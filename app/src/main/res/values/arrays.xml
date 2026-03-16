@@ -1,0 +1,5 @@
+<resources>
+    <string-array name="xposedscope" >
+        <item>com.baidu.tieba</item>
+    </string-array>
+</resources>
