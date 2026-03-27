@@ -4,6 +4,9 @@ plugins {
 
 android {
     namespace = "com.forbidad4tieba.hook"
+    buildFeatures {
+        buildConfig = true
+    }
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -14,13 +17,14 @@ android {
         applicationId = "com.forbidad4tieba.hook"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "26031601"
-        resourceConfigurations += setOf("zh")
+        versionCode = 7
+        versionName = "26032801"
+        resourceConfigurations += listOf("zh")
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
