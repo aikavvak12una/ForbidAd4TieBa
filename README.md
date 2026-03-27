@@ -34,5 +34,5 @@
 - Gemini 3.1 pro
 - Claude opus 4.6
 
-本项目采用GPL-3.0
+本项目采用GPL-3.0  
 欢迎star和PR，有问题和建议可提issue
