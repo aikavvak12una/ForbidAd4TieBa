@@ -1,0 +1,47 @@
+# IDEs and Editors
+*.iml
+.idea/
+.project
+.classpath
+.settings/
+.vscode/
+
+# Gradle
+.gradle/
+.gradle-user/
+local.properties
+
+# Build artifacts
+build/
+app/build/
+/captures
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.bak
+
+# Log files
+*.log
+build_log.txt
+compile.log
+
+# Kotlin
+.kotlin/
+
+# OS Specific
+.DS_Store
+*.DS_Store
+
+# IMPORTANT: Do not commit signing keys
+*.jks
+*.keystore
+*.p12
+*.key
+
+# Custom/Temporary files
+out.txt
+files.txt
