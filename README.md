@@ -2,8 +2,12 @@
 
 一个轻量级的开源 Xposed 模块，用于去除百度贴吧的冗余广告并净化页面体验。  
 **设置入口：** 贴吧「我的」页面 -> 长按右上角「设置」图标  
-⬇️提供反馈  
-[![badge_qgroup]][qgroup_url]  
+
+[提交issue\PR](https://github.com/aikavvak12una/ForbidAd4TieBa)  
+
+
+[提供反馈\加入测试](https://qm.qq.com/q/wPYuwVuAGA)  
+
 
 ## 功能特性
 
@@ -37,8 +41,3 @@
 ## 贡献者
 - Gemini 3.1 pro
 - Claude opus 4.6
-
-欢迎star和PR，有问题和建议可提issue  
-
-[qgroup_url]: https://qm.qq.com/q/wPYuwVuAGA
-[badge_qgroup]: https://img.shields.io/badge/QQ-群组-4DB8FF?style=for-the-badge&logo=tencentqq
