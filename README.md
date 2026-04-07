@@ -3,7 +3,7 @@
 一个轻量级的开源 Xposed 模块，用于去除百度贴吧的冗余广告并净化页面体验。  
 **设置入口：** 贴吧「我的」页面 -> 长按右上角「设置」图标  
 
-[最新版本下载](https://github.com/aikavvak12una/ForbidAd4TieBa/releases/latest/download/app-release.apk)&emsp;&emsp;&emsp;[源代码\⭐](https://github.com/aikavvak12una/ForbidAd4TieBa)&emsp;&emsp;&emsp;[提交issue\PR](https://github.com/aikavvak12una/ForbidAd4TieBa)&emsp;&emsp;&emsp;[提供反馈\加入测试](https://qm.qq.com/q/wPYuwVuAGA)  
+[最新版本下载](https://github.com/aikavvak12una/ForbidAd4TieBa/releases/latest/download/app-release.apk)&emsp;&emsp;&emsp;[提交issue\PR](https://github.com/aikavvak12una/ForbidAd4TieBa)&emsp;&emsp;&emsp;[提供反馈\加入测试](https://t.me/+JHa8ARb5mlRlYjYx)  
 
 
 ## 功能特性
