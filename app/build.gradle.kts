@@ -17,8 +17,8 @@ android {
         applicationId = "com.forbidad4tieba.hook"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "26040201"
+        versionCode = 9
+        versionName = "26040701"
         resourceConfigurations += listOf("zh")
     }
 

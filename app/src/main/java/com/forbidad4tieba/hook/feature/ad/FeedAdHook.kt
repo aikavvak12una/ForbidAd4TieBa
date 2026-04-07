@@ -2,22 +2,15 @@ package com.forbidad4tieba.hook.feature.ad
 
 import android.view.View
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.Constants
+import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ViewExt
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
 
 object FeedAdHook {
-    // Sentinel object to cache "no method found" result
     private val NO_METHOD = Any()
-    // Cache: class -> reflective Method for templateKey access (or NO_METHOD)
     private val sKeyMethodCache = ConcurrentHashMap<Class<*>, Any>(32)
-    // Cache: class -> reflective Method for inner list access (or NO_METHOD)
     private val sInnerListMethodCache = ConcurrentHashMap<Class<*>, Any>(32)
-    // Cache: class -> Pair<Method?, Method?> for zj9 wrapper (keyMethod, payloadMethod)
     private val sWrapperMethodCache = ConcurrentHashMap<Class<*>, Any>(32)
 
     fun hook(cl: ClassLoader) {
@@ -28,33 +21,51 @@ object FeedAdHook {
     // ── TemplateAdapter data-level filtering ──────────────────────────────
 
     private fun hookTemplateAdapterSetList(cl: ClassLoader) {
-        val filterHook = object : XC_MethodHook() {
-            override fun beforeHookedMethod(param: MethodHookParam) {
-                val list = param.args?.firstOrNull() as? List<*> ?: return
-                val blockAd = ConfigManager.isAdBlockEnabled
-                val blockLive = ConfigManager.isLiveBlockEnabled
-                val blockVideo = ConfigManager.isFeedVideoBlockEnabled
-                val blockMyForum = ConfigManager.isMyForumBlockEnabled
-                if (!blockAd && !blockLive && !blockVideo && !blockMyForum) return
+        val mod = XposedCompat.module ?: return
 
-                val filtered = filterItems(list, blockAd, blockLive, blockVideo, blockMyForum)
-                if (filtered !== list) param.args[0] = filtered
+        // Helper to hook a single setList/loadMore method
+        fun hookListMethod(className: String, methodName: String) {
+            val method = XposedCompat.findMethodOrNull(className, cl, methodName, List::class.java)
+            if (method == null) {
+                XposedCompat.log("[FeedAdHook] method NOT FOUND: $className.$methodName(List)")
+                return
             }
+            mod.hook(method).intercept { chain ->
+                val args = chain.args
+                val list = args.firstOrNull() as? List<*>
+                if (list != null) {
+                    val blockAd = ConfigManager.isAdBlockEnabled
+                    val blockLive = ConfigManager.isLiveBlockEnabled
+                    val blockVideo = ConfigManager.isFeedVideoBlockEnabled
+                    val blockMyForum = ConfigManager.isMyForumBlockEnabled
+                    if (blockAd || blockLive || blockVideo || blockMyForum) {
+                        val filtered = filterItems(list, blockAd, blockLive, blockVideo, blockMyForum)
+                        if (filtered !== list) {
+                            XposedCompat.logD("[FeedAdHook] > $methodName filtered: ${list.size} -> ${filtered.size}")
+                            // API 101: chain.args is a COPY — must pass modified args explicitly
+                            return@intercept chain.proceed(arrayOf<Any?>(filtered))
+                        }
+                    }
+                }
+                chain.proceed()
+            }
+            XposedCompat.log("[FeedAdHook] hook INSTALLED: $className.$methodName")
         }
 
         // Initial load / refresh
-        hookMethodSafe(cl, "com.baidu.tieba.feed.list.TemplateAdapter", "setList", filterHook, List::class.java)
-        
+        hookListMethod("com.baidu.tieba.feed.list.TemplateAdapter", "setList")
+
         // Load more / append (using dynamic symbol or fallback to J)
         val currentSymbols = com.forbidad4tieba.hook.HookSymbolResolver.getMemorySymbols()
         val loadMoreMethod = currentSymbols?.feedTemplateLoadMoreMethod ?: "J"
-        hookMethodSafe(cl, "com.baidu.tieba.feed.list.FeedTemplateAdapter", loadMoreMethod, filterHook, List::class.java)
+        hookListMethod("com.baidu.tieba.feed.list.FeedTemplateAdapter", loadMoreMethod)
     }
 
     // ── Live block fallback (component-level) ─────────────────────────────
 
     private fun hookLiveBlockFallback(cl: ClassLoader) {
-        val cardLiveViewClass = XposedHelpers.findClassIfExists(
+        val mod = XposedCompat.module ?: return
+        val cardLiveViewClass = XposedCompat.findClassOrNull(
             "com.baidu.tieba.feed.component.CardLiveView", cl
         ) ?: return
 
@@ -63,16 +74,23 @@ object FeedAdHook {
             override fun onViewDetachedFromWindow(v: View) {}
         }
 
-        XposedBridge.hookAllConstructors(cardLiveViewClass, object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                if (!ConfigManager.isLiveBlockEnabled) return
-                val view = param.thisObject as? View ?: return
-                if (view.getTag(ViewExt.TAG_EMPTY_VIEW) == true) return
-                view.setTag(ViewExt.TAG_EMPTY_VIEW, true)
-                view.addOnAttachStateChangeListener(listener)
-                if (view.isAttachedToWindow) ViewExt.squashAncestorFeedCard(view)
+        for (ctor in cardLiveViewClass.declaredConstructors) {
+            ctor.isAccessible = true
+            mod.hook(ctor).intercept { chain ->
+                val result = chain.proceed()
+                XposedCompat.logD("[FeedAdHook] > CardLiveView.<init> intercepted, liveBlock=${ConfigManager.isLiveBlockEnabled}")
+                if (ConfigManager.isLiveBlockEnabled) {
+                    val view = chain.thisObject as? View
+                    if (view != null && view.getTag(ViewExt.TAG_EMPTY_VIEW) != true) {
+                        view.setTag(ViewExt.TAG_EMPTY_VIEW, true)
+                        view.addOnAttachStateChangeListener(listener)
+                        if (view.isAttachedToWindow) ViewExt.squashAncestorFeedCard(view)
+                    }
+                }
+                result
             }
-        })
+        }
+        XposedCompat.log("[FeedAdHook] CardLiveView constructor hooks INSTALLED")
     }
 
     // ── Core filter logic ─────────────────────────────────────────────────
@@ -84,14 +102,14 @@ object FeedAdHook {
         for (i in 0 until size) {
             val item = list[i]
             var block = false
-            
+
             if (item != null) {
                 val key = getTemplateKey(item)
                 if (key != null && shouldBlock(key, blockAd, blockLive, blockVideo, blockMyForum)) {
                     block = true
                 } else {
-                    val innerList = getInnerItems(item)
-                    if (innerList != null) {
+                    val innerLists = getInnerItems(item)
+                    for (innerList in innerLists) {
                         for (innerItem in innerList) {
                             val innerKey = getTemplateKey(innerItem)
                             if (innerKey != null && shouldBlock(innerKey, blockAd, blockLive, blockVideo, blockMyForum)) {
@@ -99,10 +117,11 @@ object FeedAdHook {
                                 break
                             }
                         }
+                        if (block) break
                     }
                 }
             }
-            
+
             if (block) {
                 if (out == null) {
                     out = ArrayList(size - 1)
@@ -158,16 +177,14 @@ object FeedAdHook {
                         if (stringMethod != null && objectMethod != null) {
                             val keyMethod = cls.getMethod(stringMethod.name)
                             keyMethod.isAccessible = true
-
                             val payloadMethod = cls.getMethod(objectMethod.name)
                             payloadMethod.isAccessible = true
-
                             val pair = Pair(keyMethod, payloadMethod)
                             sWrapperMethodCache[cls] = pair
                             return pair
                         }
                     }
-                } catch (_: Throwable) {}
+                } catch (t: Throwable) { XposedCompat.logD("FeedAdHook: ${t.message}") }
             }
             currentClass = currentClass.superclass
         }
@@ -176,53 +193,65 @@ object FeedAdHook {
         return Pair(null, null)
     }
 
-    private fun getInnerItems(item: Any): List<*>? {
+    private fun getInnerItems(item: Any): List<List<*>> {
         var payload = item
-        // item is a zj9 wrapper. We need to call d() to get the actual payload (e.g. e99)
         val (_, payloadMethod) = resolveWrapperMethods(item.javaClass)
         if (payloadMethod != null) {
             try {
                 val inner = payloadMethod.invoke(item)
-                if (inner != null) {
-                    payload = inner
-                }
-            } catch (_: Throwable) {}
+                if (inner != null) payload = inner
+            } catch (t: Throwable) { XposedCompat.logD("FeedAdHook: ${t.message}") }
         }
 
         val cls = payload.javaClass
         val cached = sInnerListMethodCache[cls]
         if (cached != null) {
-            if (cached === NO_METHOD) return null
-            return try {
-                val res = (cached as Method).invoke(payload)
-                if (res is List<*>) res else null
-            } catch (_: Throwable) { null }
+            if (cached === NO_METHOD) return emptyList()
+            @Suppress("UNCHECKED_CAST")
+            val methods = cached as List<Method>
+            val results = ArrayList<List<*>>(methods.size)
+            for (m in methods) {
+                try {
+                    val res = m.invoke(payload)
+                    if (res is List<*>) results.add(res)
+                } catch (_: Throwable) { }
+            }
+            return results
         }
-        
-        return try {
+
+        val foundMethods = ArrayList<Method>()
+        try {
             val m = cls.getMethod("j")
             m.isAccessible = true
-            sInnerListMethodCache[cls] = m
-            val res = m.invoke(payload)
-            if (res is List<*>) res else null
-        } catch (_: Throwable) {
-            // Fallback: look for a method returning List
-            try {
-                for (m in cls.methods) {
-                    if (m.parameterTypes.isEmpty() && List::class.java.isAssignableFrom(m.returnType)) {
-                        if (m.name.length <= 3) {
-                            m.isAccessible = true
-                            sInnerListMethodCache[cls] = m
-                            val res = m.invoke(payload)
-                            return if (res is List<*>) res else null
-                        }
+            foundMethods.add(m)
+        } catch (_: Throwable) { }
+
+        try {
+            for (m in cls.methods) {
+                if (m.name == "j") continue
+                if (m.parameterTypes.isEmpty() && List::class.java.isAssignableFrom(m.returnType)) {
+                    if (m.name.length <= 3) {
+                        m.isAccessible = true
+                        foundMethods.add(m)
                     }
                 }
-            } catch (_: Throwable) {}
-            
+            }
+        } catch (t: Throwable) { XposedCompat.logD("FeedAdHook: ${t.message}") }
+
+        if (foundMethods.isEmpty()) {
             sInnerListMethodCache[cls] = NO_METHOD
-            null
+            return emptyList()
         }
+
+        sInnerListMethodCache[cls] = foundMethods
+        val results = ArrayList<List<*>>(foundMethods.size)
+        for (m in foundMethods) {
+            try {
+                val res = m.invoke(payload)
+                if (res is List<*>) results.add(res)
+            } catch (_: Throwable) { }
+        }
+        return results
     }
 
     private fun getTemplateKey(item: Any?): String? {
@@ -242,52 +271,37 @@ object FeedAdHook {
         sKeyMethodCache[cls]?.let { cached ->
             return if (cached === NO_METHOD) null else cached as Method
         }
-        
+
         val currentSymbols = com.forbidad4tieba.hook.HookSymbolResolver.getMemorySymbols()
         val methodName = currentSymbols?.feedTemplateKeyMethod ?: "b"
-        
+
         return try {
             val m = cls.getMethod(methodName)
             m.isAccessible = true
             sKeyMethodCache[cls] = m
             m
         } catch (_: Throwable) {
-            // Fallback strategy if symbols haven't been updated yet
             if (methodName != "b") {
                  try {
                      val fallback = cls.getMethod("b")
                      fallback.isAccessible = true
                      sKeyMethodCache[cls] = fallback
                      return fallback
-                 } catch (_: Throwable) {}
+                 } catch (t: Throwable) { XposedCompat.logD("FeedAdHook: ${t.message}") }
             }
-            // Scan for no-arg methods returning String as a last resort fallback
             try {
                 for (m in cls.methods) {
                     if (m.parameterTypes.isEmpty() && m.returnType == String::class.java) {
                         m.isAccessible = true
-                        // Basic heuristic: check if it returns a known ad key, but we can't invoke it safely here
-                        // We just take the first one that has a short name
                         if (m.name.length <= 3) {
                             sKeyMethodCache[cls] = m
                             return m
                         }
                     }
                 }
-            } catch (_: Throwable) {}
-            
+            } catch (t: Throwable) { XposedCompat.logD("FeedAdHook: ${t.message}") }
             sKeyMethodCache[cls] = NO_METHOD
             null
-        }
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────
-
-    private fun hookMethodSafe(cl: ClassLoader, className: String, methodName: String, hook: XC_MethodHook, vararg params: Class<*>) {
-        try {
-            XposedHelpers.findAndHookMethod(className, cl, methodName, *params, hook)
-        } catch (t: Throwable) {
-            XposedBridge.log("${Constants.TAG}: Failed hook $className.$methodName: ${t.message}")
         }
     }
 

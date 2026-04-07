@@ -15,7 +15,7 @@
             android:value="屏蔽贴吧信息流及贴子详情页的广告/直播内容，净化部分页面" />
         <meta-data
             android:name="xposedminversion"
-            android:value="82" />
+            android:value="101" />
         <meta-data
             android:name="xposedsharedprefs"
             android:value="true" />

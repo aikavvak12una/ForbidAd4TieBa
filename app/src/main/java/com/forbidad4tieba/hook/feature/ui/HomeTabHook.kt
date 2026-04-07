@@ -2,10 +2,8 @@ package com.forbidad4tieba.hook.feature.ui
 
 import com.forbidad4tieba.hook.HookSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.Constants
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+
+import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
 import java.util.concurrent.ConcurrentHashMap
 
@@ -14,27 +12,53 @@ object HomeTabHook {
     private val sTypeFieldCache = ConcurrentHashMap<Class<*>, Field>()
 
     internal fun hook(cl: ClassLoader, symbols: HookSymbols) {
-        val className = symbols.homeTabClass ?: return
-        val methodName = symbols.homeTabRebuildMethod ?: return
-        val listFieldName = symbols.homeTabListField ?: return
+        val mod = XposedCompat.module ?: return
+        val className = symbols.homeTabClass
+        val methodName = symbols.homeTabRebuildMethod
+        val listFieldName = symbols.homeTabListField
+        if (className == null || methodName == null || listFieldName == null) {
+            XposedCompat.log("[HomeTabHook] SKIP - missing symbols: class=$className, method=$methodName, field=$listFieldName")
+            return
+        }
         try {
-            XposedHelpers.findAndHookMethod(className, cl, methodName, object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (!ConfigManager.isHomeTabSimplifyEnabled) return
+            val method = XposedCompat.findMethodOrNull(className, cl, methodName)
+            if (method == null) {
+                XposedCompat.log("[HomeTabHook] method NOT FOUND: $className.$methodName")
+                return
+            }
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                if (ConfigManager.isHomeTabSimplifyEnabled) {
                     @Suppress("UNCHECKED_CAST")
-                    val list = resolveMutableListField(param.thisObject, listFieldName) as? MutableList<Any?> ?: return
-                    val it = list.iterator()
-                    while (it.hasNext()) {
-                        val pm6 = it.next()
-                        if (pm6 != null) {
-                            val type = readItemType(pm6)
-                            if (type != 0 && type != 1) it.remove()
+                    val list = resolveMutableListField(chain.thisObject, listFieldName) as? MutableList<Any?>
+                    if (list != null) {
+                        val sizeBefore = list.size
+                        var typeField: Field? = null
+                        var lastClass: Class<*>? = null
+                        val it = list.iterator()
+                        while (it.hasNext()) {
+                            val pm6 = it.next()
+                            if (pm6 != null) {
+                                val cls = pm6.javaClass
+                                if (cls != lastClass) {
+                                    typeField = resolveTypeField(cls)
+                                    lastClass = cls
+                                }
+                                val type = if (typeField != null) {
+                                    try { typeField.getInt(pm6) } catch (_: Throwable) { -1 }
+                                } else -1
+                                if (type != 0 && type != 1) it.remove()
+                            }
                         }
+                        XposedCompat.logD("[HomeTabHook] > tabs filtered: $sizeBefore -> ${list.size}")
                     }
                 }
-            })
+                result
+            }
+            XposedCompat.log("[HomeTabHook] hook INSTALLED: $className.$methodName")
         } catch (t: Throwable) {
-            XposedBridge.log("${Constants.TAG}: Failed to hook home tabs($className.$methodName): ${t.message}")
+            XposedCompat.log("[HomeTabHook] FAILED ($className.$methodName): ${t.message}")
+            XposedCompat.log(t)
         }
     }
 
@@ -50,8 +74,8 @@ object HomeTabHook {
             field.isAccessible = true
             sListFieldCache[cls] = field
             return field.get(owner)
-        } catch (_: Throwable) {}
-        
+        } catch (t: Throwable) { XposedCompat.logD("HomeTabHook: ${t.message}") }
+
         val found = cls.declaredFields.firstOrNull { List::class.java.isAssignableFrom(it.type) } ?: return null
         return try {
             found.isAccessible = true
@@ -60,24 +84,19 @@ object HomeTabHook {
         } catch (_: Throwable) { null }
     }
 
-    private fun readItemType(item: Any): Int {
-        val cls = item.javaClass
+    private fun resolveTypeField(cls: Class<*>): Field? {
         val cached = sTypeFieldCache[cls]
-        if (cached != null) {
-            return try { cached.getInt(item) } catch (_: Throwable) { -1 }
-        }
+        if (cached != null) return cached
         try {
             val field = cls.getDeclaredField("a")
             field.isAccessible = true
             sTypeFieldCache[cls] = field
-            return field.getInt(item)
-        } catch (_: Throwable) {}
-        
-        val found = cls.declaredFields.firstOrNull { it.type == Int::class.javaPrimitiveType } ?: return -1
-        return try {
-            found.isAccessible = true
-            sTypeFieldCache[cls] = found
-            found.getInt(item)
-        } catch (_: Throwable) { -1 }
+            return field
+        } catch (t: Throwable) { XposedCompat.logD("HomeTabHook: ${t.message}") }
+
+        val found = cls.declaredFields.firstOrNull { it.type == Int::class.javaPrimitiveType } ?: return null
+        found.isAccessible = true
+        sTypeFieldCache[cls] = found
+        return found
     }
 }

@@ -2,31 +2,33 @@ package com.forbidad4tieba.hook.feature.ui
 
 import android.view.View
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.Constants
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+
+import com.forbidad4tieba.hook.core.XposedCompat
 
 object HomeTopBarRightSlotHook {
     fun hook(cl: ClassLoader) {
+        val mod = XposedCompat.module ?: return
         try {
-            val rightSlotClass = XposedHelpers.findClassIfExists(
+            val rightSlotClass = XposedCompat.findClassOrNull(
                 "com.baidu.tieba.homepage.personalize.view.HomeTabBarRightSlot", cl
-            ) ?: return
+            )
+            if (rightSlotClass == null) {
+                XposedCompat.log("[HomeTopBarRightSlotHook] class NOT FOUND")
+                return
+            }
 
-            // We hook all methods returning void to ensure the search icon stays visible
-            // and the game icon stays hidden whenever the view's internal state is updated
             val methods = rightSlotClass.declaredMethods.filter { it.returnType == Void.TYPE }
             for (method in methods) {
-                XposedBridge.hookMethod(method, object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        if (!ConfigManager.isHomeTabSimplifyEnabled) return
-
+                method.isAccessible = true
+                mod.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    if (ConfigManager.isHomeTabSimplifyEnabled) {
                         try {
-                            val searchIcon = XposedHelpers.callMethod(param.thisObject, "getSearchIconView") as? View
-                            val gameIcon = XposedHelpers.callMethod(param.thisObject, "getGameIconView") as? View
-                            val topBarTip = XposedHelpers.callMethod(param.thisObject, "getTopBarTip") as? View
-                            val redDotView = XposedHelpers.callMethod(param.thisObject, "getRedDotView") as? View
+                            val thisObj = chain.thisObject ?: return@intercept result
+                            val searchIcon = XposedCompat.callMethod(thisObj, "getSearchIconView") as? View
+                            val gameIcon = XposedCompat.callMethod(thisObj, "getGameIconView") as? View
+                            val topBarTip = XposedCompat.callMethod(thisObj, "getTopBarTip") as? View
+                            val redDotView = XposedCompat.callMethod(thisObj, "getRedDotView") as? View
 
                             searchIcon?.visibility = View.VISIBLE
                             searchIcon?.alpha = 1.0f
@@ -43,10 +45,13 @@ object HomeTopBarRightSlotHook {
                             // Ignore missing methods gracefully
                         }
                     }
-                })
+                    result
+                }
             }
+            XposedCompat.log("[HomeTopBarRightSlotHook] hook INSTALLED on ${methods.size} void methods")
         } catch (t: Throwable) {
-            XposedBridge.log("${Constants.TAG}: Failed to hook HomeTopBarRightSlot: ${t.message}")
+            XposedCompat.log("Failed to hook HomeTopBarRightSlot: ${t.message}")
+            XposedCompat.log(t)
         }
     }
 }

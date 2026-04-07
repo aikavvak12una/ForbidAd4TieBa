@@ -27,11 +27,8 @@ import com.forbidad4tieba.hook.ScanLogger
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.utils.ViewExt
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
@@ -41,80 +38,112 @@ object SettingsMenuHook {
 
     private data class SwitchItem(
         val label: String,
+        val description: String,
         val prefKey: String,
         val supported: Boolean,
-        val defaultValue: Boolean = false
+        val defaultValue: Boolean = false,
+        val actionIcon: String? = null,
+        val onActionClick: (() -> Unit)? = null
+    )
+
+    private data class SettingGroup(
+        val name: String,
+        val items: List<SwitchItem>
     )
 
     private val sSettingsFieldCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Class<*>, Field>())
     @Volatile private var sInitialScanDialogHookInstalled = false
     @Volatile private var sInitialScanDialogShown = false
-    @Volatile private var sInitialScanResumeUnhooks: Array<XC_MethodHook.Unhook>? = null
+    @Volatile private var sInitialScanResumeUnhooks: Array<Any>? = null
 
     internal fun hook(cl: ClassLoader, symbols: HookSymbols) {
-        val className = symbols.settingsClass ?: return
-        val methodName = symbols.settingsInitMethod ?: return
-        val containerField = symbols.settingsContainerField ?: return
+        val mod = XposedCompat.module ?: return
+        val className = symbols.settingsClass
+        val methodName = symbols.settingsInitMethod
+        val containerField = symbols.settingsContainerField
+        if (className == null || methodName == null || containerField == null) {
+            XposedCompat.log("[SettingsMenuHook] SKIP - missing symbols: class=$className, method=$methodName, field=$containerField")
+            return
+        }
         try {
-            val navClass = XposedHelpers.findClassIfExists("com.baidu.tbadk.core.view.NavigationBar", cl) ?: return
-            XposedHelpers.findAndHookMethod(
-                className, cl, methodName,
-                Context::class.java,
-                navClass,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val context = param.args[0] as Context
-                        try {
-                            val settingsContainer = resolveSettingsContainer(param.thisObject, containerField)
-                            if (settingsContainer != null && ViewExt.markSettingsLongPressBound(settingsContainer)) {
-                                settingsContainer.setOnLongClickListener {
-                                    showModuleSettingsDialog(settingsContainer.context ?: context, cl)
-                                    true
-                                }
-                            }
-                        } catch (_: Throwable) {}
+            val navClass = XposedCompat.findClassOrNull("com.baidu.tbadk.core.view.NavigationBar", cl)
+            if (navClass == null) {
+                XposedCompat.log("[SettingsMenuHook] NavigationBar class NOT FOUND")
+                return
+            }
+            val method = XposedCompat.findMethodOrNull(className, cl, methodName, Context::class.java, navClass)
+            if (method == null) {
+                XposedCompat.log("[SettingsMenuHook] method NOT FOUND: $className.$methodName")
+                return
+            }
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                XposedCompat.logD("[SettingsMenuHook] > settings init intercepted")
+                val context = chain.args[0] as Context
+                try {
+                    val settingsContainer = resolveSettingsContainer(chain.thisObject, containerField)
+                    if (settingsContainer != null && ViewExt.markSettingsLongPressBound(settingsContainer)) {
+                        settingsContainer.setOnLongClickListener {
+                            showModuleSettingsDialog(settingsContainer.context ?: context, cl)
+                            true
+                        }
+                        XposedCompat.logD("[SettingsMenuHook] > long-press listener bound")
                     }
-                })
+                } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
+                result
+            }
+            XposedCompat.log("[SettingsMenuHook] hook INSTALLED: $className.$methodName")
         } catch (t: Throwable) {
-            XposedBridge.log("${Constants.TAG}: Failed to hook settings menu($className.$methodName): ${t.message}")
+            XposedCompat.log("[SettingsMenuHook] FAILED ($className.$methodName): ${t.message}")
+            XposedCompat.log(t)
         }
     }
 
     fun ensureInitialScanDialogHook(classLoader: ClassLoader) {
+        val mod = XposedCompat.module ?: return
         synchronized(this) {
             if (sInitialScanDialogHookInstalled) return
             sInitialScanDialogHookInstalled = true
         }
         try {
-            val unhooks = XposedBridge.hookAllMethods(Activity::class.java, "onResume", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val activity = param.thisObject as? Activity ?: return
-                    if (activity.packageName != Constants.TARGET_PACKAGE) return
-                    if (activity.isFinishing) return
-                    val shouldShow = synchronized(this@SettingsMenuHook) {
-                        if (sInitialScanDialogShown) false else {
-                            sInitialScanDialogShown = true
-                            true
+            val handles = mutableListOf<Any>()
+            for (method in Activity::class.java.declaredMethods) {
+                if (method.name != "onResume") continue
+                method.isAccessible = true
+                val handle = mod.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    val activity = chain.thisObject as? Activity
+                    if (activity != null && activity.packageName == Constants.TARGET_PACKAGE && !activity.isFinishing) {
+                        val shouldShow = synchronized(this@SettingsMenuHook) {
+                            if (sInitialScanDialogShown) false else {
+                                sInitialScanDialogShown = true
+                                true
+                            }
+                        }
+                        if (shouldShow) {
+                            unhookInitialScanDialogHook()
+                            startSymbolScanWithDialog(activity, classLoader)
                         }
                     }
-                    if (!shouldShow) return
-                    unhookInitialScanDialogHook()
-                    startSymbolScanWithDialog(activity, classLoader)
+                    result
                 }
-            })
-            sInitialScanResumeUnhooks = unhooks.toTypedArray()
+                handles.add(handle)
+            }
+            sInitialScanResumeUnhooks = handles.toTypedArray()
         } catch (t: Throwable) {
-            XposedBridge.log("${Constants.TAG}: Failed to hook initial scan dialog: ${t.message}")
+            XposedCompat.log("Failed to hook initial scan dialog: ${t.message}")
+            XposedCompat.log(t)
         }
     }
 
     private fun unhookInitialScanDialogHook() {
-        val unhooks = sInitialScanResumeUnhooks ?: return
+        val handles = sInitialScanResumeUnhooks ?: return
         sInitialScanResumeUnhooks = null
-        for (unhook in unhooks) {
+        for (handle in handles) {
             try {
-                unhook.unhook()
-            } catch (_: Throwable) {}
+                (handle as? java.io.Closeable)?.close()
+                    ?: (handle as? AutoCloseable)?.close()
+            } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
         }
     }
 
@@ -132,7 +161,7 @@ object SettingsMenuHook {
                 sSettingsFieldCache[cls] = field
                 return field.get(owner) as? View
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
         
         val found = cls.declaredFields.firstOrNull {
             it.type.name == "android.widget.RelativeLayout"
@@ -160,39 +189,47 @@ object SettingsMenuHook {
             val currentSymbols = HookSymbolResolver.getMemorySymbols()
             val homeTabsSupported = currentSymbols?.homeTabClass != null
 
-            // 逻辑排序选项
-            val switches = listOf(
-                // 屏蔽类
-                SwitchItem("屏蔽信息流广告", "block_ad", true, true),
-                SwitchItem("屏蔽信息流视频", "block_feed_video", true, false),
-                SwitchItem("屏蔽直播卡片", "block_live", true, false),
-                SwitchItem("屏蔽首页我的吧", "block_my_forum", true, false),
-                SwitchItem("屏蔽小卖部 Tab", "simplify_bottom_tabs", true, false),
-                // UI 精简类
-                SwitchItem("精简首页顶部 Tab", "simplify_home_tabs", homeTabsSupported, false),
-                SwitchItem("屏蔽帖子底部横幅", "hide_pb_bottom_enter_bar", true, false),
-                SwitchItem("精简进吧页面", "filter_enter_forum_web", true, false),
-                // 功能类
-                SwitchItem("信息流预加载", "enable_auto_load_more", true, false),
-                SwitchItem("禁止自动刷新", "disable_auto_refresh", true, false),
-                SwitchItem("开启自动签到", "enable_auto_sign_in", true, false),
+            // 逻辑排序分组
+            val groups = listOf(
+                SettingGroup("内容屏蔽", listOf(
+                    SwitchItem("屏蔽信息流广告", "屏蔽首页帖子间的推广广告", "block_ad", true, true),
+                    SwitchItem("屏蔽信息流视频", "隐藏首页中带视频的帖子", "block_feed_video", true, false),
+                    SwitchItem("屏蔽直播卡片", "移除信息流中直播帖子", "block_live", true, false),
+                    SwitchItem("屏蔽首页我的进吧", "隐藏首页顶部最近访问的吧", "block_my_forum", true, false)
+                )),
+                SettingGroup("UI 净化", listOf(
+                    SwitchItem("精简首页顶部 Tab", "仅保留推荐、搜索、发帖", "simplify_home_tabs", homeTabsSupported, false),
+                    SwitchItem("精简底部 Tab", "移除底部导航条小卖部入口", "simplify_bottom_tabs", true, false),
+                    SwitchItem("屏蔽帖子底部横幅", "隐藏底部导流横幅及贴吧群", "hide_pb_bottom_enter_bar", true, false),
+                    SwitchItem("精简进吧页面", "仅保留我关注的吧并自动展开", "filter_enter_forum_web", true, false)
+                )),
+                SettingGroup("扩展", listOf(
+                    SwitchItem("信息流预加载", "浏览时自动静默加载下一页", "enable_auto_load_more", true, false),
+                    SwitchItem("禁止自动刷新", "避免首页被强制重置刷新列表", "disable_auto_refresh", true, false),
+                    SwitchItem("开启自动签到", "启动时自动签到所有已关注的吧", "enable_auto_sign_in", true, false, "▶") {
+                        com.forbidad4tieba.hook.feature.signin.AutoSignInManager.tryAutoSignIn(context, force = true)
+                    }
+                ))
             )
             
             val allSwitchViews = mutableListOf<Switch>()
 
             // 顶部一键开关
-            val allEnabledInit = switches.all { prefs.getBoolean(it.prefKey, it.defaultValue) }
+            val allEnabledInit = groups.flatMap { it.items }.all { prefs.getBoolean(it.prefKey, it.defaultValue) }
             val masterRow = createSwitchRow(
                 context = context,
                 prefs = prefs,
-                label = "一键开关所有配置项",
+                label = "一键开启",
+                description = "快速开启或关闭所有选项",
                 prefKey = null,
                 padding = padding,
                 enabled = true,
                 defaultValue = allEnabledInit,
                 onCheckedChange = { isChecked ->
                     val editor = prefs.edit()
-                    switches.forEach { editor.putBoolean(it.prefKey, isChecked) }
+                    groups.forEach { g ->
+                        g.items.forEach { editor.putBoolean(it.prefKey, isChecked) }
+                    }
                     editor.apply()
                     
                     allSwitchViews.forEach { if (it.isEnabled) it.isChecked = isChecked }
@@ -203,66 +240,101 @@ object SettingsMenuHook {
             root.addView(masterRow)
             root.addView(createDivider(context, padding))
 
-            for (i in switches.indices) {
-                if (i > 0) root.addView(createDivider(context, padding))
-                val item = switches[i]
-                val label = item.label
-                val prefKey = item.prefKey
-                val supported = item.supported
-                val finalLabel = if (supported) label else "$label (当前版本不支持)"
+            groups.forEachIndexed { index, group ->
+                if (index > 0) {
+                    val gap = View(context)
+                    gap.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (12 * density).toInt())
+                    root.addView(gap)
+                }
                 
-                val rowView = createSwitchRow(context, prefs, finalLabel, prefKey, padding, supported, item.defaultValue)
-                root.addView(rowView)
-                
-                // 收集由于一键开启所需要的 Switch 实例
-                if (rowView is ViewGroup) {
-                    for (childIndex in 0 until rowView.childCount) {
-                        val child = rowView.getChildAt(childIndex)
-                        if (child is Switch) allSwitchViews.add(child)
+                val headerLabel = TextView(context).apply {
+                    text = group.name
+                    textSize = 13.5f
+                    setTextColor(0xFF4C87F7.toInt())
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, (padding * 0.8f).toInt(), 0, (padding * 0.4f).toInt())
+                }
+                root.addView(headerLabel)
+
+                group.items.forEach { item ->
+                    val finalLabel = if (item.supported) item.label else "${item.label} (暂不支持)"
+                    
+                    val rowView = createSwitchRow(context, prefs, finalLabel, item.description, item.prefKey, padding, item.supported, item.defaultValue, item.actionIcon, item.onActionClick)
+                    root.addView(rowView)
+                    
+                    if (rowView is ViewGroup) {
+                        for (childIndex in 0 until rowView.childCount) {
+                            val child = rowView.getChildAt(childIndex)
+                            if (child is Switch) allSwitchViews.add(child)
+                        }
                     }
                 }
             }
 
             root.addView(createDivider(context, padding))
-            root.addView(
-                createActionRow(context, "手动反混淆", padding) {
-                    startSymbolScanWithDialog(context, classLoader ?: context.classLoader)
-                }
-            )
-
-            root.addView(createDivider(context, padding))
-            root.addView(
-                createActionRow(context, "手动签到", padding) {
-                    com.forbidad4tieba.hook.feature.signin.AutoSignInManager.tryAutoSignIn(context, force = true)
-                }
-            )
-
-            root.addView(createDivider(context, padding))
-            val aboutView = TextView(context).apply {
-                val versionName = com.forbidad4tieba.hook.BuildConfig.VERSION_NAME
-                text = "版本: v$versionName\n作者: aikavvak12una"
-                textSize = 13f
-                gravity = Gravity.CENTER
-                setPadding(0, padding, 0, padding / 2)
-                setTextColor(0xFF888888.toInt())
-                setOnClickListener {
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/aikavvak12una/ForbidAd4TieBa"))
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                    } catch (_: Throwable) {
-                        Toast.makeText(context, "无法打开浏览器", Toast.LENGTH_SHORT).show()
-                    }
-                }
+            val aboutContainer = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, 0, 0, padding)
+                
+                val gap = View(context)
+                gap.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (12 * density).toInt())
+                addView(gap)
+                
+                addView(TextView(context).apply {
+                    text = "关于"
+                    textSize = 13.5f
+                    setTextColor(0xFF4C87F7.toInt())
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, (padding * 0.8f).toInt(), 0, (padding * 0.4f).toInt())
+                })
             }
-            root.addView(aboutView)
+
+            val moduleVersion = com.forbidad4tieba.hook.BuildConfig.VERSION_NAME
+            val tiebaVersion = try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            } catch (e: Exception) {
+                "未知"
+            }
+
+            aboutContainer.addView(createAboutItem(context, density, padding, "版本", "$tiebaVersion   $moduleVersion"))
+            aboutContainer.addView(createAboutItem(context, density, padding, "作者", "aikavvak12una", "https://github.com/aikavvak12una/ForbidAd4TieBa"))
+            aboutContainer.addView(createAboutItem(context, density, padding, "提交反馈", "加入QQ群组", "https://qm.qq.com/q/wPYuwVuAGA"))
+
+            root.addView(aboutContainer)
 
             val scrollContainer = ScrollView(context).apply {
                 addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
 
+            val titleView = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(padding, padding, padding, padding / 2)
+
+                addView(TextView(context).apply {
+                    text = "模块设置"
+                    textSize = 20f
+                    setTextColor(0xFF000000.toInt())
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+
+                addView(android.widget.ImageView(context).apply {
+                    setImageResource(android.R.drawable.ic_popup_sync)
+                    setColorFilter(0xFF4C87F7.toInt())
+                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    setPadding((4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt())
+                    val lp = LinearLayout.LayoutParams((24 * density).toInt(), (24 * density).toInt())
+                    lp.leftMargin = (6 * density).toInt()
+                    layoutParams = lp
+                    setOnClickListener {
+                        it.animate().rotationBy(360f).setDuration(400).start()
+                        startSymbolScanWithDialog(context, classLoader ?: context.classLoader)
+                    }
+                })
+            }
+
             val builder = AlertDialog.Builder(context, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            builder.setTitle("模块设置")
+            builder.setCustomTitle(titleView)
             builder.setView(scrollContainer)
             builder.setPositiveButton("保存") { _, _ ->
                 Toast.makeText(context, "设置已保存，重启贴吧生效。", Toast.LENGTH_SHORT).show()
@@ -272,7 +344,8 @@ object SettingsMenuHook {
             dialog.show()
             dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
         } catch (t: Throwable) {
-            XposedBridge.log("${Constants.TAG}: Failed to show settings dialog: ${t.message}")
+            XposedCompat.log("Failed to show settings dialog: ${t.message}")
+            XposedCompat.log(t)
         }
     }
 
@@ -332,11 +405,11 @@ object SettingsMenuHook {
         }
         val copyBtn = Button(activity).apply {
             text = "复制日志"
-            styleScanActionButton(density, 0xFF1E4F8A.toInt())
+            styleScanActionButton(density, 0xFF4C87F7.toInt())
         }
         val restartBtn = Button(activity).apply {
             text = "重启"
-            styleScanActionButton(density, 0xFF1E4F8A.toInt())
+            styleScanActionButton(density, 0xFF4C87F7.toInt())
             updateButtonEnabledState(false)
         }
         val btnLp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -449,17 +522,18 @@ object SettingsMenuHook {
                 activity.startActivity(launchIntent)
             }
         } catch (t: Throwable) {
-            XposedBridge.log("${Constants.TAG}: restart launch failed: ${t.message}")
+            XposedCompat.log("restart launch failed: ${t.message}")
+            XposedCompat.log(t)
         }
 
-        try { activity.finishAffinity() } catch (_: Throwable) {}
+        try { activity.finishAffinity() } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
 
         try {
             Handler(Looper.getMainLooper()).postDelayed({
-                try { android.os.Process.killProcess(android.os.Process.myPid()) } catch (_: Throwable) {}
-                try { exitProcess(0) } catch (_: Throwable) {}
+                try { android.os.Process.killProcess(android.os.Process.myPid()) } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
+                try { exitProcess(0) } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
             }, 200)
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
     }
 
     private fun applyUnifiedDialogCardStyle(window: android.view.Window, density: Float) {
@@ -491,27 +565,74 @@ object SettingsMenuHook {
 
     private fun createSwitchRow(
         context: Context, prefs: android.content.SharedPreferences,
-        label: String, prefKey: String?, padding: Int, enabled: Boolean = true,
+        label: String, description: String?, prefKey: String?, padding: Int, enabled: Boolean = true,
         defaultValue: Boolean = false,
+        actionIcon: String? = null,
+        onActionClick: (() -> Unit)? = null,
         onCheckedChange: ((Boolean) -> Unit)? = null
     ): View {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, padding / 2, 0, padding / 2)
+            setPadding(0, (padding * 0.6f).toInt(), 0, (padding * 0.6f).toInt())
         }
 
-        val tv = TextView(context).apply {
-            text = label
-            textSize = 16f
-            setTextColor(if (enabled) 0xFF222222.toInt() else 0xFF999999.toInt())
+        val textContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
         }
-        row.addView(tv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f))
+
+        val tvLabel = TextView(context).apply {
+            text = label
+            textSize = 15f
+            setTextColor(if (enabled) 0xFF222222.toInt() else 0xFF999999.toInt())
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        textContainer.addView(tvLabel)
+
+        if (description != null) {
+            val density = context.resources.displayMetrics.density
+            val tvDesc = TextView(context).apply {
+                text = description
+                textSize = 12f
+                setTextColor(if (enabled) 0xFF888888.toInt() else 0xFFBBBBBB.toInt())
+                setPadding(0, (2 * density).toInt(), (12 * density).toInt(), 0)
+            }
+            textContainer.addView(tvDesc)
+        }
+
+        row.addView(textContainer, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f))
+
+        if (actionIcon != null && onActionClick != null) {
+            val density = context.resources.displayMetrics.density
+            val actionBtn = TextView(context).apply {
+                text = actionIcon
+                textSize = 18f
+                setTextColor(if (enabled) 0xFF4C87F7.toInt() else 0xFF999999.toInt())
+                gravity = Gravity.CENTER
+                setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
+                setOnClickListener { if (enabled) onActionClick() }
+            }
+            row.addView(actionBtn)
+        }
 
         @Suppress("DEPRECATION")
         val sw = Switch(context).apply {
             isChecked = if (enabled && prefKey != null) prefs.getBoolean(prefKey, defaultValue) else defaultValue
             isEnabled = enabled
+            
+            val states = arrayOf(
+                intArrayOf(android.R.attr.state_checked),
+                intArrayOf(-android.R.attr.state_checked)
+            )
+            thumbTintList = android.content.res.ColorStateList(states, intArrayOf(
+                0xFF4C87F7.toInt(),
+                0xFFFAFAFA.toInt()
+            ))
+            trackTintList = android.content.res.ColorStateList(states, intArrayOf(
+                0x704C87F7.toInt(),
+                0x40000000.toInt()
+            ))
+
             setOnClickListener { 
                 // Using onClickListener instead of OnCheckedChangeListener to avoid firing when changed programmatically
             }
@@ -529,14 +650,38 @@ object SettingsMenuHook {
         return row
     }
 
-    private fun createActionRow(context: Context, text: String, padding: Int, action: () -> Unit): View {
-        return TextView(context).apply {
-            this.text = text
-            textSize = 15f
-            gravity = Gravity.CENTER
+    private fun createAboutItem(context: Context, density: Float, padding: Int, title: String, content: String, url: String? = null): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(0, padding / 2, 0, padding / 2)
-            setTextColor(0xFF0A66C2.toInt())
-            setOnClickListener { action() }
+            
+            addView(TextView(context).apply {
+                text = title
+                textSize = 15.5f
+                setTextColor(0xFF222222.toInt())
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            })
+            
+            addView(TextView(context).apply {
+                text = content
+                textSize = 14f
+                setTextColor(if (url != null) 0xFF4C87F7.toInt() else 0xFF666666.toInt())
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                setPadding(0, (4 * density).toInt(), 0, 0)
+                
+                if (url != null) {
+                    setOnClickListener {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(intent)
+                        } catch (_: Throwable) {
+                            Toast.makeText(context, "无法打开链接", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            })
         }
     }
 

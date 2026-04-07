@@ -1,10 +1,8 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.Constants
-import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+
+import com.forbidad4tieba.hook.core.XposedCompat
 
 /**
  * 提前并且无缝地自动加载更多（分页）。
@@ -17,35 +15,29 @@ object AutoLoadMoreHook {
 
     fun hook(cl: ClassLoader) {
         if (!ConfigManager.isAutoLoadMoreEnabled) return
+        val mod = XposedCompat.module ?: return
 
         try {
             // 强制启用预加载实验
-            val ubsHelperClass = XposedHelpers.findClassIfExists(UBS_AB_TEST_HELPER, cl)
-            if (ubsHelperClass != null) {
-                XposedHelpers.findAndHookMethod(
-                    ubsHelperClass,
-                    "isHomePreLoadMoreOpt",
-                    XC_MethodReplacement.returnConstant(true)
-                )
+            val ubsMethod = XposedCompat.findMethodOrNull(UBS_AB_TEST_HELPER, cl, "isHomePreLoadMoreOpt")
+            if (ubsMethod != null) {
+                mod.hook(ubsMethod).intercept { true }
             } else {
-                XposedBridge.log("${Constants.TAG}: class $UBS_AB_TEST_HELPER not found")
+                XposedCompat.log("[AutoLoadMoreHook] isHomePreLoadMoreOpt NOT FOUND")
             }
 
             // 修改预加载卡片的阈值大小，设置得比较大可以使其无缝加载
-            val configParserClass = XposedHelpers.findClassIfExists(HOME_PRELOAD_CONFIG_PARSER_A, cl)
-            if (configParserClass != null) {
-                XposedHelpers.findAndHookMethod(
-                    configParserClass,
-                    "a",
-                    XC_MethodReplacement.returnConstant(20) // 当剩余20项时就提前触发预加载
-                )
-                XposedBridge.log("${Constants.TAG}: AutoLoadMoreHook installed")
+            val configMethod = XposedCompat.findMethodOrNull(HOME_PRELOAD_CONFIG_PARSER_A, cl, "a")
+            if (configMethod != null) {
+                mod.hook(configMethod).intercept { 20 } // 当剩余20项时就提前触发预加载
+                XposedCompat.log("[AutoLoadMoreHook] hook INSTALLED")
             } else {
-                XposedBridge.log("${Constants.TAG}: class $HOME_PRELOAD_CONFIG_PARSER_A not found")
+                XposedCompat.log("[AutoLoadMoreHook] HomePreloadMoreConfigParser.a NOT FOUND")
             }
 
         } catch (t: Throwable) {
-            XposedBridge.log("${Constants.TAG}: AutoLoadMoreHook failed: ${t.message}")
+            XposedCompat.log("[AutoLoadMoreHook] FAILED: ${t.message}")
+            XposedCompat.log(t)
         }
     }
 }

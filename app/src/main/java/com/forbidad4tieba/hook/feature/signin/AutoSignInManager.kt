@@ -6,7 +6,7 @@ import android.os.Looper
 import android.webkit.CookieManager
 import android.widget.Toast
 import com.forbidad4tieba.hook.config.ConfigManager
-import de.robv.android.xposed.XposedBridge
+import com.forbidad4tieba.hook.core.XposedCompat
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -42,7 +42,7 @@ object AutoSignInManager {
                 val cookie = CookieManager.getInstance().getCookie("https://tieba.baidu.com") ?: ""
                 val bduss = extractBduss(cookie)
                 if (bduss.isEmpty()) {
-                    XposedBridge.log("$TAG: Cookie不包含BDUSS，取消签到。")
+                    XposedCompat.log("$TAG: Cookie不包含BDUSS，取消签到。")
                     if (force) toast(context, "自动签到失败：未找到账户凭证(BDUSS)，请先登录贴吧")
                     return@thread
                 }
@@ -60,52 +60,68 @@ object AutoSignInManager {
                 // 3. 获取防刷票据 tbs
                 val tbs = getTbs(cookie)
                 if (tbs.isEmpty()) {
-                    XposedBridge.log("$TAG: 获取tbs鉴权失败。")
+                    XposedCompat.log("$TAG: 获取tbs鉴权失败。")
                     if (force) toast(context, "自动签到失败：无法获取tbs鉴权参数")
                     return@thread
                 }
 
                 // 4. 获取关注贴吧列表，筛选未签到的
-                val (followList, totalLiked) = getFollow(cookie)
-                if (followList.isEmpty()) {
-                    XposedBridge.log("$TAG: 已经全部签到过了，无待签任务。总关注数: $totalLiked")
+                val (initialFollowList, totalLiked) = getFollow(cookie)
+                if (initialFollowList.isEmpty()) {
+                    XposedCompat.log("$TAG: 已经全部签到，无待签任务。总关注数: $totalLiked")
                     // 如果全部签过了也标记今日已签完
                     prefs.edit().putString(prefKey, today).apply()
-                    if (force) toast(context, "自动签到：当前 $totalLiked 个贴吧已全部签到")
+                    toast(context, "自动签到：当前 $totalLiked 个贴吧已全部签到")
                     return@thread
                 }
 
-                var successCount = 0
-                val pendingCount = followList.size
+                toast(context, "自动签到开始：共有 ${initialFollowList.size} 个吧待签到")
 
-                // 4. 开始单节点签到
-                for (tieba in followList) {
-                    val success = signSingle(tieba, tbs, cookie)
-                    if (success) successCount++
-                    // 必须加延迟防止风控（随机休眠 300~500 毫秒）
-                    Thread.sleep((300..500).random().toLong())
+                var maxRetry = 3 // 最大重试轮数
+                var currentRetry = 0
+                var leftoverList = initialFollowList
+
+                while (currentRetry < maxRetry && leftoverList.isNotEmpty()) {
+                    if (currentRetry > 0) {
+                        XposedCompat.log("$TAG: 开始第 $currentRetry 次重试签到...")
+                        Thread.sleep(2000) // 重试前等待一小段时间
+                    }
+
+                    var successCount = 0
+                    val pendingCount = leftoverList.size
+
+                    // 4. 开始单节点签到
+                    for (tieba in leftoverList) {
+                        val success = signSingle(tieba, tbs, cookie)
+                        if (success) successCount++
+                        // 必须加延迟防止风控（随机休眠 300~500 毫秒）
+                        Thread.sleep((300..500).random().toLong())
+                    }
+
+                    XposedCompat.log("$TAG: 第 ${currentRetry + 1} 轮签到完毕。共签到 $pendingCount 个吧，成功 $successCount 个")
+
+                    // 5. 验证是否全部签到完成
+                    val (newLeftoverList, _) = getFollow(cookie)
+                    leftoverList = newLeftoverList
+                    
+                    if (leftoverList.isEmpty()) {
+                        break // 已经全部签到完成，跳出重试循环
+                    }
+                    currentRetry++
                 }
 
-                XposedBridge.log("$TAG: 签到尝试完毕。共尝试补签 $pendingCount 个吧，成功 $successCount 个")
-                
-                // 5. 验证是否全部签到完成
-                val (leftoverList, _) = getFollow(cookie)
                 if (leftoverList.isEmpty()) {
                     // 只有验证完成所有可签到的吧，才能将完成记录写入日志
                     prefs.edit().putString(prefKey, today).apply()
-                    if (successCount > 0) {
-                        toast(context, "成功签到${successCount}个吧")
-                    } else if (force) {
-                        toast(context, "自动签到：已无待签吧")
-                    }
+                    toast(context, "${initialFollowList.size} 个吧已全部签到")
                 } else {
-                    XposedBridge.log("$TAG: 尚有 ${leftoverList.size} 个吧未签到，不写入完成日志。")
-                    if (force) {
-                        toast(context, "完成部分签到，剩余 ${leftoverList.size} 个未签")
-                    }
+                    XposedCompat.log("$TAG: 重试 $maxRetry 次后，尚有 ${leftoverList.size} 个吧未签到，未完成")
+                    val signedCount = initialFollowList.size - leftoverList.size
+                    toast(context, "已签到 $signedCount 个吧，还有 ${leftoverList.size} 个吧未签到，未完成")
                 }
             } catch (t: Throwable) {
-                XposedBridge.log("$TAG: 签到线程异常: ${t.message}")
+                XposedCompat.log("$TAG: 签到线程异常: ${t.message}")
+                XposedCompat.log(t)
                 if (force) toast(context, "自动签到异常：${t.message}")
             }
         }
@@ -168,29 +184,33 @@ object AutoSignInManager {
 
     private fun getRequest(urlString: String, cookie: String): JSONObject? {
         val conn = URL(urlString).openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.connectTimeout = 10000
-        conn.readTimeout = 15000
-        conn.setRequestProperty("Cookie", cookie)
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36")
-        return if (conn.responseCode in 200..399) {
-            JSONObject(BufferedReader(InputStreamReader(conn.inputStream)).readText())
-        } else null
+        try {
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Cookie", cookie)
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36")
+            return if (conn.responseCode in 200..399) {
+                JSONObject(BufferedReader(InputStreamReader(conn.inputStream)).readText())
+            } else null
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun postRequest(urlString: String, body: String, cookie: String): JSONObject? {
         val conn = URL(urlString).openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.connectTimeout = 10000
-        conn.readTimeout = 15000
-        conn.doOutput = true
-        conn.setRequestProperty("Cookie", cookie)
-        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36")
-        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-        return if (conn.responseCode in 200..399) {
-            JSONObject(BufferedReader(InputStreamReader(conn.inputStream)).readText())
-        } else null
+        try {
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Cookie", cookie)
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36")
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            return if (conn.responseCode in 200..399) {
+                JSONObject(BufferedReader(InputStreamReader(conn.inputStream)).readText())
+            } else null
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun extractBduss(cookie: String): String {

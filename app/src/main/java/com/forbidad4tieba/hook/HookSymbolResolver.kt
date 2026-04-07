@@ -1,11 +1,9 @@
 package com.forbidad4tieba.hook
 
 import android.content.Context
-import android.view.View
 import android.widget.Toast
 import dalvik.system.DexFile
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+import com.forbidad4tieba.hook.core.XposedCompat
 import org.json.JSONObject
 import java.io.File
 import kotlin.concurrent.thread
@@ -14,7 +12,7 @@ internal fun interface ScanLogger {
     fun log(line: String)
 }
 
-internal data class HookSymbols(
+data class HookSymbols(
     val homeTabClass: String? = null,
     val homeTabRebuildMethod: String? = null,
     val homeTabListField: String? = null,
@@ -33,7 +31,7 @@ internal data class HookSymbols(
     val nd7MethodL: String? = null,
     val zgaClass: String? = null,
     val zgaMethods: List<String>? = null,
-    val personalizeRefreshMethod: String? = null,
+
     val source: String = "unsupported",
     val createdAt: Long = 0L,
 ) {
@@ -61,7 +59,7 @@ internal data class HookSymbols(
                 zgaMethods.forEach { array.put(it) }
                 put("zgaMethods", array)
             }
-            put("personalizeRefreshMethod", personalizeRefreshMethod)
+
             put("source", source)
             put("createdAt", createdAt)
         }.toString()
@@ -100,7 +98,7 @@ internal data class HookSymbols(
                     nd7MethodL = obj.optStringOrNull("nd7MethodL"),
                     zgaClass = obj.optStringOrNull("zgaClass"),
                     zgaMethods = zgaMethodsList,
-                    personalizeRefreshMethod = obj.optStringOrNull("personalizeRefreshMethod"),
+
                     source = obj.optString("source", "unsupported"),
                     createdAt = obj.optLong("createdAt", 0L),
                 )
@@ -118,7 +116,7 @@ internal data class HookSymbols(
 }
 
 internal object HookSymbolResolver {
-    private const val TAG = "TiebaHook.SymbolResolver"
+    private const val TAG = "[HookSymbolResolver]"
     private const val PREFS_NAME = "tiebahook_settings"
     private const val KEY_SYMBOL_FP = "hook_symbol_fp_v2"
     private const val KEY_SYMBOL_JSON = "hook_symbol_json_v2"
@@ -300,7 +298,7 @@ internal object HookSymbolResolver {
         var nd7MethodL: String? = null
         var zgaClass: String? = null
         var zgaMethodsList: List<String>? = null
-        var personalizeRefreshMethod: String? = null
+
 
         val feedLoadMoreMatch = runRules(candidatesWithWhitelist, cl, listOf(FeedTemplateLoadMoreRule()), logger, "feedLoadMore")
         if (feedLoadMoreMatch != null) {
@@ -339,14 +337,7 @@ internal object HookSymbolResolver {
             zgaMethodsList = zgaMatch.methodName.split(",").filter { it.isNotBlank() }
         }
 
-        val personalizeRefreshMatch = runRules(
-            candidatesWithWhitelist.apply {
-                add("com.baidu.tieba.homepage.personalize.PersonalizePageView")
-            }, cl, listOf(PersonalizeRefreshRule()), logger, "personalizeRefresh"
-        )
-        if (personalizeRefreshMatch != null) {
-            personalizeRefreshMethod = personalizeRefreshMatch.methodName
-        }
+
 
         return HookSymbols(
             settingsClass = settingsMatch.className,
@@ -366,7 +357,7 @@ internal object HookSymbolResolver {
             nd7MethodL = nd7MethodL,
             zgaClass = zgaClass,
             zgaMethods = zgaMethodsList,
-            personalizeRefreshMethod = personalizeRefreshMethod,
+
             source = if (homeMatch != null) "scan" else "partial",
             createdAt = System.currentTimeMillis(),
         )
@@ -379,14 +370,14 @@ internal object HookSymbolResolver {
             var currentCl: ClassLoader? = cl
             while (currentCl != null) {
                 if (currentCl is dalvik.system.BaseDexClassLoader) {
-                    val pathListField = XposedHelpers.findField(currentCl.javaClass, "pathList")
-                    val pathList = pathListField.get(currentCl)
-                    val dexElementsField = XposedHelpers.findField(pathList.javaClass, "dexElements")
+                    val pathListField = XposedCompat.findField(currentCl::class.java, "pathList")
+                    val pathList = pathListField.get(currentCl)!!
+                    val dexElementsField = XposedCompat.findField(pathList::class.java, "dexElements")
                     val dexElements = dexElementsField.get(pathList) as Array<*>
                     
                     for (element in dexElements) {
                         if (element == null) continue
-                        val dexFileField = try { XposedHelpers.findField(element.javaClass, "dexFile") } catch (_: Throwable) { null } ?: continue
+                        val dexFileField = try { XposedCompat.findField(element::class.java, "dexFile") } catch (_: Throwable) { null } ?: continue
                         val dexFile = dexFileField.get(element) as? DexFile ?: continue
                         val entries = dexFile.entries()
                         while (entries.hasMoreElements()) {
@@ -404,6 +395,7 @@ internal object HookSymbolResolver {
             }
         } catch (t: Throwable) {
             log(logger, "list classes from dex path list failed: ${t.message}")
+            XposedCompat.log(t)
         }
         
         if (out.isNotEmpty()) {
@@ -426,13 +418,13 @@ internal object HookSymbolResolver {
                 }
             }
         } catch (t: Throwable) {
-            XposedBridge.log("$TAG: list classes fallback failed: ${t.message}")
+            XposedCompat.log("$TAG: list classes fallback failed: ${t.message}")
             log(logger, "list classes fallback failed: ${t.message}")
+            XposedCompat.log(t)
         } finally {
             try {
                 dexFile?.close()
-            } catch (_: Throwable) {
-            }
+            } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
         }
         log(logger, "obfuscated root classes listed: ${out.size}")
         return out.distinct()
@@ -528,7 +520,7 @@ internal object HookSymbolResolver {
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? {
         return try {
-            XposedHelpers.findClassIfExists(name, cl)
+            XposedCompat.findClassOrNull(name, cl)
         } catch (_: Throwable) {
             null
         }
@@ -560,22 +552,18 @@ internal object HookSymbolResolver {
             handler.post {
                 try {
                     Toast.makeText(appCtx, text, Toast.LENGTH_SHORT).show()
-                } catch (_: Throwable) {
-                }
+                } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
             }
-        } catch (_: Throwable) {
-        }
+        } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
     }
 
     private fun log(logger: ScanLogger?, line: String) {
         try {
-            XposedBridge.log("$TAG: $line")
-        } catch (_: Throwable) {
-        }
+            XposedCompat.log("$TAG: $line")
+        } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
         try {
             logger?.log(line)
-        } catch (_: Throwable) {
-        }
+        } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
     }
 
     private fun describeSymbols(context: Context, symbols: HookSymbols): String {
@@ -606,7 +594,7 @@ internal object HookSymbolResolver {
             ${fmt("Zga", symbols.zgaClass)}
             ${fmt("Splash", "${symbols.splashAdHelperClass}.${symbols.splashAdHelperMethod}")}
             ${fmt("FeedLoadMore", symbols.feedTemplateLoadMoreMethod)}
-            ${fmt("PersonalizeRefresh", symbols.personalizeRefreshMethod)}
+
             Source        : ${symbols.source}
             =========================================
         """.trimIndent()

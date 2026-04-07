@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
 import android.widget.AbsListView
+import com.forbidad4tieba.hook.core.XposedCompat
 
 object ViewExt {
     // Safe tag IDs (0x7E prefix avoids collision with app R.id 0x7F)
@@ -44,7 +45,7 @@ object ViewExt {
             if (lp !is AbsListView.LayoutParams || lp.width != 0 || lp.height != 0) {
                 view.layoutParams = AbsListView.LayoutParams(0, 0)
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) { XposedCompat.logD("ViewExt: ${t.message}") }
     }
 
     fun squashView(view: View?) {
@@ -64,7 +65,7 @@ object ViewExt {
                 }
                 view.layoutParams = lp
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) { XposedCompat.logD("ViewExt: ${t.message}") }
     }
 
     fun squashAncestorFeedCard(v: View) {
@@ -80,7 +81,7 @@ object ViewExt {
                 if (className == parent.javaClass.name) return parent
                 parent = parent.parent
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) { XposedCompat.logD("ViewExt: ${t.message}") }
         return null
     }
 
@@ -93,7 +94,7 @@ object ViewExt {
                 view.setTag(TAG_SQUASH_STATE, state)
             }
             state.squashed = true
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) { XposedCompat.logD("ViewExt: ${t.message}") }
         squashView(view)
     }
 
@@ -104,7 +105,7 @@ object ViewExt {
             if (!obj.squashed) return
             obj.restore(view)
             obj.squashed = false
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) { XposedCompat.logD("ViewExt: ${t.message}") }
     }
 
     class SquashState(view: View) {
@@ -167,7 +168,7 @@ object ViewExt {
                 } else {
                     view.requestLayout()
                 }
-            } catch (_: Throwable) {}
+            } catch (t: Throwable) { XposedCompat.logD("ViewExt: ${t.message}") }
         }
     }
 }
