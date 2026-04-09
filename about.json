@@ -1,1 +1,12 @@
 
+{
+  "schema": 1,
+  "items": [
+    {
+      "title": "反馈",
+      "description": "1 ",
+      "hasLink": true,
+      "url": "https://gitee.com/ratsoluos/detectupdate"
+    }
+  ]
+}
