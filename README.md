@@ -1,6 +1,6 @@
 # ForbidAd4TieBa
 
-一个轻量级开源 Xposed 模块，用于屏蔽百度贴吧广告并精简页面体验。  
+一个轻量级开源 Lsposed 模块，用于屏蔽百度贴吧广告并精简页面体验。  
 **设置入口：** 贴吧「我的」页面 -> 长按右上角「设置」图标  
 
 [最新版本下载](https://github.com/Xposed-Modules-Repo/com.forbidad4tieba.hook/releases/latest)&emsp;&emsp;&emsp;[提交 Issue / PR](https://github.com/aikavvak12una/ForbidAd4TieBa)&emsp;&emsp;&emsp;[加入 TG 群组](https://t.me/+JHa8ARb5mlRlYjYx)
@@ -8,6 +8,7 @@
 ## 功能特性
 * **核心框架**
   * 支持动态反混淆
+  * 基于libxposed api101，需要使用支持api101版本的lsposed安装使用
 * **广告拦截**
   * 屏蔽开屏、信息流、帖子详情页等推广广告
   * 屏蔽评论区广告
