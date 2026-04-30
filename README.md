@@ -1,20 +1,120 @@
-# ForbidAd4TieBa 
+Skip to content
+Xposed-Modules-Repo
+com.forbidad4tieba.hook
+Repository navigation
+Code
+Pull requests
+Agents
+Security and quality
+Insights
+Settings
+com.forbidad4tieba.hook
+/
+README.md
+in
+main
 
-ForbidAd4TieBa 是一个百度贴吧净化 Xposed 模块，用于净化贴吧界面元素，并提供一些扩展增强功能  
-[提交 Issue / PR](https://github.com/aikavvak12una/ForbidAd4TieBa)&emsp;&emsp;&emsp;[加入 TG 群组](https://t.me/+JHa8ARb5mlRlYjYx)
+Edit
 
-## 下载与安装
+Preview
+Indent mode
 
-[最新版本下载](https://github.com/Xposed-Modules-Repo/com.forbidad4tieba.hook/releases/latest)&emsp;&emsp;&emsp;
+Spaces
+Indent size
 
-安装后请在支持现代 libxposed api101 的框架中启用模块，并把作用域设置为：
+2
+Line wrap mode
 
-`
+Soft wrap
+Editing README.md file contents
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+ 21
+ 22
+ 23
+ 24
+ 25
+ 26
+ 27
+ 28
+ 29
+ 30
+ 31
+ 32
+ 33
+ 34
+ 35
+ 36
+ 37
+ 38
+ 39
+ 40
+ 41
+ 42
+ 43
+ 44
+ 45
+ 46
+ 47
+ 48
+ 49
+ 50
+ 51
+ 52
+ 53
+ 54
+ 55
+ 56
+ 57
+ 58
+ 59
+ 60
+ 61
+ 62
+ 63
+ 64
+ 65
+ 66
+ 67
+ 68
+ 69
+ 70
+ 71
+ 72
+ 73
+ 74
+ 75
+ 76
+ 77
+ 78
+ 79
+ 80
+ 81
+ 82
+ 83
+ 84
+ 85
+ 86
+ 87
+ 88
+ 89
+ 90
+ 91
+ 92
+ 93
+ 94
 百度贴吧
 com.baidu.tieba
 `
 
 启用后强制停止并重新打开贴吧
+
 
 ## 设置入口
 
@@ -24,7 +124,7 @@ com.baidu.tieba
 
 ### 内容净化
 
-- 屏蔽直播、视频、投票、求助、悬赏、带货、热点等信息流卡片
+- 自定义屏蔽推荐帖子
 - 支持按吧名关键词屏蔽帖子
 - 支持屏蔽未关注的吧
 
@@ -35,6 +135,7 @@ com.baidu.tieba
 - 隐藏帖子详情页底部横幅
 - 重定向进吧页面
 - 屏蔽升级弹窗
+- 吧页面禁止自动展开
 
 ### 实用增强
 
@@ -89,3 +190,8 @@ com.baidu.tieba
 ## 免责声明
 本模块仅供学习与技术研究使用，请勿用于任何违反法律法规的用途。  
 使用本模块可能出现应用卡顿、闪退、账号被封禁等问题，因此在安装使用前应仔细审查[源代码](https://github.com/aikavvak12una/ForbidAd4TieBa)，作者不对使用本模块造成的任何后果承担责任。
+
+Use Control + Shift + m to toggle the tab key moving focus. Alternatively, use esc then tab to move to the next interactive element on the page.
+未选择文件
+Attach files by dragging & dropping, selecting or pasting them.
+The function is being upgraded
