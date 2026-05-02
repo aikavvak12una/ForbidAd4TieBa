@@ -1,6 +1,6 @@
 # ForbidAd4TieBa 
 
-ForbidAd4TieBa 是一个百度贴吧净化 Xposed 模块，用于净化贴吧界面元素，并提供一些扩展增强功能  
+ForbidAd4TieBa 是一个贴吧净化 Xposed 模块，用于净化贴吧界面元素，并提供一些扩展增强功能  
 [提交 Issue / PR](https://github.com/aikavvak12una/ForbidAd4TieBa)&emsp;&emsp;&emsp;[加入 TG 群组](https://t.me/+JHa8ARb5mlRlYjYx)
 
 ## 下载与安装
