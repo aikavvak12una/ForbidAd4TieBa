@@ -1,0 +1,225 @@
+package com.forbidad4tieba.hook.feature.ad
+
+import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.core.XposedCompat
+import java.lang.reflect.Modifier
+
+object StrategyAdHook {
+    @Volatile private var staticHooked = false
+    @Volatile private var symbolHooked = false
+
+    fun hookStatic(cl: ClassLoader) {
+        if (!tryMarkStaticHooked()) return
+
+        try {
+            hookAccountData(cl)
+            hookSwitchManager(cl)
+            XposedCompat.log("[StrategyAdHook] static hooks dispatched")
+        } catch (t: Throwable) {
+            resetStaticHooked()
+            XposedCompat.log("[StrategyAdHook] static hook install FAILED: ${t.message}")
+            XposedCompat.log(t)
+        }
+    }
+
+    fun hookWithSymbols(cl: ClassLoader, symbols: HookSymbols) {
+        if (!tryMarkSymbolHooked()) return
+
+        try {
+            val splashClass = symbols.splashAdHelperClass
+            val splashMethod = symbols.splashAdHelperMethod
+            if (!splashClass.isNullOrBlank() && !splashMethod.isNullOrBlank()) {
+                hookReturnConstant(splashClass, cl, splashMethod, true)
+            } else {
+                XposedCompat.logD("[StrategyAdHook] splash helper skipped: scan symbols missing")
+            }
+
+            val closeAdClass = symbols.closeAdDataClass
+            val closeAdG1 = symbols.closeAdDataMethodG1
+            val closeAdJ1 = symbols.closeAdDataMethodJ1
+            val closeAdMethods = listOfNotNull(closeAdG1, closeAdJ1)
+                .flatMap { it.split(",") }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+            if (!closeAdClass.isNullOrBlank() && closeAdMethods.isNotEmpty()) {
+                for (methodName in closeAdMethods) {
+                    hookReturnConstant(closeAdClass, cl, methodName, 1)
+                }
+            } else {
+                XposedCompat.logD("[StrategyAdHook] CloseAdData skipped: methods not resolved by scan")
+            }
+
+            hookZga(cl, symbols)
+            XposedCompat.log("[StrategyAdHook] symbol-dependent hooks dispatched")
+        } catch (t: Throwable) {
+            resetSymbolHooked()
+            XposedCompat.log("[StrategyAdHook] symbol hook install FAILED: ${t.message}")
+            XposedCompat.log(t)
+        }
+    }
+
+    private fun hookAccountData(cl: ClassLoader) {
+        val accountClass = XposedCompat.findClassOrNull(
+            StableTiebaHookPoints.ACCOUNT_DATA_CLASS, cl
+        ) ?: return
+
+        val hooks = arrayOf(
+            "getMemberCloseAdVipClose" to 1 as Any,
+            "isMemberCloseAdVipClose" to true as Any,
+            "getMemberCloseAdIsOpen" to 1 as Any,
+            "isMemberCloseAdIsOpen" to true as Any,
+            "getMemberType" to 2 as Any
+        )
+
+        for ((method, value) in hooks) {
+            hookReturnConstant(accountClass, method, value)
+        }
+    }
+
+    private fun hookReturnConstant(targetClass: Class<*>, methodName: String, value: Any) {
+        val mod = XposedCompat.module ?: return
+        val method = XposedCompat.findMethodOrNull(targetClass, methodName)
+        if (method == null) {
+            XposedCompat.logD { "[StrategyAdHook] method NOT FOUND: ${targetClass.simpleName}.$methodName" }
+            return
+        }
+        try {
+            mod.hook(method).intercept { chain ->
+                if (ConfigManager.isAdBlockEnabled) {
+                    return@intercept value
+                }
+                chain.proceed()
+            }
+            XposedCompat.log("[StrategyAdHook] hook INSTALLED: ${targetClass.simpleName}.$methodName")
+        } catch (t: Throwable) { XposedCompat.logD { "StrategyAdHook: ${t.message}" } }
+    }
+
+    private fun hookReturnConstant(className: String, cl: ClassLoader, methodName: String, value: Any) {
+        val clazz = XposedCompat.findClassOrNull(className, cl)
+        if (clazz == null) {
+            XposedCompat.logD { "[StrategyAdHook] class NOT FOUND: $className (for $methodName)" }
+            return
+        }
+        hookReturnConstant(clazz, methodName, value)
+    }
+
+    private fun hookSwitchManager(cl: ClassLoader) {
+        val mod = XposedCompat.module ?: return
+        val smClass = XposedCompat.findClassOrNull(
+            StableTiebaHookPoints.SWITCH_MANAGER_CLASS, cl
+        ) ?: return
+
+        val adContentBlockedKeys = setOf(
+            "ad_baichuan_open",
+            "bear_wxb_download",
+            "pref_key_fun_ad_sdk_enable"
+        )
+        val adRuntimeBlockedKeys = adContentBlockedKeys + setOf(
+            "platform_csj_init",
+            "platform_gdt_init",
+            "platform_ks_init",
+            "platform_ubix_init",
+            "12_30_fun_sdk_init_switch"
+        )
+        val apsarasBlockedKeys = setOf("apsaras_switch")
+
+        val method = XposedCompat.findMethodOrNull(
+            smClass,
+            StableTiebaHookPoints.METHOD_FIND_TYPE,
+            String::class.java,
+        )
+        if (method == null) {
+            XposedCompat.log("[StrategyAdHook] SwitchManager.${StableTiebaHookPoints.METHOD_FIND_TYPE} NOT FOUND")
+            return
+        }
+        try {
+            mod.hook(method).intercept { chain ->
+                val key = chain.args.firstOrNull() as? String
+                val shouldBlock = when {
+                    ConfigManager.isAdBlockEnabled && key in adContentBlockedKeys -> true
+                    ConfigManager.isAdSdkComponentsDisabled && key in adRuntimeBlockedKeys -> true
+                    ConfigManager.isApsarasScheduleDisabled && key in apsarasBlockedKeys -> true
+                    else -> false
+                }
+                if (shouldBlock) {
+                    XposedCompat.logD { "[StrategyAdHook] > findType blocked key=$key" }
+                    return@intercept 0
+                }
+                chain.proceed()
+            }
+            XposedCompat.log("[StrategyAdHook] SwitchManager.${StableTiebaHookPoints.METHOD_FIND_TYPE} hook INSTALLED")
+        } catch (t: Throwable) {
+            XposedCompat.log("Failed to hook SwitchManager.${StableTiebaHookPoints.METHOD_FIND_TYPE}: ${t.message}")
+            XposedCompat.log(t)
+        }
+    }
+
+    private fun hookZga(cl: ClassLoader, symbols: HookSymbols) {
+        val mod = XposedCompat.module ?: return
+        val zgaClassName = symbols.zgaClass ?: return
+        val zgaClass = XposedCompat.findClassOrNull(zgaClassName, cl) ?: return
+        if (zgaClass.isInterface || Modifier.isAbstract(zgaClass.modifiers)) {
+            XposedCompat.logD { "[StrategyAdHook] zga skipped: target class is abstract/interface: $zgaClassName" }
+            return
+        }
+
+        var installed = 0
+        val zgaMethods = symbols.zgaMethods?.distinct().orEmpty()
+        if (zgaMethods.isEmpty()) return
+
+        for (methodName in zgaMethods) {
+            val overloads = zgaClass.declaredMethods.filter {
+                it.name == methodName &&
+                    Modifier.isStatic(it.modifiers) &&
+                    it.returnType == String::class.java &&
+                    it.parameterTypes.size == 1 &&
+                    it.parameterTypes[0] == String::class.java &&
+                    !Modifier.isAbstract(it.modifiers)
+            }
+
+            for (method in overloads) {
+                try {
+                    method.isAccessible = true
+                    mod.hook(method).intercept { chain ->
+                        if (!ConfigManager.isAdBlockEnabled) return@intercept chain.proceed()
+                        ""
+                    }
+                    installed++
+                } catch (t: Throwable) { XposedCompat.logD { "StrategyAdHook: ${t.message}" } }
+            }
+        }
+
+        if (installed == 0) {
+            XposedCompat.log("[StrategyAdHook] zga string hook skipped (no matching methods)")
+        } else {
+            XposedCompat.log("[StrategyAdHook] zga string hook INSTALLED: class=$zgaClassName, count=$installed")
+        }
+    }
+
+    private fun tryMarkStaticHooked(): Boolean {
+        synchronized(this) {
+            if (staticHooked) return false
+            staticHooked = true
+            return true
+        }
+    }
+
+    private fun resetStaticHooked() {
+        synchronized(this) { staticHooked = false }
+    }
+
+    private fun tryMarkSymbolHooked(): Boolean {
+        synchronized(this) {
+            if (symbolHooked) return false
+            symbolHooked = true
+            return true
+        }
+    }
+
+    private fun resetSymbolHooked() {
+        synchronized(this) { symbolHooked = false }
+    }
+}

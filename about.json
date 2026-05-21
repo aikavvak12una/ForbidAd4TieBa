@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "items": [
+    {
+      "title": "TG频道",
+      "description": "提供反馈、加入测试",
+      "hasLink": true,
+      "url": "https://t.me/+TP_ZLhoS-hFlNGJh"
+    }
+  ],
+  "telemetry": [
+    {
+      "name": "usage_daily",
+      "enabled": true,
+      "endpoint": "https://arasaka.asia/v1/heartbeat",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "schedule": {
+        "successOncePerDay": true
+      },
+      "timeoutMs": 5000,
+      "body": {
+        "uuid": "${uuid}",
+        "moduleVersion": "${moduleVersion}",
+        "runtimeEnvironment": "${runtimeEnvironment}"
+      }
+    }
+  ]
+}
