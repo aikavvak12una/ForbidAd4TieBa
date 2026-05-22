@@ -22,6 +22,11 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.TextPaint
+import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -98,6 +103,7 @@ object HomeNativeGlassHook {
     private val homeCardComponentViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val cardComponentAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val cardComponentBootstrapScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val richTextReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val chromeGlassOriginalStates = Collections.synchronizedMap(WeakHashMap<View, ChromeGlassOriginalState>())
     private val imageContainerRadiusStates = Collections.synchronizedMap(WeakHashMap<View, Float>())
     private val scrollInvalidateScheduled = AtomicBoolean(false)
@@ -111,6 +117,7 @@ object HomeNativeGlassHook {
         ConcurrentHashMap<String, Map<Int, Set<HomeNativeGlassTextRole>>>()
     private val readableTextResourceColorRoleCache =
         ConcurrentHashMap<String, Map<Int, Set<HomeNativeGlassTextRole>>>()
+    private val readableTextSpanRoles = Collections.synchronizedMap(WeakHashMap<Any, HomeNativeGlassTextRole>())
 
     @Volatile private var recyclerViewClass: Class<*>? = null
     @Volatile private var cachedBackgroundBitmap: CachedBackgroundBitmap? = null
@@ -868,6 +875,7 @@ object HomeNativeGlassHook {
         XposedCompat.findClassOrNull(StableTiebaHookPoints.TB_RICH_TEXT_VIEW_CLASS, cl)?.let { richTextClass ->
             installedCount += installDirectReadableTextHook(richTextClass, "setTextColor", linkText = false)
             installedCount += installDirectReadableTextHook(richTextClass, "setLinkTextColor", linkText = true)
+            installedCount += installRichTextReadableTextContentHook(richTextClass)
         } ?: XposedCompat.logD { "$TAG readable text SKIP: TbRichTextView class not found" }
 
         return installedCount
@@ -963,6 +971,47 @@ object HomeNativeGlassHook {
         return 1
     }
 
+    private fun installRichTextReadableTextContentHook(richTextClass: Class<*>): Int {
+        val mod = XposedCompat.module ?: return 0
+        var installedCount = 0
+        for (method in richTextClass.declaredMethods) {
+            if (!isRichTextSetTextMethod(method)) continue
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                if (!isReadableTextWriteInProgress()) {
+                    (chain.thisObject as? View)?.let { view ->
+                        scheduleRichTextReadableTextRefresh(view)
+                    }
+                }
+                result
+            }
+            installedCount++
+        }
+        return installedCount
+    }
+
+    private fun isRichTextSetTextMethod(method: Method): Boolean {
+        if (method.name != "setText" || method.returnType != Void.TYPE) return false
+        val params = method.parameterTypes
+        return params.isNotEmpty() && params[0].name == TB_RICH_TEXT_MODEL_CLASS
+    }
+
+    private fun scheduleRichTextReadableTextRefresh(view: View) {
+        runReadableTextSafely {
+            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
+            if (readableTextPaletteFor(view) == null || !isReadableTextTarget(view)) return@runReadableTextSafely
+            synchronized(richTextReadableTextRefreshScheduled) {
+                if (richTextReadableTextRefreshScheduled.containsKey(view)) return@runReadableTextSafely
+                richTextReadableTextRefreshScheduled[view] = true
+            }
+            view.post {
+                richTextReadableTextRefreshScheduled.remove(view)
+                applyReadableTextPaletteToTree(view, READABLE_TEXT_DIRECT_GROUP_DEPTH)
+            }
+        }
+    }
+
     private fun applyReadableTextColorFromResource(
         view: View,
         colorResId: Int,
@@ -1044,6 +1093,7 @@ object HomeNativeGlassHook {
                     view.setLinkTextColor(color)
                 }
             }
+            applyReadableTextPaletteToTextSpans(view, palette)
         }
         val group = view as? ViewGroup ?: return
         for (index in 0 until group.childCount) {
@@ -1053,6 +1103,134 @@ object HomeNativeGlassHook {
                 depth + 1,
                 maxDepth,
             )
+        }
+    }
+
+    private fun applyReadableTextPaletteToTextSpans(
+        textView: TextView,
+        palette: HomeNativeGlassReadableTextPalette,
+    ) {
+        val text = textView.text as? Spanned ?: return
+        if (text.isEmpty()) return
+        var replacementText: SpannableStringBuilder? = null
+        fun editableText(): SpannableStringBuilder {
+            return replacementText ?: SpannableStringBuilder(text).also { replacementText = it }
+        }
+        var changed = false
+        val clickableSpans = text.getSpans(0, text.length, ClickableSpan::class.java)
+        for (span in clickableSpans) {
+            changed = applyReadableTextPaletteToClickableSpan(
+                textView,
+                text,
+                editableText = ::editableText,
+                span,
+                palette,
+            ) || changed
+        }
+        val colorSpans = text.getSpans(0, text.length, ForegroundColorSpan::class.java)
+        for (span in colorSpans) {
+            changed = applyReadableTextPaletteToForegroundColorSpan(
+                textView,
+                text,
+                editableText = ::editableText,
+                span,
+                palette,
+            ) || changed
+        }
+        if (replacementText != null) {
+            textView.text = replacementText
+            changed = true
+        }
+        if (changed) {
+            textView.invalidate()
+        }
+    }
+
+    private fun applyReadableTextPaletteToClickableSpan(
+        textView: TextView,
+        text: Spanned,
+        editableText: () -> SpannableStringBuilder,
+        span: ClickableSpan,
+        palette: HomeNativeGlassReadableTextPalette,
+    ): Boolean {
+        if (span is ReadableTextClickableSpan) {
+            val color = palette.colorFor(span.role)
+            return if (span.color != color) {
+                span.color = color
+                true
+            } else {
+                false
+            }
+        }
+        val start = text.getSpanStart(span)
+        val end = text.getSpanEnd(span)
+        if (start < 0 || end < 0 || start >= end) return false
+        val flags = text.getSpanFlags(span)
+        val role = readableTextRoleForClickableSpan(textView, span)
+        val replacement = ReadableTextClickableSpan(
+            delegate = span,
+            role = role,
+            color = palette.colorFor(role),
+        )
+        val editable = editableText()
+        editable.removeSpan(span)
+        editable.setSpan(replacement, start, end, flags)
+        return true
+    }
+
+    private fun applyReadableTextPaletteToForegroundColorSpan(
+        textView: TextView,
+        text: Spanned,
+        editableText: () -> SpannableStringBuilder,
+        span: ForegroundColorSpan,
+        palette: HomeNativeGlassReadableTextPalette,
+    ): Boolean {
+        val role = readableTextSpanRoles[span]
+            ?: readableTextRoleForRawColor(textView, span.foregroundColor, linkText = false)
+            ?: return false
+        val color = palette.colorFor(role)
+        if (span.foregroundColor == color) {
+            readableTextSpanRoles[span] = role
+            return false
+        }
+        val start = text.getSpanStart(span)
+        val end = text.getSpanEnd(span)
+        if (start < 0 || end < 0 || start >= end) return false
+        val flags = text.getSpanFlags(span)
+        val replacement = ForegroundColorSpan(color)
+        val editable = editableText()
+        editable.removeSpan(span)
+        editable.setSpan(replacement, start, end, flags)
+        readableTextSpanRoles.remove(span)
+        readableTextSpanRoles[replacement] = role
+        return true
+    }
+
+    private fun readableTextRoleForClickableSpan(
+        textView: TextView,
+        span: ClickableSpan,
+    ): HomeNativeGlassTextRole {
+        val paint = TextPaint().apply {
+            color = textView.currentTextColor
+            linkColor = runCatching { textView.linkTextColors.defaultColor }.getOrDefault(textView.currentTextColor)
+        }
+        runCatching { span.updateDrawState(paint) }
+        return readableTextRoleForRawColor(textView, paint.color, linkText = true)
+            ?: HomeNativeGlassTextRole.LINK
+    }
+
+    private class ReadableTextClickableSpan(
+        val delegate: ClickableSpan,
+        val role: HomeNativeGlassTextRole,
+        var color: Int,
+    ) : ClickableSpan() {
+        override fun onClick(widget: View) {
+            delegate.onClick(widget)
+        }
+
+        override fun updateDrawState(ds: TextPaint) {
+            delegate.updateDrawState(ds)
+            ds.color = color
         }
     }
 
@@ -5963,6 +6141,7 @@ object HomeNativeGlassHook {
     )
     private const val HOME_SEARCH_BOX_HEADER_CONTAINER_CLASS =
         "androidx.coordinatorlayout.widget.CoordinatorLayout"
+    private const val TB_RICH_TEXT_MODEL_CLASS = "com.baidu.tbadk.widget.richText.TbRichText"
     private val HOME_SEARCH_BOX_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 80L, 240L, 600L)
     private val CARD_COMPONENT_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 80L, 240L, 600L)
     private val READABLE_TEXT_PRIMARY_RESOURCE_NAMES = setOf(
