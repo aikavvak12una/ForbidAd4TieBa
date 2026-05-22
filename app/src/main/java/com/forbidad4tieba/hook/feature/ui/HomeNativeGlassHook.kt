@@ -40,6 +40,7 @@ import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
@@ -65,6 +66,7 @@ object HomeNativeGlassHook {
     private val glassBackgroundViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val scrollInvalidationInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val frameInvalidationInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val homeRecyclerChildAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pageStyleReapplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbCommentActivityApplyScheduled = Collections.synchronizedMap(WeakHashMap<Activity, Boolean>())
     private val pbCommentSurfaceAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
@@ -2278,6 +2280,7 @@ object HomeNativeGlassHook {
         if (isRecyclerView(view)) {
             homeRecyclerViews[view] = true
             installScrollInvalidation(view)
+            installHomeRecyclerChildAttachRefresh(view)
             if (clearBackgrounds) {
                 view.setBackgroundColor(Color.TRANSPARENT)
             }
@@ -2308,6 +2311,7 @@ object HomeNativeGlassHook {
                 nearestRecycler?.let { recycler ->
                     homeRecyclerViews[recycler] = true
                     installScrollInvalidation(recycler)
+                    installHomeRecyclerChildAttachRefresh(recycler)
                     if (hasPageBackgroundOverride()) {
                         recycler.setBackgroundColor(Color.TRANSPARENT)
                     }
@@ -2331,6 +2335,7 @@ object HomeNativeGlassHook {
                 nearestRecycler?.let { recycler ->
                     homeRecyclerViews[recycler] = true
                     installScrollInvalidation(recycler)
+                    installHomeRecyclerChildAttachRefresh(recycler)
                     if (hasPageBackgroundOverride()) {
                         recycler.setBackgroundColor(Color.TRANSPARENT)
                     }
@@ -5377,6 +5382,97 @@ object HomeNativeGlassHook {
         return findHomeNativePageFromChild(searchBox)?.takeIf { it.isShown }
             ?: preferredPage?.takeIf { it.isShown }
             ?: findVisibleHomeNativePage(root)
+    }
+
+    private fun installHomeRecyclerChildAttachRefresh(recycler: View) {
+        synchronized(homeRecyclerChildAttachRefreshInstalled) {
+            if (homeRecyclerChildAttachRefreshInstalled.containsKey(recycler)) return
+            homeRecyclerChildAttachRefreshInstalled[recycler] = true
+        }
+        val recyclerClass = recyclerViewClass ?: recycler.javaClass.takeIf { isRecyclerView(recycler) }
+        val listenerClass = runCatching {
+            Class.forName(
+                "${StableTiebaHookPoints.RECYCLER_VIEW_CLASS}\$OnChildAttachStateChangeListener",
+                false,
+                recyclerClass?.classLoader ?: recycler.javaClass.classLoader,
+            )
+        }.getOrNull()
+        val addListenerMethod = if (recyclerClass != null && listenerClass != null) {
+            XposedCompat.findMethodOrNull(
+                recyclerClass,
+                "addOnChildAttachStateChangeListener",
+                listenerClass,
+            )
+        } else {
+            null
+        }
+        if (listenerClass == null || addListenerMethod == null) {
+            homeRecyclerChildAttachRefreshInstalled.remove(recycler)
+            return
+        }
+        val listener = Proxy.newProxyInstance(
+            listenerClass.classLoader,
+            arrayOf(listenerClass),
+        ) { proxy, method, args ->
+            when (method.name) {
+                "onChildViewAttachedToWindow" -> {
+                    (args?.getOrNull(0) as? View)?.let { child ->
+                        scheduleHomeRecyclerChildReadableTextRefresh(child)
+                    }
+                    null
+                }
+                "onChildViewDetachedFromWindow" -> null
+                "toString" -> "$TAG home recycler child text listener"
+                "hashCode" -> System.identityHashCode(proxy)
+                "equals" -> proxy === args?.getOrNull(0)
+                else -> null
+            }
+        }
+        runCatching {
+            addListenerMethod.invoke(recycler, listener)
+            refreshAttachedHomeRecyclerChildrenReadableText(recycler)
+        }.onFailure {
+            homeRecyclerChildAttachRefreshInstalled.remove(recycler)
+        }
+    }
+
+    private fun refreshAttachedHomeRecyclerChildrenReadableText(recycler: View) {
+        val group = recycler as? ViewGroup ?: return
+        for (index in 0 until group.childCount) {
+            scheduleHomeRecyclerChildReadableTextRefresh(group.getChildAt(index) ?: continue)
+        }
+    }
+
+    private fun scheduleHomeRecyclerChildReadableTextRefresh(child: View) {
+        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        child.post {
+            applyHomeRecyclerChildReadableTextSafely(child)
+        }
+    }
+
+    private fun applyHomeRecyclerChildReadableTextSafely(child: View) {
+        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        try {
+            if (!isInsideHomeNativePage(child)) return
+            markNestedHomeRecyclerViews(child)
+            applyReadableTextPaletteToTree(child, READABLE_TEXT_HOME_CARD_DEPTH)
+        } catch (t: Throwable) {
+            logReadableTextFailure(t)
+        }
+    }
+
+    private fun markNestedHomeRecyclerViews(view: View) {
+        if (isRecyclerView(view)) {
+            homeRecyclerViews[view] = true
+            installScrollInvalidation(view)
+            installHomeRecyclerChildAttachRefresh(view)
+            view.setBackgroundColor(Color.TRANSPARENT)
+            return
+        }
+        val group = view as? ViewGroup ?: return
+        for (index in 0 until group.childCount) {
+            markNestedHomeRecyclerViews(group.getChildAt(index) ?: continue)
+        }
     }
 
     private fun isHomeNativePageAnchor(anchor: View, page: View): Boolean {
