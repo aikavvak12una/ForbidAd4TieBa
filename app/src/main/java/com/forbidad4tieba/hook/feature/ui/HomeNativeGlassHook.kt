@@ -18,6 +18,7 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -118,6 +119,7 @@ object HomeNativeGlassHook {
     private val readableTextResourceColorRoleCache =
         ConcurrentHashMap<String, Map<Int, Set<HomeNativeGlassTextRole>>>()
     private val readableTextSpanRoles = Collections.synchronizedMap(WeakHashMap<Any, HomeNativeGlassTextRole>())
+    private val readableTextViewRoles = Collections.synchronizedMap(WeakHashMap<View, ReadableTextViewRoleState>())
 
     @Volatile private var recyclerViewClass: Class<*>? = null
     @Volatile private var cachedBackgroundBitmap: CachedBackgroundBitmap? = null
@@ -191,6 +193,11 @@ object HomeNativeGlassHook {
         val darkRaw: String,
         val light: HomeNativeGlassReadableTextPalette?,
         val dark: HomeNativeGlassReadableTextPalette?,
+    )
+
+    private data class ReadableTextViewRoleState(
+        var normal: HomeNativeGlassTextRole? = null,
+        var link: HomeNativeGlassTextRole? = null,
     )
 
     private data class PbSubPbLayoutCardState(
@@ -961,8 +968,11 @@ object HomeNativeGlassHook {
             if (isReadableTextWriteInProgress()) return@intercept chain.proceed()
             val view = chain.thisObject as? View ?: return@intercept chain.proceed()
             val color = (chain.args.getOrNull(0) as? Number)?.toInt() ?: return@intercept chain.proceed()
-            val adjustedColor = resolveReadableTextColorForRawColor(view, color, linkText)
-                ?: return@intercept chain.proceed()
+            val rawRole = resolveReadableTextRoleForRawColor(view, color, linkText) ?: return@intercept chain.proceed()
+            val role = refineReadableTextRoleForView(view, rawRole, linkText)
+            rememberReadableTextRole(view, role, linkText)
+            val palette = readableTextPaletteFor(view) ?: return@intercept chain.proceed()
+            val adjustedColor = palette.colorFor(role)
             if (adjustedColor == color) return@intercept chain.proceed()
             withReadableTextWrite {
                 chain.proceed(arrayOf<Any?>(adjustedColor))
@@ -1031,7 +1041,9 @@ object HomeNativeGlassHook {
         runReadableTextSafely {
             if (role == null || !canApplyReadableTextPalette(view)) return@runReadableTextSafely
             val palette = readableTextPaletteFor(view) ?: return@runReadableTextSafely
-            val color = palette.colorFor(role)
+            val refinedRole = refineReadableTextRoleForView(view, role, linkText)
+            val color = palette.colorFor(refinedRole)
+            rememberReadableTextRole(view, refinedRole, linkText)
             withReadableTextWrite {
                 if (linkText) {
                     applyLinkTextColor(view, color)
@@ -1039,6 +1051,20 @@ object HomeNativeGlassHook {
                     applyNormalTextColor(view, color)
                 }
             }
+        }
+    }
+
+    private fun resolveReadableTextRoleForRawColor(
+        view: View,
+        color: Int,
+        linkText: Boolean,
+    ): HomeNativeGlassTextRole? {
+        return runCatching {
+            if (!canApplyReadableTextPalette(view)) return@runCatching null
+            readableTextRoleForRawColor(view, color, linkText)
+        }.getOrElse {
+            logReadableTextFailure(it)
+            null
         }
     }
 
@@ -1076,7 +1102,12 @@ object HomeNativeGlassHook {
     ) {
         if (depth > maxDepth) return
         if (view is TextView) {
-            val textRole = readableTextRoleForRawColor(view, view.currentTextColor, linkText = false)
+            val textRole = refineReadableTextRoleForTextView(
+                view,
+                readableTextRoleForView(view, linkText = false)
+                ?: readableTextRoleForPaletteColor(palette, view.currentTextColor)
+                ?: readableTextRoleForRawColor(view, view.currentTextColor, linkText = false),
+            )
             if (textRole != null) {
                 val color = palette.colorFor(textRole)
                 if (view.currentTextColor != color) {
@@ -1084,9 +1115,10 @@ object HomeNativeGlassHook {
                 }
             }
             val linkDefaultColor = runCatching { view.linkTextColors.defaultColor }.getOrNull()
-            val linkRole = linkDefaultColor?.let {
-                readableTextRoleForRawColor(view, it, linkText = true)
-            }
+            val linkRole = (readableTextRoleForView(view, linkText = true)
+                ?: linkDefaultColor?.let { readableTextRoleForPaletteColor(palette, it) }
+                ?: linkDefaultColor?.let { readableTextRoleForRawColor(view, it, linkText = true) })
+                ?.let { refineReadableTextRoleForView(view, it, linkText = true) }
             if (linkRole != null) {
                 val color = palette.colorFor(linkRole)
                 if (linkDefaultColor != color) {
@@ -1188,9 +1220,10 @@ object HomeNativeGlassHook {
         val role = readableTextSpanRoles[span]
             ?: readableTextRoleForRawColor(textView, span.foregroundColor, linkText = false)
             ?: return false
-        val color = palette.colorFor(role)
+        val refinedRole = refineReadableTextRoleForTextView(textView, role) ?: role
+        val color = palette.colorFor(refinedRole)
         if (span.foregroundColor == color) {
-            readableTextSpanRoles[span] = role
+            readableTextSpanRoles[span] = refinedRole
             return false
         }
         val start = text.getSpanStart(span)
@@ -1202,7 +1235,7 @@ object HomeNativeGlassHook {
         editable.removeSpan(span)
         editable.setSpan(replacement, start, end, flags)
         readableTextSpanRoles.remove(span)
-        readableTextSpanRoles[replacement] = role
+        readableTextSpanRoles[replacement] = refinedRole
         return true
     }
 
@@ -1215,7 +1248,9 @@ object HomeNativeGlassHook {
             linkColor = runCatching { textView.linkTextColors.defaultColor }.getOrDefault(textView.currentTextColor)
         }
         runCatching { span.updateDrawState(paint) }
-        return readableTextRoleForRawColor(textView, paint.color, linkText = true)
+        val role = readableTextRoleForRawColor(textView, paint.color, linkText = true)
+            ?: readableTextRoleForPaletteColor(readableTextPaletteFor(textView), paint.color)
+        return if (role == HomeNativeGlassTextRole.PRIMARY) HomeNativeGlassTextRole.LINK else role
             ?: HomeNativeGlassTextRole.LINK
     }
 
@@ -1232,6 +1267,81 @@ object HomeNativeGlassHook {
             delegate.updateDrawState(ds)
             ds.color = color
         }
+    }
+
+    private fun refineReadableTextRoleForView(
+        view: View,
+        role: HomeNativeGlassTextRole,
+        linkText: Boolean,
+    ): HomeNativeGlassTextRole {
+        if (linkText && role == HomeNativeGlassTextRole.PRIMARY) return HomeNativeGlassTextRole.LINK
+        val textView = view as? TextView ?: return role
+        return refineReadableTextRoleForTextView(textView, role) ?: role
+    }
+
+    private fun rememberReadableTextRole(
+        view: View,
+        role: HomeNativeGlassTextRole,
+        linkText: Boolean,
+    ) {
+        val state = synchronized(readableTextViewRoles) {
+            readableTextViewRoles.getOrPut(view) { ReadableTextViewRoleState() }
+        }
+        if (linkText) {
+            state.link = role
+        } else {
+            state.normal = role
+        }
+    }
+
+    private fun readableTextRoleForView(
+        view: View,
+        linkText: Boolean,
+    ): HomeNativeGlassTextRole? {
+        val state = readableTextViewRoles[view] ?: return null
+        return if (linkText) state.link else state.normal
+    }
+
+    private fun readableTextRoleForPaletteColor(
+        palette: HomeNativeGlassReadableTextPalette?,
+        color: Int,
+    ): HomeNativeGlassTextRole? {
+        if (palette == null || Color.alpha(color) == 0) return null
+        val normalized = color and 0x00FFFFFF
+        return when (normalized) {
+            palette.primary and 0x00FFFFFF -> HomeNativeGlassTextRole.PRIMARY
+            palette.secondary and 0x00FFFFFF -> HomeNativeGlassTextRole.SECONDARY
+            palette.tertiary and 0x00FFFFFF -> HomeNativeGlassTextRole.TERTIARY
+            palette.link and 0x00FFFFFF -> HomeNativeGlassTextRole.LINK
+            palette.action and 0x00FFFFFF -> HomeNativeGlassTextRole.ACTION
+            palette.disabled and 0x00FFFFFF -> HomeNativeGlassTextRole.DISABLED
+            palette.accentBlue and 0x00FFFFFF -> HomeNativeGlassTextRole.ACCENT_BLUE
+            palette.accentRed and 0x00FFFFFF -> HomeNativeGlassTextRole.ACCENT_RED
+            else -> null
+        }
+    }
+
+    private fun refineReadableTextRoleForTextView(
+        view: TextView,
+        role: HomeNativeGlassTextRole?,
+    ): HomeNativeGlassTextRole? {
+        val scaledDensity = (view.resources.displayMetrics.density * view.resources.configuration.fontScale)
+            .takeIf { it > 0f } ?: return role
+        val sizeSp = view.textSize / scaledDensity
+        return when {
+            role == null -> null
+            role == HomeNativeGlassTextRole.PRIMARY && isReadableTextProminent(view) -> role
+            role == HomeNativeGlassTextRole.PRIMARY && sizeSp <= READABLE_TEXT_TERTIARY_MAX_SP ->
+                HomeNativeGlassTextRole.TERTIARY
+            role == HomeNativeGlassTextRole.PRIMARY && sizeSp <= READABLE_TEXT_SECONDARY_MAX_SP ->
+                HomeNativeGlassTextRole.SECONDARY
+            else -> role
+        }
+    }
+
+    private fun isReadableTextProminent(view: TextView): Boolean {
+        val style = view.typeface?.style ?: 0
+        return view.paint.isFakeBoldText || (style and Typeface.BOLD) != 0
     }
 
     private fun applyNormalTextColor(view: View, color: Int) {
@@ -1283,9 +1393,9 @@ object HomeNativeGlassHook {
             ).also { readableTextPaletteState = it }
         }
         return if (usesDarkMaterial(view)) {
-            state.dark ?: state.light
+            state.dark
         } else {
-            state.light ?: state.dark
+            state.light
         }
     }
 
@@ -6203,6 +6313,8 @@ object HomeNativeGlassHook {
     private const val READABLE_TEXT_DIRECT_GROUP_DEPTH = 3
     private const val READABLE_TEXT_HOME_CARD_DEPTH = 12
     private const val READABLE_TEXT_PB_ITEM_DEPTH = 10
+    private const val READABLE_TEXT_SECONDARY_MAX_SP = 14.5f
+    private const val READABLE_TEXT_TERTIARY_MAX_SP = 12.5f
     private const val HOME_TOP_TAB_RECOMMEND_TYPE = 1
     private const val HOME_TOP_TAB_RECOMMEND_CODE = "recommend"
     private const val CARD_COMPONENT_TINT_ALPHA_EXTRA = 25

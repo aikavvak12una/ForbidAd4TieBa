@@ -78,11 +78,11 @@ data class HomeNativeGlassReadableTextPalette(
         private const val SAMPLE_EDGE = 96
         private const val MAX_SAMPLE_COUNT = 4096
         private const val MIN_PIXEL_ALPHA = 32
-        private const val CONTRAST_PRIMARY = 4.8
-        private const val CONTRAST_SECONDARY = 3.8
-        private const val CONTRAST_TERTIARY = 3.2
+        private const val CONTRAST_PRIMARY = 5.0
+        private const val CONTRAST_SECONDARY = 4.2
+        private const val CONTRAST_TERTIARY = 3.8
         private const val CONTRAST_LINK = 4.5
-        private const val CONTRAST_DISABLED = 3.0
+        private const val CONTRAST_DISABLED = 3.4
 
         private val DARK_TEXT_BASE = BaseColors(
             primary = Color.rgb(32, 35, 42),
@@ -114,15 +114,17 @@ data class HomeNativeGlassReadableTextPalette(
             for (index in parts.indices) {
                 colors[index] = parseColor(parts[index].trim()) ?: return null
             }
-            return HomeNativeGlassReadableTextPalette(
-                primary = colors[0],
-                secondary = colors[1],
-                tertiary = colors[2],
-                link = colors[3],
-                action = colors[4],
-                disabled = colors[5],
-                accentBlue = colors[6],
-                accentRed = colors[7],
+            return ensureRoleHierarchy(
+                HomeNativeGlassReadableTextPalette(
+                    primary = colors[0],
+                    secondary = colors[1],
+                    tertiary = colors[2],
+                    link = colors[3],
+                    action = colors[4],
+                    disabled = colors[5],
+                    accentBlue = colors[6],
+                    accentRed = colors[7],
+                ),
             )
         }
 
@@ -196,10 +198,27 @@ data class HomeNativeGlassReadableTextPalette(
                 whiteScore > blackScore
             }
             val base = if (preferLightText) LIGHT_TEXT_BASE else DARK_TEXT_BASE
+            val primary = ensureContrast(base.primary, guard, CONTRAST_PRIMARY, preferLightText)
+            val secondary = softenForHierarchy(
+                ensureContrast(base.secondary, guard, CONTRAST_SECONDARY, preferLightText),
+                strongerColor = primary,
+                backgroundLuminance = guard,
+                targetContrast = CONTRAST_SECONDARY,
+                preferLightText = preferLightText,
+                minDistance = 28,
+            )
+            val tertiary = softenForHierarchy(
+                ensureContrast(base.tertiary, guard, CONTRAST_TERTIARY, preferLightText),
+                strongerColor = secondary,
+                backgroundLuminance = guard,
+                targetContrast = CONTRAST_TERTIARY,
+                preferLightText = preferLightText,
+                minDistance = 24,
+            )
             return HomeNativeGlassReadableTextPalette(
-                primary = ensureContrast(base.primary, guard, CONTRAST_PRIMARY, preferLightText),
-                secondary = ensureContrast(base.secondary, guard, CONTRAST_SECONDARY, preferLightText),
-                tertiary = ensureContrast(base.tertiary, guard, CONTRAST_TERTIARY, preferLightText),
+                primary = primary,
+                secondary = secondary,
+                tertiary = tertiary,
                 link = ensureContrast(base.link, guard, CONTRAST_LINK, preferLightText),
                 action = ensureContrast(base.action, guard, CONTRAST_LINK, preferLightText),
                 disabled = ensureContrast(base.disabled, guard, CONTRAST_DISABLED, preferLightText),
@@ -283,6 +302,75 @@ data class HomeNativeGlassReadableTextPalette(
             }
             val targetContrastValue = worstContrast(target, backgroundLuminance)
             return opaque(if (targetContrastValue >= bestContrast) target else best)
+        }
+
+        private fun softenForHierarchy(
+            color: Int,
+            strongerColor: Int,
+            backgroundLuminance: DoubleArray,
+            targetContrast: Double,
+            preferLightText: Boolean,
+            minDistance: Int,
+        ): Int {
+            if (rgbDistance(color, strongerColor) >= minDistance) {
+                return opaque(color)
+            }
+            val target = if (preferLightText) Color.BLACK else Color.WHITE
+            var best = color
+            for (step in 1..24) {
+                val candidate = blendRgb(color, target, step / 24f)
+                if (worstContrast(candidate, backgroundLuminance) < targetContrast) break
+                best = candidate
+                if (rgbDistance(candidate, strongerColor) >= minDistance) {
+                    return opaque(candidate)
+                }
+            }
+            return opaque(best)
+        }
+
+        private fun rgbDistance(a: Int, b: Int): Int {
+            return kotlin.math.abs(Color.red(a) - Color.red(b)) +
+                kotlin.math.abs(Color.green(a) - Color.green(b)) +
+                kotlin.math.abs(Color.blue(a) - Color.blue(b))
+        }
+
+        private fun ensureRoleHierarchy(
+            palette: HomeNativeGlassReadableTextPalette,
+        ): HomeNativeGlassReadableTextPalette {
+            val secondary = separateDisplayRoleColor(
+                palette.secondary,
+                strongerColor = palette.primary,
+                minDistance = 24,
+            )
+            val tertiary = separateDisplayRoleColor(
+                palette.tertiary,
+                strongerColor = secondary,
+                minDistance = 22,
+            )
+            return palette.copy(
+                secondary = secondary,
+                tertiary = tertiary,
+            )
+        }
+
+        private fun separateDisplayRoleColor(
+            color: Int,
+            strongerColor: Int,
+            minDistance: Int,
+        ): Int {
+            if (rgbDistance(color, strongerColor) >= minDistance) {
+                return opaque(color)
+            }
+            val target = if (relativeLuminance(strongerColor) > 0.5) Color.BLACK else Color.WHITE
+            var best = color
+            for (step in 1..12) {
+                val candidate = blendRgb(color, target, step / 48f)
+                best = candidate
+                if (rgbDistance(candidate, strongerColor) >= minDistance) {
+                    return opaque(candidate)
+                }
+            }
+            return opaque(best)
         }
 
         private fun blendRgb(from: Int, to: Int, ratio: Float): Int {
