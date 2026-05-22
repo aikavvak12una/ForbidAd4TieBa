@@ -290,6 +290,9 @@ object HomeNativeGlassHook {
                 )
                 return
             }
+            (ConfigManager.getAppContext() as? android.app.Application)?.let { app ->
+                SystemBarCompatHook.register(app)
+            }
             XposedCompat.log(
                 "$TAG hook INSTALLED: pages=$pageConstructors, " +
                     "cards=$bindHooks, touches=$touchHooks, " +
@@ -2127,6 +2130,7 @@ object HomeNativeGlassHook {
     private fun applyPageStyleSafely(page: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         try {
+            SystemBarCompatHook.applyIfNeeded(ReflectionUtils.findActivityFromContext(page.context))
             val backgroundDrawable = createBackgroundDrawable(
                 page,
                 ConfigManager.homeNativeGlassBackgroundImagePath,
@@ -2523,6 +2527,7 @@ object HomeNativeGlassHook {
         if (!hasPageBackgroundOverride()) return
         if (!isPbActivity(activity)) return
         try {
+            SystemBarCompatHook.applyIfNeeded(activity)
             val host = findPbActivityContentHost(activity) ?: return
             applyPbCommentBackgroundHost(host)
             clearPbCommentHostBackgroundBlockers(host)
