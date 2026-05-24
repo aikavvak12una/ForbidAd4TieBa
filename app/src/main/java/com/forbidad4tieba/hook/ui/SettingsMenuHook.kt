@@ -4057,9 +4057,46 @@ object SettingsMenuHook {
         }
         if (background != null) {
             window.setBackgroundDrawable(NoIntrinsicInsetDrawable(background, tokens.dialogInsetPx))
-            return
+        } else {
+            UiStyle.applyDialogCard(window, tokens)
         }
-        UiStyle.applyDialogCard(window, tokens)
+        clearSystemDialogCustomPanelPadding(window)
+        applyStableDialogWindowLayout(window, density)
+    }
+
+    private fun clearSystemDialogCustomPanelPadding(window: Window) {
+        val customPanel = window.decorView.findViewById<View>(android.R.id.custom) ?: return
+        if (
+            customPanel.paddingLeft != 0 ||
+            customPanel.paddingTop != 0 ||
+            customPanel.paddingRight != 0 ||
+            customPanel.paddingBottom != 0
+        ) {
+            customPanel.setPadding(0, 0, 0, 0)
+        }
+    }
+
+    private fun applyStableDialogWindowLayout(window: Window, density: Float) {
+        val screenWidth = window.context.resources.displayMetrics.widthPixels
+        val horizontalMargin = (12f * density).toInt().coerceAtLeast(1)
+        val availableWidth = screenWidth - horizontalMargin * 2
+        if (availableWidth <= 0) return
+
+        val maxWidth = (560f * density).toInt().coerceAtLeast(1)
+        val minWidth = (280f * density).toInt().coerceAtMost(availableWidth)
+        val targetWidth = availableWidth
+            .coerceAtMost(maxWidth)
+            .coerceAtLeast(minWidth)
+
+        window.setGravity(Gravity.CENTER)
+        val attrs = window.attributes
+        attrs.gravity = Gravity.CENTER
+        attrs.x = 0
+        attrs.y = 0
+        attrs.width = targetWidth
+        attrs.height = ViewGroup.LayoutParams.WRAP_CONTENT
+        window.attributes = attrs
+        window.setLayout(targetWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     private class NoIntrinsicInsetDrawable(
