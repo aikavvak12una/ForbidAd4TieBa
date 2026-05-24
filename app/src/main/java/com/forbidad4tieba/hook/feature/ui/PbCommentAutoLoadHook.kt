@@ -4,10 +4,10 @@ import com.forbidad4tieba.hook.HookSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
-import java.util.WeakHashMap
 
 /**
  * 复用目标应用的底部加载回调，预加载下一页 PB 评论。
@@ -21,7 +21,8 @@ object PbCommentAutoLoadHook {
     private const val MIN_TRIGGER_INTERVAL_MS = 1500L
 
     @Volatile private var hooked = false
-    private val states = WeakHashMap<Any, ScrollState>()
+    @Volatile private var lastFragmentRef: WeakReference<Any>? = null
+    private var lastFragmentState = ScrollState()
 
     fun hook(cl: ClassLoader, symbols: HookSymbols) {
         if (!ConfigManager.isAutoLoadMoreEnabled) {
@@ -134,17 +135,23 @@ object PbCommentAutoLoadHook {
 
     private fun shouldTrigger(fragment: Any, firstVisible: Int, totalCount: Int): Boolean {
         val now = android.os.SystemClock.uptimeMillis()
-        return synchronized(states) {
-            val state = states.getOrPut(fragment) { ScrollState() }
-            val scrollingDown = state.lastFirstVisible < 0 || firstVisible >= state.lastFirstVisible
-            state.lastFirstVisible = firstVisible
-            if (!scrollingDown) return@synchronized false
-            if (state.lastTriggeredTotalCount == totalCount) return@synchronized false
-            if (now - state.lastTriggerAt < MIN_TRIGGER_INTERVAL_MS) return@synchronized false
-            state.lastTriggeredTotalCount = totalCount
-            state.lastTriggerAt = now
-            true
-        }
+        val state = stateFor(fragment)
+        val scrollingDown = state.lastFirstVisible < 0 || firstVisible >= state.lastFirstVisible
+        state.lastFirstVisible = firstVisible
+        if (!scrollingDown) return false
+        if (state.lastTriggeredTotalCount == totalCount) return false
+        if (now - state.lastTriggerAt < MIN_TRIGGER_INTERVAL_MS) return false
+        state.lastTriggeredTotalCount = totalCount
+        state.lastTriggerAt = now
+        return true
+    }
+
+    private fun stateFor(fragment: Any): ScrollState {
+        if (lastFragmentRef?.get() === fragment) return lastFragmentState
+        val state = ScrollState()
+        lastFragmentState = state
+        lastFragmentRef = WeakReference(fragment)
+        return state
     }
 
     private fun preloadRemainingThreshold(totalCount: Int): Int {

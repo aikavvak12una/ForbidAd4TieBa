@@ -79,11 +79,15 @@ object HomeNativeGlassHook {
     private val pbCommentSurfaceApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbCommentItemFrameAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbCommentItemFrameApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val pbCommentListItemApplyScheduled =
+        Collections.synchronizedMap(WeakHashMap<View, PendingViewGroupApply>())
     private val pbCommentBackgroundHostStates = Collections.synchronizedMap(WeakHashMap<View, PbCommentBackgroundState>())
     private val pbSubPbLayoutAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbSubPbLayoutApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbSubPbLayoutCardStates = Collections.synchronizedMap(WeakHashMap<View, PbSubPbLayoutCardState>())
     private val pbSubPbLayoutPaddingStates = Collections.synchronizedMap(WeakHashMap<View, PbSubPbLayoutPaddingState>())
+    private val subPbReplyItemApplyScheduled =
+        Collections.synchronizedMap(WeakHashMap<View, PendingViewGroupApply>())
     private val subPbInputBarApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val subPbNavigationBarApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbReplyBarInputApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
@@ -232,6 +236,10 @@ object HomeNativeGlassHook {
         val right: Int,
         val bottom: Int,
     )
+
+    private class PendingViewGroupApply(parent: ViewGroup?) {
+        var parentRef: WeakReference<ViewGroup>? = parent?.let(::WeakReference)
+    }
 
     private class HomeRecyclerFrameState {
         var initialized: Boolean = false
@@ -545,7 +553,7 @@ object HomeNativeGlassHook {
             val result = chain.proceed()
             val itemView = result as? View ?: return@intercept result
             val parent = chain.args.getOrNull(2) as? ViewGroup
-            applyPbCommentListItemBackgroundSafely(itemView, parent)
+            schedulePbCommentListItemBackground(itemView, parent)
             result
         }
         return 1
@@ -580,7 +588,7 @@ object HomeNativeGlassHook {
                 val itemView = result as? View ?: chain.args.getOrNull(1) as? View
                 val parent = chain.args.getOrNull(2) as? ViewGroup
                 if (itemView != null) {
-                    applySubPbReplyItemGlassSafely(itemView, parent)
+                    scheduleSubPbReplyItemGlass(itemView, parent)
                 }
                 result
             }
@@ -3071,6 +3079,28 @@ object HomeNativeGlassHook {
         }
     }
 
+    private fun schedulePbCommentListItemBackground(itemView: View, parent: ViewGroup?) {
+        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!hasPageBackgroundOverride()) return
+        var shouldPost = false
+        synchronized(pbCommentListItemApplyScheduled) {
+            val pending = pbCommentListItemApplyScheduled[itemView]
+            if (pending == null) {
+                pbCommentListItemApplyScheduled[itemView] = PendingViewGroupApply(parent)
+                shouldPost = true
+            } else {
+                pending.parentRef = parent?.let(::WeakReference)
+            }
+        }
+        if (!shouldPost) return
+        itemView.postOnAnimation {
+            val pending = synchronized(pbCommentListItemApplyScheduled) {
+                pbCommentListItemApplyScheduled.remove(itemView)
+            }
+            applyPbCommentListItemBackgroundSafely(itemView, pending?.parentRef?.get())
+        }
+    }
+
     private fun applyPbCommentListItemBackgroundSafely(itemView: View, parent: ViewGroup?) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
@@ -3089,6 +3119,28 @@ object HomeNativeGlassHook {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb comment list item glass failed: ${t.message}" }
             }
+        }
+    }
+
+    private fun scheduleSubPbReplyItemGlass(itemView: View, parent: ViewGroup?) {
+        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!hasPageBackgroundOverride()) return
+        var shouldPost = false
+        synchronized(subPbReplyItemApplyScheduled) {
+            val pending = subPbReplyItemApplyScheduled[itemView]
+            if (pending == null) {
+                subPbReplyItemApplyScheduled[itemView] = PendingViewGroupApply(parent)
+                shouldPost = true
+            } else {
+                pending.parentRef = parent?.let(::WeakReference)
+            }
+        }
+        if (!shouldPost) return
+        itemView.postOnAnimation {
+            val pending = synchronized(subPbReplyItemApplyScheduled) {
+                subPbReplyItemApplyScheduled.remove(itemView)
+            }
+            applySubPbReplyItemGlassSafely(itemView, pending?.parentRef?.get())
         }
     }
 

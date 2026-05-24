@@ -24,6 +24,8 @@ object StableTiebaHookPoints {
     const val BD_LIST_VIEW_SCROLL_TO_BOTTOM_LISTENER_CLASS = "com.baidu.adp.widget.ListView.BdListView\$p"
     const val PB_FIRST_FLOOR_RECOMMEND_ADAPTER_CLASS =
         "com.baidu.tieba.pb.widget.adapter.PbFirstFloorRecommendAdapter"
+    const val PB_FIRST_FLOOR_RECOMMEND_DATA_CLASS =
+        "com.baidu.tieba.pb.data.PbFirstFloorRecommendData"
     const val PB_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.main.PbActivity"
     const val PB_ABS_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.main.AbsPbActivity"
     const val PB_FRAGMENT_CLASS = "com.baidu.tieba.pb.pb.main.PbFragment"

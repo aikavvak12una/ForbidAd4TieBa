@@ -5,9 +5,9 @@ import com.forbidad4tieba.hook.HookSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ReflectionUtils
+import java.lang.ref.WeakReference
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
-import java.util.WeakHashMap
 
 /**
  * 合并列表状态相同的 PB 评论滚动回调。
@@ -17,7 +17,8 @@ object PbScrollCoalesceHook {
     private const val BOTTOM_GUARD_REMAINING_ITEMS = 20
 
     @Volatile private var hooked = false
-    private val states = WeakHashMap<Any, ScrollState>()
+    @Volatile private var lastListenerRef: WeakReference<Any>? = null
+    private var lastListenerState = ScrollState()
 
     fun hook(cl: ClassLoader, symbols: HookSymbols) {
         if (!ConfigManager.isPbScrollCoalesceEnabled) {
@@ -86,20 +87,26 @@ object PbScrollCoalesceHook {
         if (remaining <= BOTTOM_GUARD_REMAINING_ITEMS) return false
 
         val now = SystemClock.uptimeMillis()
-        return synchronized(states) {
-            val state = states.getOrPut(listener) { ScrollState() }
-            val sameState = state.firstVisible == firstVisible &&
-                state.visibleCount == visibleCount &&
-                state.totalCount == totalCount
-            val skip = sameState && now - state.lastProceedAt < COALESCE_WINDOW_MS
-            if (!skip) {
-                state.firstVisible = firstVisible
-                state.visibleCount = visibleCount
-                state.totalCount = totalCount
-                state.lastProceedAt = now
-            }
-            skip
+        val state = stateFor(listener)
+        val sameState = state.firstVisible == firstVisible &&
+            state.visibleCount == visibleCount &&
+            state.totalCount == totalCount
+        val skip = sameState && now - state.lastProceedAt < COALESCE_WINDOW_MS
+        if (!skip) {
+            state.firstVisible = firstVisible
+            state.visibleCount = visibleCount
+            state.totalCount = totalCount
+            state.lastProceedAt = now
         }
+        return skip
+    }
+
+    private fun stateFor(listener: Any): ScrollState {
+        if (lastListenerRef?.get() === listener) return lastListenerState
+        val state = ScrollState()
+        lastListenerState = state
+        lastListenerRef = WeakReference(listener)
+        return state
     }
 
     private fun resolveScrollMethod(clazz: Class<*>, methodName: String): Method? {

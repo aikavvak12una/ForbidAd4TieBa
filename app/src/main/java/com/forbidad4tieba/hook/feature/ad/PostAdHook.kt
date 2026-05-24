@@ -8,6 +8,7 @@ import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 object PostAdHook {
@@ -39,7 +40,15 @@ object PostAdHook {
         val itemClass: Class<*>,
         val getTypeMethod: Method,
         val blockedTypes: Set<Any>,
+        val blockedItemClasses: Array<Class<*>>,
+        val classDecisions: ConcurrentHashMap<Class<*>, ClassDecision> = ConcurrentHashMap(32),
     )
+
+    private enum class ClassDecision {
+        BLOCKED,
+        CHECK_TYPE,
+        ALLOW,
+    }
 
     @Volatile private var hooked = false
     private val filterErrorLogged = AtomicBoolean(false)
@@ -111,13 +120,21 @@ object PostAdHook {
 
         val blockedTypes = Collections.newSetFromMap(IdentityHashMap<Any, Boolean>())
         addAdvertAppTypes(cl, blockedTypes)
-        if (blockedTypes.isEmpty()) return null
+        val blockedItemClasses = resolveBlockedItemClasses(cl)
+        if (blockedTypes.isEmpty() && blockedItemClasses.isEmpty()) return null
 
         return RuntimeFilter(
             itemClass = itemClass,
             getTypeMethod = getTypeMethod,
             blockedTypes = blockedTypes,
+            blockedItemClasses = blockedItemClasses,
         )
+    }
+
+    private fun resolveBlockedItemClasses(cl: ClassLoader): Array<Class<*>> {
+        return arrayOf(
+            XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_FIRST_FLOOR_RECOMMEND_DATA_CLASS, cl),
+        ).filterNotNull().toTypedArray()
     }
 
     private fun addAdvertAppTypes(cl: ClassLoader, out: MutableSet<Any>) {
@@ -152,7 +169,12 @@ object PostAdHook {
     }
 
     private fun isBlockedItem(item: Any?, runtimeFilter: RuntimeFilter): Boolean {
-        if (item == null || !runtimeFilter.itemClass.isInstance(item)) return false
+        if (item == null) return false
+        when (classDecisionFor(item.javaClass, runtimeFilter)) {
+            ClassDecision.BLOCKED -> return true
+            ClassDecision.ALLOW -> return false
+            ClassDecision.CHECK_TYPE -> Unit
+        }
         val type = try {
             runtimeFilter.getTypeMethod.invoke(item)
         } catch (t: Throwable) {
@@ -160,6 +182,16 @@ object PostAdHook {
             null
         } ?: return false
         return runtimeFilter.blockedTypes.contains(type)
+    }
+
+    private fun classDecisionFor(clazz: Class<*>, runtimeFilter: RuntimeFilter): ClassDecision {
+        runtimeFilter.classDecisions[clazz]?.let { return it }
+        val resolved = when {
+            runtimeFilter.blockedItemClasses.any { it.isAssignableFrom(clazz) } -> ClassDecision.BLOCKED
+            runtimeFilter.itemClass.isAssignableFrom(clazz) -> ClassDecision.CHECK_TYPE
+            else -> ClassDecision.ALLOW
+        }
+        return runtimeFilter.classDecisions.putIfAbsent(clazz, resolved) ?: resolved
     }
 
     private fun logFilterFailureOnce(t: Throwable) {
