@@ -79,6 +79,9 @@ object HomeNativeGlassHook {
     private val pbCommentSurfaceApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbCommentItemFrameAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbCommentItemFrameApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val pbActivityByContext = Collections.synchronizedMap(WeakHashMap<Context, WeakReference<Activity>>())
+    private val pbActivityContentHosts = Collections.synchronizedMap(WeakHashMap<Activity, WeakReference<View>>())
+    private val pbActivityTypes = Collections.synchronizedMap(WeakHashMap<Activity, PbActivityType>())
     private val pbCommentListItemApplyScheduled =
         Collections.synchronizedMap(WeakHashMap<View, PendingViewGroupApply>())
     private val pbCommentBackgroundHostStates = Collections.synchronizedMap(WeakHashMap<View, PbCommentBackgroundState>())
@@ -183,6 +186,11 @@ object HomeNativeGlassHook {
         val sourcePath: String,
         val tintAlphaPercent: Int,
         val darkMode: Boolean,
+    )
+
+    private data class PbActivityType(
+        val isPb: Boolean,
+        val isSubPbReplyHost: Boolean,
     )
 
     private data class PbCommentDynamicTintColorState(
@@ -1102,6 +1110,16 @@ object HomeNativeGlassHook {
         }
     }
 
+    private fun applyKnownPbReadableTextPaletteToTree(root: View, maxDepth: Int) {
+        runReadableTextSafely {
+            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
+            val palette = readableTextPaletteFor(root) ?: return@runReadableTextSafely
+            withReadableTextWrite {
+                applyReadableTextPaletteToTree(root, palette, depth = 0, maxDepth = maxDepth)
+            }
+        }
+    }
+
     private fun applyReadableTextPaletteToTree(
         view: View,
         palette: HomeNativeGlassReadableTextPalette,
@@ -1414,7 +1432,7 @@ object HomeNativeGlassHook {
     }
 
     private fun isReadableTextTarget(view: View): Boolean {
-        val activity = ReflectionUtils.findActivityFromContext(view.context)
+        val activity = findCachedActivityFromContext(view.context)
         if (activity != null && (isPbActivity(activity) || isSubPbReplyHostActivity(activity))) {
             return true
         }
@@ -2833,7 +2851,7 @@ object HomeNativeGlassHook {
             applyPbCommentBackgroundHost(host)
             clearPbCommentHostBackgroundBlockers(host)
             schedulePbReplyBarInputCapsuleDynamicTint(host)
-            applyReadableTextPaletteToTree(host, READABLE_TEXT_PB_ITEM_DEPTH)
+            applyKnownPbReadableTextPaletteToTree(host, READABLE_TEXT_PB_ITEM_DEPTH)
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb comment activity glass failed: ${t.message}" }
@@ -2924,7 +2942,7 @@ object HomeNativeGlassHook {
     private fun applyPbCommonPreloadedLayoutTintSafely(view: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = ReflectionUtils.findActivityFromContext(view.context) ?: return
+        val activity = findCachedActivityFromContext(view.context) ?: return
         if (!isPbActivity(activity)) return
         try {
             if (isPbItemRelativeView(view)) {
@@ -2932,11 +2950,11 @@ object HomeNativeGlassHook {
                 clearForeground(view)
                 clearElevation(view)
                 view.invalidate()
-                applyReadableTextPaletteToTree(view, READABLE_TEXT_PB_ITEM_DEPTH)
+                applyKnownPbReadableTextPaletteToTree(view, READABLE_TEXT_PB_ITEM_DEPTH)
                 return
             }
             applyPbCommentDynamicTintColor(view, resolveCachedPbCommentDynamicTintColor(view))
-            applyReadableTextPaletteToTree(view, READABLE_TEXT_PB_ITEM_DEPTH)
+            applyKnownPbReadableTextPaletteToTree(view, READABLE_TEXT_PB_ITEM_DEPTH)
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb common preloaded layout tint failed: ${t.message}" }
@@ -3044,7 +3062,7 @@ object HomeNativeGlassHook {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         if (!isPbSubPbLayout(subPbLayout)) return
-        val activity = ReflectionUtils.findActivityFromContext(subPbLayout.context) ?: return
+        val activity = findCachedActivityFromContext(subPbLayout.context) ?: return
         if (!isPbActivity(activity)) return
         try {
             val host = findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(subPbLayout) ?: return
@@ -3104,8 +3122,8 @@ object HomeNativeGlassHook {
     private fun applyPbCommentListItemBackgroundSafely(itemView: View, parent: ViewGroup?) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = ReflectionUtils.findActivityFromContext(itemView.context)
-            ?: ReflectionUtils.findActivityFromContext(parent?.context)
+        val activity = findCachedActivityFromContext(itemView.context)
+            ?: findCachedActivityFromContext(parent?.context)
             ?: return
         if (!isPbActivity(activity)) return
         try {
@@ -3114,7 +3132,7 @@ object HomeNativeGlassHook {
             clearPbCommentBackgroundPath(itemView, host, keepSortSwitchComponent = false)
             removePbCommentReplyTitleDecorationsSafely(itemView, requireKnownDivider = true)
             clearPbCommentListItemBackgrounds(itemView, depth = 0, keepSortSwitchComponent = false)
-            applyReadableTextPaletteToTree(itemView, READABLE_TEXT_PB_ITEM_DEPTH)
+            applyKnownPbReadableTextPaletteToTree(itemView, READABLE_TEXT_PB_ITEM_DEPTH)
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb comment list item glass failed: ${t.message}" }
@@ -3147,8 +3165,8 @@ object HomeNativeGlassHook {
     private fun applySubPbReplyItemGlassSafely(itemView: View, parent: ViewGroup?) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = ReflectionUtils.findActivityFromContext(itemView.context)
-            ?: ReflectionUtils.findActivityFromContext(parent?.context)
+        val activity = findCachedActivityFromContext(itemView.context)
+            ?: findCachedActivityFromContext(parent?.context)
             ?: return
         if (!isSubPbReplyHostActivity(activity)) return
         try {
@@ -3158,7 +3176,7 @@ object HomeNativeGlassHook {
             clearForeground(itemView)
             clearNativePressVisual(itemView)
             clearSubPbReplyItemContentBackgrounds(itemView)
-            applyReadableTextPaletteToTree(itemView, READABLE_TEXT_PB_ITEM_DEPTH)
+            applyKnownPbReadableTextPaletteToTree(itemView, READABLE_TEXT_PB_ITEM_DEPTH)
             itemView.invalidate()
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
@@ -3182,14 +3200,14 @@ object HomeNativeGlassHook {
     }
 
     private fun applySubPbNextPageGlassToList(listView: ViewGroup): Boolean {
-        val activity = ReflectionUtils.findActivityFromContext(listView.context)
+        val activity = findCachedActivityFromContext(listView.context)
             ?: return false
         if (!isSubPbReplyHostActivity(activity)) return false
         val target = findSubPbNextPageMoreView(listView) ?: return false
         val host = findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(listView) ?: return false
         applyPbCommentBackgroundHost(host)
         clearSubPbNextPageMoreViewBackground(target)
-        applyReadableTextPaletteToTree(target, READABLE_TEXT_DIRECT_GROUP_DEPTH)
+        applyKnownPbReadableTextPaletteToTree(target, READABLE_TEXT_DIRECT_GROUP_DEPTH)
         listView.invalidate()
         return true
     }
@@ -3208,7 +3226,7 @@ object HomeNativeGlassHook {
 
     private fun findSubPbNextPageMoreViewForRuntimeTint(anchor: View): View? {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
-        val activity = ReflectionUtils.findActivityFromContext(anchor.context) ?: return null
+        val activity = findCachedActivityFromContext(anchor.context) ?: return null
         if (!isSubPbReplyHostActivity(activity)) return null
         val viewId = runtimeTargets?.subPbNextPageMoreViewId ?: return null
         if (viewId <= 0 || viewId == View.NO_ID) return null
@@ -3256,16 +3274,56 @@ object HomeNativeGlassHook {
     }
 
     private fun findPbCommentActivityContentHost(source: View): View? {
-        val activity = ReflectionUtils.findActivityFromContext(source.context) ?: return null
+        val activity = findCachedActivityFromContext(source.context) ?: return null
         if (!isPbActivity(activity)) return null
         return findPbActivityContentHost(activity)
     }
 
     private fun findPbActivityContentHost(activity: Activity): View? {
-        return runCatching { activity.findViewById<View>(android.R.id.content) }.getOrNull()
+        synchronized(pbActivityContentHosts) {
+            val cached = pbActivityContentHosts[activity]?.get()
+            if (cached != null) return cached
+            pbActivityContentHosts.remove(activity)
+        }
+        val host = runCatching { activity.findViewById<View>(android.R.id.content) }.getOrNull()
+        if (host != null) {
+            pbActivityContentHosts[activity] = WeakReference(host)
+        }
+        return host
+    }
+
+    private fun findCachedActivityFromContext(context: Context?): Activity? {
+        context ?: return null
+        synchronized(pbActivityByContext) {
+            val cached = pbActivityByContext[context]?.get()
+            if (cached != null) return cached
+            pbActivityByContext.remove(context)
+        }
+        val activity = ReflectionUtils.findActivityFromContext(context) ?: return null
+        pbActivityByContext[context] = WeakReference(activity)
+        return activity
     }
 
     private fun isPbActivity(activity: Activity): Boolean {
+        return pbActivityTypeFor(activity).isPb
+    }
+
+    private fun isSubPbReplyHostActivity(activity: Activity): Boolean {
+        return pbActivityTypeFor(activity).isSubPbReplyHost
+    }
+
+    private fun pbActivityTypeFor(activity: Activity): PbActivityType {
+        synchronized(pbActivityTypes) {
+            pbActivityTypes[activity]?.let { return it }
+        }
+        val resolved = resolvePbActivityType(activity)
+        pbActivityTypes[activity] = resolved
+        return resolved
+    }
+
+    private fun resolvePbActivityType(activity: Activity): PbActivityType {
+        var isPb = false
+        var isSubPbReplyHost = false
         var current: Class<*>? = activity.javaClass
         while (current != null && current != Any::class.java) {
             val name = current.name
@@ -3273,26 +3331,18 @@ object HomeNativeGlassHook {
                 name == StableTiebaHookPoints.PB_ACTIVITY_CLASS ||
                 name == StableTiebaHookPoints.PB_ABS_ACTIVITY_CLASS
             ) {
-                return true
+                isPb = true
             }
-            current = current.superclass
-        }
-        return false
-    }
-
-    private fun isSubPbReplyHostActivity(activity: Activity): Boolean {
-        var current: Class<*>? = activity.javaClass
-        while (current != null && current != Any::class.java) {
-            val name = current.name
             if (
                 name == StableTiebaHookPoints.NEW_SUB_PB_ACTIVITY_CLASS ||
                 name == StableTiebaHookPoints.FOLD_COMMENT_ACTIVITY_CLASS
             ) {
-                return true
+                isSubPbReplyHost = true
             }
+            if (isPb && isSubPbReplyHost) break
             current = current.superclass
         }
-        return false
+        return PbActivityType(isPb = isPb, isSubPbReplyHost = isSubPbReplyHost)
     }
 
     private fun applyPbCommentBackgroundHost(host: View) {
@@ -3354,7 +3404,7 @@ object HomeNativeGlassHook {
         applyPbSubPbLayoutExtraHeight(subPbLayout)
         disablePbSubPbLayoutScrollCaches(subPbLayout)
         clearPbSubPbLayoutContentBackgrounds(subPbLayout)
-        applyReadableTextPaletteToTree(subPbLayout, READABLE_TEXT_PB_ITEM_DEPTH)
+        applyKnownPbReadableTextPaletteToTree(subPbLayout, READABLE_TEXT_PB_ITEM_DEPTH)
         applyPbSubPbLayoutShadow(subPbLayout, radius)
         subPbLayout.invalidate()
     }
@@ -3581,7 +3631,7 @@ object HomeNativeGlassHook {
     private fun removePbCommentReplyTitleDecorationsSafely(root: View, requireKnownDivider: Boolean) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = ReflectionUtils.findActivityFromContext(root.context) ?: return
+        val activity = findCachedActivityFromContext(root.context) ?: return
         if (!isPbActivity(activity)) return
         try {
             val knownDecorations = findPbReplyTitleKnownDecorations(root)
@@ -3626,7 +3676,7 @@ object HomeNativeGlassHook {
     private fun refreshPbReplyTitleDynamicTintSafely(root: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = ReflectionUtils.findActivityFromContext(root.context) ?: return
+        val activity = findCachedActivityFromContext(root.context) ?: return
         if (!isPbActivity(activity)) return
         try {
             removePbCommentReplyTitleDecorationsSafely(root, requireKnownDivider = false)
@@ -3635,7 +3685,7 @@ object HomeNativeGlassHook {
                 (root.resources.displayMetrics.density * PB_REPLY_TITLE_DECORATIVE_MAX_HEIGHT_DP).toInt(),
             )
             clearPbReplyTitleBackgrounds(root, root, maxHeightPx, depth = 0)
-            applyReadableTextPaletteToTree(root, READABLE_TEXT_PB_ITEM_DEPTH)
+            applyKnownPbReadableTextPaletteToTree(root, READABLE_TEXT_PB_ITEM_DEPTH)
             findPbSortSwitchButton(root, depth = 0)?.let { sortButton ->
                 applyPbSortSwitchBackgroundDynamicTint(sortButton, invalidateOnChange = true)
             }
@@ -3827,7 +3877,7 @@ object HomeNativeGlassHook {
     private fun scheduleSubPbNavigationBarTint(navigationBar: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         if (!isSubPbNavigationBar(navigationBar)) return
-        val activity = ReflectionUtils.findActivityFromContext(navigationBar.context) ?: return
+        val activity = findCachedActivityFromContext(navigationBar.context) ?: return
         if (!isSubPbReplyHostActivity(activity)) return
 
         var shouldPost = false
@@ -3872,7 +3922,7 @@ object HomeNativeGlassHook {
     private fun applySubPbNavigationBarTint(navigationBar: View): Boolean {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
         if (!isSubPbNavigationBar(navigationBar)) return false
-        val activity = ReflectionUtils.findActivityFromContext(navigationBar.context) ?: return false
+        val activity = findCachedActivityFromContext(navigationBar.context) ?: return false
         if (!isSubPbReplyHostActivity(activity)) return false
 
         findPbActivityContentHost(activity)?.let { host ->
@@ -3881,7 +3931,7 @@ object HomeNativeGlassHook {
         }
         applyPbCommentDynamicTintColor(navigationBar, resolveCachedPbCommentDynamicTintColor(navigationBar))
         clearSubPbNavigationBarChromeBackgrounds(navigationBar)
-        applyReadableTextPaletteToTree(navigationBar, READABLE_TEXT_DIRECT_GROUP_DEPTH)
+        applyKnownPbReadableTextPaletteToTree(navigationBar, READABLE_TEXT_DIRECT_GROUP_DEPTH)
         navigationBar.invalidate()
         return true
     }
@@ -3906,7 +3956,7 @@ object HomeNativeGlassHook {
 
     private fun scheduleSubPbInputBarDynamicTint(anchor: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
-        val activity = ReflectionUtils.findActivityFromContext(anchor.context) ?: return
+        val activity = findCachedActivityFromContext(anchor.context) ?: return
         if (!isSubPbReplyHostActivity(activity)) return
         if (findSubPbViewRoot(anchor) == null) return
 
@@ -3961,7 +4011,7 @@ object HomeNativeGlassHook {
 
     private fun findSubPbInputBarMatch(anchor: View): SubPbInputBarMatch? {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
-        val activity = ReflectionUtils.findActivityFromContext(anchor.context) ?: return null
+        val activity = findCachedActivityFromContext(anchor.context) ?: return null
         if (!isSubPbReplyHostActivity(activity)) return null
         val root = findSubPbViewRoot(anchor) ?: return null
         val capsule = findSubPbInputCapsule(root) ?: return null
@@ -4216,7 +4266,7 @@ object HomeNativeGlassHook {
         val targets = runtimeTargets ?: return null
         if (colorResId == 0 || colorResId !in targets.dynamicBackgroundColorIds) return null
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
-        val activity = ReflectionUtils.findActivityFromContext(view.context) ?: return null
+        val activity = findCachedActivityFromContext(view.context) ?: return null
         if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return null
         val darkMode = when (skinType) {
             1, 4 -> true
@@ -4304,7 +4354,7 @@ object HomeNativeGlassHook {
 
     private fun shouldApplyPbSortSwitchDynamicTint(view: View): Boolean {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
-        val activity = ReflectionUtils.findActivityFromContext(view.context) ?: return false
+        val activity = findCachedActivityFromContext(view.context) ?: return false
         return isPbActivity(activity) || isSubPbReplyHostActivity(activity)
     }
 
@@ -4329,14 +4379,14 @@ object HomeNativeGlassHook {
 
     private fun resolvePbCachedDynamicTintColor(view: View): Int? {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
-        val activity = ReflectionUtils.findActivityFromContext(view.context) ?: return null
+        val activity = findCachedActivityFromContext(view.context) ?: return null
         if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return null
         return resolveCachedPbCommentDynamicTintColorOrNull(usesDarkMaterial(view))
     }
 
     private fun schedulePbReplyBarInputCapsuleDynamicTint(anchor: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
-        val activity = ReflectionUtils.findActivityFromContext(anchor.context) ?: return
+        val activity = findCachedActivityFromContext(anchor.context) ?: return
         if (!isPbActivity(activity)) return
 
         var shouldPost = false
@@ -4370,7 +4420,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbReplyBarInputCapsuleDynamicTint(anchor: View) {
-        val activity = ReflectionUtils.findActivityFromContext(anchor.context) ?: return
+        val activity = findCachedActivityFromContext(anchor.context) ?: return
         if (!isPbActivity(activity)) return
         val searchRoot = findPbReplyBarSearchRoot(anchor, activity) ?: return
         val capsule = findPbReplyBarInputCapsule(searchRoot) ?: return
@@ -4558,7 +4608,7 @@ object HomeNativeGlassHook {
 
     private fun isPbDialogActionMenuRoundLayout(view: View): Boolean {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
-        val activity = ReflectionUtils.findActivityFromContext(view.context) ?: return false
+        val activity = findCachedActivityFromContext(view.context) ?: return false
         if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return false
         val group = view as? ViewGroup ?: return false
         return hasDescendantClassName(group, "android.widget.HorizontalScrollView", maxDepth = 4) &&
