@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.TextSwitcher
+import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import java.io.IOException
 import java.lang.reflect.Modifier
 
@@ -324,6 +325,9 @@ internal class PbCommentScrollRule(
             !Modifier.isStatic(field.modifiers) && field.type == pbFragmentClass
         } ?: return null
 
+        val bottomListenerField = findBottomListenerField(pbFragmentClass)
+        val bottomMethod = bottomListenerField?.let { findBottomMethod(it.type) }
+
         val methods = cls.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
         val scrollCandidates = methods.filter { method ->
             method.returnType == Void.TYPE &&
@@ -355,13 +359,51 @@ internal class PbCommentScrollRule(
         if (scrollMethod.name == "b") score += 15
         if (cls.name.contains("${pbFragmentClassName}\$")) score += 10
         if (Modifier.isFinal(fragmentField.modifiers)) score += 5
+        if (bottomListenerField?.type?.name?.startsWith("${StableTiebaHookPoints.BD_LIST_VIEW_CLASS}\$") == true) {
+            score += 8
+        }
+        if (bottomMethod?.name == "onScrollToBottom") score += 8
         score -= scrollCandidates.size * 3
 
         return ScanMatch(
             className = cls.name,
             methodName = scrollMethod.name,
-            fieldName = fragmentField.name,
+            fieldName = listOf(
+                fragmentField.name,
+                bottomListenerField?.name.orEmpty(),
+                bottomMethod?.name.orEmpty(),
+            ).joinToString(","),
             score = score,
+        )
+    }
+
+    private fun findBottomListenerField(pbFragmentClass: Class<*>): java.lang.reflect.Field? {
+        val fields = pbFragmentClass.declaredFields.filter { field ->
+            !Modifier.isStatic(field.modifiers) &&
+                field.type.name.startsWith("${StableTiebaHookPoints.BD_LIST_VIEW_CLASS}\$") &&
+                findBottomMethod(field.type) != null
+        }
+        return fields.minWithOrNull(
+            compareBy<java.lang.reflect.Field>(
+                { if (Modifier.isFinal(it.modifiers)) 0 else 1 },
+                { it.name.length },
+                { it.name },
+            ),
+        )
+    }
+
+    private fun findBottomMethod(type: Class<*>): java.lang.reflect.Method? {
+        val methods = type.declaredMethods.filter { method ->
+            !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.isEmpty()
+        }
+        return methods.minWithOrNull(
+            compareBy<java.lang.reflect.Method>(
+                { if (it.name == "onScrollToBottom") 0 else 1 },
+                { it.name.length },
+                { it.name },
+            ),
         )
     }
 }
