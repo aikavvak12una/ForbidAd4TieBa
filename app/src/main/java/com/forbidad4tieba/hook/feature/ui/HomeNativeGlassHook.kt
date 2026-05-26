@@ -85,6 +85,8 @@ object HomeNativeGlassHook {
     private val pbCommentListItemApplyScheduled =
         Collections.synchronizedMap(WeakHashMap<View, PendingViewGroupApply>())
     private val pbCommentBackgroundHostStates = Collections.synchronizedMap(WeakHashMap<View, PbCommentBackgroundState>())
+    private val pbCommentBackgroundWriteRoles =
+        Collections.synchronizedMap(WeakHashMap<View, PbCommentBackgroundWriteRole>())
     private val pbSubPbLayoutAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbSubPbLayoutApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbSubPbLayoutCardStates = Collections.synchronizedMap(WeakHashMap<View, PbSubPbLayoutCardState>())
@@ -192,6 +194,15 @@ object HomeNativeGlassHook {
         val isPb: Boolean,
         val isSubPbReplyHost: Boolean,
     )
+
+    private enum class PbCommentBackgroundWriteRole {
+        IGNORE,
+        CLEAR,
+        DYNAMIC_TINT,
+        SUB_PB_LAYOUT,
+        HOST,
+        KEEP,
+    }
 
     private data class PbCommentDynamicTintColorState(
         val path: String,
@@ -561,6 +572,7 @@ object HomeNativeGlassHook {
             val result = chain.proceed()
             val itemView = result as? View ?: return@intercept result
             val parent = chain.args.getOrNull(2) as? ViewGroup
+            rememberPbCommentBackgroundWriteRole(itemView, PbCommentBackgroundWriteRole.CLEAR)
             schedulePbCommentListItemBackground(itemView, parent)
             result
         }
@@ -1645,13 +1657,14 @@ object HomeNativeGlassHook {
                     val colorResId = (chain.args.getOrNull(1) as? Number)?.toInt()
                         ?: return@intercept chain.proceed()
                     val skinType = (chain.args.getOrNull(2) as? Number)?.toInt()
+                    if (interceptPbCommentNativeBackgroundWrite(view)) {
+                        afterSkinManagerPbBackgroundWrite(view)
+                        return@intercept null
+                    }
                     val color = resolvePbDynamicBackgroundReplacement(view, colorResId, skinType)
                     if (color == null) {
                         val result = chain.proceed()
-                        applySubPbNextPageMoreViewTransparencyIfNeeded(view)
-                        schedulePbReplyBarInputCapsuleDynamicTint(view)
-                        applySubPbInputBarFrameDynamicTintIfNeeded(view)
-                        scheduleSubPbInputBarDynamicTint(view)
+                        afterSkinManagerPbBackgroundWrite(view)
                         return@intercept result
                     }
                     if (applySubPbNextPageMoreViewTransparencyIfNeeded(view)) {
@@ -1660,8 +1673,7 @@ object HomeNativeGlassHook {
                     if (!applySubPbInputBarFrameDynamicTintIfNeeded(view)) {
                         setBackgroundColorPreservingPadding(view, color)
                     }
-                    schedulePbReplyBarInputCapsuleDynamicTint(view)
-                    scheduleSubPbInputBarDynamicTint(view)
+                    afterSkinManagerPbBackgroundWrite(view)
                     null
                 }
                 installedCount++
@@ -1684,13 +1696,14 @@ object HomeNativeGlassHook {
                     val colorResId = (chain.args.getOrNull(1) as? Number)?.toInt()
                         ?: return@intercept chain.proceed()
                     val skinType = (chain.args.getOrNull(2) as? Number)?.toInt()
+                    if (interceptPbCommentNativeBackgroundWrite(view)) {
+                        afterSkinManagerPbBackgroundWrite(view)
+                        return@intercept null
+                    }
                     val color = resolvePbDynamicBackgroundReplacement(view, colorResId, skinType)
                     if (color == null) {
                         val result = chain.proceed()
-                        applySubPbNextPageMoreViewTransparencyIfNeeded(view)
-                        schedulePbReplyBarInputCapsuleDynamicTint(view)
-                        applySubPbInputBarFrameDynamicTintIfNeeded(view)
-                        scheduleSubPbInputBarDynamicTint(view)
+                        afterSkinManagerPbBackgroundWrite(view)
                         return@intercept result
                     }
                     if (applySubPbNextPageMoreViewTransparencyIfNeeded(view)) {
@@ -1699,16 +1712,12 @@ object HomeNativeGlassHook {
                     if (!applySubPbInputBarFrameDynamicTintIfNeeded(view)) {
                         setBackgroundColorPreservingPadding(view, color)
                     }
-                    schedulePbReplyBarInputCapsuleDynamicTint(view)
-                    scheduleSubPbInputBarDynamicTint(view)
+                    afterSkinManagerPbBackgroundWrite(view)
                     null
                 }
                 installedCount++
             }
-        }
-
-        if (!hasDynamicBackgroundTargets) {
-            return installedCount
+            installedCount += installSkinManagerShapeBackgroundBlock(skinManagerClass)
         }
 
         val emManagerClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.EM_MANAGER_CLASS, cl)
@@ -1726,24 +1735,22 @@ object HomeNativeGlassHook {
                     val colorResId = (chain.args.getOrNull(0) as? Number)?.toInt()
                         ?: return@intercept chain.proceed()
                     val view = readEmManagerView(manager) ?: return@intercept chain.proceed()
+                    if (interceptPbCommentNativeBackgroundWrite(view)) {
+                        afterEmManagerPbBackgroundWrite(view)
+                        return@intercept null
+                    }
                     val color = resolvePbDynamicBackgroundReplacement(view, colorResId, null)
                         ?: run {
                             val result = chain.proceed()
-                            schedulePbDialogRoundLayoutDynamicTint(view)
-                            schedulePbReplyBarInputCapsuleDynamicTint(view)
-                            scheduleSubPbInputBarDynamicTint(view)
+                            afterEmManagerPbBackgroundWrite(view)
                             return@intercept result
                         }
                     if (applyEmManagerRealBackgroundColor(manager, color)) {
-                        schedulePbDialogRoundLayoutDynamicTint(view)
-                        schedulePbReplyBarInputCapsuleDynamicTint(view)
-                        scheduleSubPbInputBarDynamicTint(view)
+                        afterEmManagerPbBackgroundWrite(view)
                         null
                     } else {
                         val result = chain.proceed()
-                        schedulePbDialogRoundLayoutDynamicTint(view)
-                        schedulePbReplyBarInputCapsuleDynamicTint(view)
-                        scheduleSubPbInputBarDynamicTint(view)
+                        afterEmManagerPbBackgroundWrite(view)
                         result
                     }
                 }
@@ -1752,6 +1759,50 @@ object HomeNativeGlassHook {
         }
 
         return installedCount
+    }
+
+    private fun installSkinManagerShapeBackgroundBlock(skinManagerClass: Class<*>): Int {
+        val mod = XposedCompat.module ?: return 0
+        var installedCount = 0
+        for (method in skinManagerClass.declaredMethods) {
+            if (!isSkinManagerShapeBackgroundMethod(method)) continue
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val view = chain.args.getOrNull(0) as? View
+                    ?: return@intercept chain.proceed()
+                if (applySubPbNavigationBarTintForBackgroundWrite(view)) {
+                    return@intercept null
+                }
+                if (interceptPbCommentNativeBackgroundWrite(view)) {
+                    afterSkinManagerPbBackgroundWrite(view)
+                    return@intercept null
+                }
+                chain.proceed()
+            }
+            installedCount++
+        }
+        return installedCount
+    }
+
+    private fun isSkinManagerShapeBackgroundMethod(method: Method): Boolean {
+        if (method.name != "setBackgroundShapeDrawable" || method.returnType != Void.TYPE) return false
+        val params = method.parameterTypes
+        return params.size in 4..8 &&
+            params[0] == View::class.java &&
+            params.drop(1).all { it == java.lang.Integer.TYPE }
+    }
+
+    private fun afterSkinManagerPbBackgroundWrite(view: View) {
+        applySubPbNextPageMoreViewTransparencyIfNeeded(view)
+        schedulePbReplyBarInputCapsuleDynamicTint(view)
+        applySubPbInputBarFrameDynamicTintIfNeeded(view)
+        scheduleSubPbInputBarDynamicTint(view)
+    }
+
+    private fun afterEmManagerPbBackgroundWrite(view: View) {
+        schedulePbDialogRoundLayoutDynamicTint(view)
+        schedulePbReplyBarInputCapsuleDynamicTint(view)
+        scheduleSubPbInputBarDynamicTint(view)
     }
 
     private fun installPbSortSwitchButtonDynamicTintHooks(cl: ClassLoader): Int {
@@ -2820,6 +2871,7 @@ object HomeNativeGlassHook {
 
     private fun rememberPbCommentItemFrame(itemFrame: View) {
         if (!isPbCommentItemFrame(itemFrame)) return
+        rememberPbCommentBackgroundWriteRole(itemFrame, PbCommentBackgroundWriteRole.CLEAR)
         installPbCommentItemFrameAttachRefresh(itemFrame)
         schedulePbCommentItemFrameRefresh(itemFrame)
     }
@@ -2860,6 +2912,12 @@ object HomeNativeGlassHook {
     }
 
     private fun rememberPbCommentSurfaceView(surface: View) {
+        val role = if (isPbSubPbLayout(surface)) {
+            PbCommentBackgroundWriteRole.SUB_PB_LAYOUT
+        } else {
+            PbCommentBackgroundWriteRole.CLEAR
+        }
+        rememberPbCommentBackgroundWriteRole(surface, role)
         installPbCommentSurfaceAttachRefresh(surface)
         schedulePbCommentSurfaceRefresh(surface)
     }
@@ -2964,6 +3022,7 @@ object HomeNativeGlassHook {
 
     private fun rememberPbSubPbLayout(subPbLayout: View) {
         if (!isPbSubPbLayout(subPbLayout)) return
+        rememberPbCommentBackgroundWriteRole(subPbLayout, PbCommentBackgroundWriteRole.SUB_PB_LAYOUT)
         installPbSubPbLayoutAttachRefresh(subPbLayout)
         schedulePbSubPbLayoutRefresh(subPbLayout)
     }
@@ -3287,6 +3346,7 @@ object HomeNativeGlassHook {
         }
         val host = runCatching { activity.findViewById<View>(android.R.id.content) }.getOrNull()
         if (host != null) {
+            rememberPbCommentBackgroundWriteRole(host, PbCommentBackgroundWriteRole.HOST)
             pbActivityContentHosts[activity] = WeakReference(host)
         }
         return host
@@ -3360,12 +3420,16 @@ object HomeNativeGlassHook {
         }
         val cachedEntry = findCachedBackgroundEntry(ConfigManager.homeNativeGlassBackgroundImagePath, 1, 1)
         if (cachedEntry == null) {
+            applyPbCommentFallbackBackgroundHost(host, state)
             scheduleBackgroundDecode(ConfigManager.homeNativeGlassBackgroundImagePath, 1, 1, host) { target ->
                 applyPbCommentBackgroundHost(target)
             }
             return
         }
-        val bitmap = cachedEntry.blurredBitmap ?: return
+        val bitmap = cachedEntry.blurredBitmap ?: run {
+            applyPbCommentFallbackBackgroundHost(host, state)
+            return
+        }
         host.background = PbCommentGlassBackgroundDrawable(
             bitmap = bitmap,
             tintAlphaPercent = state.tintAlphaPercent,
@@ -3378,6 +3442,19 @@ object HomeNativeGlassHook {
         clearElevation(host)
         pbCommentBackgroundHostStates[host] = state
         host.invalidate()
+    }
+
+    private fun applyPbCommentFallbackBackgroundHost(host: View, state: PbCommentBackgroundState) {
+        val color = resolveCachedPbCommentDynamicTintColor(host)
+        if ((host.background as? ColorDrawable)?.color != color) {
+            setBackgroundColorPreservingPadding(host, color)
+        }
+        if (host is AbsListView) {
+            host.cacheColorHint = Color.TRANSPARENT
+        }
+        clearForeground(host)
+        clearElevation(host)
+        pbCommentBackgroundHostStates[host] = state
     }
 
     private fun applyPbSubPbLayoutCard(subPbLayout: View, host: View) {
@@ -3525,6 +3602,154 @@ object HomeNativeGlassHook {
             current.clipToPadding = false
             current = current.parent
             depth++
+        }
+    }
+
+    private fun interceptPbCommentNativeBackgroundWrite(view: View): Boolean {
+        if (!ConfigManager.isHomeNativeGlassEnabled) return false
+        if (!hasPageBackgroundOverride()) return false
+        val activity = findCachedActivityFromContext(view.context) ?: return false
+        if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return false
+
+        val host = findPbActivityContentHost(activity)
+        if (host === view) {
+            applyPbCommentBackgroundHost(view)
+            return true
+        }
+
+        return when (cachedPbCommentBackgroundWriteRole(view)) {
+            PbCommentBackgroundWriteRole.CLEAR -> {
+                host?.let { applyPbCommentBackgroundHost(it) }
+                clearPbCommentNativeBackgroundWriteTarget(view)
+                true
+            }
+            PbCommentBackgroundWriteRole.DYNAMIC_TINT -> {
+                applyPbCommentDynamicTint(view)
+                true
+            }
+            PbCommentBackgroundWriteRole.SUB_PB_LAYOUT -> {
+                applyPbSubPbLayoutGlassSafely(view)
+                true
+            }
+            PbCommentBackgroundWriteRole.HOST -> {
+                applyPbCommentBackgroundHost(view)
+                true
+            }
+            PbCommentBackgroundWriteRole.KEEP,
+            PbCommentBackgroundWriteRole.IGNORE -> false
+        }
+    }
+
+    private fun clearPbCommentNativeBackgroundWriteTarget(view: View) {
+        clearNativePressVisual(view)
+        clearForeground(view)
+        clearElevation(view)
+        setTransparentBackgroundIfNeeded(view)
+        if (view is AbsListView) {
+            view.cacheColorHint = Color.TRANSPARENT
+        }
+        if (
+            isPbCommentItemFrame(view) ||
+            isPbItemRelativeView(view) ||
+            view.javaClass.name in PB_COMMENT_ITEM_SURFACE_CLASSES
+        ) {
+            clearNestedRecyclerBackgrounds(view)
+        }
+        view.invalidate()
+    }
+
+    private fun rememberPbCommentBackgroundWriteRole(
+        view: View,
+        role: PbCommentBackgroundWriteRole,
+    ) {
+        if (role == PbCommentBackgroundWriteRole.IGNORE) return
+        synchronized(pbCommentBackgroundWriteRoles) {
+            val current = pbCommentBackgroundWriteRoles[view]
+            if (current == null || pbCommentBackgroundWriteRolePriority(role) > pbCommentBackgroundWriteRolePriority(current)) {
+                pbCommentBackgroundWriteRoles[view] = role
+            }
+        }
+    }
+
+    private fun cachedPbCommentBackgroundWriteRole(view: View): PbCommentBackgroundWriteRole {
+        synchronized(pbCommentBackgroundWriteRoles) {
+            pbCommentBackgroundWriteRoles[view]?.let { return it }
+        }
+        val role = resolvePbCommentBackgroundWriteRole(view)
+        if (role != PbCommentBackgroundWriteRole.IGNORE) {
+            rememberPbCommentBackgroundWriteRole(view, role)
+        }
+        return role
+    }
+
+    private fun resolvePbCommentBackgroundWriteRole(view: View): PbCommentBackgroundWriteRole {
+        if (shouldKeepPbCommentBackground(view)) return PbCommentBackgroundWriteRole.KEEP
+        if (isPbSubPbLayout(view)) return PbCommentBackgroundWriteRole.SUB_PB_LAYOUT
+        if (isPbSortSwitchComponent(view)) return PbCommentBackgroundWriteRole.DYNAMIC_TINT
+        if (
+            isPbCommentItemFrame(view) ||
+            isPbItemRelativeView(view) ||
+            view.javaClass.name in PB_COMMENT_SURFACE_CLASSES ||
+            view.javaClass.name in PB_COMMENT_ITEM_SURFACE_CLASSES ||
+            view.javaClass.name.contains("PageBrowserRecyclerView") ||
+            view.javaClass.name.contains("CommentRecyclerView") ||
+            view.javaClass.name.contains("ParentRecyclerView") ||
+            view.javaClass.name.contains("ChildRecyclerView") ||
+            view is AbsListView
+        ) {
+            return PbCommentBackgroundWriteRole.CLEAR
+        }
+        if (
+            (
+                isRecyclerView(view) ||
+                    view.javaClass.name == "android.widget.FrameLayout" ||
+                    view.javaClass.name == "android.widget.RelativeLayout" ||
+                    view.javaClass.name == "android.widget.LinearLayout"
+                ) &&
+            hasPbCommentBackgroundWriteAncestor(view)
+        ) {
+            return PbCommentBackgroundWriteRole.CLEAR
+        }
+        return PbCommentBackgroundWriteRole.IGNORE
+    }
+
+    private fun hasPbCommentBackgroundWriteAncestor(view: View): Boolean {
+        var current = view.parent as? View
+        var depth = 0
+        while (current != null && depth < PB_COMMENT_BACKGROUND_WRITE_PARENT_SCAN_DEPTH) {
+            synchronized(pbCommentBackgroundWriteRoles) {
+                when (pbCommentBackgroundWriteRoles[current]) {
+                    PbCommentBackgroundWriteRole.CLEAR,
+                    PbCommentBackgroundWriteRole.SUB_PB_LAYOUT,
+                    PbCommentBackgroundWriteRole.HOST -> return true
+                    PbCommentBackgroundWriteRole.KEEP -> return false
+                    else -> Unit
+                }
+            }
+            if (
+                isPbCommentItemFrame(current) ||
+                isPbItemRelativeView(current) ||
+                isPbSubPbLayout(current) ||
+                current.javaClass.name in PB_COMMENT_SURFACE_CLASSES ||
+                current.javaClass.name in PB_COMMENT_ITEM_SURFACE_CLASSES
+            ) {
+                return true
+            }
+            if (shouldKeepPbCommentBackground(current)) return false
+            current = current.parent as? View
+            depth++
+        }
+        return false
+    }
+
+    private fun pbCommentBackgroundWriteRolePriority(role: PbCommentBackgroundWriteRole): Int {
+        return when (role) {
+            PbCommentBackgroundWriteRole.IGNORE -> 0
+            PbCommentBackgroundWriteRole.CLEAR -> 1
+            PbCommentBackgroundWriteRole.DYNAMIC_TINT -> 2
+            PbCommentBackgroundWriteRole.SUB_PB_LAYOUT -> 3
+            PbCommentBackgroundWriteRole.HOST -> 4
+            PbCommentBackgroundWriteRole.KEEP -> 5
         }
     }
 
@@ -6445,6 +6670,7 @@ object HomeNativeGlassHook {
     private const val PB_COMMENT_TOP_CONTAINER_CLEAR_DEPTH = 2
     private const val PB_COMMENT_HOST_CLEAR_DEPTH = 5
     private const val PB_COMMENT_BACKGROUND_PATH_CLEAR_DEPTH = 18
+    private const val PB_COMMENT_BACKGROUND_WRITE_PARENT_SCAN_DEPTH = 8
     private const val PB_COMMENT_LIST_ITEM_CLEAR_DEPTH = 4
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE = 48
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_PIXEL_ALPHA = 32
