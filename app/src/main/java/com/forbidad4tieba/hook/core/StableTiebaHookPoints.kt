@@ -21,7 +21,6 @@ object StableTiebaHookPoints {
     const val TYPE_ADAPTER_VIEW_HOLDER_CLASS = "$TYPE_ADAPTER_CLASS\$ViewHolder"
     const val BD_LIST_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdListView"
     const val BD_TYPE_RECYCLER_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdTypeRecyclerView"
-    const val BD_LIST_VIEW_SCROLL_TO_BOTTOM_LISTENER_CLASS = "com.baidu.adp.widget.ListView.BdListView\$p"
     const val PB_FIRST_FLOOR_RECOMMEND_ADAPTER_CLASS =
         "com.baidu.tieba.pb.widget.adapter.PbFirstFloorRecommendAdapter"
     const val PB_FIRST_FLOOR_RECOMMEND_DATA_CLASS =
@@ -116,7 +115,6 @@ object StableTiebaHookPoints {
     const val METHOD_ON_CREATE_VIEW_HOLDER = "onCreateViewHolder"
     const val METHOD_ON_FILL_VIEW_HOLDER = "onFillViewHolder"
     const val METHOD_ON_PRE_LOAD = "onPreLoad"
-    const val METHOD_ON_SCROLL_TO_BOTTOM = "onScrollToBottom"
     const val METHOD_GET_TAB_WRAPPER = "getTabWrapper"
     const val METHOD_GET_CURRENT_TAB_TYPE = "getCurrentTabType"
     const val METHOD_IS_HOME_PRE_LOAD_MORE_OPT = "isHomePreLoadMoreOpt"

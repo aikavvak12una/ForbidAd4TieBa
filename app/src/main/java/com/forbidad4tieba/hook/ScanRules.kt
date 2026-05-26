@@ -305,9 +305,8 @@ internal class AutoLoadMoreConfigRule(
     }
 }
 
-internal class PbCommentAutoLoadRule(
+internal class PbCommentScrollRule(
     private val pbFragmentClassName: String,
-    private val bottomListenerClassName: String,
 ) : ScanRule() {
     override val minScore: Int = 100
     override val minScoreGap: Int = 10
@@ -320,17 +319,10 @@ internal class PbCommentAutoLoadRule(
 
         val pbFragmentClass = runCatching { Class.forName(pbFragmentClassName, false, cl) }.getOrNull()
             ?: return null
-        val bottomListenerClass = runCatching { Class.forName(bottomListenerClassName, false, cl) }.getOrNull()
-            ?: return null
 
         val fragmentField = cls.declaredFields.firstOrNull { field ->
             !Modifier.isStatic(field.modifiers) && field.type == pbFragmentClass
         } ?: return null
-
-        val bottomListenerFields = pbFragmentClass.declaredFields.filter { field ->
-            !Modifier.isStatic(field.modifiers) && bottomListenerClass.isAssignableFrom(field.type)
-        }
-        val bottomListenerField = bottomListenerFields.singleOrNull() ?: return null
 
         val methods = cls.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
         val scrollCandidates = methods.filter { method ->
@@ -363,14 +355,12 @@ internal class PbCommentAutoLoadRule(
         if (scrollMethod.name == "b") score += 15
         if (cls.name.contains("${pbFragmentClassName}\$")) score += 10
         if (Modifier.isFinal(fragmentField.modifiers)) score += 5
-        if (Modifier.isFinal(bottomListenerField.modifiers)) score += 5
         score -= scrollCandidates.size * 3
-        score -= bottomListenerFields.size * 5
 
         return ScanMatch(
             className = cls.name,
             methodName = scrollMethod.name,
-            fieldName = "${fragmentField.name},${bottomListenerField.name}",
+            fieldName = fragmentField.name,
             score = score,
         )
     }

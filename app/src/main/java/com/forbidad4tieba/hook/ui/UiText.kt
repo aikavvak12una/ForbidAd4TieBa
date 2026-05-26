@@ -129,7 +129,7 @@ object UiText {
         fun homeNativeGlassTintColorSwatch(index: Int): String = "动态取色色块 $index"
 
         const val AUTO_LOAD_MORE_LABEL = "预加载"
-        const val AUTO_LOAD_MORE_DESC = "浏览信息流和帖子评论时自动静默加载下一页"
+        const val AUTO_LOAD_MORE_DESC = "浏览信息流自动静默加载下一页"
         const val DISABLE_AUTO_REFRESH_LABEL = "禁止自动刷新"
         const val DISABLE_AUTO_REFRESH_DESC = "避免首页被强制重置刷新列表"
         const val DISABLE_PB_GESTURE_FONT_SCALE_LABEL = "禁用调整字号手势"

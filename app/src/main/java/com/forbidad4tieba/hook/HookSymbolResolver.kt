@@ -183,8 +183,6 @@ data class HookSymbols(
     val autoLoadMoreConfigMethod: String? = null,
     val pbCommentScrollListenerClass: String? = null,
     val pbCommentScrollMethod: String? = null,
-    val pbCommentScrollFragmentField: String? = null,
-    val pbCommentScrollBottomListenerField: String? = null,
     val pbGestureScaleManagerClass: String? = null,
     val pbGestureScaleDispatchMethod: String? = null,
     val pbGestureScaleListenerSetterMethod: String? = null,
@@ -438,8 +436,6 @@ data class HookSymbols(
             put("autoLoadMoreConfigMethod", autoLoadMoreConfigMethod)
             put("pbCommentScrollListenerClass", pbCommentScrollListenerClass)
             put("pbCommentScrollMethod", pbCommentScrollMethod)
-            put("pbCommentScrollFragmentField", pbCommentScrollFragmentField)
-            put("pbCommentScrollBottomListenerField", pbCommentScrollBottomListenerField)
             put("pbGestureScaleManagerClass", pbGestureScaleManagerClass)
             put("pbGestureScaleDispatchMethod", pbGestureScaleDispatchMethod)
             put("pbGestureScaleListenerSetterMethod", pbGestureScaleListenerSetterMethod)
@@ -763,8 +759,6 @@ data class HookSymbols(
                     autoLoadMoreConfigMethod = obj.optStringOrNull("autoLoadMoreConfigMethod"),
                     pbCommentScrollListenerClass = obj.optStringOrNull("pbCommentScrollListenerClass"),
                     pbCommentScrollMethod = obj.optStringOrNull("pbCommentScrollMethod"),
-                    pbCommentScrollFragmentField = obj.optStringOrNull("pbCommentScrollFragmentField"),
-                    pbCommentScrollBottomListenerField = obj.optStringOrNull("pbCommentScrollBottomListenerField"),
                     pbGestureScaleManagerClass = obj.optStringOrNull("pbGestureScaleManagerClass"),
                     pbGestureScaleDispatchMethod = obj.optStringOrNull("pbGestureScaleDispatchMethod"),
                     pbGestureScaleListenerSetterMethod = obj.optStringOrNull("pbGestureScaleListenerSetterMethod"),
@@ -1957,16 +1951,6 @@ internal object HookSymbolResolver {
             listOf(
                 "pbCommentScrollListenerClass" to has(symbols.pbCommentScrollListenerClass),
                 "pbCommentScrollMethod" to has(symbols.pbCommentScrollMethod),
-            ),
-        )
-        add(
-            "PbCommentAutoLoadHook",
-            "${symbols.pbCommentScrollListenerClass}.${symbols.pbCommentScrollMethod}[${symbols.pbCommentScrollFragmentField}->${symbols.pbCommentScrollBottomListenerField}]",
-            listOf(
-                "pbCommentScrollListenerClass" to has(symbols.pbCommentScrollListenerClass),
-                "pbCommentScrollMethod" to has(symbols.pbCommentScrollMethod),
-                "pbCommentScrollFragmentField" to has(symbols.pbCommentScrollFragmentField),
-                "pbCommentScrollBottomListenerField" to has(symbols.pbCommentScrollBottomListenerField),
             ),
         )
         add(
@@ -3467,8 +3451,6 @@ internal object HookSymbolResolver {
         var autoLoadMoreConfigMethod: String? = null
         var pbCommentScrollListenerClass: String? = null
         var pbCommentScrollMethod: String? = null
-        var pbCommentScrollFragmentField: String? = null
-        var pbCommentScrollBottomListenerField: String? = null
         var pbGestureScaleManagerClass: String? = null
         var pbGestureScaleDispatchMethod: String? = null
         var pbGestureScaleListenerSetterMethod: String? = null
@@ -3917,24 +3899,16 @@ internal object HookSymbolResolver {
             autoLoadMoreConfigMethod = autoLoadMoreMatch.methodName
         }
 
-        val pbCommentAutoLoadMatch = runRules(
+        val pbCommentScrollMatch = runRules(
             candidatesWithWhitelist,
             cl,
-            listOf(
-                PbCommentAutoLoadRule(
-                    PB_FRAGMENT_CLASS,
-                    StableTiebaHookPoints.BD_LIST_VIEW_SCROLL_TO_BOTTOM_LISTENER_CLASS,
-                ),
-            ),
+            listOf(PbCommentScrollRule(PB_FRAGMENT_CLASS)),
             logger,
-            "pbCommentAutoLoad",
+            "pbCommentScroll",
         )
-        if (pbCommentAutoLoadMatch != null) {
-            pbCommentScrollListenerClass = pbCommentAutoLoadMatch.className
-            pbCommentScrollMethod = pbCommentAutoLoadMatch.methodName
-            val fields = unpack(pbCommentAutoLoadMatch.fieldName, 2)
-            pbCommentScrollFragmentField = fields[0]
-            pbCommentScrollBottomListenerField = fields[1]
+        if (pbCommentScrollMatch != null) {
+            pbCommentScrollListenerClass = pbCommentScrollMatch.className
+            pbCommentScrollMethod = pbCommentScrollMatch.methodName
         }
 
         val pbGestureScaleMatch = runRules(
@@ -4323,8 +4297,6 @@ internal object HookSymbolResolver {
             autoLoadMoreConfigMethod = autoLoadMoreConfigMethod,
             pbCommentScrollListenerClass = pbCommentScrollListenerClass,
             pbCommentScrollMethod = pbCommentScrollMethod,
-            pbCommentScrollFragmentField = pbCommentScrollFragmentField,
-            pbCommentScrollBottomListenerField = pbCommentScrollBottomListenerField,
             pbGestureScaleManagerClass = pbGestureScaleManagerClass,
             pbGestureScaleDispatchMethod = pbGestureScaleDispatchMethod,
             pbGestureScaleListenerSetterMethod = pbGestureScaleListenerSetterMethod,
@@ -11323,12 +11295,10 @@ internal object HookSymbolResolver {
             symbols.autoLoadMoreConfigClass != null ||
                 symbols.autoLoadMoreConfigMethod != null
         if (hasAutoLoadMoreSymbols && !isAutoLoadMoreConfigValid(symbols, cl)) return false
-        val hasPbCommentAutoLoadSymbols =
+        val hasPbCommentScrollSymbols =
             symbols.pbCommentScrollListenerClass != null ||
-                symbols.pbCommentScrollMethod != null ||
-                symbols.pbCommentScrollFragmentField != null ||
-                symbols.pbCommentScrollBottomListenerField != null
-        if (hasPbCommentAutoLoadSymbols && !isPbCommentAutoLoadValid(symbols, cl)) return false
+                symbols.pbCommentScrollMethod != null
+        if (hasPbCommentScrollSymbols && !isPbCommentScrollValid(symbols, cl)) return false
         val hasHomeNativeGlassSortSwitchSymbols =
             symbols.homeNativeGlassSortSwitchBackgroundPaintField != null ||
                 symbols.homeNativeGlassSortSwitchSlideDrawMethod != null ||
@@ -12110,33 +12080,11 @@ internal object HookSymbolResolver {
         }
     }
 
-    private fun isPbCommentAutoLoadValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    private fun isPbCommentScrollValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
         val listenerClassName = symbols.pbCommentScrollListenerClass ?: return false
         val scrollMethodName = symbols.pbCommentScrollMethod ?: return false
-        val fragmentFieldName = symbols.pbCommentScrollFragmentField ?: return false
-        val bottomListenerFieldName = symbols.pbCommentScrollBottomListenerField ?: return false
         return try {
             val listenerClass = safeFindClass(listenerClassName, cl) ?: return false
-            val pbFragmentClass = safeFindClass(PB_FRAGMENT_CLASS, cl) ?: return false
-            val bottomListenerClass = safeFindClass(
-                StableTiebaHookPoints.BD_LIST_VIEW_SCROLL_TO_BOTTOM_LISTENER_CLASS,
-                cl,
-            ) ?: return false
-
-            val fragmentFieldOk = listenerClass.declaredFields.any { field ->
-                !java.lang.reflect.Modifier.isStatic(field.modifiers) &&
-                    field.name == fragmentFieldName &&
-                    field.type == pbFragmentClass
-            }
-            if (!fragmentFieldOk) return false
-
-            val bottomFieldOk = pbFragmentClass.declaredFields.any { field ->
-                !java.lang.reflect.Modifier.isStatic(field.modifiers) &&
-                    field.name == bottomListenerFieldName &&
-                    bottomListenerClass.isAssignableFrom(field.type)
-            }
-            if (!bottomFieldOk) return false
-
             listenerClass.declaredMethods.any { method ->
                 !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
                     method.name == scrollMethodName &&
@@ -12910,24 +12858,12 @@ internal object HookSymbolResolver {
             HookFeatureStatus(state = HookFeatureState.DISABLED, missingCritical = forumTopShiftCritical)
         }
 
-        val autoLoadMoreOptional = ArrayList<String>(6)
+        val autoLoadMoreOptional = ArrayList<String>(2)
         if (symbols.autoLoadMoreConfigClass.isNullOrBlank()) {
             autoLoadMoreOptional.add("autoLoadMoreConfigClass")
         }
         if (symbols.autoLoadMoreConfigMethod.isNullOrBlank()) {
             autoLoadMoreOptional.add("autoLoadMoreConfigMethod")
-        }
-        if (symbols.pbCommentScrollListenerClass.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollListenerClass")
-        }
-        if (symbols.pbCommentScrollMethod.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollMethod")
-        }
-        if (symbols.pbCommentScrollFragmentField.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollFragmentField")
-        }
-        if (symbols.pbCommentScrollBottomListenerField.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollBottomListenerField")
         }
         out[HookFeatureKey.AUTO_LOAD_MORE] = if (autoLoadMoreOptional.isEmpty()) {
             HookFeatureStatus(state = HookFeatureState.FULL)
@@ -13516,7 +13452,6 @@ internal object HookSymbolResolver {
             ${fmt("ForumTopShift", "${symbols.forumBottomSheetViewClass}.${symbols.forumBottomSheetInitScrollMethod}")}
             ${fmt("AutoRefresh", "${PERSONALIZE_PAGE_VIEW_CLASS}.${symbols.autoRefreshTriggerMethod}")}
             ${fmt("AutoLoadMore", "${symbols.autoLoadMoreConfigClass}.${symbols.autoLoadMoreConfigMethod}")}
-            ${fmt("PbCommentAutoLoad", "${symbols.pbCommentScrollListenerClass}.${symbols.pbCommentScrollMethod}[${symbols.pbCommentScrollFragmentField}->${symbols.pbCommentScrollBottomListenerField}]")}
             ${fmt("PbGestureScale", "${symbols.pbGestureScaleManagerClass}.${symbols.pbGestureScaleDispatchMethod}/${symbols.pbGestureScaleListenerSetterMethod} -> ${symbols.pbGestureScaleListenerClass}.${symbols.pbGestureScaleListenerOnScaleMethod}")}
             ${fmt("CollectionCore", "${symbols.collectionPresenterField}.${symbols.collectionPresenterListSetterMethod} / ${symbols.collectionModelField}.${symbols.collectionModelListGetterMethod}/${symbols.collectionModelParseMethod}")}
             ${fmt("CollectionAdapter", "${symbols.collectionPresenterAdapterField}.{${symbols.collectionAdapterShowFooterMethod},${symbols.collectionAdapterLoadingMethod},${symbols.collectionAdapterHasMoreMethod}}")}

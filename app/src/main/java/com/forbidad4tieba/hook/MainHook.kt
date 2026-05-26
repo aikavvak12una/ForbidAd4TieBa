@@ -306,7 +306,6 @@ class MainHook : XposedModule() {
 
                     com.forbidad4tieba.hook.feature.ui.AutoLoadMoreHook.hook(cl, symbols)
                     PbScrollCoalesceHook.hook(cl, symbols)
-                    com.forbidad4tieba.hook.feature.ui.PbCommentAutoLoadHook.hook(cl, symbols)
                     PbDisableGestureFontScaleHook.hook(cl, symbols)
                     AiComponentDisableHook.hook(cl, symbols)
 
