@@ -114,7 +114,6 @@ object StableTiebaHookPoints {
     const val METHOD_GET_ITEM_VIEW_TYPE = "getItemViewType"
     const val METHOD_ON_CREATE_VIEW_HOLDER = "onCreateViewHolder"
     const val METHOD_ON_FILL_VIEW_HOLDER = "onFillViewHolder"
-    const val METHOD_ON_PRE_LOAD = "onPreLoad"
     const val METHOD_GET_TAB_WRAPPER = "getTabWrapper"
     const val METHOD_GET_CURRENT_TAB_TYPE = "getCurrentTabType"
     const val METHOD_IS_HOME_PRE_LOAD_MORE_OPT = "isHomePreLoadMoreOpt"

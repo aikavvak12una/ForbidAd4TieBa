@@ -823,12 +823,9 @@ object SettingsMenuHook {
                         ),
                     ),
                     SettingGroup(
-                        UiText.Settings.PERFORMANCE_GROUP_PRELOAD,
+                        UiText.Settings.PERFORMANCE_GROUP_STARTUP,
                         listOf(
                             SwitchItem(UiText.Settings.DISABLE_AD_SDK_COMPONENTS_LABEL, UiText.Settings.DISABLE_AD_SDK_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_AD_SDK_COMPONENTS, true, true),
-                            SwitchItem(UiText.Settings.DISABLE_PRELOAD_RUNTIME_LABEL, UiText.Settings.DISABLE_PRELOAD_RUNTIME_DESC, ConfigManager.KEY_DISABLE_PRELOAD_RUNTIME, true, true),
-                            SwitchItem(UiText.Settings.DISABLE_FEED_PB_CDN_PRELOAD_LABEL, UiText.Settings.DISABLE_FEED_PB_CDN_PRELOAD_DESC, ConfigManager.KEY_DISABLE_FEED_PB_CDN_PRELOAD, true, false),
-                            SwitchItem(UiText.Settings.DISABLE_PB_PRELOAD_LABEL, UiText.Settings.DISABLE_PB_PRELOAD_DESC, ConfigManager.KEY_DISABLE_PB_PRELOAD, true, true),
                             SwitchItem(UiText.Settings.DISABLE_FLUTTER_PREINIT_LABEL, UiText.Settings.DISABLE_FLUTTER_PREINIT_DESC, ConfigManager.KEY_DISABLE_FLUTTER_PREINIT, true, true),
                             SwitchItem(UiText.Settings.BLOCK_TITAN_PATCH_LABEL, UiText.Settings.BLOCK_TITAN_PATCH_DESC, ConfigManager.KEY_BLOCK_TITAN_PATCH, true, false),
                         ),

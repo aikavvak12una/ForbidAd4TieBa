@@ -23,8 +23,6 @@ object HostPerformanceConfigHook {
     private const val PREF_SPLASH_PLG_ENABLE = "key_splash_new_policy_plg_enable"
     private const val PREF_SPLASH_PLG_CPC_ENABLE = "key_splash_new_policy_plg_cpc_enable"
     private const val PREF_SPLASH_SHAKE_AD_OPEN = "key_splash_shake_ad_open"
-    private const val PREF_FRS_PRELOAD_MORE = "frs_preload_not_see_thread_num_sp_key"
-    private const val PREF_HOME_PRELOAD_MORE = "home_preload_not_see_thread_num_sp_key"
     private const val PREF_LOW_SCORE_THRESHOLD = "sp_low_score_device_config"
     private const val PREF_LOW_DEV_FORBID_LIST = "low_dev_forbid_list"
     private const val FORCED_LOW_DEVICE_SCORE = -1.0
@@ -33,26 +31,14 @@ object HostPerformanceConfigHook {
     private const val LOW_DEV_DISABLE_DU_MEDIA_PRE_INSTALL = "disable_du_media_pre_install"
     private const val LOW_DEV_DISABLE_PRELOAD_FEED_IMAGE = "disable_preload_feed_image"
     private const val LOW_DEV_DISABLE_HOME_ANIMATION = "disable_home_animation"
-    private const val LOW_DEV_DISABLE_FRS_PB_CDN = "disable_frs_pb_cdn"
-    private const val LOW_DEV_DISABLE_HOME_PB_CDN = "disable_home_pb_cdn"
     private const val LOW_DEV_DISABLE_PRELOAD_HOME_DATA = "disable_preload_home_data"
     private const val LOW_DEV_DISABLE_WEBVIEW_PROXY = "disable_webview_proxy"
     private const val LOW_DEV_MI_13_FORCE_DISABLE = "mi_13_force_disable"
 
     private val lowDevDefaultForbidListJson = buildLowDevForbidListJson(
-        includePbCdn = false,
-        includeHomeData = true,
-    )
-    private val lowDevStrictForbidListJson = buildLowDevForbidListJson(
-        includePbCdn = true,
         includeHomeData = true,
     )
     private val lowDevAutoLoadDefaultForbidListJson = buildLowDevForbidListJson(
-        includePbCdn = false,
-        includeHomeData = false,
-    )
-    private val lowDevAutoLoadStrictForbidListJson = buildLowDevForbidListJson(
-        includePbCdn = true,
         includeHomeData = false,
     )
 
@@ -103,7 +89,6 @@ object HostPerformanceConfigHook {
                     val key = chain.args.firstOrNull() as? String
                     when {
                         ConfigManager.isAdSdkComponentsDisabled && key == PREF_FUN_AD_SDK_ENABLE -> 0
-                        shouldDisablePreloadMorePref(key) -> 0
                         else -> chain.proceed()
                     }
                 }
@@ -225,38 +210,25 @@ object HostPerformanceConfigHook {
 
     private fun isAnyConfigOverrideEnabled(): Boolean {
         return ConfigManager.isAdSdkComponentsDisabled ||
-            ConfigManager.isPreloadRuntimeDisabled ||
             ConfigManager.isFlutterPreinitDisabled ||
             ConfigManager.isLowEndDeviceConfigForced
     }
 
     private fun resolveLowDevForbidListJson(): String {
         val keepHomePreloadMore = ConfigManager.isAutoLoadMoreEnabled
-        return when {
-            ConfigManager.isFeedPbCdnPreloadDisabled && keepHomePreloadMore ->
-                lowDevAutoLoadStrictForbidListJson
-            ConfigManager.isFeedPbCdnPreloadDisabled -> lowDevStrictForbidListJson
-            keepHomePreloadMore -> lowDevAutoLoadDefaultForbidListJson
-            else -> lowDevDefaultForbidListJson
+        return if (keepHomePreloadMore) {
+            lowDevAutoLoadDefaultForbidListJson
+        } else {
+            lowDevDefaultForbidListJson
         }
     }
 
-    private fun shouldDisablePreloadMorePref(key: String?): Boolean {
-        if (!ConfigManager.isPreloadRuntimeDisabled) return false
-        if (key == PREF_HOME_PRELOAD_MORE && ConfigManager.isAutoLoadMoreEnabled) return false
-        return key == PREF_FRS_PRELOAD_MORE || key == PREF_HOME_PRELOAD_MORE
-    }
-
-    private fun buildLowDevForbidListJson(includePbCdn: Boolean, includeHomeData: Boolean): String {
+    private fun buildLowDevForbidListJson(includeHomeData: Boolean): String {
         val items = ArrayList<String>(9)
         items.add(LOW_DEV_DISABLE_RE_RUN_IDLE)
         items.add(LOW_DEV_DISABLE_DU_MEDIA_PRE_INSTALL)
         items.add(LOW_DEV_DISABLE_PRELOAD_FEED_IMAGE)
         items.add(LOW_DEV_DISABLE_HOME_ANIMATION)
-        if (includePbCdn) {
-            items.add(LOW_DEV_DISABLE_FRS_PB_CDN)
-            items.add(LOW_DEV_DISABLE_HOME_PB_CDN)
-        }
         if (includeHomeData) {
             items.add(LOW_DEV_DISABLE_PRELOAD_HOME_DATA)
         }

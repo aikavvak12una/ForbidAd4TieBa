@@ -89,17 +89,14 @@ object ConfigManager {
     const val KEY_DISABLE_VIDEO_COMPONENTS = "disable_video_components"
     const val KEY_DISABLE_MONITOR_SYNC_COMPONENTS = "disable_monitor_sync_components"
     const val KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS = "disable_update_download_components"
-    const val KEY_DISABLE_PB_PRELOAD = "disable_pb_preload"
     const val KEY_ENABLE_PB_PERFORMANCE_MODE = "enable_pb_performance_mode"
     const val KEY_ENABLE_PB_SCROLL_COALESCE = "enable_pb_scroll_coalesce"
     const val KEY_FORCE_FEED_UI_OPT = "force_feed_ui_opt"
     const val KEY_ENABLE_PERFORMANCE_OPTIMIZATION = "enable_performance_optimization"
     const val KEY_FORCE_HOST_PERFORMANCE_FLAGS = "force_host_performance_flags"
     const val KEY_DISABLE_APSARAS_SCHEDULE = "disable_apsaras_schedule"
-    const val KEY_DISABLE_PRELOAD_RUNTIME = "disable_preload_runtime"
     const val KEY_DISABLE_FLUTTER_PREINIT = "disable_flutter_preinit"
     const val KEY_FORCE_LOW_END_DEVICE_CONFIG = "force_low_end_device_config"
-    const val KEY_DISABLE_FEED_PB_CDN_PRELOAD = "disable_feed_pb_cdn_preload"
     const val KEY_BLOCK_TITAN_PATCH = "block_titan_patch"
     const val KEY_PRIVATE_READ_RECEIPT_INVISIBLE = "private_read_receipt_invisible"
     const val KEY_FILTER_POST_VOTE = "filter_post_vote"
@@ -167,15 +164,12 @@ object ConfigManager {
     @Volatile var isVideoComponentsDisabled: Boolean = false
     @Volatile var isMonitorSyncComponentsDisabled: Boolean = false
     @Volatile var isUpdateDownloadComponentsDisabled: Boolean = false
-    @Volatile var isPbPreloadDisabled: Boolean = false
     @Volatile var isPbPerformanceModeEnabled: Boolean = false
     @Volatile var isFeedUiOptForced: Boolean = false
     @Volatile var isHostPerformanceFlagsForced: Boolean = false
     @Volatile var isApsarasScheduleDisabled: Boolean = false
-    @Volatile var isPreloadRuntimeDisabled: Boolean = false
     @Volatile var isFlutterPreinitDisabled: Boolean = false
     @Volatile var isLowEndDeviceConfigForced: Boolean = false
-    @Volatile var isFeedPbCdnPreloadDisabled: Boolean = false
     @Volatile var isTitanPatchBlockEnabled: Boolean = false
     @Volatile var isPrivateReadReceiptInvisibleEnabled: Boolean = false
     @Volatile var isPostVoteFilterEnabled: Boolean = false
@@ -348,17 +342,14 @@ object ConfigManager {
             KEY_DISABLE_VIDEO_COMPONENTS,
             KEY_DISABLE_MONITOR_SYNC_COMPONENTS,
             KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS,
-            KEY_DISABLE_PB_PRELOAD,
             KEY_ENABLE_PB_PERFORMANCE_MODE,
             KEY_ENABLE_PB_SCROLL_COALESCE,
             KEY_FORCE_FEED_UI_OPT,
             KEY_ENABLE_PERFORMANCE_OPTIMIZATION,
             KEY_FORCE_HOST_PERFORMANCE_FLAGS,
             KEY_DISABLE_APSARAS_SCHEDULE,
-            KEY_DISABLE_PRELOAD_RUNTIME,
             KEY_DISABLE_FLUTTER_PREINIT,
             KEY_FORCE_LOW_END_DEVICE_CONFIG,
-            KEY_DISABLE_FEED_PB_CDN_PRELOAD,
             KEY_BLOCK_TITAN_PATCH,
             KEY_PRIVATE_READ_RECEIPT_INVISIBLE -> refreshRestrictedRuntimeFlags(p)
             KEY_FILTER_POST_VOTE -> isPostVoteFilterEnabled = p.getBoolean(key, false)
@@ -439,10 +430,8 @@ object ConfigManager {
         isAdBlockEnabled = restrictedBoolean(p, KEY_BLOCK_AD)
         isHostPerformanceFlagsForced = performanceChildBoolean(p, KEY_FORCE_HOST_PERFORMANCE_FLAGS, performanceOptimizationEnabled, true)
         isApsarasScheduleDisabled = performanceChildBoolean(p, KEY_DISABLE_APSARAS_SCHEDULE, performanceOptimizationEnabled, true)
-        isPreloadRuntimeDisabled = performanceChildBoolean(p, KEY_DISABLE_PRELOAD_RUNTIME, performanceOptimizationEnabled, true)
         isFlutterPreinitDisabled = performanceChildBoolean(p, KEY_DISABLE_FLUTTER_PREINIT, performanceOptimizationEnabled, true)
         isLowEndDeviceConfigForced = performanceChildBoolean(p, KEY_FORCE_LOW_END_DEVICE_CONFIG, performanceOptimizationEnabled, true)
-        isFeedPbCdnPreloadDisabled = performanceChildBoolean(p, KEY_DISABLE_FEED_PB_CDN_PRELOAD, performanceOptimizationEnabled, false)
         isAiComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_AI_COMPONENTS, performanceOptimizationEnabled, true)
         isLocationComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_LOCATION_COMPONENTS, performanceOptimizationEnabled, true)
         isAdSdkComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_AD_SDK_COMPONENTS, performanceOptimizationEnabled, true)
@@ -450,8 +439,6 @@ object ConfigManager {
         isVideoComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_VIDEO_COMPONENTS, performanceOptimizationEnabled, true)
         isMonitorSyncComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_MONITOR_SYNC_COMPONENTS, performanceOptimizationEnabled, true)
         isUpdateDownloadComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS, performanceOptimizationEnabled, true)
-        isPbPreloadDisabled = isPreloadRuntimeDisabled ||
-            performanceChildBoolean(p, KEY_DISABLE_PB_PRELOAD, performanceOptimizationEnabled, true)
         isPbPerformanceModeEnabled = performanceChildBoolean(p, KEY_ENABLE_PB_PERFORMANCE_MODE, performanceOptimizationEnabled, true)
         isPbScrollCoalesceEnabled = performanceChildBoolean(p, KEY_ENABLE_PB_SCROLL_COALESCE, performanceOptimizationEnabled, true)
         isFeedUiOptForced = performanceChildBoolean(p, KEY_FORCE_FEED_UI_OPT, performanceOptimizationEnabled, true)

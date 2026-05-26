@@ -20,7 +20,6 @@ import com.forbidad4tieba.hook.feature.perf.AiComponentDisableHook
 import com.forbidad4tieba.hook.feature.perf.ForceFeedUiOptHook
 import com.forbidad4tieba.hook.feature.perf.HostPerformanceConfigHook
 import com.forbidad4tieba.hook.feature.perf.PbPerformanceModeHook
-import com.forbidad4tieba.hook.feature.perf.PbPreloadBlockHook
 import com.forbidad4tieba.hook.feature.perf.AdSdkInitBlockHook
 import com.forbidad4tieba.hook.feature.perf.ColdStartOptHook
 import com.forbidad4tieba.hook.feature.perf.TitanPatchBlockHook
@@ -70,7 +69,6 @@ class MainHook : XposedModule() {
         val imageViewerNativeShareHook: Boolean,
         val defaultOriginalImageHook: Boolean,
         val imageViewerSwipeEnterForumBlockHook: Boolean,
-        val pbPreloadBlockHook: Boolean,
         val pbPerformanceModeHook: Boolean,
         val homeTabAutoHideHooks: Boolean,
         val upgradeDialogHook: Boolean,
@@ -83,7 +81,6 @@ class MainHook : XposedModule() {
                 !imageViewerNativeShareHook &&
                 !defaultOriginalImageHook &&
                 !imageViewerSwipeEnterForumBlockHook &&
-                !pbPreloadBlockHook &&
                 !pbPerformanceModeHook &&
                 !homeTabAutoHideHooks &&
                 !upgradeDialogHook
@@ -374,11 +371,6 @@ class MainHook : XposedModule() {
             FreeCopyHook.hook(cl, symbols)
         }
 
-        if (plan.pbPreloadBlockHook) {
-            XposedCompat.log("[MainHook] Installing PbPreloadBlockHook...")
-            PbPreloadBlockHook.hook(cl)
-        }
-
         if (plan.homeTabAutoHideHooks && ConfigManager.isHomeTabAutoHideEnabled) {
             XposedCompat.log("[MainHook] Installing HomeTopTabAutoHideHook...")
             HomeTopTabAutoHideHook.hook(cl)
@@ -517,7 +509,6 @@ class MainHook : XposedModule() {
             imageViewerNativeShareHook = isImageViewerProcess,
             defaultOriginalImageHook = isImageViewerProcess,
             imageViewerSwipeEnterForumBlockHook = isImageViewerProcess,
-            pbPreloadBlockHook = isMain,
             pbPerformanceModeHook = isMain,
             homeTabAutoHideHooks = isMain,
             upgradeDialogHook = isMain,

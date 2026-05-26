@@ -34,9 +34,7 @@ object ColdStartOptHook {
         BooleanOverride("idleTaskOpt", true) {
             ConfigManager.isHostPerformanceFlagsForced || ConfigManager.isFlutterPreinitDisabled
         },
-        BooleanOverride("idleTaskOpt2", true) {
-            ConfigManager.isHostPerformanceFlagsForced || ConfigManager.isPreloadRuntimeDisabled
-        },
+        BooleanOverride("idleTaskOpt2", true) { ConfigManager.isHostPerformanceFlagsForced },
         BooleanOverride("cookieRepeatedOpt", true) { ConfigManager.isHostPerformanceFlagsForced },
         BooleanOverride("isFeedUserIconOpt", true) { ConfigManager.isHostPerformanceFlagsForced },
         BooleanOverride("frsChatAsync", true) { ConfigManager.isHostPerformanceFlagsForced },
@@ -45,9 +43,7 @@ object ColdStartOptHook {
         BooleanOverride("isOpenApsarasSchedule", false) { ConfigManager.isApsarasScheduleDisabled },
         BooleanOverride("isFrsFunAdSdkTest", false) { ConfigManager.isAdSdkComponentsDisabled },
         BooleanOverride("isDuplicateRemovalFunAdABTest", false) { ConfigManager.isAdSdkComponentsDisabled },
-        BooleanOverride("isAutoPlayNextVideo", false) {
-            ConfigManager.isPreloadRuntimeDisabled || ConfigManager.isVideoComponentsDisabled
-        },
+        BooleanOverride("isAutoPlayNextVideo", false) { ConfigManager.isVideoComponentsDisabled },
     )
 
     fun hook(cl: ClassLoader) {
@@ -96,7 +92,6 @@ object ColdStartOptHook {
     private fun isAnyOverrideEnabled(): Boolean {
         return ConfigManager.isHostPerformanceFlagsForced ||
             ConfigManager.isFlutterPreinitDisabled ||
-            ConfigManager.isPreloadRuntimeDisabled ||
             ConfigManager.isLowEndDeviceConfigForced ||
             ConfigManager.isApsarasScheduleDisabled ||
             ConfigManager.isAdSdkComponentsDisabled ||

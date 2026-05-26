@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * 三层都 hook 后，不管哪条路径触发，都不会继续预取视频。
  *
- * 由视频组件开关或统一预加载运行期开关控制。
+ * 由视频组件开关控制。
  */
 object VideoPreloadBlockHook {
     private const val TAG = "[VideoPreloadBlockHook]"
@@ -111,6 +111,6 @@ object VideoPreloadBlockHook {
     }
 
     private fun isEnabled(): Boolean {
-        return ConfigManager.isPreloadRuntimeDisabled || ConfigManager.isVideoComponentsDisabled
+        return ConfigManager.isVideoComponentsDisabled
     }
 }
