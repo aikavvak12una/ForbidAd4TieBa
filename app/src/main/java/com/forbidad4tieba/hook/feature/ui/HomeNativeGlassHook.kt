@@ -6132,18 +6132,42 @@ object HomeNativeGlassHook {
             }
         }
         val blurredBitmap = cachedEntry?.blurredBitmap
+        val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
+        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
+        val materialTintColor = resolveCardMaterialTintColor(view)
+        val strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled
+        val shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled
         val background = if (page != null && blurredBitmap != null) {
+            val current = view.background as? CardGlassDrawable
+            if (
+                current != null &&
+                current.matches(
+                    page = page,
+                    bitmap = blurredBitmap,
+                    radius = radius,
+                    tintAlphaPercent = tintAlphaPercent,
+                    tintAlphaExtra = tintAlphaExtra,
+                    blurPercent = blurPercent,
+                    materialTintColor = materialTintColor,
+                    strokeEnabled = strokeEnabled,
+                    shadowEnabled = shadowEnabled,
+                )
+            ) {
+                glassBackgroundViews[view] = true
+                clearElevation(view)
+                return
+            }
             CardGlassDrawable(
                 target = view,
                 page = page,
                 bitmap = blurredBitmap,
                 radius = radius,
-                tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent,
+                tintAlphaPercent = tintAlphaPercent,
                 tintAlphaExtra = tintAlphaExtra,
-                blurPercent = ConfigManager.homeNativeGlassCardBlurPercent,
-                materialTintColor = resolveCardMaterialTintColor(view),
-                strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled,
-                shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled,
+                blurPercent = blurPercent,
+                materialTintColor = materialTintColor,
+                strokeEnabled = strokeEnabled,
+                shadowEnabled = shadowEnabled,
             )
         } else {
             GradientDrawable().apply {
@@ -6478,7 +6502,7 @@ object HomeNativeGlassHook {
         anchor.postOnAnimation {
             scrollInvalidateScheduled.set(false)
             refreshHomeNativeBackgroundLayers(anchor)
-            invalidateGlassBackgroundViews()
+            invalidateGlassBackgroundViews(anchor)
         }
     }
 
@@ -6502,6 +6526,29 @@ object HomeNativeGlassHook {
                 view.invalidate()
             }
         }
+    }
+
+    private fun invalidateGlassBackgroundViews(anchor: View) {
+        val views = synchronized(glassBackgroundViews) {
+            glassBackgroundViews.keys.toList()
+        }
+        for (view in views) {
+            if (view.isAttachedToWindow && isViewWithinAncestor(view, anchor)) {
+                view.invalidate()
+            }
+        }
+    }
+
+    private fun isViewWithinAncestor(view: View, ancestor: View): Boolean {
+        if (view === ancestor) return true
+        var current = view.parent
+        var depth = 0
+        while (current is View && depth < GLASS_INVALIDATE_PARENT_SCAN_DEPTH) {
+            if (current === ancestor) return true
+            current = current.parent
+            depth++
+        }
+        return false
     }
 
     private fun clearElevation(view: View) {
@@ -6677,6 +6724,7 @@ object HomeNativeGlassHook {
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_LUMA = 24
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MAX_LUMA = 232
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_CHROMA_BIAS = 32
+    private const val GLASS_INVALIDATE_PARENT_SCAN_DEPTH = 24
     private const val PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA = 28
     private const val IMAGE_CONTAINER_RADIUS_CHILD_DEPTH = 3
     private const val IMAGE_CONTAINER_RADIUS_SCALE = 0.75f
@@ -6866,14 +6914,18 @@ object HomeNativeGlassHook {
         private val noiseShader = BitmapShader(noiseBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
         private val shaderMatrix = Matrix()
         private val noiseMatrix = Matrix()
+        private val darkMaterial =
+            (target.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
         private val baseTintAlpha = tintAlphaPercent.coerceIn(
             ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         )
-        private val materialIntensity = blurPercent.coerceIn(
+        private val cardBlurPercent = blurPercent.coerceIn(
             ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-        ) / 100f
+        )
+        private val materialIntensity = cardBlurPercent / 100f
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
             this.shader = this@CardGlassDrawable.shader
         }
@@ -6895,6 +6947,26 @@ object HomeNativeGlassHook {
         private val insetRect = RectF()
         private val targetLocation = IntArray(2)
         private val pageLocation = IntArray(2)
+        private var lastPageWidth = -1
+        private var lastPageHeight = -1
+        private var lastRelativeX = Int.MIN_VALUE
+        private var lastRelativeY = Int.MIN_VALUE
+        private var lastNoiseLeft = Float.NaN
+        private var lastNoiseTop = Float.NaN
+        private var cachedSoftShadowShader: LinearGradient? = null
+        private var softShadowTop = Float.NaN
+        private var softShadowBottom = Float.NaN
+        private var softShadowAlpha = -1
+        private var cachedAmbientShadowShader: LinearGradient? = null
+        private var ambientShadowTop = Float.NaN
+        private var ambientShadowBottom = Float.NaN
+        private var ambientShadowAlpha = -1
+        private var ambientShadowStrokeWidth = Float.NaN
+        private var cachedEdgeHighlightShader: LinearGradient? = null
+        private var edgeHighlightTop = Float.NaN
+        private var edgeHighlightBottom = Float.NaN
+        private var edgeHighlightAlpha = -1
+        private var edgeHighlightStrokeWidth = Float.NaN
         private var drawableAlpha = 255
         private var pressTintAlphaExtra = 0
 
@@ -6905,29 +6977,16 @@ object HomeNativeGlassHook {
             val target = targetRef.get()
             val page = pageRef.get()
             if (target != null && page != null && page.width > 0 && page.height > 0) {
-                target.getLocationInWindow(targetLocation)
-                page.getLocationInWindow(pageLocation)
-                val relativeX = targetLocation[0] - pageLocation[0]
-                val relativeY = targetLocation[1] - pageLocation[1]
-                val scale = max(
-                    page.width.toFloat() / bitmap.width.toFloat(),
-                    page.height.toFloat() / bitmap.height.toFloat(),
-                )
-                val dx = (page.width - bitmap.width * scale) * 0.5f - relativeX
-                val dy = (page.height - bitmap.height * scale) * 0.5f - relativeY
-                shaderMatrix.reset()
-                shaderMatrix.setScale(scale, scale)
-                shaderMatrix.postTranslate(dx, dy)
-                shader.setLocalMatrix(shaderMatrix)
+                updateBitmapShader(target, page)
                 canvas.drawRoundRect(rect, radius, radius, bitmapPaint)
-                drawMaterialOverlay(canvas)
+                drawMaterialOverlay(canvas, darkMaterial)
                 drawNoise(canvas)
                 if (shadowEnabled) {
                     drawSoftShadow(canvas)
                     drawAmbientShadow(canvas)
                 }
                 if (strokeEnabled) {
-                    drawStroke(canvas)
+                    drawStroke(canvas, darkMaterial)
                     drawEdgeHighlight(canvas)
                 }
             }
@@ -6954,8 +7013,66 @@ object HomeNativeGlassHook {
             invalidateSelf()
         }
 
-        private fun drawMaterialOverlay(canvas: Canvas) {
-            val darkMode = appleUsesDarkMaterial()
+        fun matches(
+            page: View,
+            bitmap: Bitmap,
+            radius: Float,
+            tintAlphaPercent: Int,
+            tintAlphaExtra: Int,
+            blurPercent: Int,
+            materialTintColor: Int?,
+            strokeEnabled: Boolean,
+            shadowEnabled: Boolean,
+        ): Boolean {
+            return pageRef.get() === page &&
+                this.bitmap === bitmap &&
+                this.radius == radius &&
+                baseTintAlpha == tintAlphaPercent.coerceIn(
+                    ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ) &&
+                this.tintAlphaExtra == tintAlphaExtra &&
+                cardBlurPercent == blurPercent.coerceIn(
+                    ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                    ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                ) &&
+                this.materialTintColor == materialTintColor &&
+                this.strokeEnabled == strokeEnabled &&
+                this.shadowEnabled == shadowEnabled
+        }
+
+        private fun updateBitmapShader(target: View, page: View) {
+            target.getLocationInWindow(targetLocation)
+            page.getLocationInWindow(pageLocation)
+            val relativeX = targetLocation[0] - pageLocation[0]
+            val relativeY = targetLocation[1] - pageLocation[1]
+            val pageWidth = page.width
+            val pageHeight = page.height
+            if (
+                pageWidth == lastPageWidth &&
+                pageHeight == lastPageHeight &&
+                relativeX == lastRelativeX &&
+                relativeY == lastRelativeY
+            ) {
+                return
+            }
+            val scale = max(
+                pageWidth.toFloat() / bitmap.width.toFloat(),
+                pageHeight.toFloat() / bitmap.height.toFloat(),
+            )
+            val dx = (pageWidth - bitmap.width * scale) * 0.5f - relativeX
+            val dy = (pageHeight - bitmap.height * scale) * 0.5f - relativeY
+            shaderMatrix.reset()
+            shaderMatrix.setScale(scale, scale)
+            shaderMatrix.postTranslate(dx, dy)
+            shader.setLocalMatrix(shaderMatrix)
+            lastPageWidth = pageWidth
+            lastPageHeight = pageHeight
+            lastRelativeX = relativeX
+            lastRelativeY = relativeY
+        }
+
+        private fun drawMaterialOverlay(canvas: Canvas, darkMode: Boolean) {
             val overlayAlpha = overlayAlpha(darkMode)
             if (overlayAlpha <= 0) return
             val overlayColor = materialOverlayColor(darkMode)
@@ -6971,21 +7088,8 @@ object HomeNativeGlassHook {
         private fun drawSoftShadow(canvas: Canvas) {
             val alpha = materialAlpha(APPLE_INNER_SHADOW_ALPHA)
             if (alpha <= 0) return
-            shadowPaint.shader = LinearGradient(
-                0f,
-                rect.top,
-                0f,
-                rect.bottom,
-                intArrayOf(
-                    Color.TRANSPARENT,
-                    Color.TRANSPARENT,
-                    Color.argb(alpha, 0, 0, 0),
-                ),
-                floatArrayOf(0f, 0.58f, 1f),
-                Shader.TileMode.CLAMP,
-            )
+            shadowPaint.shader = softShadowShader(alpha)
             canvas.drawRoundRect(rect, radius, radius, shadowPaint)
-            shadowPaint.shader = null
         }
 
         private fun drawAmbientShadow(canvas: Canvas) {
@@ -6996,36 +7100,26 @@ object HomeNativeGlassHook {
             val inset = strokeWidth * 0.5f
             insetRect.inset(inset, inset)
             ambientShadowPaint.strokeWidth = strokeWidth
-            ambientShadowPaint.shader = LinearGradient(
-                0f,
-                insetRect.top,
-                0f,
-                insetRect.bottom,
-                intArrayOf(
-                    Color.TRANSPARENT,
-                    Color.TRANSPARENT,
-                    Color.argb((alpha * 0.52f).toInt().coerceIn(0, 255), 0, 0, 0),
-                    Color.argb(alpha, 0, 0, 0),
-                ),
-                floatArrayOf(0f, 0.48f, 0.82f, 1f),
-                Shader.TileMode.CLAMP,
-            )
+            ambientShadowPaint.shader = ambientShadowShader(alpha, strokeWidth)
             val insetRadius = (radius - inset).coerceAtLeast(0f)
             canvas.drawRoundRect(insetRect, insetRadius, insetRadius, ambientShadowPaint)
-            ambientShadowPaint.shader = null
         }
 
         private fun drawNoise(canvas: Canvas) {
             val alpha = materialAlpha(APPLE_NOISE_ALPHA)
             if (alpha <= 0) return
-            noiseMatrix.reset()
-            noiseMatrix.setTranslate(rect.left, rect.top)
-            noiseShader.setLocalMatrix(noiseMatrix)
+            if (rect.left != lastNoiseLeft || rect.top != lastNoiseTop) {
+                noiseMatrix.reset()
+                noiseMatrix.setTranslate(rect.left, rect.top)
+                noiseShader.setLocalMatrix(noiseMatrix)
+                lastNoiseLeft = rect.left
+                lastNoiseTop = rect.top
+            }
             noisePaint.alpha = alpha
             canvas.drawRoundRect(rect, radius, radius, noisePaint)
         }
 
-        private fun drawStroke(canvas: Canvas) {
+        private fun drawStroke(canvas: Canvas, darkMode: Boolean) {
             val strokeWidth = strokeWidth()
             if (strokeWidth <= 0f) return
             val alpha = materialAlpha(APPLE_STROKE_ALPHA)
@@ -7035,7 +7129,7 @@ object HomeNativeGlassHook {
             insetRect.inset(inset, inset)
             strokePaint.strokeWidth = strokeWidth
             strokePaint.shader = null
-            strokePaint.color = if (appleUsesDarkMaterial()) {
+            strokePaint.color = if (darkMode) {
                 Color.argb((alpha * 0.55f).toInt().coerceIn(0, 255), 255, 255, 255)
             } else {
                 Color.argb(alpha, 255, 255, 255)
@@ -7053,22 +7147,9 @@ object HomeNativeGlassHook {
             val inset = strokeWidth * 0.5f
             insetRect.inset(inset, inset)
             edgeHighlightPaint.strokeWidth = strokeWidth
-            edgeHighlightPaint.shader = LinearGradient(
-                0f,
-                insetRect.top,
-                0f,
-                insetRect.bottom,
-                intArrayOf(
-                    Color.argb(alpha, 255, 255, 255),
-                    Color.argb((alpha * 0.28f).toInt().coerceIn(0, 255), 255, 255, 255),
-                    Color.TRANSPARENT,
-                ),
-                floatArrayOf(0f, 0.34f, 1f),
-                Shader.TileMode.CLAMP,
-            )
+            edgeHighlightPaint.shader = edgeHighlightShader(alpha, strokeWidth)
             val insetRadius = (radius - inset).coerceAtLeast(0f)
             canvas.drawRoundRect(insetRect, insetRadius, insetRadius, edgeHighlightPaint)
-            edgeHighlightPaint.shader = null
         }
 
         private fun overlayAlpha(darkMode: Boolean): Int {
@@ -7110,18 +7191,107 @@ object HomeNativeGlassHook {
             )
         }
 
-        private fun appleUsesDarkMaterial(): Boolean {
-            val view = targetRef.get() ?: return false
-            val mode = view.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-            return mode == Configuration.UI_MODE_NIGHT_YES
-        }
-
         private fun materialAlpha(appleAlpha: Int): Int {
             return (appleAlpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
         }
 
         private fun strokeWidth(): Float {
             return (1.0f + materialIntensity * 0.8f).coerceIn(1f, 1.8f)
+        }
+
+        private fun softShadowShader(alpha: Int): LinearGradient {
+            val cached = cachedSoftShadowShader
+            if (
+                cached != null &&
+                softShadowAlpha == alpha &&
+                softShadowTop == rect.top &&
+                softShadowBottom == rect.bottom
+            ) {
+                return cached
+            }
+            return LinearGradient(
+                0f,
+                rect.top,
+                0f,
+                rect.bottom,
+                intArrayOf(
+                    Color.TRANSPARENT,
+                    Color.TRANSPARENT,
+                    Color.argb(alpha, 0, 0, 0),
+                ),
+                floatArrayOf(0f, 0.58f, 1f),
+                Shader.TileMode.CLAMP,
+            ).also {
+                cachedSoftShadowShader = it
+                softShadowAlpha = alpha
+                softShadowTop = rect.top
+                softShadowBottom = rect.bottom
+            }
+        }
+
+        private fun ambientShadowShader(alpha: Int, strokeWidth: Float): LinearGradient {
+            val cached = cachedAmbientShadowShader
+            if (
+                cached != null &&
+                ambientShadowAlpha == alpha &&
+                ambientShadowStrokeWidth == strokeWidth &&
+                ambientShadowTop == insetRect.top &&
+                ambientShadowBottom == insetRect.bottom
+            ) {
+                return cached
+            }
+            return LinearGradient(
+                0f,
+                insetRect.top,
+                0f,
+                insetRect.bottom,
+                intArrayOf(
+                    Color.TRANSPARENT,
+                    Color.TRANSPARENT,
+                    Color.argb((alpha * 0.52f).toInt().coerceIn(0, 255), 0, 0, 0),
+                    Color.argb(alpha, 0, 0, 0),
+                ),
+                floatArrayOf(0f, 0.48f, 0.82f, 1f),
+                Shader.TileMode.CLAMP,
+            ).also {
+                cachedAmbientShadowShader = it
+                ambientShadowAlpha = alpha
+                ambientShadowStrokeWidth = strokeWidth
+                ambientShadowTop = insetRect.top
+                ambientShadowBottom = insetRect.bottom
+            }
+        }
+
+        private fun edgeHighlightShader(alpha: Int, strokeWidth: Float): LinearGradient {
+            val cached = cachedEdgeHighlightShader
+            if (
+                cached != null &&
+                edgeHighlightAlpha == alpha &&
+                edgeHighlightStrokeWidth == strokeWidth &&
+                edgeHighlightTop == insetRect.top &&
+                edgeHighlightBottom == insetRect.bottom
+            ) {
+                return cached
+            }
+            return LinearGradient(
+                0f,
+                insetRect.top,
+                0f,
+                insetRect.bottom,
+                intArrayOf(
+                    Color.argb(alpha, 255, 255, 255),
+                    Color.argb((alpha * 0.28f).toInt().coerceIn(0, 255), 255, 255, 255),
+                    Color.TRANSPARENT,
+                ),
+                floatArrayOf(0f, 0.34f, 1f),
+                Shader.TileMode.CLAMP,
+            ).also {
+                cachedEdgeHighlightShader = it
+                edgeHighlightAlpha = alpha
+                edgeHighlightStrokeWidth = strokeWidth
+                edgeHighlightTop = insetRect.top
+                edgeHighlightBottom = insetRect.bottom
+            }
         }
 
         companion object {
