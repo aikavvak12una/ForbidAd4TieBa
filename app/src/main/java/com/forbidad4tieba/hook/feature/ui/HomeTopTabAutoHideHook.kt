@@ -14,19 +14,12 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 object HomeTopTabAutoHideHook {
-    private const val APP_BAR_LAYOUT_CLASS =
-        "com.google.android.material.appbar.AppBarLayout"
-    private const val APP_BAR_BEHAVIOR_CLASS =
-        "com.google.android.material.appbar.AppBarLayout\$Behavior"
     private const val APP_BAR_LAYOUT_PARAMS_CLASS =
         "com.google.android.material.appbar.AppBarLayout\$LayoutParams"
     private const val APP_BAR_SCROLLING_VIEW_BEHAVIOR_CLASS =
         "com.google.android.material.appbar.AppBarLayout\$ScrollingViewBehavior"
-    private const val COORDINATOR_LAYOUT_CLASS =
-        "androidx.coordinatorlayout.widget.CoordinatorLayout"
-    private const val METHOD_DISPATCH_ON_SCROLLED = "dispatchOnScrolled"
+    private const val METHOD_DISPATCH_NESTED_PRE_SCROLL = "dispatchNestedPreScroll"
     private const val METHOD_DISPATCH_ON_PAGE_SELECTED = "dispatchOnPageSelected"
-    private const val METHOD_ON_START_NESTED_SCROLL = "onStartNestedScroll"
     private const val METHOD_SET_FORM = "setForm"
     private const val METHOD_SET_EXPANDED = "setExpanded"
     private const val SCROLL_FLAG_SCROLL_FALLBACK = 1
@@ -41,19 +34,28 @@ object HomeTopTabAutoHideHook {
     private val appBarCache = Collections.synchronizedMap(WeakHashMap<View, ViewGroup>())
     private val appBarMissRetryAt = Collections.synchronizedMap(WeakHashMap<View, Long>())
     private val appBarExpandedStates = Collections.synchronizedMap(WeakHashMap<ViewGroup, Boolean>())
-    private val appBarActionStates = Collections.synchronizedMap(WeakHashMap<ViewGroup, AutoHideAppBarState>())
-    private val scrollStateCache = Collections.synchronizedMap(WeakHashMap<View, AutoHideScrollState>())
+    private val appBarOffsetControllers = Collections.synchronizedMap(WeakHashMap<ViewGroup, AppBarOffsetController>())
     private val homeViewPagers = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val methodCache = ConcurrentHashMap<Class<*>, ScrollFlagMethods>()
     private val methodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
     private val behaviorMethodCache = ConcurrentHashMap<Class<*>, BehaviorMethods>()
     private val behaviorMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val offsetMethodCache = ConcurrentHashMap<Class<*>, OffsetMethods>()
+    private val offsetMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
     private val expandedMethodCache = ConcurrentHashMap<Class<*>, Method>()
     private val expandedMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val totalScrollRangeMethodCache = ConcurrentHashMap<Class<*>, Method>()
+    private val totalScrollRangeMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val offsetChangedMethodCache = ConcurrentHashMap<Class<*>, Method>()
+    private val offsetChangedMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val dependentDispatchMethodCache = ConcurrentHashMap<Class<*>, Method>()
+    private val dependentDispatchMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val locationScratchLocal = ThreadLocal<IntArray>()
     private val applyErrorLogged = AtomicBoolean(false)
     private val behaviorErrorLogged = AtomicBoolean(false)
     private val autoHideActiveLogged = AtomicBoolean(false)
     private val autoHideErrorLogged = AtomicBoolean(false)
+    private val preScrollErrorLogged = AtomicBoolean(false)
 
     @Volatile private var hooked = false
     @Volatile private var targetScrollFlags = SCROLL_FLAG_SCROLL_FALLBACK or SCROLL_FLAG_ENTER_ALWAYS_FALLBACK
@@ -95,15 +97,14 @@ object HomeTopTabAutoHideHook {
                 resetHooked()
                 XposedCompat.log("[HomeTopTabAutoHideHook] constructor NOT FOUND")
             } else {
-                val scrollObservers = installRecyclerViewScrollObserver(mod, cl)
+                val scrollObservers = installRecyclerViewPreScrollObserver(mod, cl)
                 val pageObservers = installHomeViewPagerMarker(mod, cl) +
                     installViewPagerPageSelectedObserver(mod, cl)
-                val nativeGuards = installNativeAppBarNestedScrollGuard(mod, cl)
                 val lockObservers = HomeTabAutoHideLockController.hook(cl)
                 XposedCompat.log(
                     "[HomeTopTabAutoHideHook] hook INSTALLED: constructors=$installed, " +
                         "scrollObservers=$scrollObservers, pageObservers=$pageObservers, " +
-                        "nativeGuards=$nativeGuards, lockObservers=$lockObservers"
+                        "lockObservers=$lockObservers"
                 )
             }
         } catch (t: Throwable) {
@@ -113,28 +114,42 @@ object HomeTopTabAutoHideHook {
         }
     }
 
-    private fun installRecyclerViewScrollObserver(mod: io.github.libxposed.api.XposedModule, cl: ClassLoader): Int {
+    private fun installRecyclerViewPreScrollObserver(
+        mod: io.github.libxposed.api.XposedModule,
+        cl: ClassLoader,
+    ): Int {
         val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
         if (clazz == null) {
             XposedCompat.log("[HomeTopTabAutoHideHook] class NOT FOUND: ${StableTiebaHookPoints.RECYCLER_VIEW_CLASS}")
             return 0
         }
-        val method = XposedCompat.findMethodOrNull(clazz, METHOD_DISPATCH_ON_SCROLLED, java.lang.Integer.TYPE, java.lang.Integer.TYPE)
-            ?: XposedCompat.findMethodOrNull(clazz, "onScrolled", java.lang.Integer.TYPE, java.lang.Integer.TYPE)
+        val method = XposedCompat.findMethodOrNull(
+            clazz,
+            METHOD_DISPATCH_NESTED_PRE_SCROLL,
+            java.lang.Integer.TYPE,
+            java.lang.Integer.TYPE,
+            IntArray::class.java,
+            IntArray::class.java,
+            java.lang.Integer.TYPE,
+        )
         if (method == null) {
-            XposedCompat.log("[HomeTopTabAutoHideHook] method NOT FOUND: RecyclerView scroll dispatch")
+            XposedCompat.log("[HomeTopTabAutoHideHook] method NOT FOUND: RecyclerView.$METHOD_DISPATCH_NESTED_PRE_SCROLL")
             return 0
         }
         mod.hook(method).intercept { chain ->
             val result = chain.proceed()
-            if (ConfigManager.isHomeTabAutoHideEnabled) {
-                val target = chain.thisObject as? View
-                val dy = (chain.args.getOrNull(1) as? Int) ?: 0
-                if (target != null && dy != 0) {
-                    handleAutoHideScroll(target, dy)
-                }
-            }
-            result
+            if (!ConfigManager.isHomeTabAutoHideEnabled) return@intercept result
+            val target = chain.thisObject as? View ?: return@intercept result
+            val dy = (chain.args.getOrNull(1) as? Int) ?: return@intercept result
+            if (dy == 0) return@intercept result
+            val consumed = chain.args.getOrNull(2) as? IntArray ?: return@intercept result
+            if (consumed.size <= 1) return@intercept result
+            val remainingDy = dy - consumed.getOrElse(1) { 0 }
+            if (dy > 0 && remainingDy <= 0) return@intercept result
+            if (dy < 0 && remainingDy >= 0) return@intercept result
+            val offsetInWindow = chain.args.getOrNull(3) as? IntArray
+            val topConsumed = consumeTopAppBarPreScroll(target, remainingDy, consumed, offsetInWindow)
+            if (topConsumed != 0) true else result
         }
         return 1
     }
@@ -190,40 +205,6 @@ object HomeTopTabAutoHideHook {
         return 1
     }
 
-    private fun installNativeAppBarNestedScrollGuard(mod: io.github.libxposed.api.XposedModule, cl: ClassLoader): Int {
-        val behaviorClass = XposedCompat.findClassOrNull(APP_BAR_BEHAVIOR_CLASS, cl)
-        val coordinatorClass = XposedCompat.findClassOrNull(COORDINATOR_LAYOUT_CLASS, cl)
-        val appBarClass = XposedCompat.findClassOrNull(APP_BAR_LAYOUT_CLASS, cl)
-        if (behaviorClass == null || coordinatorClass == null || appBarClass == null) {
-            XposedCompat.log("[HomeTopTabAutoHideHook] class NOT FOUND: native AppBar nested scroll guard")
-            return 0
-        }
-        val method = findDeclaredMethodInHierarchy(
-            behaviorClass,
-            METHOD_ON_START_NESTED_SCROLL,
-            coordinatorClass,
-            appBarClass,
-            View::class.java,
-            View::class.java,
-            java.lang.Integer.TYPE,
-            java.lang.Integer.TYPE,
-        )
-        if (method == null) {
-            XposedCompat.log("[HomeTopTabAutoHideHook] method NOT FOUND: AppBarLayout.Behavior.onStartNestedScroll")
-            return 0
-        }
-        mod.hook(method).intercept { chain ->
-            if (ConfigManager.isHomeTabAutoHideEnabled) {
-                val appBar = chain.args.getOrNull(1) as? View
-                if (appBar != null && isHomeAppBar(appBar)) {
-                    return@intercept false
-                }
-            }
-            chain.proceed()
-        }
-        return 1
-    }
-
     private fun scheduleConfigure(appBar: ViewGroup) {
         appBar.post { configureAppBar(appBar) }
     }
@@ -250,43 +231,7 @@ object HomeTopTabAutoHideHook {
 
     private fun expandHomeTabForPageSwitch(viewPager: View) {
         val appBar = resolveHomeAppBarForScrollTarget(viewPager) ?: return
-        if (setAppBarExpandedIfNeeded(appBar, true)) {
-            quietAutoHideForAppBar(
-                appBar,
-                HomeTabAutoHideStrategy.pageSwitchQuietUntil(SystemClock.uptimeMillis()),
-            )
-        }
-    }
-
-    private fun handleAutoHideScroll(target: View, dy: Int) {
-        val appBar = resolveHomeAppBarForScrollTarget(target) ?: return
-        if (appBar.height <= 0 || appBar.windowToken == null) return
-        val now = SystemClock.uptimeMillis()
-        val state = scrollStateFor(target, appBar)
-        if (HomeTabAutoHideLockController.isLockedHidden()) {
-            HomeTabAutoHideStrategy.reset(state)
-            applyLockedHidden(appBar)
-            return
-        }
-        val direction = HomeTabAutoHideStrategy.directionOf(dy)
-        val appBarState = appBarActionStateFor(appBar)
-        if (now < appBarState.quietUntilAt) return
-        val desiredExpanded = direction < 0
-        val currentExpanded = synchronized(appBarExpandedStates) {
-            appBarExpandedStates[appBar] ?: isAppBarExpanded(appBar)
-        }
-        if (currentExpanded == desiredExpanded) {
-            HomeTabAutoHideStrategy.reset(state)
-            return
-        }
-        if (!HomeTabAutoHideStrategy.reachedScrollThreshold(target, state, direction, dy)) return
-        HomeTabAutoHideStrategy.reset(state)
-
-        if (now - appBarState.lastActionAt < HomeTabAutoHideStrategy.ACTION_MIN_INTERVAL_MS) return
-        if (setAppBarExpandedIfNeeded(appBar, desiredExpanded)) {
-            appBarState.lastActionAt = now
-            appBarState.quietUntilAt = HomeTabAutoHideStrategy.postActionQuietUntil(now)
-        }
+        expandAppBarImmediately(appBar)
     }
 
     internal fun applyLockedHidden(anchor: View): Boolean {
@@ -296,21 +241,15 @@ object HomeTopTabAutoHideHook {
             resolveHomeAppBarForScrollTarget(anchor)
         } ?: return false
         if (appBar.height <= 0 || appBar.windowToken == null) return false
-        val changed = setAppBarExpandedIfNeeded(appBar, false)
-        quietAutoHideForAppBar(
-            appBar,
-            HomeTabAutoHideStrategy.postActionQuietUntil(SystemClock.uptimeMillis()),
-        )
-        return changed || !isAppBarExpanded(appBar)
+        val changed = hideAppBarImmediately(appBar)
+        return changed || isAppBarFullyHidden(appBar)
     }
 
     internal fun releaseLockedHidden(anchor: View): Boolean {
-        val quietUntilAt = HomeTabAutoHideStrategy.pageSwitchQuietUntil(SystemClock.uptimeMillis())
         var handled = false
         val resolved = resolveHomeAppBarForScrollTarget(anchor)
         if (resolved != null) {
-            setAppBarExpandedIfNeeded(resolved, true)
-            quietAutoHideForAppBar(resolved, quietUntilAt)
+            expandAppBarImmediately(resolved)
             handled = true
         }
 
@@ -319,31 +258,10 @@ object HomeTopTabAutoHideHook {
         }
         for (appBar in knownAppBars) {
             if (appBar === resolved) continue
-            setAppBarExpandedIfNeeded(appBar, true)
-            quietAutoHideForAppBar(appBar, quietUntilAt)
+            expandAppBarImmediately(appBar)
             handled = true
         }
         return handled
-    }
-
-    private fun scrollStateFor(target: View, appBar: ViewGroup): AutoHideScrollState {
-        synchronized(scrollStateCache) {
-            val cached = scrollStateCache[target]
-            if (cached != null && cached.appBar === appBar) return cached
-            val state = AutoHideScrollState(appBar)
-            scrollStateCache[target] = state
-            return state
-        }
-    }
-
-    private fun appBarActionStateFor(appBar: ViewGroup): AutoHideAppBarState {
-        synchronized(appBarActionStates) {
-            val cached = appBarActionStates[appBar]
-            if (cached != null) return cached
-            val state = AutoHideAppBarState()
-            appBarActionStates[appBar] = state
-            return state
-        }
     }
 
     private fun resolveHomeAppBarForScrollTarget(target: View): ViewGroup? {
@@ -357,8 +275,9 @@ object HomeTopTabAutoHideHook {
             val retryAt = appBarMissRetryAt[target]
             if (retryAt != null && now < retryAt) return null
         }
-        val appBar = findHomeAppBar(root)
+        val appBar = findHomeAppBarForTarget(root, target)
         if (appBar != null) {
+            configureAppBar(appBar)
             synchronized(appBarCache) {
                 appBarCache[target] = appBar
             }
@@ -379,6 +298,76 @@ object HomeTopTabAutoHideHook {
         return null
     }
 
+    private fun consumeTopAppBarPreScroll(
+        target: View,
+        dy: Int,
+        consumed: IntArray,
+        offsetInWindow: IntArray?,
+    ): Int {
+        val appBar = resolveHomeAppBarForScrollTarget(target) ?: return 0
+        if (appBar.height <= 0 || appBar.windowToken == null) return 0
+        if (HomeTabAutoHideLockController.isLockedHidden()) {
+            applyLockedHidden(appBar)
+            return 0
+        }
+
+        val range = hiddenRange(appBar)
+        if (range <= 0) return 0
+        val controller = appBarOffsetController(appBar) ?: return 0
+        val currentOffset = currentAppBarOffset(controller)?.coerceIn(-range, 0) ?: return 0
+        val targetOffset = (currentOffset - dy).coerceIn(-range, 0)
+        val consumedY = currentOffset - targetOffset
+        if (consumedY == 0) return 0
+
+        return try {
+            if (consumed.size > 1) {
+                consumed[1] += consumedY
+            }
+            if (setAppBarOffset(appBar, controller, targetOffset, target, offsetInWindow)) {
+                consumedY
+            } else {
+                consumed[1] -= consumedY
+                0
+            }
+        } catch (t: Throwable) {
+            if (preScrollErrorLogged.compareAndSet(false, true)) {
+                XposedCompat.log("[HomeTopTabAutoHideHook] pre-scroll appbar offset FAILED: ${t.message}")
+                XposedCompat.log(t)
+            }
+            0
+        }
+    }
+
+    private fun locationScratch(): IntArray {
+        val cached = locationScratchLocal.get()
+        if (cached != null) return cached
+        return IntArray(2).also { locationScratchLocal.set(it) }
+    }
+
+    private fun hideAppBarImmediately(appBar: ViewGroup): Boolean {
+        val range = hiddenRange(appBar)
+        if (range <= 0) return setAppBarExpandedIfNeeded(appBar, false)
+        val controller = appBarOffsetController(appBar) ?: return setAppBarExpandedIfNeeded(appBar, false)
+        val currentOffset = currentAppBarOffset(controller)?.coerceIn(-range, 0)
+            ?: return setAppBarExpandedIfNeeded(appBar, false)
+        if (currentOffset <= -range) {
+            synchronized(appBarExpandedStates) {
+                appBarExpandedStates[appBar] = false
+            }
+            return false
+        }
+        return setAppBarOffset(appBar, controller, -range, null, null)
+    }
+
+    private fun expandAppBarImmediately(appBar: ViewGroup): Boolean {
+        val controller = appBarOffsetController(appBar)
+        val currentOffset = controller?.let { currentAppBarOffset(it) }
+        if (controller != null && currentOffset != null && currentOffset != 0) {
+            return setAppBarOffset(appBar, controller, 0, null, null)
+        }
+        return setAppBarExpandedIfNeeded(appBar, true)
+    }
+
     private fun setAppBarExpandedIfNeeded(appBar: ViewGroup, expanded: Boolean): Boolean {
         val actualExpanded = isAppBarExpanded(appBar)
         val current = synchronized(appBarExpandedStates) {
@@ -387,7 +376,7 @@ object HomeTopTabAutoHideHook {
         if (current == expanded && actualExpanded == expanded) return false
         val method = expandedMethod(appBar.javaClass) ?: return false
         return try {
-            method.invoke(appBar, expanded, HomeTabAutoHideStrategy.ANIMATE_SCROLL_ACTIONS)
+            method.invoke(appBar, expanded, false)
             synchronized(appBarExpandedStates) {
                 appBarExpandedStates[appBar] = expanded
             }
@@ -401,32 +390,144 @@ object HomeTopTabAutoHideHook {
         }
     }
 
+    private fun appBarOffsetController(appBar: ViewGroup): AppBarOffsetController? {
+        synchronized(appBarOffsetControllers) {
+            appBarOffsetControllers[appBar]?.let { return it }
+        }
+        val layoutParams = appBar.layoutParams ?: return null
+        val layoutParamMethods = behaviorMethods(layoutParams.javaClass) ?: return null
+        val behavior = try {
+            layoutParamMethods.getBehavior?.invoke(layoutParams)
+        } catch (t: Throwable) {
+            if (behaviorErrorLogged.compareAndSet(false, true)) {
+                XposedCompat.log("[HomeTopTabAutoHideHook] get appbar behavior FAILED: ${t.message}")
+                XposedCompat.log(t)
+            }
+            null
+        } ?: return null
+        val offsetMethods = offsetMethods(behavior.javaClass) ?: return null
+        val controller = AppBarOffsetController(behavior, offsetMethods)
+        synchronized(appBarOffsetControllers) {
+            appBarOffsetControllers[appBar] = controller
+        }
+        return controller
+    }
+
+    private fun currentAppBarOffset(controller: AppBarOffsetController): Int? {
+        return try {
+            controller.methods.getTopAndBottomOffset.invoke(controller.behavior) as? Int
+        } catch (t: Throwable) {
+            if (preScrollErrorLogged.compareAndSet(false, true)) {
+                XposedCompat.log("[HomeTopTabAutoHideHook] get appbar offset FAILED: ${t.message}")
+                XposedCompat.log(t)
+            }
+            null
+        }
+    }
+
+    private fun setAppBarOffset(
+        appBar: ViewGroup,
+        controller: AppBarOffsetController,
+        targetOffset: Int,
+        windowTarget: View?,
+        offsetInWindow: IntArray?,
+    ): Boolean {
+        val scratch = if (windowTarget != null && offsetInWindow != null && offsetInWindow.size > 1) {
+            locationScratch().also { windowTarget.getLocationInWindow(it) }
+        } else {
+            null
+        }
+        val beforeWindowX = scratch?.get(0) ?: 0
+        val beforeWindowY = scratch?.get(1) ?: 0
+        return try {
+            val changed = controller.methods.setTopAndBottomOffset.invoke(
+                controller.behavior,
+                targetOffset,
+            ) as? Boolean
+            if (changed != true) return false
+            notifyAppBarOffsetChanged(appBar, targetOffset)
+            dispatchDependentViewsChanged(appBar)
+            if (scratch != null && windowTarget != null && offsetInWindow != null) {
+                windowTarget.getLocationInWindow(scratch)
+                offsetInWindow[0] += scratch[0] - beforeWindowX
+                offsetInWindow[1] += scratch[1] - beforeWindowY
+            }
+            synchronized(appBarExpandedStates) {
+                appBarExpandedStates[appBar] = targetOffset == 0
+            }
+            true
+        } catch (t: Throwable) {
+            if (preScrollErrorLogged.compareAndSet(false, true)) {
+                XposedCompat.log("[HomeTopTabAutoHideHook] set appbar offset FAILED: ${t.message}")
+                XposedCompat.log(t)
+            }
+            false
+        }
+    }
+
+    private fun isAppBarFullyHidden(appBar: ViewGroup): Boolean {
+        val range = hiddenRange(appBar)
+        if (range <= 0) return !isAppBarExpanded(appBar)
+        val controller = appBarOffsetController(appBar) ?: return false
+        val currentOffset = currentAppBarOffset(controller) ?: return false
+        return currentOffset <= -range
+    }
+
+    private fun hiddenRange(appBar: ViewGroup): Int {
+        val range = totalScrollRange(appBar)
+        return if (range > 0) range else appBar.height
+    }
+
+    private fun totalScrollRange(appBar: ViewGroup): Int {
+        val method = totalScrollRangeMethod(appBar.javaClass) ?: return 0
+        return try {
+            (method.invoke(appBar) as? Int) ?: 0
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    private fun notifyAppBarOffsetChanged(appBar: ViewGroup, offset: Int) {
+        val method = offsetChangedMethod(appBar.javaClass) ?: return
+        try {
+            method.invoke(appBar, offset)
+        } catch (_: Throwable) {
+            // Offset listeners are best-effort; the layout movement is already applied.
+        }
+    }
+
+    private fun dispatchDependentViewsChanged(appBar: ViewGroup) {
+        val parent = appBar.parent as? ViewGroup ?: return
+        val method = dependentDispatchMethod(parent.javaClass) ?: return
+        try {
+            method.invoke(parent, appBar)
+        } catch (_: Throwable) {
+            // Coordinator dependency dispatch is best-effort; native pre-draw can still reconcile.
+        }
+    }
+
     private fun isAppBarExpanded(appBar: ViewGroup): Boolean {
         return appBar.top >= 0
     }
 
-    private fun quietAutoHideForAppBar(appBar: ViewGroup, quietUntilAt: Long) {
-        synchronized(appBarActionStates) {
-            val state = appBarActionStates[appBar] ?: AutoHideAppBarState().also {
-                appBarActionStates[appBar] = it
-            }
-            state.quietUntilAt = maxOf(state.quietUntilAt, quietUntilAt)
+    private fun isScrollTargetInHomeContainer(target: View, appBar: ViewGroup): Boolean {
+        val container = appBar.parent as? ViewGroup ?: return false
+        var current: View? = target
+        var depth = 0
+        while (current != null && depth < 16) {
+            if (current === container) return true
+            current = current.parent as? View
+            depth++
         }
-        synchronized(scrollStateCache) {
-            for (state in scrollStateCache.values) {
-                if (state.appBar === appBar) {
-                    HomeTabAutoHideStrategy.reset(state)
-                }
-            }
-        }
+        return false
     }
 
-    private fun findHomeAppBar(root: View): ViewGroup? {
+    private fun findHomeAppBarForTarget(root: View, target: View): ViewGroup? {
         val group = root as? ViewGroup ?: return null
-        if (isHomeAppBar(group)) return group
+        if (isHomeAppBar(group) && isScrollTargetInHomeContainer(target, group)) return group
         for (index in 0 until group.childCount) {
             val child = group.getChildAt(index) ?: continue
-            val found = findHomeAppBar(child)
+            val found = findHomeAppBarForTarget(child, target)
             if (found != null) return found
         }
         return null
@@ -530,20 +631,66 @@ object HomeTopTabAutoHideHook {
         }
     }
 
-    private fun findDeclaredMethodInHierarchy(
-        clazz: Class<*>,
-        methodName: String,
-        vararg paramTypes: Class<*>,
-    ): Method? {
-        var current: Class<*>? = clazz
-        while (current != null) {
-            try {
-                return current.getDeclaredMethod(methodName, *paramTypes).apply { isAccessible = true }
-            } catch (_: NoSuchMethodException) {
-                current = current.superclass
-            }
+    private fun offsetMethods(clazz: Class<*>): OffsetMethods? {
+        offsetMethodCache[clazz]?.let { return it }
+        if (offsetMethodMissCache.contains(clazz)) return null
+        return try {
+            val methods = OffsetMethods(
+                getTopAndBottomOffset = clazz.getMethod("getTopAndBottomOffset").apply { isAccessible = true },
+                setTopAndBottomOffset = clazz.getMethod(
+                    "setTopAndBottomOffset",
+                    java.lang.Integer.TYPE,
+                ).apply { isAccessible = true },
+            )
+            offsetMethodCache[clazz] = methods
+            methods
+        } catch (_: Throwable) {
+            offsetMethodMissCache.add(clazz)
+            null
         }
-        return null
+    }
+
+    private fun totalScrollRangeMethod(clazz: Class<*>): Method? {
+        totalScrollRangeMethodCache[clazz]?.let { return it }
+        if (totalScrollRangeMethodMissCache.contains(clazz)) return null
+        return try {
+            val method = clazz.getMethod("getTotalScrollRange").apply { isAccessible = true }
+            totalScrollRangeMethodCache[clazz] = method
+            method
+        } catch (_: Throwable) {
+            totalScrollRangeMethodMissCache.add(clazz)
+            null
+        }
+    }
+
+    private fun offsetChangedMethod(clazz: Class<*>): Method? {
+        offsetChangedMethodCache[clazz]?.let { return it }
+        if (offsetChangedMethodMissCache.contains(clazz)) return null
+        return try {
+            val method = clazz.getMethod("onOffsetChanged", java.lang.Integer.TYPE).apply {
+                isAccessible = true
+            }
+            offsetChangedMethodCache[clazz] = method
+            method
+        } catch (_: Throwable) {
+            offsetChangedMethodMissCache.add(clazz)
+            null
+        }
+    }
+
+    private fun dependentDispatchMethod(clazz: Class<*>): Method? {
+        dependentDispatchMethodCache[clazz]?.let { return it }
+        if (dependentDispatchMethodMissCache.contains(clazz)) return null
+        return try {
+            val method = clazz.getMethod("dispatchDependentViewsChanged", View::class.java).apply {
+                isAccessible = true
+            }
+            dependentDispatchMethodCache[clazz] = method
+            method
+        } catch (_: Throwable) {
+            dependentDispatchMethodMissCache.add(clazz)
+            null
+        }
     }
 
     private fun behaviorMethods(clazz: Class<*>): BehaviorMethods? {
@@ -653,17 +800,14 @@ object HomeTopTabAutoHideHook {
         val getBehavior: Method?,
     )
 
-    private data class AutoHideScrollState(
-        val appBar: ViewGroup,
-        override var lastDirection: Int = 0,
-        override var accumulatedDy: Int = 0,
-        override var hideThresholdPx: Int = 0,
-        override var showThresholdPx: Int = 0,
-    ) : HomeTabAutoHideStrategy.ScrollAccumulator
+    private data class OffsetMethods(
+        val getTopAndBottomOffset: Method,
+        val setTopAndBottomOffset: Method,
+    )
 
-    private data class AutoHideAppBarState(
-        var lastActionAt: Long = 0L,
-        var quietUntilAt: Long = 0L,
+    private data class AppBarOffsetController(
+        val behavior: Any,
+        val methods: OffsetMethods,
     )
 
     private data class RuntimeTargets(
