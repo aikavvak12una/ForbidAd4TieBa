@@ -900,6 +900,19 @@ object SettingsMenuHook {
                 SwitchItem(UiText.Settings.OPEN_WEB_LINK_IN_SYSTEM_BROWSER_LABEL, UiText.Settings.OPEN_WEB_LINK_IN_SYSTEM_BROWSER_DESC, ConfigManager.KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER, true, false),
             )
             if (restrictedFeaturesUnlocked) {
+                extensionItems.add(
+                    1,
+                    SwitchItem(
+                        UiText.Settings.PB_LIKE_AUTO_REPLY_LABEL,
+                        UiText.Settings.PB_LIKE_AUTO_REPLY_DESC,
+                        ConfigManager.KEY_ENABLE_PB_LIKE_AUTO_REPLY,
+                        true,
+                        false,
+                        UiText.Settings.ACTION_ICON_SETTINGS
+                    ) {
+                        showPbLikeAutoReplyDialog(context, prefs)
+                    }
+                )
                 val performanceGroups = listOf(
                     SettingGroup(
                         UiText.Settings.PERFORMANCE_GROUP_HOST_RUNTIME,
@@ -3588,7 +3601,6 @@ object SettingsMenuHook {
                 counterView.text = UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_COUNT_PREFIX + keywordCount(raw)
             }
 
-            val inputCardBg = UiStyle.createKeywordInputCardBackground(tokens, density)
             val input = android.widget.EditText(context).apply {
                 setSingleLine(false)
                 maxLines = 6
@@ -3600,12 +3612,12 @@ object SettingsMenuHook {
                 setHintTextColor(tokens.textMuted)
                 textSize = 15f
                 includeFontPadding = false
-                background = null
+                background = UiStyle.createPlainInputUnderlineBackground(tokens, density)
                 setPadding(
                     0,
+                    (2 * density).toInt(),
                     0,
-                    0,
-                    0
+                    (8 * density).toInt()
                 )
             }
             refreshCounter(initialRaw)
@@ -3616,24 +3628,6 @@ object SettingsMenuHook {
                     refreshCounter(s?.toString().orEmpty())
                 }
             })
-
-            val inputCard = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                background = inputCardBg
-                setPadding(
-                    (12 * density).toInt(),
-                    (10 * density).toInt(),
-                    (12 * density).toInt(),
-                    (10 * density).toInt()
-                )
-                addView(
-                    input,
-                    LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                    )
-                )
-            }
 
             val container = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -3654,7 +3648,7 @@ object SettingsMenuHook {
                     )
                 )
                 addView(
-                    inputCard,
+                    input,
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT
@@ -3686,6 +3680,82 @@ object SettingsMenuHook {
             dialog.show()
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showCustomPostFilterKeywordDialog failed: ${t.message}")
+        }
+    }
+
+    private fun showPbLikeAutoReplyDialog(context: Context, prefs: android.content.SharedPreferences) {
+        try {
+            val tokens = UiStyle.tokens(context)
+            val density = context.resources.displayMetrics.density
+            val padding = (16 * density).toInt()
+
+            val label = TextView(context).apply {
+                text = UiText.Settings.PB_LIKE_AUTO_REPLY_CONTENT_LABEL
+                textSize = 12.5f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(tokens.textSecondary)
+                includeFontPadding = false
+                setPadding(0, 0, 0, (8 * density).toInt())
+            }
+            val input = android.widget.EditText(context).apply {
+                setSingleLine(false)
+                maxLines = 6
+                minLines = 3
+                gravity = Gravity.TOP or Gravity.START
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                hint = UiText.Settings.PB_LIKE_AUTO_REPLY_CONTENT_HINT
+                setText(prefs.getString(ConfigManager.KEY_PB_LIKE_AUTO_REPLY_TEXT, "").orEmpty())
+                setTextColor(tokens.textPrimary)
+                setHintTextColor(tokens.textMuted)
+                textSize = 15f
+                includeFontPadding = false
+                background = UiStyle.createPlainInputUnderlineBackground(tokens, density)
+                setPadding(0, (2 * density).toInt(), 0, (8 * density).toInt())
+            }
+            val container = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(padding, padding, padding, 0)
+                addView(label)
+                addView(
+                    input,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
+            }
+            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
+                .setTitle(UiText.Settings.PB_LIKE_AUTO_REPLY_DIALOG_TITLE)
+                .setView(createDialogScrollContainer(context, container))
+                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
+                .setPositiveButton(UiText.Settings.SAVE, null)
+                .create()
+            dialog.setOnShowListener {
+                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                    val content = input.text?.toString()?.trim().orEmpty()
+                    if (content.isBlank()) {
+                        Toast.makeText(context, UiText.Settings.PB_LIKE_AUTO_REPLY_CONTENT_EMPTY, Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    prefs.edit()
+                        .putString(ConfigManager.KEY_PB_LIKE_AUTO_REPLY_TEXT, content)
+                        .apply()
+                    ConfigManager.pbLikeAutoReplyText = content
+                    Toast.makeText(context, UiText.Settings.PB_LIKE_AUTO_REPLY_CONTENT_SAVED, Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                }
+            }
+            dialog.show()
+            input.post {
+                input.requestFocus()
+                (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                    ?.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+            }
+        } catch (t: Throwable) {
+            XposedCompat.logW("[SettingsMenuHook] showPbLikeAutoReplyDialog failed: ${t.message}")
         }
     }
 

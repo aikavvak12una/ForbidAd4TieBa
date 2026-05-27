@@ -130,6 +130,13 @@ object UiText {
 
         const val AUTO_LOAD_MORE_LABEL = "预加载"
         const val AUTO_LOAD_MORE_DESC = "浏览信息流和帖子评论时自动静默加载下一页\n*滑动卡顿尝试关闭此功能"
+        const val PB_LIKE_AUTO_REPLY_LABEL = "快捷回复"
+        const val PB_LIKE_AUTO_REPLY_DESC = "点赞帖子后，自动发送预设回复内容"
+        const val PB_LIKE_AUTO_REPLY_DIALOG_TITLE = "点赞后自动回复"
+        const val PB_LIKE_AUTO_REPLY_CONTENT_LABEL = "回复内容"
+        const val PB_LIKE_AUTO_REPLY_CONTENT_HINT = "输入点赞帖子后自动发送的回复"
+        const val PB_LIKE_AUTO_REPLY_CONTENT_EMPTY = "回复内容不能为空"
+        const val PB_LIKE_AUTO_REPLY_CONTENT_SAVED = "自动回复内容已保存"
         const val DISABLE_AUTO_REFRESH_LABEL = "禁止自动刷新"
         const val DISABLE_AUTO_REFRESH_DESC = "避免首页被强制重置刷新列表"
         const val DISABLE_PB_GESTURE_FONT_SCALE_LABEL = "禁用调整字号手势"

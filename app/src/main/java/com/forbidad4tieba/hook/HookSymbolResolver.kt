@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
@@ -60,6 +61,7 @@ object HookFeatureKey {
     const val OPEN_WEB_LINK_IN_SYSTEM_BROWSER = "open_web_link_in_system_browser"
     const val HOME_NATIVE_GLASS = "enable_home_native_glass"
     const val AUTO_LOAD_MORE = "enable_auto_load_more"
+    const val ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
     const val DISABLE_AUTO_REFRESH = "disable_auto_refresh"
     const val ENABLE_PB_SCROLL_COALESCE = "enable_pb_scroll_coalesce"
     const val DISABLE_PB_GESTURE_FONT_SCALE = "disable_pb_gesture_font_scale"
@@ -197,6 +199,16 @@ data class HookSymbols(
     val pbGestureScaleListenerSetterMethod: String? = null,
     val pbGestureScaleListenerClass: String? = null,
     val pbGestureScaleListenerOnScaleMethod: String? = null,
+    val pbLikeAutoReplyAgreeViewClass: String? = null,
+    val pbLikeAutoReplyAgreeClickMethod: String? = null,
+    val pbLikeAutoReplyAgreeViewGetDataMethod: String? = null,
+    val pbLikeAutoReplyAgreeDataClass: String? = null,
+    val pbLikeAutoReplyAgreeDataHasAgreeField: String? = null,
+    val pbLikeAutoReplyAgreeDataAgreeTypeField: String? = null,
+    val pbLikeAutoReplyAgreeDataIsInThreadField: String? = null,
+    val pbLikeAutoReplyInputContainerClass: String? = null,
+    val pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null,
+    val pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null,
 
     val collectionPresenterField: String? = null,
     val collectionPresenterListSetterMethod: String? = null,
@@ -459,6 +471,16 @@ data class HookSymbols(
             put("pbGestureScaleListenerSetterMethod", pbGestureScaleListenerSetterMethod)
             put("pbGestureScaleListenerClass", pbGestureScaleListenerClass)
             put("pbGestureScaleListenerOnScaleMethod", pbGestureScaleListenerOnScaleMethod)
+            put("pbLikeAutoReplyAgreeViewClass", pbLikeAutoReplyAgreeViewClass)
+            put("pbLikeAutoReplyAgreeClickMethod", pbLikeAutoReplyAgreeClickMethod)
+            put("pbLikeAutoReplyAgreeViewGetDataMethod", pbLikeAutoReplyAgreeViewGetDataMethod)
+            put("pbLikeAutoReplyAgreeDataClass", pbLikeAutoReplyAgreeDataClass)
+            put("pbLikeAutoReplyAgreeDataHasAgreeField", pbLikeAutoReplyAgreeDataHasAgreeField)
+            put("pbLikeAutoReplyAgreeDataAgreeTypeField", pbLikeAutoReplyAgreeDataAgreeTypeField)
+            put("pbLikeAutoReplyAgreeDataIsInThreadField", pbLikeAutoReplyAgreeDataIsInThreadField)
+            put("pbLikeAutoReplyInputContainerClass", pbLikeAutoReplyInputContainerClass)
+            put("pbLikeAutoReplyInputContainerGetInputViewMethod", pbLikeAutoReplyInputContainerGetInputViewMethod)
+            put("pbLikeAutoReplyInputContainerGetSendViewMethod", pbLikeAutoReplyInputContainerGetSendViewMethod)
 
             put("collectionPresenterField", collectionPresenterField)
             put("collectionPresenterListSetterMethod", collectionPresenterListSetterMethod)
@@ -791,6 +813,19 @@ data class HookSymbols(
                     pbGestureScaleListenerSetterMethod = obj.optStringOrNull("pbGestureScaleListenerSetterMethod"),
                     pbGestureScaleListenerClass = obj.optStringOrNull("pbGestureScaleListenerClass"),
                     pbGestureScaleListenerOnScaleMethod = obj.optStringOrNull("pbGestureScaleListenerOnScaleMethod"),
+                    pbLikeAutoReplyAgreeViewClass = obj.optStringOrNull("pbLikeAutoReplyAgreeViewClass"),
+                    pbLikeAutoReplyAgreeClickMethod = obj.optStringOrNull("pbLikeAutoReplyAgreeClickMethod"),
+                    pbLikeAutoReplyAgreeViewGetDataMethod = obj.optStringOrNull("pbLikeAutoReplyAgreeViewGetDataMethod"),
+                    pbLikeAutoReplyAgreeDataClass = obj.optStringOrNull("pbLikeAutoReplyAgreeDataClass"),
+                    pbLikeAutoReplyAgreeDataHasAgreeField = obj.optStringOrNull("pbLikeAutoReplyAgreeDataHasAgreeField"),
+                    pbLikeAutoReplyAgreeDataAgreeTypeField = obj.optStringOrNull("pbLikeAutoReplyAgreeDataAgreeTypeField"),
+                    pbLikeAutoReplyAgreeDataIsInThreadField =
+                        obj.optStringOrNull("pbLikeAutoReplyAgreeDataIsInThreadField"),
+                    pbLikeAutoReplyInputContainerClass = obj.optStringOrNull("pbLikeAutoReplyInputContainerClass"),
+                    pbLikeAutoReplyInputContainerGetInputViewMethod =
+                        obj.optStringOrNull("pbLikeAutoReplyInputContainerGetInputViewMethod"),
+                    pbLikeAutoReplyInputContainerGetSendViewMethod =
+                        obj.optStringOrNull("pbLikeAutoReplyInputContainerGetSendViewMethod"),
 
                     collectionPresenterField = obj.optStringOrNull("collectionPresenterField"),
                     collectionPresenterListSetterMethod = obj.optStringOrNull("collectionPresenterListSetterMethod"),
@@ -1052,7 +1087,7 @@ internal data class AutoSignInHybridNativeProxySymbols(
 internal object HookSymbolResolver {
     private const val TAG = "[HookSymbolResolver]"
     private const val KEY_SYMBOL_FP = "hook_symbol_fp_v23"
-    private const val KEY_SYMBOL_JSON = "hook_symbol_json_v64"
+    private const val KEY_SYMBOL_JSON = "hook_symbol_json_v67"
     private const val KEY_CACHE_MODULE_VERSION = "hook_symbol_cache_module_version"
     private const val KEY_SYMBOL_VERIFIED_FP = "hook_symbol_verified_fp_v1"
     // 模块适配新的贴吧目标版本时，同步更新这三个值。
@@ -1364,6 +1399,19 @@ internal object HookSymbolResolver {
         val evidence: String,
     )
 
+    private data class PbLikeAutoReplyScanSymbols(
+        val agreeViewClass: String? = null,
+        val agreeClickMethod: String? = null,
+        val agreeViewGetDataMethod: String? = null,
+        val agreeDataClass: String? = null,
+        val agreeDataHasAgreeField: String? = null,
+        val agreeDataAgreeTypeField: String? = null,
+        val agreeDataIsInThreadField: String? = null,
+        val inputContainerClass: String? = null,
+        val inputContainerGetInputViewMethod: String? = null,
+        val inputContainerGetSendViewMethod: String? = null,
+    )
+
     private val ALL_FEATURE_KEYS = listOf(
         HookFeatureKey.BLOCK_AD,
         HookFeatureKey.ENABLE_CUSTOM_POST_FILTER,
@@ -1375,6 +1423,7 @@ internal object HookSymbolResolver {
         HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
         HookFeatureKey.HOME_NATIVE_GLASS,
         HookFeatureKey.AUTO_LOAD_MORE,
+        HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY,
         HookFeatureKey.DISABLE_AUTO_REFRESH,
         HookFeatureKey.ENABLE_PB_SCROLL_COALESCE,
         HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE,
@@ -1409,6 +1458,9 @@ internal object HookSymbolResolver {
         "com.baidu.tbadk.coreExtra.view.UrlDragImageView",
         StableTiebaHookPoints.BD_LIST_VIEW_CLASS,
         StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS,
+        StableTiebaHookPoints.AGREE_VIEW_CLASS,
+        StableTiebaHookPoints.AGREE_DATA_CLASS,
+        StableTiebaHookPoints.PB_NEW_INPUT_CONTAINER_CLASS,
         FORUM_BOTTOM_SHEET_VIEW_CLASS,
         AI_SPRITE_MEME_PAN_CONTROLLER_CLASS,
         AI_PB_NEW_INPUT_CONTAINER_CLASS,
@@ -2029,6 +2081,27 @@ internal object HookSymbolResolver {
             listOf(
                 "pbGestureScaleListenerClass" to has(symbols.pbGestureScaleListenerClass),
                 "pbGestureScaleListenerOnScaleMethod" to has(symbols.pbGestureScaleListenerOnScaleMethod),
+            ),
+        )
+        add(
+            "PbLikeAutoReplyHook",
+            "${symbols.pbLikeAutoReplyAgreeViewClass}.${symbols.pbLikeAutoReplyAgreeClickMethod}(View) / " +
+                "${symbols.pbLikeAutoReplyAgreeViewGetDataMethod} -> " +
+                "${symbols.pbLikeAutoReplyInputContainerClass}.{${symbols.pbLikeAutoReplyInputContainerGetInputViewMethod}," +
+                "${symbols.pbLikeAutoReplyInputContainerGetSendViewMethod}}",
+            listOf(
+                "pbLikeAutoReplyAgreeViewClass" to has(symbols.pbLikeAutoReplyAgreeViewClass),
+                "pbLikeAutoReplyAgreeClickMethod" to has(symbols.pbLikeAutoReplyAgreeClickMethod),
+                "pbLikeAutoReplyAgreeViewGetDataMethod" to has(symbols.pbLikeAutoReplyAgreeViewGetDataMethod),
+                "pbLikeAutoReplyAgreeDataClass" to has(symbols.pbLikeAutoReplyAgreeDataClass),
+                "pbLikeAutoReplyAgreeDataHasAgreeField" to has(symbols.pbLikeAutoReplyAgreeDataHasAgreeField),
+                "pbLikeAutoReplyAgreeDataAgreeTypeField" to has(symbols.pbLikeAutoReplyAgreeDataAgreeTypeField),
+                "pbLikeAutoReplyAgreeDataIsInThreadField" to has(symbols.pbLikeAutoReplyAgreeDataIsInThreadField),
+                "pbLikeAutoReplyInputContainerClass" to has(symbols.pbLikeAutoReplyInputContainerClass),
+                "pbLikeAutoReplyInputContainerGetInputViewMethod" to
+                    has(symbols.pbLikeAutoReplyInputContainerGetInputViewMethod),
+                "pbLikeAutoReplyInputContainerGetSendViewMethod" to
+                    has(symbols.pbLikeAutoReplyInputContainerGetSendViewMethod),
             ),
         )
         add(
@@ -3526,6 +3599,16 @@ internal object HookSymbolResolver {
         var pbGestureScaleListenerSetterMethod: String? = null
         var pbGestureScaleListenerClass: String? = null
         var pbGestureScaleListenerOnScaleMethod: String? = null
+        var pbLikeAutoReplyAgreeViewClass: String? = null
+        var pbLikeAutoReplyAgreeClickMethod: String? = null
+        var pbLikeAutoReplyAgreeViewGetDataMethod: String? = null
+        var pbLikeAutoReplyAgreeDataClass: String? = null
+        var pbLikeAutoReplyAgreeDataHasAgreeField: String? = null
+        var pbLikeAutoReplyAgreeDataAgreeTypeField: String? = null
+        var pbLikeAutoReplyAgreeDataIsInThreadField: String? = null
+        var pbLikeAutoReplyInputContainerClass: String? = null
+        var pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null
+        var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
         var collectionPresenterField: String? = null
         var collectionPresenterListSetterMethod: String? = null
         var collectionPresenterAdapterField: String? = null
@@ -4035,6 +4118,25 @@ internal object HookSymbolResolver {
             pbGestureScaleListenerOnScaleMethod = methods[2]
         }
 
+        val pbLikeAutoReplyScan = runScanStep(
+            "PbLikeAutoReplyHook",
+            logger,
+            scanErrors,
+            PbLikeAutoReplyScanSymbols(),
+        ) {
+            scanPbLikeAutoReplySymbols(context, cl, logger)
+        }
+        pbLikeAutoReplyAgreeViewClass = pbLikeAutoReplyScan.agreeViewClass
+        pbLikeAutoReplyAgreeClickMethod = pbLikeAutoReplyScan.agreeClickMethod
+        pbLikeAutoReplyAgreeViewGetDataMethod = pbLikeAutoReplyScan.agreeViewGetDataMethod
+        pbLikeAutoReplyAgreeDataClass = pbLikeAutoReplyScan.agreeDataClass
+        pbLikeAutoReplyAgreeDataHasAgreeField = pbLikeAutoReplyScan.agreeDataHasAgreeField
+        pbLikeAutoReplyAgreeDataAgreeTypeField = pbLikeAutoReplyScan.agreeDataAgreeTypeField
+        pbLikeAutoReplyAgreeDataIsInThreadField = pbLikeAutoReplyScan.agreeDataIsInThreadField
+        pbLikeAutoReplyInputContainerClass = pbLikeAutoReplyScan.inputContainerClass
+        pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyScan.inputContainerGetInputViewMethod
+        pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyScan.inputContainerGetSendViewMethod
+
         val shareTrackMatch = runRules(candidatesWithWhitelist, cl, listOf(ShareTrackUrlBuilderRule()), logger, "shareTrack")
         if (shareTrackMatch != null) {
             shareTrackBuilderClass = shareTrackMatch.className
@@ -4419,6 +4521,16 @@ internal object HookSymbolResolver {
             pbGestureScaleListenerSetterMethod = pbGestureScaleListenerSetterMethod,
             pbGestureScaleListenerClass = pbGestureScaleListenerClass,
             pbGestureScaleListenerOnScaleMethod = pbGestureScaleListenerOnScaleMethod,
+            pbLikeAutoReplyAgreeViewClass = pbLikeAutoReplyAgreeViewClass,
+            pbLikeAutoReplyAgreeClickMethod = pbLikeAutoReplyAgreeClickMethod,
+            pbLikeAutoReplyAgreeViewGetDataMethod = pbLikeAutoReplyAgreeViewGetDataMethod,
+            pbLikeAutoReplyAgreeDataClass = pbLikeAutoReplyAgreeDataClass,
+            pbLikeAutoReplyAgreeDataHasAgreeField = pbLikeAutoReplyAgreeDataHasAgreeField,
+            pbLikeAutoReplyAgreeDataAgreeTypeField = pbLikeAutoReplyAgreeDataAgreeTypeField,
+            pbLikeAutoReplyAgreeDataIsInThreadField = pbLikeAutoReplyAgreeDataIsInThreadField,
+            pbLikeAutoReplyInputContainerClass = pbLikeAutoReplyInputContainerClass,
+            pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyInputContainerGetInputViewMethod,
+            pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyInputContainerGetSendViewMethod,
 
             collectionPresenterField = collectionPresenterField,
             collectionPresenterListSetterMethod = collectionPresenterListSetterMethod,
@@ -5768,6 +5880,163 @@ internal object HookSymbolResolver {
         if (!hasAiWriteFrame) return false
         if (spriteMemePanClass == null) return true
         return fields.any { field -> spriteMemePanClass.isAssignableFrom(field.type) }
+    }
+
+    private fun scanPbLikeAutoReplySymbols(
+        context: Context,
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): PbLikeAutoReplyScanSymbols {
+        val agreeViewClass = safeFindClass(StableTiebaHookPoints.AGREE_VIEW_CLASS, cl)
+        if (agreeViewClass == null) {
+            log(logger, "pbLikeAutoReply: AgreeView class not found")
+            return PbLikeAutoReplyScanSymbols()
+        }
+
+        val getDataMethod = collectInstanceMethods(agreeViewClass).firstOrNull { method ->
+            method.name == StableTiebaHookPoints.METHOD_GET_DATA &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType.name == StableTiebaHookPoints.AGREE_DATA_CLASS
+        }
+        if (getDataMethod == null) {
+            log(logger, "pbLikeAutoReply: AgreeView.getData() not found or return mismatch")
+            return PbLikeAutoReplyScanSymbols(agreeViewClass = agreeViewClass.name)
+        }
+
+        val agreeDataClass = getDataMethod.returnType
+        val agreeDataFields = collectInstanceFields(agreeDataClass)
+        val hasAgreeField = agreeDataFields.firstOrNull { field ->
+            field.name == "hasAgree" && isBooleanType(field.type)
+        }
+        val agreeTypeField = agreeDataFields.firstOrNull { field ->
+            field.name == "agreeType" && isIntType(field.type)
+        }
+        val isInThreadField = agreeDataFields.firstOrNull { field ->
+            field.name == "isInThread" && isBooleanType(field.type)
+        }
+        if (hasAgreeField == null || agreeTypeField == null || isInThreadField == null) {
+            log(
+                logger,
+                "pbLikeAutoReply: AgreeData fields missing, hasAgree=${hasAgreeField?.name}, " +
+                    "agreeType=${agreeTypeField?.name}, isInThread=${isInThreadField?.name}",
+            )
+        }
+
+        val agreeClickMethod = scanPbLikeAgreeClickMethodFromDex(context, agreeViewClass, logger)
+        if (agreeClickMethod == null) {
+            log(logger, "pbLikeAutoReply: AgreeView like click method not found")
+        }
+
+        val inputContainerClass = safeFindClass(StableTiebaHookPoints.PB_NEW_INPUT_CONTAINER_CLASS, cl)
+        if (inputContainerClass == null) {
+            log(logger, "pbLikeAutoReply: PbNewInputContainer class not found")
+            return PbLikeAutoReplyScanSymbols(
+                agreeViewClass = agreeViewClass.name,
+                agreeClickMethod = agreeClickMethod,
+                agreeViewGetDataMethod = getDataMethod.name,
+                agreeDataClass = agreeDataClass.name,
+                agreeDataHasAgreeField = hasAgreeField?.name,
+                agreeDataAgreeTypeField = agreeTypeField?.name,
+                agreeDataIsInThreadField = isInThreadField?.name,
+            )
+        }
+
+        val inputMethods = collectInstanceMethods(inputContainerClass)
+        val getInputViewMethod = inputMethods.firstOrNull { method ->
+            method.name == StableTiebaHookPoints.METHOD_GET_INPUT_VIEW &&
+                method.parameterTypes.isEmpty() &&
+                (EditText::class.java.isAssignableFrom(method.returnType) ||
+                    View::class.java.isAssignableFrom(method.returnType))
+        }
+        val getSendViewMethod = inputMethods.firstOrNull { method ->
+            method.name == StableTiebaHookPoints.METHOD_GET_SEND_VIEW &&
+                method.parameterTypes.isEmpty() &&
+                View::class.java.isAssignableFrom(method.returnType)
+        }
+        if (getInputViewMethod == null || getSendViewMethod == null) {
+            log(
+                logger,
+                "pbLikeAutoReply: PbNewInputContainer methods missing, " +
+                    "input=${getInputViewMethod?.name}, send=${getSendViewMethod?.name}",
+            )
+        }
+
+        val symbols = PbLikeAutoReplyScanSymbols(
+            agreeViewClass = agreeViewClass.name,
+            agreeClickMethod = agreeClickMethod,
+            agreeViewGetDataMethod = getDataMethod.name,
+            agreeDataClass = agreeDataClass.name,
+            agreeDataHasAgreeField = hasAgreeField?.name,
+            agreeDataAgreeTypeField = agreeTypeField?.name,
+            agreeDataIsInThreadField = isInThreadField?.name,
+            inputContainerClass = inputContainerClass.name,
+            inputContainerGetInputViewMethod = getInputViewMethod?.name,
+            inputContainerGetSendViewMethod = getSendViewMethod?.name,
+        )
+        log(
+            logger,
+            "pbLikeAutoReply matched: ${symbols.agreeViewClass}.${symbols.agreeClickMethod}/" +
+                "${symbols.agreeViewGetDataMethod} " +
+                "data=${symbols.agreeDataClass}[${symbols.agreeDataHasAgreeField}," +
+                "${symbols.agreeDataAgreeTypeField},${symbols.agreeDataIsInThreadField}] input=${symbols.inputContainerClass}." +
+                "{${symbols.inputContainerGetInputViewMethod},${symbols.inputContainerGetSendViewMethod}}",
+        )
+        return symbols
+    }
+
+    private fun scanPbLikeAgreeClickMethodFromDex(
+        context: Context,
+        agreeViewClass: Class<*>,
+        logger: ScanLogger?,
+    ): String? {
+        val sourcePaths = appSourcePaths(context)
+        if (sourcePaths.isEmpty()) {
+            log(logger, "pbLikeAutoReplyDex: apk source path unavailable")
+            return null
+        }
+        val matches = DexShareIconScanner.scanPbLikeAgreeClick(
+            sourcePaths = sourcePaths,
+            ownerClassName = agreeViewClass.name,
+            logger = logger,
+        )
+            .filter { match -> isPbLikeAgreeClickMethodNameValid(agreeViewClass, match.ownerMethodName) }
+            .groupBy { it.ownerMethodName }
+            .mapNotNull { (_, methodMatches) -> methodMatches.maxByOrNull { it.score } }
+            .sortedWith(
+                compareByDescending<DexPbLikeAgreeClickMatch> { it.score }
+                    .thenBy { it.ownerMethodName.length }
+                    .thenBy { it.ownerMethodName },
+            )
+
+        val best = matches.firstOrNull() ?: run {
+            log(logger, "pbLikeAutoReplyDex: no semantic match")
+            return null
+        }
+        val second = matches.getOrNull(1)
+        if (second != null && best.score - second.score < 12) {
+            log(
+                logger,
+                "pbLikeAutoReplyDex ambiguous: best=${best.ownerMethodName}:${best.score}[${best.evidence}], " +
+                    "second=${second.ownerMethodName}:${second.score}[${second.evidence}]",
+            )
+            return null
+        }
+        log(
+            logger,
+            "pbLikeAutoReplyDex matched: ${agreeViewClass.name}.${best.ownerMethodName} " +
+                "score=${best.score} evidence=${best.evidence}",
+        )
+        return best.ownerMethodName
+    }
+
+    private fun isPbLikeAgreeClickMethodNameValid(agreeViewClass: Class<*>, methodName: String): Boolean {
+        return agreeViewClass.declaredMethods.any { method ->
+            !Modifier.isStatic(method.modifiers) &&
+                method.name == methodName &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0] == View::class.java
+        }
     }
 
     private fun scanTypeAdapterDataFilterSymbols(
@@ -7723,6 +7992,12 @@ internal object HookSymbolResolver {
         val strong: Boolean = true,
     )
 
+    private data class DexPbLikeAgreeClickMatch(
+        val ownerMethodName: String,
+        val score: Int,
+        val evidence: String,
+    )
+
     private data class DexPbAdBidModelMatch(
         val className: String,
         val requestImplMethodName: String,
@@ -8037,6 +8312,9 @@ internal object HookSymbolResolver {
             "Lcom/baidu/tieba/pb/pagebrowser/model/BaseRequestModel;"
         private const val KOTLIN_CONTINUATION_DESCRIPTOR = "Lkotlin/coroutines/Continuation;"
         private const val OBJECT_DESCRIPTOR = "Ljava/lang/Object;"
+        private const val AGREE_DATA_DESCRIPTOR = "Lcom/baidu/tieba/tbadkcore/data/AgreeData;"
+        private const val AGREE_DATA_HAS_AGREE_FIELD = "hasAgree"
+        private const val AGREE_DATA_AGREE_TYPE_FIELD = "agreeType"
 
         fun scan(
             sourcePaths: List<String>,
@@ -8107,6 +8385,40 @@ internal object HookSymbolResolver {
                 }
             }
             recordDexScanIssue(logger, "AutoRefreshHook.Dex", errorCount, firstError)
+            return out
+        }
+
+        fun scanPbLikeAgreeClick(
+            sourcePaths: List<String>,
+            ownerClassName: String,
+            logger: ScanLogger? = null,
+        ): List<DexPbLikeAgreeClickMatch> {
+            val ownerDescriptor = "L${ownerClassName.replace('.', '/')};"
+            val out = ArrayList<DexPbLikeAgreeClickMatch>(4)
+            var errorCount = 0
+            var firstError: String? = null
+            fun recordError(t: Throwable) {
+                errorCount++
+                if (firstError == null) firstError = sanitizeScanStatusText(formatScanException(t))
+            }
+            for (sourcePath in sourcePaths) {
+                val file = File(sourcePath)
+                if (!file.isFile) continue
+                scanDexFiles(file, ::recordError) { dexBytes ->
+                    val reader = try {
+                        DexImage(dexBytes)
+                    } catch (t: Throwable) {
+                        recordError(t)
+                        return@scanDexFiles
+                    }
+                    try {
+                        out.addAll(reader.findPbLikeAgreeClickMatches(ownerDescriptor))
+                    } catch (t: Throwable) {
+                        recordError(t)
+                    }
+                }
+            }
+            recordDexScanIssue(logger, "PbLikeAutoReplyHook.AgreeClickDex", errorCount, firstError)
             return out
         }
 
@@ -8393,6 +8705,18 @@ internal object HookSymbolResolver {
                 return emptyList()
             }
 
+            fun findPbLikeAgreeClickMatches(ownerDescriptor: String): List<DexPbLikeAgreeClickMatch> {
+                for (i in 0 until classDefsSize) {
+                    val classDefOff = classDefsOff + i * 32
+                    val classIdx = intAt(classDefOff)
+                    if (typeDescriptor(classIdx) != ownerDescriptor) continue
+                    val classDataOff = intAt(classDefOff + 24)
+                    if (classDataOff == 0) return emptyList()
+                    return scanPbLikeAgreeClickClassData(classDataOff)
+                }
+                return emptyList()
+            }
+
             fun findAiWriteInitMatches(ownerDescriptor: String): List<DexAiComponentInitMatch> {
                 for (i in 0 until classDefsSize) {
                     val classDefOff = classDefsOff + i * 32
@@ -8610,6 +8934,35 @@ internal object HookSymbolResolver {
                     cursor = method.next
                     methodIdx = method.methodIdx
                     scanAutoRefreshCodeItem(method.codeOff, methodName(methodIdx))?.let(out::add)
+                }
+                return out
+            }
+
+            private fun scanPbLikeAgreeClickClassData(classDataOff: Int): List<DexPbLikeAgreeClickMatch> {
+                var cursor = classDataOff
+                val staticFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+                val instanceFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+                val directMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+                val virtualMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+
+                repeat(staticFieldsSize) { cursor = skipEncodedField(cursor) }
+                repeat(instanceFieldsSize) { cursor = skipEncodedField(cursor) }
+
+                val out = ArrayList<DexPbLikeAgreeClickMatch>(2)
+                var methodIdx = 0
+                repeat(directMethodsSize) {
+                    val method = readEncodedMethod(cursor, methodIdx)
+                    cursor = method.next
+                    methodIdx = method.methodIdx
+                    scanPbLikeAgreeClickCodeItem(method)?.let(out::add)
+                }
+
+                methodIdx = 0
+                repeat(virtualMethodsSize) {
+                    val method = readEncodedMethod(cursor, methodIdx)
+                    cursor = method.next
+                    methodIdx = method.methodIdx
+                    scanPbLikeAgreeClickCodeItem(method)?.let(out::add)
                 }
                 return out
             }
@@ -8839,6 +9192,91 @@ internal object HookSymbolResolver {
                 val accessFlags = readUleb128(cursor).also { cursor = it.next }.value
                 val codeOff = readUleb128(cursor).also { cursor = it.next }.value
                 return EncodedMethod(previousMethodIdx + methodIdxDiff, accessFlags, codeOff, cursor)
+            }
+
+            private fun scanPbLikeAgreeClickCodeItem(method: EncodedMethod): DexPbLikeAgreeClickMatch? {
+                if (isStaticAccess(method.accessFlags)) return null
+                val methodName = methodName(method.methodIdx)?.takeIf { it.isNotBlank() } ?: return null
+                if (methodReturnDescriptor(method.methodIdx) != "V") return null
+                if (methodParameterDescriptors(method.methodIdx) != listOf(ANDROID_VIEW_DESCRIPTOR)) return null
+                val codeOff = method.codeOff
+                if (codeOff <= 0 || codeOff + 16 > bytes.size) return null
+                val insnsSize = intAt(codeOff + 12)
+                val insnsOff = codeOff + 16
+                if (insnsOff <= 0 || insnsOff + insnsSize * 2 > bytes.size) return null
+
+                var readsHasAgree = 0
+                var readsAgreeType = 0
+                var writesHasAgree = 0
+                var writesAgreeType = 0
+                var hasViewGetId = false
+                var hasAgreeDataField = false
+                var hasBackendCall = false
+
+                for (i in 0 until insnsSize) {
+                    val unit = ushortAt(insnsOff + i * 2)
+                    val op = unit and 0xFF
+                    when {
+                        op in 0x52..0x5F -> {
+                            val fieldIdx = ushortAt(insnsOff + (i + 1) * 2)
+                            if (fieldTypeDescriptor(fieldIdx) == AGREE_DATA_DESCRIPTOR) {
+                                hasAgreeDataField = true
+                            }
+                            if (fieldClassDescriptor(fieldIdx) != AGREE_DATA_DESCRIPTOR) continue
+                            when (fieldName(fieldIdx)) {
+                                AGREE_DATA_HAS_AGREE_FIELD -> {
+                                    if (isDexInstancePut(op)) writesHasAgree++ else readsHasAgree++
+                                }
+                                AGREE_DATA_AGREE_TYPE_FIELD -> {
+                                    if (isDexInstancePut(op)) writesAgreeType++ else readsAgreeType++
+                                }
+                            }
+                        }
+                        op in 0x6E..0x72 || op in 0x74..0x78 -> {
+                            val methodIdx = ushortAt(insnsOff + (i + 1) * 2)
+                            if (isViewGetId(methodIdx)) {
+                                hasViewGetId = true
+                            }
+                            if (isAgreeBackendInvoke(methodIdx)) {
+                                hasBackendCall = true
+                            }
+                        }
+                    }
+                }
+
+                val hasStateWrite = writesHasAgree > 0 && writesAgreeType > 0
+                val hasStateRead = readsHasAgree > 0 || readsAgreeType > 0
+                if (!hasStateWrite || !hasStateRead || !hasViewGetId) return null
+
+                var score = 0
+                val evidence = ArrayList<String>(8)
+                score += writesHasAgree.coerceAtMost(3) * 80
+                evidence.add("writeHasAgree=$writesHasAgree")
+                score += writesAgreeType.coerceAtMost(3) * 70
+                evidence.add("writeAgreeType=$writesAgreeType")
+                if (readsHasAgree > 0) {
+                    score += 45
+                    evidence.add("readHasAgree")
+                }
+                if (readsAgreeType > 0) {
+                    score += 40
+                    evidence.add("readAgreeType")
+                }
+                if (hasViewGetId) {
+                    score += 70
+                    evidence.add("viewGetId")
+                }
+                if (hasAgreeDataField) {
+                    score += 25
+                    evidence.add("agreeDataField")
+                }
+                if (hasBackendCall) {
+                    score += 35
+                    evidence.add("backend")
+                }
+                if (methodName.length <= 3) score += 8
+                if (score < 360) return null
+                return DexPbLikeAgreeClickMatch(methodName, score, evidence.joinToString(","))
             }
 
             private fun scanAutoRefreshCodeItem(
@@ -9667,6 +10105,26 @@ internal object HookSymbolResolver {
                 if (methodIdx !in 0 until methodIdsSize) return false
                 if (methodName(methodIdx) != "setOnClickListener") return false
                 return isViewLikeDescriptor(methodClassDescriptor(methodIdx).orEmpty())
+            }
+
+            private fun isViewGetId(methodIdx: Int): Boolean {
+                if (methodIdx !in 0 until methodIdsSize) return false
+                return methodName(methodIdx) == "getId" &&
+                    isViewLikeDescriptor(methodClassDescriptor(methodIdx).orEmpty()) &&
+                    methodReturnDescriptor(methodIdx) == "I" &&
+                    methodParameterDescriptors(methodIdx).isEmpty()
+            }
+
+            private fun isAgreeBackendInvoke(methodIdx: Int): Boolean {
+                if (methodIdx !in 0 until methodIdsSize) return false
+                val descriptor = methodClassDescriptor(methodIdx).orEmpty()
+                if (!descriptor.startsWith("Lcom/baidu/")) return false
+                val parameters = methodParameterDescriptors(methodIdx)
+                return parameters.any { it == AGREE_DATA_DESCRIPTOR }
+            }
+
+            private fun isDexInstancePut(op: Int): Boolean {
+                return op in 0x59..0x5F
             }
 
             private fun isViewSetVisibility(methodIdx: Int): Boolean {
@@ -11079,7 +11537,8 @@ internal object HookSymbolResolver {
                         method.parameterTypes[0] == String::class.java
                 }
             }
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            XposedCompat.logD("$TAG: pbLikeAutoReply validate failed: ${sanitizeScanStatusText(formatScanException(t))}")
             false
         }
     }
@@ -11454,6 +11913,18 @@ internal object HookSymbolResolver {
                 symbols.pbGestureScaleListenerClass != null ||
                 symbols.pbGestureScaleListenerOnScaleMethod != null
         if (hasPbGestureScaleSymbols && !isPbGestureScaleValid(symbols, cl)) return false
+        val hasPbLikeAutoReplySymbols =
+            symbols.pbLikeAutoReplyAgreeViewClass != null ||
+                symbols.pbLikeAutoReplyAgreeClickMethod != null ||
+                symbols.pbLikeAutoReplyAgreeViewGetDataMethod != null ||
+                symbols.pbLikeAutoReplyAgreeDataClass != null ||
+                symbols.pbLikeAutoReplyAgreeDataHasAgreeField != null ||
+                symbols.pbLikeAutoReplyAgreeDataAgreeTypeField != null ||
+                symbols.pbLikeAutoReplyAgreeDataIsInThreadField != null ||
+                symbols.pbLikeAutoReplyInputContainerClass != null ||
+                symbols.pbLikeAutoReplyInputContainerGetInputViewMethod != null ||
+                symbols.pbLikeAutoReplyInputContainerGetSendViewMethod != null
+        if (hasPbLikeAutoReplySymbols && !isPbLikeAutoReplyValid(symbols, cl)) return false
         val hasAiComponentSymbols =
             symbols.aiSpriteMemePanControllerClass != null ||
                 symbols.aiSpriteMemeEnableMethod != null ||
@@ -12366,6 +12837,71 @@ internal object HookSymbolResolver {
         }
     }
 
+    private fun isPbLikeAutoReplyValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+        val agreeViewClassName = symbols.pbLikeAutoReplyAgreeViewClass ?: return false
+        val agreeClickMethodName = symbols.pbLikeAutoReplyAgreeClickMethod ?: return false
+        val getDataMethodName = symbols.pbLikeAutoReplyAgreeViewGetDataMethod ?: return false
+        val agreeDataClassName = symbols.pbLikeAutoReplyAgreeDataClass ?: return false
+        val hasAgreeFieldName = symbols.pbLikeAutoReplyAgreeDataHasAgreeField ?: return false
+        val agreeTypeFieldName = symbols.pbLikeAutoReplyAgreeDataAgreeTypeField ?: return false
+        val isInThreadFieldName = symbols.pbLikeAutoReplyAgreeDataIsInThreadField ?: return false
+        val inputContainerClassName = symbols.pbLikeAutoReplyInputContainerClass ?: return false
+        val getInputViewMethodName = symbols.pbLikeAutoReplyInputContainerGetInputViewMethod ?: return false
+        val getSendViewMethodName = symbols.pbLikeAutoReplyInputContainerGetSendViewMethod ?: return false
+        return try {
+            val agreeViewClass = safeFindClass(agreeViewClassName, cl) ?: return false
+            val agreeDataClass = safeFindClass(agreeDataClassName, cl) ?: return false
+            val inputContainerClass = safeFindClass(inputContainerClassName, cl) ?: return false
+            if (!LinearLayout::class.java.isAssignableFrom(agreeViewClass)) return false
+            if (!LinearLayout::class.java.isAssignableFrom(inputContainerClass)) return false
+
+            val clickMethodOk = agreeViewClass.declaredMethods.any { method ->
+                method.name == agreeClickMethodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == View::class.java
+            }
+            if (!clickMethodOk) return false
+
+            val getDataOk = collectInstanceMethods(agreeViewClass).any { method ->
+                method.name == getDataMethodName &&
+                    method.parameterTypes.isEmpty() &&
+                    method.returnType == agreeDataClass
+            }
+            if (!getDataOk) return false
+
+            val fields = collectInstanceFields(agreeDataClass)
+            val hasAgreeOk = fields.any { field ->
+                field.name == hasAgreeFieldName && isBooleanType(field.type)
+            }
+            if (!hasAgreeOk) return false
+            val agreeTypeOk = fields.any { field ->
+                field.name == agreeTypeFieldName && isIntType(field.type)
+            }
+            if (!agreeTypeOk) return false
+            val isInThreadOk = fields.any { field ->
+                field.name == isInThreadFieldName && isBooleanType(field.type)
+            }
+            if (!isInThreadOk) return false
+
+            val inputMethods = collectInstanceMethods(inputContainerClass)
+            val inputOk = inputMethods.any { method ->
+                method.name == getInputViewMethodName &&
+                    method.parameterTypes.isEmpty() &&
+                    (EditText::class.java.isAssignableFrom(method.returnType) ||
+                        View::class.java.isAssignableFrom(method.returnType))
+            }
+            if (!inputOk) return false
+            inputMethods.any { method ->
+                method.name == getSendViewMethodName &&
+                    method.parameterTypes.isEmpty() &&
+                    View::class.java.isAssignableFrom(method.returnType)
+            }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     private fun isAiComponentValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
         val controllerClassName = symbols.aiSpriteMemePanControllerClass ?: return false
         val enableMethodName = symbols.aiSpriteMemeEnableMethod ?: return false
@@ -13106,6 +13642,46 @@ internal object HookSymbolResolver {
             )
         }
 
+        val pbLikeAutoReplyCritical = ArrayList<String>(8)
+        if (symbols.pbLikeAutoReplyAgreeViewClass.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyAgreeViewClass")
+        }
+        if (symbols.pbLikeAutoReplyAgreeClickMethod.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyAgreeClickMethod")
+        }
+        if (symbols.pbLikeAutoReplyAgreeViewGetDataMethod.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyAgreeViewGetDataMethod")
+        }
+        if (symbols.pbLikeAutoReplyAgreeDataClass.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyAgreeDataClass")
+        }
+        if (symbols.pbLikeAutoReplyAgreeDataHasAgreeField.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyAgreeDataHasAgreeField")
+        }
+        if (symbols.pbLikeAutoReplyAgreeDataAgreeTypeField.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyAgreeDataAgreeTypeField")
+        }
+        if (symbols.pbLikeAutoReplyAgreeDataIsInThreadField.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyAgreeDataIsInThreadField")
+        }
+        if (symbols.pbLikeAutoReplyInputContainerClass.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyInputContainerClass")
+        }
+        if (symbols.pbLikeAutoReplyInputContainerGetInputViewMethod.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyInputContainerGetInputViewMethod")
+        }
+        if (symbols.pbLikeAutoReplyInputContainerGetSendViewMethod.isNullOrBlank()) {
+            pbLikeAutoReplyCritical.add("pbLikeAutoReplyInputContainerGetSendViewMethod")
+        }
+        out[HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY] = if (pbLikeAutoReplyCritical.isEmpty()) {
+            HookFeatureStatus(state = HookFeatureState.FULL)
+        } else {
+            HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = pbLikeAutoReplyCritical,
+            )
+        }
+
         val pbScrollCoalesceCritical = ArrayList<String>(2)
         if (symbols.pbCommentScrollListenerClass.isNullOrBlank()) {
             pbScrollCoalesceCritical.add("pbCommentScrollListenerClass")
@@ -13686,6 +14262,7 @@ internal object HookSymbolResolver {
             ${fmt("AutoLoadMore", "${symbols.autoLoadMoreConfigClass}.${symbols.autoLoadMoreConfigMethod}")}
             ${fmt("PbCommentBottom", "${symbols.pbCommentBottomListScrollClass}.${symbols.pbCommentBottomListScrollMethod}[${symbols.pbCommentBottomListOwnerField}] / ${symbols.pbCommentBottomRecyclerScrollClass}.${symbols.pbCommentBottomRecyclerScrollMethod}[${symbols.pbCommentBottomRecyclerOwnerField}]")}
             ${fmt("PbGestureScale", "${symbols.pbGestureScaleManagerClass}.${symbols.pbGestureScaleDispatchMethod}/${symbols.pbGestureScaleListenerSetterMethod} -> ${symbols.pbGestureScaleListenerClass}.${symbols.pbGestureScaleListenerOnScaleMethod}")}
+            ${fmt("PbLikeAutoReply", "${symbols.pbLikeAutoReplyAgreeViewClass}.${symbols.pbLikeAutoReplyAgreeClickMethod}/${symbols.pbLikeAutoReplyAgreeViewGetDataMethod}[${symbols.pbLikeAutoReplyAgreeDataHasAgreeField},${symbols.pbLikeAutoReplyAgreeDataAgreeTypeField},${symbols.pbLikeAutoReplyAgreeDataIsInThreadField}] -> ${symbols.pbLikeAutoReplyInputContainerClass}.{${symbols.pbLikeAutoReplyInputContainerGetInputViewMethod},${symbols.pbLikeAutoReplyInputContainerGetSendViewMethod}}")}
             ${fmt("CollectionCore", "${symbols.collectionPresenterField}.${symbols.collectionPresenterListSetterMethod} / ${symbols.collectionModelField}.${symbols.collectionModelListGetterMethod}/${symbols.collectionModelParseMethod}")}
             ${fmt("CollectionAdapter", "${symbols.collectionPresenterAdapterField}.{${symbols.collectionAdapterShowFooterMethod},${symbols.collectionAdapterLoadingMethod},${symbols.collectionAdapterHasMoreMethod}}")}
             ${fmt("CollectionListField", "${symbols.collectionModelListField}/${symbols.collectionFragmentDisplayListField} nav={${symbols.collectionActivityNavControllerField},${symbols.collectionNavBarField}}")}

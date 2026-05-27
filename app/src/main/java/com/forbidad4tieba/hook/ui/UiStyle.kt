@@ -478,12 +478,8 @@ internal object UiStyle {
         return UnderlineDrawable(density, tokens.accent)
     }
 
-    internal fun createKeywordInputCardBackground(tokens: Tokens, density: Float): Drawable {
-        return GradientDrawable().apply {
-            setColor(tokens.inputFill)
-            cornerRadius = 14f * density
-            setStroke((1 * density).toInt().coerceAtLeast(1), tokens.inputStroke)
-        }
+    internal fun createPlainInputUnderlineBackground(tokens: Tokens, density: Float): Drawable {
+        return UnderlineDrawable(density, tokens.inputStroke)
     }
 
     internal fun createMetricCellBackground(

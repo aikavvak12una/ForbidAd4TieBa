@@ -42,6 +42,7 @@ import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHook
 import com.forbidad4tieba.hook.feature.ui.HomeSideBarSettingsEntryHook
 import com.forbidad4tieba.hook.feature.ui.ForumNativeTopShiftBlockHook
 import com.forbidad4tieba.hook.feature.ui.PbDisableGestureFontScaleHook
+import com.forbidad4tieba.hook.feature.ui.PbLikeAutoReplyHook
 import com.forbidad4tieba.hook.feature.ui.PbCommentAutoLoadHook
 import com.forbidad4tieba.hook.feature.ui.PbScrollCoalesceHook
 import com.forbidad4tieba.hook.feature.ui.UpgradePopWindowBlockHook
@@ -309,6 +310,7 @@ class MainHook : XposedModule() {
                     PbCommentAutoLoadHook.hook(cl, symbols)
                     PbScrollCoalesceHook.hook(cl, symbols)
                     PbDisableGestureFontScaleHook.hook(cl, symbols)
+                    PbLikeAutoReplyHook.hook(cl, symbols)
                     AiComponentDisableHook.hook(cl, symbols)
 
                     MsgTabDefaultNotifyHook.hook(cl, symbols)

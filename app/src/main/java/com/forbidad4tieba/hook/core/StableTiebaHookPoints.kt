@@ -45,6 +45,9 @@ object StableTiebaHookPoints {
         "com.baidu.tieba.pb.pb.main.PbReplyTitleViewHolder"
     const val PB_COMMON_LAYOUT_PRELOADER_CLASS =
         "com.baidu.tieba.pb.preload.CommonLayoutPreloader"
+    const val AGREE_VIEW_CLASS = "com.baidu.tbadk.core.view.AgreeView"
+    const val AGREE_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.AgreeData"
+    const val PB_NEW_INPUT_CONTAINER_CLASS = "com.baidu.tbadk.editortools.pb.PbNewInputContainer"
     const val SUB_PB_REPLY_ADAPTER_CLASS =
         "com.baidu.tieba.pb.pb.sub.adapter.SubPbReplyAdapter"
     const val NEW_SUB_PB_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.sub.NewSubPbActivity"
@@ -122,6 +125,8 @@ object StableTiebaHookPoints {
     const val METHOD_FIND_TYPE = "findType"
     const val METHOD_SEND_MESSAGE = "sendMessage"
     const val METHOD_GET_DATA = "getData"
+    const val METHOD_GET_INPUT_VIEW = "getInputView"
+    const val METHOD_GET_SEND_VIEW = "getSendView"
     const val METHOD_GET_CURRENT_ACCOUNT = "getCurrentAccount"
     const val METHOD_ADD_POST_DATA = "addPostData"
     const val METHOD_POST_NET_DATA = "postNetData"
