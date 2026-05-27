@@ -1,17 +1,19 @@
 {
-  "schema": 1,
-  "items": [
+  "schema"  “模式”: 1,
+“方案”：1，
+  "items"  “项目”: [
+“项目”： [
     {
-      "title": "TG频道",
-      "description": "提供反馈、加入测试",
+      "title"  “标题”: "TG频道",
+      "description"  “描述”: "提供反馈、加入测试",
       "hasLink": true,
       "url": "https://t.me/+TP_ZLhoS-hFlNGJh"
     }
   ],
   "controls": {
-    "restrictHiddenFeaturesOnEnvironmentLevel2": false
+    "restrictHiddenFeaturesOnEnvironmentLevel2": true
   },
-  "telemetry": [
+  "telemetry"  “遥测”  “遥测”: [
     {
       "name": "usage_daily",
       "enabled": true,
