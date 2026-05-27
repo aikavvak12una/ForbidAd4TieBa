@@ -9,7 +9,7 @@
     }
   ],
   "controls": {
-    "restrictHiddenFeaturesOnEnvironmentLevel2": true
+    "restrictHiddenFeaturesOnEnvironmentLevel2": false
   },
   "telemetry": [
     {
