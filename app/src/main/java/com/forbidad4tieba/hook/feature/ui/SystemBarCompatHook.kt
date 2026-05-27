@@ -3,6 +3,8 @@ package com.forbidad4tieba.hook.feature.ui
 import android.app.Activity
 import android.app.Application
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -27,6 +29,7 @@ object SystemBarCompatHook {
     private val windowActivities = Collections.synchronizedMap(WeakHashMap<Window, Activity>())
     private val navigationBarColorHookedClasses = ConcurrentHashMap.newKeySet<String>()
     private val bottomTabInsetStates = Collections.synchronizedMap(WeakHashMap<View, BottomTabInsetState>())
+    private val requestedNavigationBarColors = Collections.synchronizedMap(WeakHashMap<Window, Int>())
 
     private data class BottomTabInsetState(
         val left: Int,
@@ -34,6 +37,8 @@ object SystemBarCompatHook {
         val right: Int,
         val bottom: Int,
         val height: Int,
+        val background: Drawable?,
+        var gestureBridgeColor: Int? = null,
     )
 
     fun register(app: Application) {
@@ -118,6 +123,7 @@ object SystemBarCompatHook {
                 if (!shouldApply(activity)) return@intercept chain.proceed()
                 val color = (chain.args.getOrNull(0) as? Number)?.toInt()
                     ?: return@intercept chain.proceed()
+                rememberRequestedNavigationBarColor(window, color)
                 val result = if (color == Color.TRANSPARENT) {
                     chain.proceed()
                 } else {
@@ -134,6 +140,13 @@ object SystemBarCompatHook {
         }.onFailure { t ->
             navigationBarColorHookedClasses.remove(key)
             logFirstError("navigation color hook failed: $key, ${t.message}")
+        }
+    }
+
+    private fun rememberRequestedNavigationBarColor(window: Window, color: Int) {
+        if (Color.alpha(color) <= 0) return
+        synchronized(requestedNavigationBarColors) {
+            requestedNavigationBarColors[window] = color
         }
     }
 
@@ -181,10 +194,14 @@ object SystemBarCompatHook {
     }
 
     private fun shouldApply(activity: Activity): Boolean {
+        if (!isGestureNavigation(activity)) return false
+        if (isHomeNativeGlassRuntimeActive()) return isSupportedActivity(activity)
+        return ConfigManager.isHomeTabAutoHideEnabled && isMainTabActivity(activity)
+    }
+
+    private fun isHomeNativeGlassRuntimeActive(): Boolean {
         return ConfigManager.isHomeNativeGlassEnabled &&
-            ConfigManager.homeNativeGlassBackgroundImagePath.isNotBlank() &&
-            isGestureNavigation(activity) &&
-            isSupportedActivity(activity)
+            ConfigManager.homeNativeGlassBackgroundImagePath.isNotBlank()
     }
 
     @Suppress("DEPRECATION")
@@ -226,6 +243,7 @@ object SystemBarCompatHook {
         val tabHost = findViewByClassName(decor, StableTiebaHookPoints.FRAGMENT_TAB_HOST_CLASS) ?: return
         val wrapper = invokeNoArgView(tabHost, StableTiebaHookPoints.METHOD_GET_TAB_WRAPPER) ?: tabHost
         applyBottomInset(wrapper, insetBottom)
+        applyHomeBottomTabGestureBridge(activity, tabHost, wrapper)
     }
 
     private fun applyBottomInset(view: View, insetBottom: Int) {
@@ -236,6 +254,7 @@ object SystemBarCompatHook {
                 right = view.paddingRight,
                 bottom = view.paddingBottom,
                 height = view.layoutParams?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT,
+                background = view.background,
             ).also { bottomTabInsetStates[view] = it }
         }
         val targetBottom = state.bottom + insetBottom
@@ -257,6 +276,82 @@ object SystemBarCompatHook {
         } else {
             view.requestLayout()
         }
+    }
+
+    private fun applyHomeBottomTabGestureBridge(activity: Activity, tabHost: View, wrapper: View) {
+        val state = synchronized(bottomTabInsetStates) { bottomTabInsetStates[wrapper] } ?: return
+        if (!ConfigManager.isHomeTabAutoHideEnabled || isHomeNativeGlassRuntimeActive()) {
+            restoreGestureBridgeIfNeeded(wrapper, state)
+            return
+        }
+
+        val currentBackground = wrapper.background
+        if (
+            state.gestureBridgeColor == null &&
+            currentBackground != null &&
+            !isTransparentColorDrawable(currentBackground)
+        ) {
+            return
+        }
+
+        val color = resolveHomeBottomTabGestureBridgeColor(activity, tabHost, wrapper)
+        if (color == null) {
+            restoreGestureBridgeIfNeeded(wrapper, state)
+            return
+        }
+        if (state.gestureBridgeColor == color && opaqueBackgroundColor(wrapper) == color) return
+        wrapper.background = ColorDrawable(color)
+        state.gestureBridgeColor = color
+    }
+
+    private fun restoreGestureBridgeIfNeeded(wrapper: View, state: BottomTabInsetState) {
+        if (state.gestureBridgeColor == null) return
+        wrapper.background = state.background
+        state.gestureBridgeColor = null
+    }
+
+    private fun resolveHomeBottomTabGestureBridgeColor(
+        activity: Activity,
+        tabHost: View,
+        wrapper: View,
+    ): Int? {
+        invokeNoArgView(tabHost, "getFragmentTabWidget")?.let { widget ->
+            opaqueBackgroundColor(widget)?.let { return it }
+            opaqueLargeChildBackgroundColor(widget)?.let { return it }
+        }
+        opaqueBackgroundColor(tabHost)?.let { return it }
+        opaqueLargeChildBackgroundColor(wrapper)?.let { return it }
+        val window = activity.window
+        return synchronized(requestedNavigationBarColors) {
+            requestedNavigationBarColors[window]
+        }?.takeIf { Color.alpha(it) > 0 }
+    }
+
+    private fun opaqueBackgroundColor(view: View): Int? {
+        val color = (view.background as? ColorDrawable)?.color ?: return null
+        return color.takeIf { Color.alpha(it) > 0 }
+    }
+
+    private fun opaqueLargeChildBackgroundColor(view: View): Int? {
+        val group = view as? ViewGroup ?: return null
+        val minHeight = (view.resources.displayMetrics.density * 8f + 0.5f).toInt().coerceAtLeast(1)
+        val minWidth = if (view.width > 0) (view.width * 0.4f).toInt() else 0
+        for (index in 0 until group.childCount) {
+            val child = group.getChildAt(index) ?: continue
+            val color = opaqueBackgroundColor(child) ?: continue
+            val lp = child.layoutParams
+            val childHeight = maxOf(child.height, child.measuredHeight, lp?.height ?: 0)
+            val childWidth = maxOf(child.width, child.measuredWidth, lp?.width ?: 0)
+            val matchesWidth = minWidth <= 0 ||
+                childWidth >= minWidth ||
+                lp?.width == ViewGroup.LayoutParams.MATCH_PARENT
+            if (childHeight >= minHeight && matchesWidth) return color
+        }
+        return null
+    }
+
+    private fun isTransparentColorDrawable(drawable: Drawable): Boolean {
+        return drawable is ColorDrawable && Color.alpha(drawable.color) == 0
     }
 
     @Suppress("DEPRECATION")

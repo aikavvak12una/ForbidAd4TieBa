@@ -3,6 +3,7 @@ package com.forbidad4tieba.hook.feature.ui
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.SystemClock
@@ -73,6 +74,7 @@ object HomeBottomTabAutoHideHook {
                 )
                 return
             }
+            registerSystemBarCompatIfNeeded()
             XposedCompat.log(
                 "[HomeBottomTabAutoHideHook] hook INSTALLED: " +
                     "scrollObservers=$scrollObservers, tabObservers=$tabObservers"
@@ -310,6 +312,7 @@ object HomeBottomTabAutoHideHook {
         if (state.currentTabType < 0) {
             state.currentTabType = resolveCurrentTabType(tabHost)
         }
+        SystemBarCompatHook.applyIfNeeded(findActivity(tabHost.context))
         return ResolvedBottomTab(root, tabHost, wrapper)
     }
 
@@ -462,6 +465,11 @@ object HomeBottomTabAutoHideHook {
 
     private fun shouldHandleScroll(): Boolean {
         return ConfigManager.isHomeTabAutoHideEnabled || hiddenTabPresent.get()
+    }
+
+    private fun registerSystemBarCompatIfNeeded() {
+        val app = ConfigManager.getAppContext() as? Application ?: return
+        SystemBarCompatHook.register(app)
     }
 
     private fun performBottomTabAction(
