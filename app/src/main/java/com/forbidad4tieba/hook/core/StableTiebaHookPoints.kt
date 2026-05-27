@@ -20,6 +20,7 @@ object StableTiebaHookPoints {
     const val TYPE_ADAPTER_CLASS = "com.baidu.adp.widget.ListView.TypeAdapter"
     const val TYPE_ADAPTER_VIEW_HOLDER_CLASS = "$TYPE_ADAPTER_CLASS\$ViewHolder"
     const val BD_LIST_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdListView"
+    const val BD_RECYCLER_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdRecyclerView"
     const val BD_TYPE_RECYCLER_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdTypeRecyclerView"
     const val PB_FIRST_FLOOR_RECOMMEND_ADAPTER_CLASS =
         "com.baidu.tieba.pb.widget.adapter.PbFirstFloorRecommendAdapter"

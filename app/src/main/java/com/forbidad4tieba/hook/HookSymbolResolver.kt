@@ -186,6 +186,12 @@ data class HookSymbols(
     val pbCommentScrollFragmentField: String? = null,
     val pbCommentScrollBottomListenerField: String? = null,
     val pbCommentScrollBottomMethod: String? = null,
+    val pbCommentBottomListScrollClass: String? = null,
+    val pbCommentBottomListScrollMethod: String? = null,
+    val pbCommentBottomListOwnerField: String? = null,
+    val pbCommentBottomRecyclerScrollClass: String? = null,
+    val pbCommentBottomRecyclerScrollMethod: String? = null,
+    val pbCommentBottomRecyclerOwnerField: String? = null,
     val pbGestureScaleManagerClass: String? = null,
     val pbGestureScaleDispatchMethod: String? = null,
     val pbGestureScaleListenerSetterMethod: String? = null,
@@ -442,6 +448,12 @@ data class HookSymbols(
             put("pbCommentScrollFragmentField", pbCommentScrollFragmentField)
             put("pbCommentScrollBottomListenerField", pbCommentScrollBottomListenerField)
             put("pbCommentScrollBottomMethod", pbCommentScrollBottomMethod)
+            put("pbCommentBottomListScrollClass", pbCommentBottomListScrollClass)
+            put("pbCommentBottomListScrollMethod", pbCommentBottomListScrollMethod)
+            put("pbCommentBottomListOwnerField", pbCommentBottomListOwnerField)
+            put("pbCommentBottomRecyclerScrollClass", pbCommentBottomRecyclerScrollClass)
+            put("pbCommentBottomRecyclerScrollMethod", pbCommentBottomRecyclerScrollMethod)
+            put("pbCommentBottomRecyclerOwnerField", pbCommentBottomRecyclerOwnerField)
             put("pbGestureScaleManagerClass", pbGestureScaleManagerClass)
             put("pbGestureScaleDispatchMethod", pbGestureScaleDispatchMethod)
             put("pbGestureScaleListenerSetterMethod", pbGestureScaleListenerSetterMethod)
@@ -768,6 +780,12 @@ data class HookSymbols(
                     pbCommentScrollFragmentField = obj.optStringOrNull("pbCommentScrollFragmentField"),
                     pbCommentScrollBottomListenerField = obj.optStringOrNull("pbCommentScrollBottomListenerField"),
                     pbCommentScrollBottomMethod = obj.optStringOrNull("pbCommentScrollBottomMethod"),
+                    pbCommentBottomListScrollClass = obj.optStringOrNull("pbCommentBottomListScrollClass"),
+                    pbCommentBottomListScrollMethod = obj.optStringOrNull("pbCommentBottomListScrollMethod"),
+                    pbCommentBottomListOwnerField = obj.optStringOrNull("pbCommentBottomListOwnerField"),
+                    pbCommentBottomRecyclerScrollClass = obj.optStringOrNull("pbCommentBottomRecyclerScrollClass"),
+                    pbCommentBottomRecyclerScrollMethod = obj.optStringOrNull("pbCommentBottomRecyclerScrollMethod"),
+                    pbCommentBottomRecyclerOwnerField = obj.optStringOrNull("pbCommentBottomRecyclerOwnerField"),
                     pbGestureScaleManagerClass = obj.optStringOrNull("pbGestureScaleManagerClass"),
                     pbGestureScaleDispatchMethod = obj.optStringOrNull("pbGestureScaleDispatchMethod"),
                     pbGestureScaleListenerSetterMethod = obj.optStringOrNull("pbGestureScaleListenerSetterMethod"),
@@ -1033,8 +1051,8 @@ internal data class AutoSignInHybridNativeProxySymbols(
 
 internal object HookSymbolResolver {
     private const val TAG = "[HookSymbolResolver]"
-    private const val KEY_SYMBOL_FP = "hook_symbol_fp_v21"
-    private const val KEY_SYMBOL_JSON = "hook_symbol_json_v62"
+    private const val KEY_SYMBOL_FP = "hook_symbol_fp_v23"
+    private const val KEY_SYMBOL_JSON = "hook_symbol_json_v64"
     private const val KEY_CACHE_MODULE_VERSION = "hook_symbol_cache_module_version"
     private const val KEY_SYMBOL_VERIFIED_FP = "hook_symbol_verified_fp_v1"
     // 模块适配新的贴吧目标版本时，同步更新这三个值。
@@ -1389,6 +1407,8 @@ internal object HookSymbolResolver {
         "com.baidu.tieba.feed.card.FeedCardView",
         "com.baidu.tieba.feed.component.uistate.CardHeadUiState",
         "com.baidu.tbadk.coreExtra.view.UrlDragImageView",
+        StableTiebaHookPoints.BD_LIST_VIEW_CLASS,
+        StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS,
         FORUM_BOTTOM_SHEET_VIEW_CLASS,
         AI_SPRITE_MEME_PAN_CONTROLLER_CLASS,
         AI_PB_NEW_INPUT_CONTAINER_CLASS,
@@ -1417,6 +1437,7 @@ internal object HookSymbolResolver {
         "com.baidu.tbadk.editortools.",
         "com.baidu.tbadk.mainTab.",
         "com.baidu.tbadk.widget.",
+        "com.baidu.adp.widget.ListView.",
         "com.baidu.searchbox.task.view.mainactivity.",
     )
 
@@ -1962,17 +1983,37 @@ internal object HookSymbolResolver {
                 "pbCommentScrollMethod" to has(symbols.pbCommentScrollMethod),
             ),
         )
-        add(
-            "PbCommentAutoLoadHook",
-            "${symbols.pbCommentScrollListenerClass}.${symbols.pbCommentScrollMethod}",
-            listOf(
-                "pbCommentScrollListenerClass" to has(symbols.pbCommentScrollListenerClass),
-                "pbCommentScrollMethod" to has(symbols.pbCommentScrollMethod),
-                "pbCommentScrollFragmentField" to has(symbols.pbCommentScrollFragmentField),
-                "pbCommentScrollBottomListenerField" to has(symbols.pbCommentScrollBottomListenerField),
-                "pbCommentScrollBottomMethod" to has(symbols.pbCommentScrollBottomMethod),
-            ),
-        )
+        run {
+            val listChecks = listOf(
+                "pbCommentBottomListScrollClass" to has(symbols.pbCommentBottomListScrollClass),
+                "pbCommentBottomListScrollMethod" to has(symbols.pbCommentBottomListScrollMethod),
+                "pbCommentBottomListOwnerField" to has(symbols.pbCommentBottomListOwnerField),
+            )
+            val recyclerChecks = listOf(
+                "pbCommentBottomRecyclerScrollClass" to has(symbols.pbCommentBottomRecyclerScrollClass),
+                "pbCommentBottomRecyclerScrollMethod" to has(symbols.pbCommentBottomRecyclerScrollMethod),
+                "pbCommentBottomRecyclerOwnerField" to has(symbols.pbCommentBottomRecyclerOwnerField),
+            )
+            val listFound = listChecks.all { it.second }
+            val recyclerFound = recyclerChecks.all { it.second }
+            val anyBottomSymbol = (listChecks + recyclerChecks).any { it.second }
+            val missing = when {
+                listFound || recyclerFound -> emptyList()
+                anyBottomSymbol -> (listChecks + recyclerChecks).filter { !it.second }.map { it.first }
+                else -> listOf("pbCommentBottomMechanism")
+            }
+            val state = when {
+                listFound || recyclerFound -> "FOUND"
+                anyBottomSymbol -> "PARTIAL"
+                else -> "MISSING"
+            }
+            val missingText = if (missing.isEmpty()) "-" else missing.joinToString(",")
+            out.add(
+                "HookPoint[PbCommentAutoLoadHook] state=$state missing=$missingText target=" +
+                    "${symbols.pbCommentBottomListScrollClass}.${symbols.pbCommentBottomListScrollMethod} / " +
+                    "${symbols.pbCommentBottomRecyclerScrollClass}.${symbols.pbCommentBottomRecyclerScrollMethod}",
+            )
+        }
         add(
             "PbDisableGestureFontScaleHook.Manager",
             "${symbols.pbGestureScaleManagerClass}.${symbols.pbGestureScaleDispatchMethod}/${symbols.pbGestureScaleListenerSetterMethod}",
@@ -3474,6 +3515,12 @@ internal object HookSymbolResolver {
         var pbCommentScrollFragmentField: String? = null
         var pbCommentScrollBottomListenerField: String? = null
         var pbCommentScrollBottomMethod: String? = null
+        var pbCommentBottomListScrollClass: String? = null
+        var pbCommentBottomListScrollMethod: String? = null
+        var pbCommentBottomListOwnerField: String? = null
+        var pbCommentBottomRecyclerScrollClass: String? = null
+        var pbCommentBottomRecyclerScrollMethod: String? = null
+        var pbCommentBottomRecyclerOwnerField: String? = null
         var pbGestureScaleManagerClass: String? = null
         var pbGestureScaleDispatchMethod: String? = null
         var pbGestureScaleListenerSetterMethod: String? = null
@@ -3938,6 +3985,40 @@ internal object HookSymbolResolver {
             pbCommentScrollBottomMethod = fields[2]
         }
 
+        fun bottomMechanismCandidates(ownerClassName: String): List<String> {
+            val nestedPrefix = "$ownerClassName\$"
+            val nested = candidatesWithWhitelist
+                .filter { it.startsWith(nestedPrefix) }
+                .distinct()
+            return if (nested.isNotEmpty()) nested else listOf(ownerClassName)
+        }
+
+        val pbCommentBottomListMatch = runRules(
+            bottomMechanismCandidates(StableTiebaHookPoints.BD_LIST_VIEW_CLASS),
+            cl,
+            listOf(BdListViewBottomScrollRule(StableTiebaHookPoints.BD_LIST_VIEW_CLASS)),
+            logger,
+            "pbCommentBottomList",
+        )
+        if (pbCommentBottomListMatch != null) {
+            pbCommentBottomListScrollClass = pbCommentBottomListMatch.className
+            pbCommentBottomListScrollMethod = pbCommentBottomListMatch.methodName
+            pbCommentBottomListOwnerField = pbCommentBottomListMatch.fieldName
+        }
+
+        val pbCommentBottomRecyclerMatch = runRules(
+            bottomMechanismCandidates(StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS),
+            cl,
+            listOf(BdRecyclerViewBottomScrollRule(StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS)),
+            logger,
+            "pbCommentBottomRecycler",
+        )
+        if (pbCommentBottomRecyclerMatch != null) {
+            pbCommentBottomRecyclerScrollClass = pbCommentBottomRecyclerMatch.className
+            pbCommentBottomRecyclerScrollMethod = pbCommentBottomRecyclerMatch.methodName
+            pbCommentBottomRecyclerOwnerField = pbCommentBottomRecyclerMatch.fieldName
+        }
+
         val pbGestureScaleMatch = runRules(
             candidatesWithWhitelist,
             cl,
@@ -4327,6 +4408,12 @@ internal object HookSymbolResolver {
             pbCommentScrollFragmentField = pbCommentScrollFragmentField,
             pbCommentScrollBottomListenerField = pbCommentScrollBottomListenerField,
             pbCommentScrollBottomMethod = pbCommentScrollBottomMethod,
+            pbCommentBottomListScrollClass = pbCommentBottomListScrollClass,
+            pbCommentBottomListScrollMethod = pbCommentBottomListScrollMethod,
+            pbCommentBottomListOwnerField = pbCommentBottomListOwnerField,
+            pbCommentBottomRecyclerScrollClass = pbCommentBottomRecyclerScrollClass,
+            pbCommentBottomRecyclerScrollMethod = pbCommentBottomRecyclerScrollMethod,
+            pbCommentBottomRecyclerOwnerField = pbCommentBottomRecyclerOwnerField,
             pbGestureScaleManagerClass = pbGestureScaleManagerClass,
             pbGestureScaleDispatchMethod = pbGestureScaleDispatchMethod,
             pbGestureScaleListenerSetterMethod = pbGestureScaleListenerSetterMethod,
@@ -11078,6 +11165,7 @@ internal object HookSymbolResolver {
     private fun isTargetAppClassName(name: String): Boolean {
         return name.startsWith("com.baidu.tieba.") ||
             name.startsWith("com.baidu.tbadk.") ||
+            name.startsWith("com.baidu.adp.widget.ListView.") ||
             name.startsWith("com.baidu.searchbox.task.view.mainactivity.")
     }
 
@@ -11332,6 +11420,14 @@ internal object HookSymbolResolver {
                 symbols.pbCommentScrollBottomListenerField != null ||
                 symbols.pbCommentScrollBottomMethod != null
         if (hasPbCommentScrollSymbols && !isPbCommentScrollValid(symbols, cl)) return false
+        val hasPbCommentBottomSymbols =
+            symbols.pbCommentBottomListScrollClass != null ||
+                symbols.pbCommentBottomListScrollMethod != null ||
+                symbols.pbCommentBottomListOwnerField != null ||
+                symbols.pbCommentBottomRecyclerScrollClass != null ||
+                symbols.pbCommentBottomRecyclerScrollMethod != null ||
+                symbols.pbCommentBottomRecyclerOwnerField != null
+        if (hasPbCommentBottomSymbols && !isPbCommentBottomMechanismValid(symbols, cl)) return false
         val hasHomeNativeGlassSortSwitchSymbols =
             symbols.homeNativeGlassSortSwitchBackgroundPaintField != null ||
                 symbols.homeNativeGlassSortSwitchSlideDrawMethod != null ||
@@ -12160,6 +12256,70 @@ internal object HookSymbolResolver {
         }
     }
 
+    private fun isPbCommentBottomMechanismValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+        val listOk = isListBottomScrollValid(
+            symbols.pbCommentBottomListScrollClass,
+            symbols.pbCommentBottomListScrollMethod,
+            symbols.pbCommentBottomListOwnerField,
+            StableTiebaHookPoints.BD_LIST_VIEW_CLASS,
+            cl,
+        ) { method ->
+            method.parameterTypes.size == 4 &&
+                method.parameterTypes[0] == android.widget.AbsListView::class.java &&
+                method.parameterTypes[1] == Int::class.javaPrimitiveType &&
+                method.parameterTypes[2] == Int::class.javaPrimitiveType &&
+                method.parameterTypes[3] == Int::class.javaPrimitiveType
+        }
+        val recyclerOk = isListBottomScrollValid(
+            symbols.pbCommentBottomRecyclerScrollClass,
+            symbols.pbCommentBottomRecyclerScrollMethod,
+            symbols.pbCommentBottomRecyclerOwnerField,
+            StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS,
+            cl,
+        ) { method ->
+            val recyclerViewClass = safeFindClass(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
+            method.parameterTypes.size == 3 &&
+                recyclerViewClass != null &&
+                method.parameterTypes[0] == recyclerViewClass &&
+                method.parameterTypes[1] == Int::class.javaPrimitiveType &&
+                method.parameterTypes[2] == Int::class.javaPrimitiveType
+        }
+        return listOk || recyclerOk
+    }
+
+    private fun isListBottomScrollValid(
+        className: String?,
+        methodName: String?,
+        ownerFieldName: String?,
+        ownerClassName: String,
+        cl: ClassLoader,
+        parameterCheck: (Method) -> Boolean,
+    ): Boolean {
+        if (className.isNullOrBlank() || methodName.isNullOrBlank() || ownerFieldName.isNullOrBlank()) {
+            return false
+        }
+        return try {
+            val targetClass = safeFindClass(className, cl)
+            val ownerClass = safeFindClass(ownerClassName, cl)
+            if (targetClass == null || ownerClass == null) return false
+            val ownerField = targetClass.declaredFields.firstOrNull { field ->
+                !Modifier.isStatic(field.modifiers) &&
+                    field.name == ownerFieldName &&
+                    field.type == ownerClass
+            } ?: return false
+            ownerField.isAccessible = true
+            targetClass.declaredMethods.any { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.name == methodName &&
+                    method.returnType == Void.TYPE &&
+                    parameterCheck(method)
+            }
+        } catch (t: Throwable) {
+            XposedCompat.logD("$TAG: pbCommentBottom validate failed: ${sanitizeScanStatusText(formatScanException(t))}")
+            false
+        }
+    }
+
     private fun isPbGestureScaleValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
         val managerClassName = symbols.pbGestureScaleManagerClass ?: return false
         val dispatchMethodName = symbols.pbGestureScaleDispatchMethod ?: return false
@@ -12919,27 +13079,23 @@ internal object HookSymbolResolver {
             HookFeatureStatus(state = HookFeatureState.DISABLED, missingCritical = forumTopShiftCritical)
         }
 
-        val autoLoadMoreOptional = ArrayList<String>(7)
+        val autoLoadMoreOptional = ArrayList<String>(8)
         if (symbols.autoLoadMoreConfigClass.isNullOrBlank()) {
             autoLoadMoreOptional.add("autoLoadMoreConfigClass")
         }
         if (symbols.autoLoadMoreConfigMethod.isNullOrBlank()) {
             autoLoadMoreOptional.add("autoLoadMoreConfigMethod")
         }
-        if (symbols.pbCommentScrollListenerClass.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollListenerClass")
-        }
-        if (symbols.pbCommentScrollMethod.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollMethod")
-        }
-        if (symbols.pbCommentScrollFragmentField.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollFragmentField")
-        }
-        if (symbols.pbCommentScrollBottomListenerField.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollBottomListenerField")
-        }
-        if (symbols.pbCommentScrollBottomMethod.isNullOrBlank()) {
-            autoLoadMoreOptional.add("pbCommentScrollBottomMethod")
+        val hasListBottomMechanism =
+            !symbols.pbCommentBottomListScrollClass.isNullOrBlank() &&
+                !symbols.pbCommentBottomListScrollMethod.isNullOrBlank() &&
+                !symbols.pbCommentBottomListOwnerField.isNullOrBlank()
+        val hasRecyclerBottomMechanism =
+            !symbols.pbCommentBottomRecyclerScrollClass.isNullOrBlank() &&
+                !symbols.pbCommentBottomRecyclerScrollMethod.isNullOrBlank() &&
+                !symbols.pbCommentBottomRecyclerOwnerField.isNullOrBlank()
+        if (!hasListBottomMechanism && !hasRecyclerBottomMechanism) {
+            autoLoadMoreOptional.add("pbCommentBottomMechanism")
         }
         out[HookFeatureKey.AUTO_LOAD_MORE] = if (autoLoadMoreOptional.isEmpty()) {
             HookFeatureStatus(state = HookFeatureState.FULL)
@@ -13528,6 +13684,7 @@ internal object HookSymbolResolver {
             ${fmt("ForumTopShift", "${symbols.forumBottomSheetViewClass}.${symbols.forumBottomSheetInitScrollMethod}")}
             ${fmt("AutoRefresh", "${PERSONALIZE_PAGE_VIEW_CLASS}.${symbols.autoRefreshTriggerMethod}")}
             ${fmt("AutoLoadMore", "${symbols.autoLoadMoreConfigClass}.${symbols.autoLoadMoreConfigMethod}")}
+            ${fmt("PbCommentBottom", "${symbols.pbCommentBottomListScrollClass}.${symbols.pbCommentBottomListScrollMethod}[${symbols.pbCommentBottomListOwnerField}] / ${symbols.pbCommentBottomRecyclerScrollClass}.${symbols.pbCommentBottomRecyclerScrollMethod}[${symbols.pbCommentBottomRecyclerOwnerField}]")}
             ${fmt("PbGestureScale", "${symbols.pbGestureScaleManagerClass}.${symbols.pbGestureScaleDispatchMethod}/${symbols.pbGestureScaleListenerSetterMethod} -> ${symbols.pbGestureScaleListenerClass}.${symbols.pbGestureScaleListenerOnScaleMethod}")}
             ${fmt("CollectionCore", "${symbols.collectionPresenterField}.${symbols.collectionPresenterListSetterMethod} / ${symbols.collectionModelField}.${symbols.collectionModelListGetterMethod}/${symbols.collectionModelParseMethod}")}
             ${fmt("CollectionAdapter", "${symbols.collectionPresenterAdapterField}.{${symbols.collectionAdapterShowFooterMethod},${symbols.collectionAdapterLoadingMethod},${symbols.collectionAdapterHasMoreMethod}}")}

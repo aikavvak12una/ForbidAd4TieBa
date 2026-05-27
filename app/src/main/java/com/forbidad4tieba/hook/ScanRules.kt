@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AbsListView
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.TextSwitcher
@@ -401,6 +402,129 @@ internal class PbCommentScrollRule(
         return methods.minWithOrNull(
             compareBy<java.lang.reflect.Method>(
                 { if (it.name == "onScrollToBottom") 0 else 1 },
+                { it.name.length },
+                { it.name },
+            ),
+        )
+    }
+}
+
+internal class BdListViewBottomScrollRule(
+    private val listViewClassName: String,
+) : ScanRule() {
+    override val minScore: Int = 100
+    override val minScoreGap: Int = 10
+
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+        val listViewClass = Class.forName(listViewClassName, false, cl)
+        val scanTargets = if (cls.name == listViewClassName) {
+            cls.declaredClasses.asSequence()
+        } else {
+            sequenceOf(cls)
+        }
+        val candidates = scanTargets.mapNotNull { target ->
+            val ownerField = target.declaredFields.firstOrNull { field ->
+                !Modifier.isStatic(field.modifiers) && field.type == listViewClass
+            } ?: return@mapNotNull null
+            val methods = target.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
+            val onScrollCandidates = methods.filter { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 4 &&
+                    AbsListView::class.java.isAssignableFrom(method.parameterTypes[0]) &&
+                    method.parameterTypes[1] == Int::class.javaPrimitiveType &&
+                    method.parameterTypes[2] == Int::class.javaPrimitiveType &&
+                    method.parameterTypes[3] == Int::class.javaPrimitiveType
+            }
+            val onScroll = pickScrollMethod(onScrollCandidates, preferredName = "onScroll")
+                ?: return@mapNotNull null
+            val listType = onScroll.parameterTypes[0]
+            val hasStateCallback = methods.any { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 2 &&
+                    method.parameterTypes[0] == listType &&
+                    method.parameterTypes[1] == Int::class.javaPrimitiveType
+            }
+            if (!hasStateCallback) return@mapNotNull null
+
+            var score = 120
+            if (AbsListView.OnScrollListener::class.java.isAssignableFrom(target)) score += 20
+            if (target.name.startsWith("${listViewClassName}\$")) score += 10
+            if (onScroll.name == "onScroll") score += 8
+            if (ownerField.name.length == 1) score += 4
+            score -= methods.size / 2
+            ScanMatch(target.name, onScroll.name, ownerField.name, score)
+        }
+        return candidates.maxByOrNull { it.score }
+    }
+
+    private fun pickScrollMethod(methods: List<java.lang.reflect.Method>, preferredName: String): java.lang.reflect.Method? {
+        return methods.minWithOrNull(
+            compareBy<java.lang.reflect.Method>(
+                { if (it.name == preferredName) 0 else 1 },
+                { it.name.length },
+                { it.name },
+            ),
+        )
+    }
+}
+
+internal class BdRecyclerViewBottomScrollRule(
+    private val recyclerViewClassName: String,
+) : ScanRule() {
+    override val minScore: Int = 100
+    override val minScoreGap: Int = 10
+
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+        val ownerClass = Class.forName(recyclerViewClassName, false, cl)
+        val recyclerViewClass = Class.forName(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, false, cl)
+        val recyclerScrollListenerClass =
+            Class.forName("${StableTiebaHookPoints.RECYCLER_VIEW_CLASS}\$OnScrollListener", false, cl)
+        val scanTargets = if (cls.name == recyclerViewClassName) {
+            cls.declaredClasses.asSequence()
+        } else {
+            sequenceOf(cls)
+        }
+        val candidates = scanTargets.mapNotNull { target ->
+            val ownerField = target.declaredFields.firstOrNull { field ->
+                !Modifier.isStatic(field.modifiers) && field.type == ownerClass
+            } ?: return@mapNotNull null
+            val methods = target.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
+            val onScrolledCandidates = methods.filter { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 3 &&
+                    method.parameterTypes[0] == recyclerViewClass &&
+                    method.parameterTypes[1] == Int::class.javaPrimitiveType &&
+                    method.parameterTypes[2] == Int::class.javaPrimitiveType
+            }
+            val onScrolled = pickScrollMethod(onScrolledCandidates, preferredName = "onScrolled")
+                ?: return@mapNotNull null
+            val hasStateCallback = methods.any { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 2 &&
+                    method.parameterTypes[0] == recyclerViewClass &&
+                    method.parameterTypes[1] == Int::class.javaPrimitiveType
+            }
+            if (!hasStateCallback) return@mapNotNull null
+
+            var score = 120
+            if (recyclerScrollListenerClass.isAssignableFrom(target)) score += 20
+            if (target.name.startsWith("${recyclerViewClassName}\$")) score += 10
+            if (onScrolled.name == "onScrolled") score += 8
+            if (ownerField.name.length == 1) score += 4
+            score -= methods.size / 2
+            ScanMatch(target.name, onScrolled.name, ownerField.name, score)
+        }
+        return candidates.maxByOrNull { it.score }
+    }
+
+    private fun pickScrollMethod(methods: List<java.lang.reflect.Method>, preferredName: String): java.lang.reflect.Method? {
+        return methods.minWithOrNull(
+            compareBy<java.lang.reflect.Method>(
+                { if (it.name == preferredName) 0 else 1 },
                 { it.name.length },
                 { it.name },
             ),
