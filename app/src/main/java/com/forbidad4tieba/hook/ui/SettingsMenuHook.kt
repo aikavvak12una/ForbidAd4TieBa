@@ -663,18 +663,24 @@ object SettingsMenuHook {
 
     fun ensureInitialScanDialogHook(classLoader: ClassLoader) {
         InitialScanDialogInstaller.ensureInstalled(classLoader) { activity, cl ->
-            maybeShowInitialScanEnvironmentWarning(activity) {
-                startSymbolScanWithDialog(activity, cl, clearUserData = false)
+            startSymbolScanWithDialog(activity, cl, clearUserData = false)
+        }
+    }
+
+    fun ensurePostScanEnvironmentWarningHook() {
+        PostScanEnvironmentWarningInstaller.ensureInstalled { activity ->
+            if (ConfigManager.consumePendingPostScanEnvironmentWarning(activity)) {
+                showEnvironmentWarningDialog(activity) {}
             }
         }
     }
 
-    private fun maybeShowInitialScanEnvironmentWarning(
+    private fun showEnvironmentWarningDialog(
         activity: Activity,
         onConfirmed: () -> Unit,
     ) {
         try {
-            if (AboutInfoManager.environmentRatingLevelForSettings(activity) == 0) {
+            if (!ConfigManager.shouldShowEnvironmentWarningDialog(activity)) {
                 onConfirmed()
                 return
             }
@@ -749,7 +755,7 @@ object SettingsMenuHook {
             }
             dialog.show()
         } catch (t: Throwable) {
-            XposedCompat.logW("[SettingsMenuHook] maybeShowInitialScanEnvironmentWarning failed: ${t.message}")
+            XposedCompat.logW("[SettingsMenuHook] showEnvironmentWarningDialog failed: ${t.message}")
             onConfirmed()
         }
     }
@@ -1182,10 +1188,7 @@ object SettingsMenuHook {
                             { showRuntimeEnvironmentDialog(context) }
                         } else {
                             versionClick@{
-                                if (
-                                    AboutInfoManager.environmentRatingLevelForSettings(context) == 2 &&
-                                    ConfigManager.isRestrictedFeatureUnlockBlocked(context)
-                                ) {
+                                if (ConfigManager.isRestrictedFeatureUnlockBlocked(context)) {
                                     Toast.makeText(
                                         context,
                                         UiText.Settings.RESTRICTED_FEATURE_UNSUPPORTED_ENVIRONMENT,
@@ -1687,6 +1690,9 @@ object SettingsMenuHook {
                     },
                 )
                 ConfigManager.applyScanAvailability(activity, HookSymbolResolver.featureStatusMap(symbols))
+                if (symbols.source != "unsupported") {
+                    ConfigManager.markPostScanEnvironmentWarningPending(activity)
+                }
                 source = symbols.source
                 scanSymbols = symbols
             } catch (t: Throwable) {

@@ -44,10 +44,11 @@ object ConfigManager {
     val SUPPORTED_MODEL_SCORE_AUTO_PERCENTILES = intArrayOf(5, 10, 15, 20)
     private const val MODEL_SCORE_THRESHOLD_SCALE = 6
     private const val KEY_USER_SETTINGS_VERSION_CODE = "user_settings_version_code"
-    private const val KEY_REMOTE_RESTRICT_HIDDEN_FEATURES_ON_ENV_LEVEL2 =
-        "remote_restrict_hidden_features_on_env_level2"
-    private const val KEY_REMOTE_ENVIRONMENT_RATING_LEVEL = "remote_environment_rating_level"
+    private const val KEY_REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE =
+        "remote_environment_warning_dialog_active"
     private const val KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE = "remote_restricted_features_lock_active"
+    private const val KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING =
+        "pending_post_scan_environment_warning"
 
     const val KEY_BLOCK_AD = "block_ad"
     const val KEY_SIMPLIFY_HOME_TABS = "simplify_home_tabs"
@@ -129,6 +130,7 @@ object ConfigManager {
     @Volatile private var scanFeatureAvailability: Map<String, Boolean> = emptyMap()
 
     @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
+    @Volatile private var environmentWarningDialogActive: Boolean = false
     @Volatile var areRestrictedFeaturesUnlocked: Boolean = false
     @Volatile var isAdBlockEnabled: Boolean = false
     @Volatile var isHomeTopTabsCustomEnabled: Boolean = false
@@ -217,6 +219,8 @@ object ConfigManager {
 
             restrictedFeatureUnlockBlockedByRemote = getModuleStatePrefs(appCtx)
                 .getBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, false)
+            environmentWarningDialogActive = getModuleStatePrefs(appCtx)
+                .getBoolean(KEY_REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE, false)
             if (restrictedFeatureUnlockBlockedByRemote && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
                 p.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
             }
@@ -468,29 +472,49 @@ object ConfigManager {
         return getModuleStatePrefs(context).getBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, false)
     }
 
-    fun applyRemoteEnvironmentRestriction(
+    fun shouldShowEnvironmentWarningDialog(context: Context): Boolean {
+        if (environmentWarningDialogActive) return true
+        return getModuleStatePrefs(context).getBoolean(KEY_REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE, false)
+    }
+
+    fun markPostScanEnvironmentWarningPending(context: Context) {
+        getModuleStatePrefs(context).edit()
+            .putBoolean(KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, true)
+            .apply()
+    }
+
+    fun hasPendingPostScanEnvironmentWarning(context: Context): Boolean {
+        return getModuleStatePrefs(context).getBoolean(KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, false)
+    }
+
+    fun consumePendingPostScanEnvironmentWarning(context: Context): Boolean {
+        val statePrefs = getModuleStatePrefs(context)
+        if (!statePrefs.getBoolean(KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, false)) return false
+        statePrefs.edit()
+            .putBoolean(KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, false)
+            .apply()
+        return shouldShowEnvironmentWarningDialog(context)
+    }
+
+    fun applyRemoteEnvironmentControls(
         context: Context,
-        restrictHiddenFeaturesOnEnvironmentLevel2: Boolean,
-        environmentRatingLevel: Int,
+        showWarningDialog: Boolean,
+        lockHiddenFeatures: Boolean,
     ) {
         val appCtx = context.applicationContext ?: context
-        val locked = restrictHiddenFeaturesOnEnvironmentLevel2 && environmentRatingLevel == 2
         getModuleStatePrefs(appCtx).edit()
-            .putBoolean(
-                KEY_REMOTE_RESTRICT_HIDDEN_FEATURES_ON_ENV_LEVEL2,
-                restrictHiddenFeaturesOnEnvironmentLevel2,
-            )
-            .putInt(KEY_REMOTE_ENVIRONMENT_RATING_LEVEL, environmentRatingLevel)
-            .putBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, locked)
+            .putBoolean(KEY_REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE, showWarningDialog)
+            .putBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, lockHiddenFeatures)
             .apply()
 
         val p = getPrefs(appCtx)
-        restrictedFeatureUnlockBlockedByRemote = locked
-        if (locked && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
+        environmentWarningDialogActive = showWarningDialog
+        restrictedFeatureUnlockBlockedByRemote = lockHiddenFeatures
+        if (lockHiddenFeatures && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
             p.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
         }
         areRestrictedFeaturesUnlocked =
-            p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) && !locked
+            p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) && !lockHiddenFeatures
         refreshRestrictedRuntimeFlags(p)
     }
 
