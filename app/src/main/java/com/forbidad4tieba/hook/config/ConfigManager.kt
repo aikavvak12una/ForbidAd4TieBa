@@ -80,6 +80,8 @@ object ConfigManager {
     const val KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED = "home_native_glass_shadow_enabled"
     const val KEY_DISABLE_AUTO_REFRESH = "disable_auto_refresh"
     const val KEY_ENABLE_AUTO_LOAD_MORE = "enable_auto_load_more"
+    const val KEY_ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
+    const val KEY_PB_LIKE_AUTO_REPLY_TEXT = "pb_like_auto_reply_text"
     const val KEY_DEFAULT_NOTIFY_TAB = "default_notify_tab"
     const val KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE = "enable_default_original_image"
     const val KEY_ENABLE_AUTO_SIGN_IN = "enable_auto_sign_in"
@@ -157,6 +159,8 @@ object ConfigManager {
     @Volatile var isHomeNativeGlassShadowEnabled: Boolean = DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED
     @Volatile var isAutoRefreshDisabled: Boolean = false
     @Volatile var isAutoLoadMoreEnabled: Boolean = false
+    @Volatile var isPbLikeAutoReplyEnabled: Boolean = false
+    @Volatile var pbLikeAutoReplyText: String = ""
     @Volatile var isPbScrollCoalesceEnabled: Boolean = false
     @Volatile var isDefaultNotifyTabEnabled: Boolean = true
     @Volatile var isDefaultOriginalImageEnabled: Boolean = false
@@ -234,6 +238,8 @@ object ConfigManager {
             refreshHomeNativeGlassStyle(p)
             isAutoRefreshDisabled = featureBoolean(p, KEY_DISABLE_AUTO_REFRESH)
             isAutoLoadMoreEnabled = featureBoolean(p, KEY_ENABLE_AUTO_LOAD_MORE)
+            isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)
+            pbLikeAutoReplyText = p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty()
             isDefaultNotifyTabEnabled = isScanFeatureAvailable(KEY_DEFAULT_NOTIFY_TAB)
             isDefaultOriginalImageEnabled = featureBoolean(p, KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE)
             isCleanShareTrackingParamsEnabled = isScanFeatureAvailable(KEY_CLEAN_SHARE_TRACKING_PARAMS)
@@ -345,6 +351,8 @@ object ConfigManager {
             KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED -> refreshHomeNativeGlassStyle(p)
             KEY_DISABLE_AUTO_REFRESH -> isAutoRefreshDisabled = featureBoolean(p, key)
             KEY_ENABLE_AUTO_LOAD_MORE -> isAutoLoadMoreEnabled = featureBoolean(p, key)
+            KEY_ENABLE_PB_LIKE_AUTO_REPLY -> isPbLikeAutoReplyEnabled = restrictedBoolean(p, key)
+            KEY_PB_LIKE_AUTO_REPLY_TEXT -> pbLikeAutoReplyText = p.getString(key, "")?.trim().orEmpty()
             KEY_DEFAULT_NOTIFY_TAB -> isDefaultNotifyTabEnabled = isScanFeatureAvailable(KEY_DEFAULT_NOTIFY_TAB)
             KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE -> isDefaultOriginalImageEnabled = featureBoolean(p, key)
             KEY_CLEAN_SHARE_TRACKING_PARAMS -> isCleanShareTrackingParamsEnabled = isScanFeatureAvailable(KEY_CLEAN_SHARE_TRACKING_PARAMS)
@@ -506,6 +514,7 @@ object ConfigManager {
         isTitanPatchBlockEnabled = performanceChildBoolean(p, KEY_BLOCK_TITAN_PATCH, performanceOptimizationEnabled, false)
         isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(p, KEY_PRIVATE_READ_RECEIPT_INVISIBLE)
         isPostModelScoreFilterEnabled = restrictedBoolean(p, KEY_FILTER_POST_MODEL_SCORE)
+        isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)
         isDetailedLoggingEnabled = restrictedBoolean(p, KEY_ENABLE_DETAILED_LOGGING)
     }
 
@@ -617,6 +626,8 @@ object ConfigManager {
         refreshHomeNativeGlassStyle(p)
         isAutoRefreshDisabled = featureBoolean(p, KEY_DISABLE_AUTO_REFRESH)
         isAutoLoadMoreEnabled = featureBoolean(p, KEY_ENABLE_AUTO_LOAD_MORE)
+        isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)
+        pbLikeAutoReplyText = p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty()
         isDefaultNotifyTabEnabled = isScanFeatureAvailable(KEY_DEFAULT_NOTIFY_TAB)
         isDefaultOriginalImageEnabled = featureBoolean(p, KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE)
         isCleanShareTrackingParamsEnabled = isScanFeatureAvailable(KEY_CLEAN_SHARE_TRACKING_PARAMS)

@@ -45,7 +45,7 @@ android {
         }
     }
 
-    val moduleVersionCode = 23
+    val moduleVersionCode = 24
     val minSupportedUserSettingsVersionCode = 20
 
     defaultConfig {
