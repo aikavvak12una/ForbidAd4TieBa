@@ -265,6 +265,9 @@ class MainHook : XposedModule() {
                 if (needsInitialScanDialog) {
                     XposedCompat.log("[MainHook] > Symbols unavailable, installing initial scan dialog hook")
                     SettingsMenuHook.ensureInitialScanDialogHook(cl)
+                } else if (ConfigManager.hasPendingPostScanEnvironmentWarning(appContext)) {
+                    XposedCompat.log("[MainHook] > Installing post-scan environment warning hook")
+                    SettingsMenuHook.ensurePostScanEnvironmentWarningHook()
                 }
                 try {
                     AboutInfoManager.fetchAtStartupIfNeeded(appContext)

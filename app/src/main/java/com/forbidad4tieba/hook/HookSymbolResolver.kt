@@ -3332,6 +3332,9 @@ internal object HookSymbolResolver {
                 forceRescan = true,
                 showToast = false,
             )
+            if (symbols.source != "unsupported") {
+                ConfigManager.markPostScanEnvironmentWarningPending(appCtx)
+            }
             val versionWarning = formatScanVersionWarning(symbols)
             when {
                 versionWarning != null -> toastOnMain(appCtx, versionWarning)

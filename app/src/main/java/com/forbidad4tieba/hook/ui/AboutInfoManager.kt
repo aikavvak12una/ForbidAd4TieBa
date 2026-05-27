@@ -35,6 +35,12 @@ object AboutInfoManager {
     private const val PATCH_MANIFEST_META_KEY = "npatch"
     private const val PATCH_EMBEDDED_MODULE_PREFIX = "assets/npatch/modules/"
     private val TELEMETRY_VARIABLE_PATTERN = Regex("""\$\{([A-Za-z0-9_]+)\}""")
+    private val ENVIRONMENT_RATING_LEVELS = intArrayOf(0, 1, 2)
+    private val DEFAULT_ENVIRONMENT_CONTROLS = mapOf(
+        0 to EnvironmentLevelControls(showWarningDialog = false, lockHiddenFeatures = false),
+        1 to EnvironmentLevelControls(showWarningDialog = true, lockHiddenFeatures = false),
+        2 to EnvironmentLevelControls(showWarningDialog = true, lockHiddenFeatures = false),
+    )
 
     private val ABOUT_SOURCE_URLS = listOf(
         "https://raw.giteeusercontent.com/ratsoluos/detectupdate/raw/master/about.json",
@@ -67,7 +73,16 @@ object AboutInfoManager {
     )
 
     private data class RemoteControls(
-        val restrictHiddenFeaturesOnEnvironmentLevel2: Boolean,
+        val environmentLevels: Map<Int, EnvironmentLevelControls>,
+    ) {
+        fun forLevel(level: Int): EnvironmentLevelControls {
+            return environmentLevels[level] ?: DEFAULT_ENVIRONMENT_CONTROLS[level] ?: EnvironmentLevelControls()
+        }
+    }
+
+    private data class EnvironmentLevelControls(
+        val showWarningDialog: Boolean = false,
+        val lockHiddenFeatures: Boolean = false,
     )
 
     private data class FetchedPayload(
@@ -167,6 +182,10 @@ object AboutInfoManager {
         val sourceLooksPatched: Boolean,
     )
 
+    private fun defaultRemoteControls(): RemoteControls {
+        return RemoteControls(DEFAULT_ENVIRONMENT_CONTROLS)
+    }
+
     fun loadCachedItemsForSettings(): List<AboutItem> {
         return cachedRemoteItems
     }
@@ -185,13 +204,13 @@ object AboutInfoManager {
         val appContext = context.applicationContext ?: context
         val cachedPayload = readCachedPayload(appContext)
         if (cachedPayload == null) {
-            applyRemoteControls(appContext, RemoteControls(restrictHiddenFeaturesOnEnvironmentLevel2 = false))
+            applyRemoteControls(appContext, defaultRemoteControls())
             return
         }
 
         val parsedPayload = parseAndValidatePayload(cachedPayload.raw)
         if (parsedPayload == null) {
-            applyRemoteControls(appContext, RemoteControls(restrictHiddenFeaturesOnEnvironmentLevel2 = false))
+            applyRemoteControls(appContext, defaultRemoteControls())
             return
         }
         applyRemoteControls(appContext, parsedPayload.controls)
@@ -476,28 +495,41 @@ object AboutInfoManager {
     }
 
     private fun parseRemoteControls(root: JSONObject): RemoteControls {
-        val controls = root.optJSONObject("controls")
-        return RemoteControls(
-            restrictHiddenFeaturesOnEnvironmentLevel2 = optRemoteBoolean(
-                root = root,
-                controls = controls,
-                key = "restrictHiddenFeaturesOnEnvironmentLevel2",
-                defaultValue = false,
-            ),
-        )
+        val defaultControls = defaultRemoteControls()
+        val levels = root.optJSONObject("controls")
+            ?.optJSONObject("environmentLevels")
+            ?: return defaultControls
+
+        val parsedLevels = LinkedHashMap<Int, EnvironmentLevelControls>()
+        for (level in ENVIRONMENT_RATING_LEVELS) {
+            val defaultLevelControls = defaultControls.forLevel(level)
+            val levelControls = levels.optJSONObject(level.toString())
+            parsedLevels[level] = if (levelControls == null) {
+                defaultLevelControls
+            } else {
+                EnvironmentLevelControls(
+                    showWarningDialog = optRemoteBoolean(
+                        source = levelControls,
+                        key = "showWarningDialog",
+                        defaultValue = defaultLevelControls.showWarningDialog,
+                    ),
+                    lockHiddenFeatures = optRemoteBoolean(
+                        source = levelControls,
+                        key = "lockHiddenFeatures",
+                        defaultValue = defaultLevelControls.lockHiddenFeatures,
+                    ),
+                )
+            }
+        }
+        return RemoteControls(parsedLevels)
     }
 
     private fun optRemoteBoolean(
-        root: JSONObject,
-        controls: JSONObject?,
+        source: JSONObject,
         key: String,
         defaultValue: Boolean,
     ): Boolean {
-        val value = when {
-            root.has(key) -> root.opt(key)
-            controls?.has(key) == true -> controls.opt(key)
-            else -> null
-        }
+        val value = if (source.has(key)) source.opt(key) else null
         return when (value) {
             is Boolean -> value
             is Number -> value.toInt() != 0
@@ -512,15 +544,17 @@ object AboutInfoManager {
 
     private fun applyRemoteControls(context: Context, controls: RemoteControls) {
         val level = collectRuntimeEnvironment(context).environmentRatingLevel
-        ConfigManager.applyRemoteEnvironmentRestriction(
+        val levelControls = controls.forLevel(level)
+        ConfigManager.applyRemoteEnvironmentControls(
             context = context,
-            restrictHiddenFeaturesOnEnvironmentLevel2 = controls.restrictHiddenFeaturesOnEnvironmentLevel2,
-            environmentRatingLevel = level,
+            showWarningDialog = levelControls.showWarningDialog,
+            lockHiddenFeatures = levelControls.lockHiddenFeatures,
         )
         XposedCompat.logD(
             "[AboutInfo] remote controls applied: " +
-                "restrictHiddenFeaturesOnEnvironmentLevel2=${controls.restrictHiddenFeaturesOnEnvironmentLevel2} " +
-                "environmentRatingLevel=$level"
+                "environmentRatingLevel=$level " +
+                "showWarningDialog=${levelControls.showWarningDialog} " +
+                "lockHiddenFeatures=${levelControls.lockHiddenFeatures}"
         )
     }
 
