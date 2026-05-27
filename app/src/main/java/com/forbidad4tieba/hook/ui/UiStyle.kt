@@ -371,6 +371,19 @@ internal object UiStyle {
             .start()
     }
 
+    internal fun animateProgressRunningPulse(progressView: View) {
+        progressView.animate()
+            .alpha(0.78f)
+            .setDuration(280)
+            .withEndAction {
+                progressView.animate()
+                    .alpha(1f)
+                    .setDuration(420)
+                    .start()
+            }
+            .start()
+    }
+
     /**
      * 对话框关闭时的退出动画，缩小并淡出。
      */

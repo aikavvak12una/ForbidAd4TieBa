@@ -73,6 +73,8 @@ object SettingsMenuHook {
     private const val RESTRICTED_FEATURE_UNLOCK_TAP_COUNT = 7
     private const val RESTRICTED_FEATURE_CONFIRM_DELAY_SECONDS = 5
     private const val INITIAL_SCAN_ENVIRONMENT_WARNING_DELAY_SECONDS = 10
+    private const val SCAN_RUNNING_PULSE_INITIAL_DELAY_MS = 900L
+    private const val SCAN_RUNNING_PULSE_INTERVAL_MS = 1800L
     private const val REQUEST_HOME_NATIVE_GLASS_IMAGE = 0x4E47
     private const val HOME_NATIVE_GLASS_SOURCE_DIR_NAME = "home_native_glass"
     private const val HOME_NATIVE_GLASS_SOURCE_FILE_PREFIX = "source_"
@@ -1437,6 +1439,7 @@ object SettingsMenuHook {
         var progressSteps = 0
         val scanLogLines = Collections.synchronizedList(mutableListOf<String>())
         var scanExceptionLine: String? = null
+        var scanPulseRunnable: Runnable? = null
 
         fun appendScanLog(line: String) {
             scanLogLines.add(line)
@@ -1489,6 +1492,25 @@ object SettingsMenuHook {
             )
         }
         root.addView(progressBar)
+
+        fun stopScanPulse() {
+            scanPulseRunnable?.let { ui.removeCallbacks(it) }
+            scanPulseRunnable = null
+            progressBar.animate().cancel()
+            progressBar.alpha = 1f
+        }
+
+        fun startScanPulse() {
+            if (scanPulseRunnable != null) return
+            scanPulseRunnable = object : Runnable {
+                override fun run() {
+                    if (finished) return
+                    UiStyle.animateProgressRunningPulse(progressBar)
+                    ui.postDelayed(this, SCAN_RUNNING_PULSE_INTERVAL_MS)
+                }
+            }
+            ui.postDelayed(scanPulseRunnable!!, SCAN_RUNNING_PULSE_INITIAL_DELAY_MS)
+        }
 
         // 状态文本。
         val statusView = TextView(activity).apply {
@@ -1570,6 +1592,9 @@ object SettingsMenuHook {
                 }
             } else false
         }
+        dialog.setOnDismissListener {
+            stopScanPulse()
+        }
         dialog.setOnShowListener {
             dialog.window?.let { window ->
                 applyUnifiedDialogCardStyle(window, density)
@@ -1620,6 +1645,7 @@ object SettingsMenuHook {
 
         updateStatus(UiText.Settings.SCAN_PREPARING)
         progressBar.setProgress(0.02f, animated = false)
+        startScanPulse()
 
         thread(name = "tbhook-symbol-scan", isDaemon = true) {
             var source = "unsupported"
@@ -1671,6 +1697,7 @@ object SettingsMenuHook {
                 appendScanLog("${UiText.Settings.RUNTIME_ENVIRONMENT}:\n$runtimeEnvironmentJson")
                 ui.post {
                     finished = true
+                    stopScanPulse()
                     progressBar.setProgress(1f)
                     UiStyle.animateProgressComplete(progressBar)
                     dialog.setCancelable(true)
