@@ -240,10 +240,13 @@ object UiText {
         const val SCAN_VERSION_LABEL = "贴吧"
         const val SCAN_MODULE_LABEL = "模块"
         const val SCAN_LOG_COPIED = "扫描日志已复制"
+        const val INITIAL_SCAN_ENVIRONMENT_WARNING_TITLE = "⚠️ 环境提示"
+        const val INITIAL_SCAN_ENVIRONMENT_WARNING_MESSAGE = "预留正文文本"
         const val RESTRICTED_FEATURE_WARNING_TITLE = "注意"
         const val RESTRICTED_FEATURE_WARNING_MESSAGE = "使用隐藏功能可能导致应用出现卡顿、崩溃、账号被封禁等异常，点击确认代表您已知悉并承担可能带来的后果"
         const val RESTRICTED_FEATURE_CONFIRM = "确认"
         const val RESTRICTED_FEATURE_UNLOCKED = "已显示被隐藏的功能"
+        const val RESTRICTED_FEATURE_UNSUPPORTED_ENVIRONMENT = "当前环境不支持"
 
 
         const val HOME_TOP_TAB_DIALOG_TITLE = SIMPLIFY_HOME_TAB_LABEL
@@ -271,6 +274,7 @@ object UiText {
         fun withUnsupportedSuffix(label: String): String = "$label$UNSUPPORTED_SUFFIX"
         fun withPartialSuffix(label: String): String = "$label$PARTIAL_SUFFIX"
         fun restrictedFeatureConfirmWaiting(seconds: Int): String = "$RESTRICTED_FEATURE_CONFIRM (${seconds}s)"
+        fun initialScanEnvironmentWarningConfirmWaiting(seconds: Int): String = "$BUTTON_OK (${seconds}s)"
         fun scanUserDataCleared(count: Int): String = "模块用户数据清理完成：$count 项"
         fun scanUserDataClearFailed(count: Int): String = "模块用户数据清理失败：$count 项"
         fun clearModuleDataPartialFailed(count: Int): String = "模块数据清理存在失败项：$count 项，正在重启贴吧"

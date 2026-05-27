@@ -37,6 +37,7 @@ object AboutInfoManager {
     private val TELEMETRY_VARIABLE_PATTERN = Regex("""\$\{([A-Za-z0-9_]+)\}""")
 
     private val ABOUT_SOURCE_URLS = listOf(
+        "https://raw.giteeusercontent.com/ratsoluos/detectupdate/raw/master/about.json",
         "https://raw.githubusercontent.com/aikavvak12una/ForbidAd4TieBa/refs/heads/main/about.json",
         "https://github.com/aikavvak12una/ForbidAd4TieBa/raw/refs/heads/main/about.json",
     )
@@ -62,6 +63,11 @@ object AboutInfoManager {
     private data class JsonPayload(
         val items: List<JsonAboutItem>,
         val telemetry: List<TelemetryConfig>,
+        val controls: RemoteControls,
+    )
+
+    private data class RemoteControls(
+        val restrictHiddenFeaturesOnEnvironmentLevel2: Boolean,
     )
 
     private data class FetchedPayload(
@@ -171,6 +177,26 @@ object AboutInfoManager {
             .toString(2)
     }
 
+    fun environmentRatingLevelForSettings(context: Context): Int {
+        return collectRuntimeEnvironment(context).environmentRatingLevel
+    }
+
+    fun applyCachedRuntimeControlsIfNeeded(context: Context) {
+        val appContext = context.applicationContext ?: context
+        val cachedPayload = readCachedPayload(appContext)
+        if (cachedPayload == null) {
+            applyRemoteControls(appContext, RemoteControls(restrictHiddenFeaturesOnEnvironmentLevel2 = false))
+            return
+        }
+
+        val parsedPayload = parseAndValidatePayload(cachedPayload.raw)
+        if (parsedPayload == null) {
+            applyRemoteControls(appContext, RemoteControls(restrictHiddenFeaturesOnEnvironmentLevel2 = false))
+            return
+        }
+        applyRemoteControls(appContext, parsedPayload.controls)
+    }
+
     fun fetchAtStartupIfNeeded(context: Context) {
         val appContext = context.applicationContext ?: context
         synchronized(this) {
@@ -216,6 +242,9 @@ object AboutInfoManager {
                         bytes = remotePayload.bytes,
                         elapsedMs = remotePayload.elapsedMs,
                     )
+                    parseAndValidatePayload(remotePayload.raw)?.let { parsedRemote ->
+                        applyRemoteControls(appContext, parsedRemote.controls)
+                    }
                 }
             }.onFailure { t ->
                 XposedCompat.log("[AboutInfo] startup fetch crashed: ${t.message}")
@@ -308,6 +337,7 @@ object AboutInfoManager {
             "[AboutInfo] payload accepted: source=cache url=cache " +
                 "bytes=$bytes elapsedMs=$elapsedMs cacheAgeMs=$cacheAgeMs itemCount=${items.size}"
         )
+        applyRemoteControls(context, parsedPayload.controls)
         reportTelemetryIfNeeded(context, parsedPayload.telemetry)
     }
 
@@ -437,11 +467,61 @@ object AboutInfoManager {
             return JsonPayload(
                 items = parsed,
                 telemetry = parseTelemetryConfig(root),
+                controls = parseRemoteControls(root),
             )
         } catch (t: Throwable) {
             XposedCompat.logW("[AboutInfo] parse exception: ${t.message}")
             return null
         }
+    }
+
+    private fun parseRemoteControls(root: JSONObject): RemoteControls {
+        val controls = root.optJSONObject("controls")
+        return RemoteControls(
+            restrictHiddenFeaturesOnEnvironmentLevel2 = optRemoteBoolean(
+                root = root,
+                controls = controls,
+                key = "restrictHiddenFeaturesOnEnvironmentLevel2",
+                defaultValue = false,
+            ),
+        )
+    }
+
+    private fun optRemoteBoolean(
+        root: JSONObject,
+        controls: JSONObject?,
+        key: String,
+        defaultValue: Boolean,
+    ): Boolean {
+        val value = when {
+            root.has(key) -> root.opt(key)
+            controls?.has(key) == true -> controls.opt(key)
+            else -> null
+        }
+        return when (value) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> when (value.trim().lowercase(Locale.ROOT)) {
+                "1", "true", "yes", "on", "enabled" -> true
+                "0", "false", "no", "off", "disabled" -> false
+                else -> defaultValue
+            }
+            else -> defaultValue
+        }
+    }
+
+    private fun applyRemoteControls(context: Context, controls: RemoteControls) {
+        val level = collectRuntimeEnvironment(context).environmentRatingLevel
+        ConfigManager.applyRemoteEnvironmentRestriction(
+            context = context,
+            restrictHiddenFeaturesOnEnvironmentLevel2 = controls.restrictHiddenFeaturesOnEnvironmentLevel2,
+            environmentRatingLevel = level,
+        )
+        XposedCompat.logD(
+            "[AboutInfo] remote controls applied: " +
+                "restrictHiddenFeaturesOnEnvironmentLevel2=${controls.restrictHiddenFeaturesOnEnvironmentLevel2} " +
+                "environmentRatingLevel=$level"
+        )
     }
 
     private fun parseTelemetryConfig(root: JSONObject): List<TelemetryConfig> {

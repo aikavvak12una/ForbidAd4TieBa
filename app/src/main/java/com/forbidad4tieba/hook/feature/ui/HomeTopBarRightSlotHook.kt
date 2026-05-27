@@ -62,7 +62,7 @@ object HomeTopBarRightSlotHook {
                 }
                 mod.hook(method).intercept { chain ->
                     val result = chain.proceed()
-                    if (ConfigManager.isAdBlockEnabled) {
+                    if (ConfigManager.shouldStabilizeHomeChrome()) {
                         applySlotUiState(chain.thisObject)
                     }
                     result

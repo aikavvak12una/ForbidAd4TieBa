@@ -72,6 +72,7 @@ import kotlin.system.exitProcess
 object SettingsMenuHook {
     private const val RESTRICTED_FEATURE_UNLOCK_TAP_COUNT = 7
     private const val RESTRICTED_FEATURE_CONFIRM_DELAY_SECONDS = 5
+    private const val INITIAL_SCAN_ENVIRONMENT_WARNING_DELAY_SECONDS = 10
     private const val REQUEST_HOME_NATIVE_GLASS_IMAGE = 0x4E47
     private const val HOME_NATIVE_GLASS_SOURCE_DIR_NAME = "home_native_glass"
     private const val HOME_NATIVE_GLASS_SOURCE_FILE_PREFIX = "source_"
@@ -660,7 +661,94 @@ object SettingsMenuHook {
 
     fun ensureInitialScanDialogHook(classLoader: ClassLoader) {
         InitialScanDialogInstaller.ensureInstalled(classLoader) { activity, cl ->
-            startSymbolScanWithDialog(activity, cl, clearUserData = false)
+            maybeShowInitialScanEnvironmentWarning(activity) {
+                startSymbolScanWithDialog(activity, cl, clearUserData = false)
+            }
+        }
+    }
+
+    private fun maybeShowInitialScanEnvironmentWarning(
+        activity: Activity,
+        onConfirmed: () -> Unit,
+    ) {
+        try {
+            if (AboutInfoManager.environmentRatingLevelForSettings(activity) == 0) {
+                onConfirmed()
+                return
+            }
+
+            val tokens = UiStyle.tokens(activity)
+            val density = activity.resources.displayMetrics.density
+            val padding = (16 * density).toInt()
+            val messageView = TextView(activity).apply {
+                text = UiText.Settings.INITIAL_SCAN_ENVIRONMENT_WARNING_MESSAGE
+                textSize = 14f
+                setTextColor(tokens.textPrimary)
+                setPadding(padding, padding, padding, padding)
+            }
+            val scroll = ScrollView(activity).apply {
+                addView(
+                    messageView,
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    )
+                )
+            }
+
+            val handler = Handler(Looper.getMainLooper())
+            var countdownRunnable: Runnable? = null
+            val dialog = AlertDialog.Builder(activity, dialogThemeFor(activity))
+                .setTitle(UiText.Settings.INITIAL_SCAN_ENVIRONMENT_WARNING_TITLE)
+                .setView(scroll)
+                .setPositiveButton(
+                    UiText.Settings.initialScanEnvironmentWarningConfirmWaiting(
+                        INITIAL_SCAN_ENVIRONMENT_WARNING_DELAY_SECONDS
+                    ),
+                    null,
+                )
+                .create()
+            dialog.setCancelable(false)
+            dialog.setCanceledOnTouchOutside(false)
+
+            dialog.setOnShowListener {
+                dialog.window?.let { window ->
+                    applyUnifiedDialogCardStyle(window, density)
+                    UiStyle.animateDialogEntry(window.decorView, density)
+                }
+                val confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                confirmButton.setTextColor(tokens.danger)
+                var secondsLeft = INITIAL_SCAN_ENVIRONMENT_WARNING_DELAY_SECONDS
+                confirmButton.text = UiText.Settings.initialScanEnvironmentWarningConfirmWaiting(secondsLeft)
+                confirmButton.updateButtonEnabledState(false)
+
+                countdownRunnable = object : Runnable {
+                    override fun run() {
+                        secondsLeft -= 1
+                        if (secondsLeft <= 0) {
+                            confirmButton.text = UiText.Settings.BUTTON_OK
+                            confirmButton.updateButtonEnabledState(true)
+                        } else {
+                            confirmButton.text =
+                                UiText.Settings.initialScanEnvironmentWarningConfirmWaiting(secondsLeft)
+                            handler.postDelayed(this, 1000L)
+                        }
+                    }
+                }
+                handler.postDelayed(countdownRunnable!!, 1000L)
+
+                confirmButton.setOnClickListener {
+                    dialog.dismiss()
+                    onConfirmed()
+                }
+            }
+            dialog.setOnDismissListener {
+                countdownRunnable?.let { handler.removeCallbacks(it) }
+            }
+            dialog.show()
+        } catch (t: Throwable) {
+            XposedCompat.logW("[SettingsMenuHook] maybeShowInitialScanEnvironmentWarning failed: ${t.message}")
+            onConfirmed()
         }
     }
 
@@ -1078,7 +1166,18 @@ object SettingsMenuHook {
                         if (restrictedFeaturesUnlocked) {
                             { showRuntimeEnvironmentDialog(context) }
                         } else {
-                            {
+                            versionClick@{
+                                if (
+                                    AboutInfoManager.environmentRatingLevelForSettings(context) == 2 &&
+                                    ConfigManager.isRestrictedFeatureUnlockBlocked(context)
+                                ) {
+                                    Toast.makeText(
+                                        context,
+                                        UiText.Settings.RESTRICTED_FEATURE_UNSUPPORTED_ENVIRONMENT,
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@versionClick
+                                }
                                 versionTapCount += 1
                                 if (versionTapCount >= RESTRICTED_FEATURE_UNLOCK_TAP_COUNT) {
                                     versionTapCount = 0

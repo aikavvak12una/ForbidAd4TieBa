@@ -115,6 +115,7 @@ object TitanPatchBlockHook {
         // 慢路径：通过 TitanIniter 的 context 直接读 prefs，load() 阶段可用。
         try {
             val context = getContextFromLoaderManager(loaderManager) ?: return false
+            if (ConfigManager.isRestrictedFeatureUnlockBlocked(context)) return false
             val prefs = context.getSharedPreferences(
                 ConfigManager.USER_SETTINGS_PREFS_NAME,
                 android.content.Context.MODE_PRIVATE

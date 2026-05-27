@@ -186,6 +186,9 @@ class MainHook : XposedModule() {
                         XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
                         val isMainProcess = processName == Constants.TARGET_PACKAGE
                         if (isMainProcess) {
+                            runStartupTask("apply cached runtime controls") {
+                                AboutInfoManager.applyCachedRuntimeControlsIfNeeded(app)
+                            }
                             runStartupTask("trim model score stats") {
                                 CustomPostModelScoreStats.trimToPostLimitAsync()
                             }

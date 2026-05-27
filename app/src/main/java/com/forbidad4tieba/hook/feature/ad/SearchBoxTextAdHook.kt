@@ -74,7 +74,7 @@ object SearchBoxTextAdHook {
 
             installHomeSearchBoxMarker(mod, ownerMethods)
             mod.hook(method).intercept { chain ->
-                if (!ConfigManager.isAdBlockEnabled) return@intercept chain.proceed()
+                if (!ConfigManager.shouldStabilizeHomeChrome()) return@intercept chain.proceed()
 
                 if (!isHomeSearchBox(chain.thisObject)) return@intercept chain.proceed()
 

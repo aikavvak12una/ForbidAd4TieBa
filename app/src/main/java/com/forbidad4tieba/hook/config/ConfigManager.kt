@@ -44,6 +44,10 @@ object ConfigManager {
     val SUPPORTED_MODEL_SCORE_AUTO_PERCENTILES = intArrayOf(5, 10, 15, 20)
     private const val MODEL_SCORE_THRESHOLD_SCALE = 6
     private const val KEY_USER_SETTINGS_VERSION_CODE = "user_settings_version_code"
+    private const val KEY_REMOTE_RESTRICT_HIDDEN_FEATURES_ON_ENV_LEVEL2 =
+        "remote_restrict_hidden_features_on_env_level2"
+    private const val KEY_REMOTE_ENVIRONMENT_RATING_LEVEL = "remote_environment_rating_level"
+    private const val KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE = "remote_restricted_features_lock_active"
 
     const val KEY_BLOCK_AD = "block_ad"
     const val KEY_SIMPLIFY_HOME_TABS = "simplify_home_tabs"
@@ -122,6 +126,7 @@ object ConfigManager {
     @Volatile private var appContext: Context? = null
     @Volatile private var scanFeatureAvailability: Map<String, Boolean> = emptyMap()
 
+    @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
     @Volatile var areRestrictedFeaturesUnlocked: Boolean = false
     @Volatile var isAdBlockEnabled: Boolean = false
     @Volatile var isHomeTopTabsCustomEnabled: Boolean = false
@@ -206,7 +211,13 @@ object ConfigManager {
             prefs = p
             ensureUserSettingsVersion(p)
 
-            areRestrictedFeaturesUnlocked = p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)
+            restrictedFeatureUnlockBlockedByRemote = getModuleStatePrefs(appCtx)
+                .getBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, false)
+            if (restrictedFeatureUnlockBlockedByRemote && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
+                p.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
+            }
+            areRestrictedFeaturesUnlocked =
+                p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) && !restrictedFeatureUnlockBlockedByRemote
             refreshRestrictedRuntimeFlags(p)
             isHomeTopTabsCustomEnabled = featureBoolean(p, KEY_CUSTOM_HOME_TOP_TABS)
             isHomeTopTabMaterialEnabled = p.getBoolean(KEY_HOME_TOP_TAB_MATERIAL, true)
@@ -240,7 +251,7 @@ object ConfigManager {
             isPostUnfollowedForumFilterEnabled = p.getBoolean(KEY_FILTER_POST_UNFOLLOWED_FORUM, false)
             isPostForumKeywordFilterEnabled = p.getBoolean(KEY_FILTER_POST_FORUM_KEYWORD, false)
             postForumKeywordList = parseKeywordList(p.getString(KEY_FILTER_POST_FORUM_KEYWORD_LIST, ""))
-            isPostModelScoreFilterEnabled = p.getBoolean(KEY_FILTER_POST_MODEL_SCORE, false)
+            isPostModelScoreFilterEnabled = restrictedBoolean(p, KEY_FILTER_POST_MODEL_SCORE)
             postModelScoreThresholds = parseModelScoreThresholds(p.getString(KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, ""))
             postModelScoreAutoPercentiles = parseModelScoreAutoPercentiles(
                 p.getString(KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES, "")
@@ -249,7 +260,7 @@ object ConfigManager {
                 KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT,
                 DEFAULT_MODEL_SCORE_STATS_POST_LIMIT
             ).coerceAtLeast(MIN_MODEL_SCORE_STATS_POST_LIMIT)
-            isDetailedLoggingEnabled = p.getBoolean(KEY_ENABLE_DETAILED_LOGGING, false)
+            isDetailedLoggingEnabled = restrictedBoolean(p, KEY_ENABLE_DETAILED_LOGGING)
 
 
             p.registerOnSharedPreferenceChangeListener(listener)
@@ -285,7 +296,10 @@ object ConfigManager {
     private fun updateMemory(p: SharedPreferences, key: String?) {
         when (key) {
             KEY_RESTRICTED_FEATURES_UNLOCKED -> {
-                areRestrictedFeaturesUnlocked = p.getBoolean(key, false)
+                if (restrictedFeatureUnlockBlockedByRemote && p.getBoolean(key, false)) {
+                    p.edit().putBoolean(key, false).apply()
+                }
+                areRestrictedFeaturesUnlocked = p.getBoolean(key, false) && !restrictedFeatureUnlockBlockedByRemote
                 refreshRestrictedRuntimeFlags(p)
             }
             KEY_BLOCK_AD -> refreshRestrictedRuntimeFlags(p)
@@ -365,7 +379,7 @@ object ConfigManager {
             KEY_FILTER_POST_UNFOLLOWED_FORUM -> isPostUnfollowedForumFilterEnabled = p.getBoolean(key, false)
             KEY_FILTER_POST_FORUM_KEYWORD -> isPostForumKeywordFilterEnabled = p.getBoolean(key, false)
             KEY_FILTER_POST_FORUM_KEYWORD_LIST -> postForumKeywordList = parseKeywordList(p.getString(key, ""))
-            KEY_FILTER_POST_MODEL_SCORE -> isPostModelScoreFilterEnabled = p.getBoolean(key, false)
+            KEY_FILTER_POST_MODEL_SCORE -> isPostModelScoreFilterEnabled = restrictedBoolean(p, key)
             KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS -> postModelScoreThresholds = parseModelScoreThresholds(p.getString(key, ""))
             KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES -> postModelScoreAutoPercentiles = parseModelScoreAutoPercentiles(
                 p.getString(key, "")
@@ -374,7 +388,7 @@ object ConfigManager {
                 key,
                 DEFAULT_MODEL_SCORE_STATS_POST_LIMIT
             ).coerceAtLeast(MIN_MODEL_SCORE_STATS_POST_LIMIT)
-            KEY_ENABLE_DETAILED_LOGGING -> isDetailedLoggingEnabled = p.getBoolean(key, false)
+            KEY_ENABLE_DETAILED_LOGGING -> isDetailedLoggingEnabled = restrictedBoolean(p, key)
 
         }
     }
@@ -405,23 +419,70 @@ object ConfigManager {
         return isDetailedLoggingEnabled
     }
 
+    fun shouldStabilizeHomeChrome(): Boolean {
+        return isAdBlockEnabled || isHomeNativeGlassRuntimeActive()
+    }
+
+    fun shouldForceFeedUiOpt(): Boolean {
+        return isFeedUiOptForced ||
+            (isHomeNativeGlassRuntimeActive() && isScanFeatureAvailable(KEY_FORCE_FEED_UI_OPT))
+    }
+
+    private fun isHomeNativeGlassRuntimeActive(): Boolean {
+        return isHomeNativeGlassEnabled && homeNativeGlassBackgroundImagePath.isNotBlank()
+    }
+
     fun isAutoSignInEnabled(context: Context): Boolean {
         val p = getPrefs(context)
         return p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) &&
+            !isRestrictedFeatureUnlockBlocked(context) &&
             p.getBoolean(KEY_ENABLE_AUTO_SIGN_IN, false) &&
             isScanFeatureAvailable(KEY_ENABLE_AUTO_SIGN_IN)
     }
 
     fun isRestrictedFeaturesUnlocked(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)
+        return getPrefs(context).getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) &&
+            !isRestrictedFeatureUnlockBlocked(context)
     }
 
     fun setRestrictedFeaturesUnlocked(context: Context, unlocked: Boolean) {
         val p = getPrefs(context)
+        val finalUnlocked = unlocked && !isRestrictedFeatureUnlockBlocked(context)
         p.edit()
-            .putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, unlocked)
+            .putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, finalUnlocked)
             .apply()
-        areRestrictedFeaturesUnlocked = unlocked
+        areRestrictedFeaturesUnlocked = finalUnlocked
+        refreshRestrictedRuntimeFlags(p)
+    }
+
+    fun isRestrictedFeatureUnlockBlocked(context: Context): Boolean {
+        if (restrictedFeatureUnlockBlockedByRemote) return true
+        return getModuleStatePrefs(context).getBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, false)
+    }
+
+    fun applyRemoteEnvironmentRestriction(
+        context: Context,
+        restrictHiddenFeaturesOnEnvironmentLevel2: Boolean,
+        environmentRatingLevel: Int,
+    ) {
+        val appCtx = context.applicationContext ?: context
+        val locked = restrictHiddenFeaturesOnEnvironmentLevel2 && environmentRatingLevel == 2
+        getModuleStatePrefs(appCtx).edit()
+            .putBoolean(
+                KEY_REMOTE_RESTRICT_HIDDEN_FEATURES_ON_ENV_LEVEL2,
+                restrictHiddenFeaturesOnEnvironmentLevel2,
+            )
+            .putInt(KEY_REMOTE_ENVIRONMENT_RATING_LEVEL, environmentRatingLevel)
+            .putBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, locked)
+            .apply()
+
+        val p = getPrefs(appCtx)
+        restrictedFeatureUnlockBlockedByRemote = locked
+        if (locked && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
+            p.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
+        }
+        areRestrictedFeaturesUnlocked =
+            p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) && !locked
         refreshRestrictedRuntimeFlags(p)
     }
 
@@ -444,10 +505,12 @@ object ConfigManager {
         isFeedUiOptForced = performanceChildBoolean(p, KEY_FORCE_FEED_UI_OPT, performanceOptimizationEnabled, true)
         isTitanPatchBlockEnabled = performanceChildBoolean(p, KEY_BLOCK_TITAN_PATCH, performanceOptimizationEnabled, false)
         isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(p, KEY_PRIVATE_READ_RECEIPT_INVISIBLE)
+        isPostModelScoreFilterEnabled = restrictedBoolean(p, KEY_FILTER_POST_MODEL_SCORE)
+        isDetailedLoggingEnabled = restrictedBoolean(p, KEY_ENABLE_DETAILED_LOGGING)
     }
 
     private fun restrictedBoolean(p: SharedPreferences, key: String): Boolean {
-        return areRestrictedFeaturesUnlocked && featureBoolean(p, key)
+        return areRestrictedFeaturesUnlocked && !restrictedFeatureUnlockBlockedByRemote && featureBoolean(p, key)
     }
 
     private fun performanceChildBoolean(

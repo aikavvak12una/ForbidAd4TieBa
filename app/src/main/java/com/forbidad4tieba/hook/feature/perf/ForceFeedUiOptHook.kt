@@ -10,7 +10,7 @@ object ForceFeedUiOptHook {
     @Volatile private var hooked = false
 
     fun hook(cl: ClassLoader) {
-        if (!ConfigManager.isFeedUiOptForced) {
+        if (!ConfigManager.shouldForceFeedUiOpt()) {
             XposedCompat.logD("[ForceFeedUiOptHook] skipped: config disabled")
             return
         }
@@ -33,7 +33,7 @@ object ForceFeedUiOptHook {
             }
             method.isAccessible = true
             mod.hook(method).intercept { chain ->
-                if (ConfigManager.isFeedUiOptForced) return@intercept true
+                if (ConfigManager.shouldForceFeedUiOpt()) return@intercept true
                 chain.proceed()
             }
             XposedCompat.log("[ForceFeedUiOptHook] hook INSTALLED: isFeedUIOpt() -> true")
