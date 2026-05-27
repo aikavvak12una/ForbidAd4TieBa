@@ -108,6 +108,7 @@ object AboutInfoManager {
                 "xposedFrameworkVersionCode" -> environment.xposedFrameworkVersionCode
                 "xposedFrameworkProperties" -> environment.xposedFrameworkProperties
                 "xposedFrameworkCapabilities" -> environment.xposedFrameworkCapabilities.joinToString(",")
+                "environmentRatingLevel" -> environment.environmentRatingLevel.toString()
                 "runtimeKind" -> environment.runtimeKind
                 "patchMode" -> environment.patchMode
                 else -> null
@@ -132,6 +133,7 @@ object AboutInfoManager {
         val xposedFrameworkVersionCode: String,
         val xposedFrameworkProperties: String,
         val xposedFrameworkCapabilities: List<String>,
+        val environmentRatingLevel: Int,
         val runtimeKind: String,
         val patchMode: String,
     ) {
@@ -146,6 +148,7 @@ object AboutInfoManager {
                 .put("xposedFrameworkVersionCode", xposedFrameworkVersionCode)
                 .put("xposedFrameworkProperties", xposedFrameworkProperties)
                 .put("xposedFrameworkCapabilities", JSONArray(xposedFrameworkCapabilities))
+                .put("environmentRatingLevel", environmentRatingLevel)
                 .put("runtimeKind", runtimeKind)
                 .put("patchMode", patchMode)
         }
@@ -727,6 +730,7 @@ object AboutInfoManager {
         val module = XposedCompat.module
         val frameworkProperties = runCatching { module?.frameworkProperties }.getOrNull()
         val frameworkName = runCatching { module?.frameworkName }.getOrNull().orUnknown()
+        val patchMode = collectPatchMode(context)
 
         return RuntimeEnvironment(
             tiebaVersionName = collectTiebaVersionName(context),
@@ -738,8 +742,9 @@ object AboutInfoManager {
             xposedFrameworkVersionCode = runCatching { module?.frameworkVersionCode }.getOrNull()?.toString().orUnknown(),
             xposedFrameworkProperties = frameworkProperties?.toString().orUnknown(),
             xposedFrameworkCapabilities = formatFrameworkCapabilities(frameworkProperties),
+            environmentRatingLevel = classifyEnvironmentRatingLevel(frameworkProperties, patchMode),
             runtimeKind = classifyRuntimeKind(frameworkName),
-            patchMode = collectPatchMode(context),
+            patchMode = patchMode,
         )
     }
 
@@ -774,6 +779,14 @@ object AboutInfoManager {
             out.add("PROP_RT_API_PROTECTION")
         }
         return out
+    }
+
+    private fun classifyEnvironmentRatingLevel(properties: Long?, patchMode: String): Int {
+        return when {
+            properties != null && (properties and XposedInterface.PROP_CAP_SYSTEM) != 0L -> 0
+            patchMode == "integrated" -> 2
+            else -> 1
+        }
     }
 
     private fun classifyHostSource(sourceDir: String?): String {
