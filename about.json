@@ -9,8 +9,21 @@
     }
   ],
   "controls": {
-    "restrictHiddenFeaturesOnEnvironmentLevel2": false
-  },
+  "environmentLevels": {
+    "0": {
+      "showWarningDialog": false,
+      "lockHiddenFeatures": false
+    },
+    "1": {
+      "showWarningDialog": true,
+      "lockHiddenFeatures": false
+    },
+    "2": {
+      "showWarningDialog": true,
+      "lockHiddenFeatures": false
+    }
+  }
+},
   "telemetry": [
     {
       "name": "usage_daily",
