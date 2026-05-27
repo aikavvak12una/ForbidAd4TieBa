@@ -113,6 +113,7 @@ object HomeNativeGlassHook {
     private val homeCardComponentViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val cardComponentAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val cardComponentBootstrapScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val homeFeedCardGlassTargets = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val richTextReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val chromeGlassOriginalStates = Collections.synchronizedMap(WeakHashMap<View, ChromeGlassOriginalState>())
     private val imageContainerRadiusStates = Collections.synchronizedMap(WeakHashMap<View, Float>())
@@ -288,6 +289,7 @@ object HomeNativeGlassHook {
         try {
             recyclerViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
             runtimeTargets = resolveRuntimeTargets(symbols)
+            prewarmBackgroundCacheIfNeeded()
             val pageConstructors = installPageConstructors(cl)
             val bindHooks = if (bindMethodName != null) {
                 installFeedCardBind(cl, bindMethodName)
@@ -430,8 +432,16 @@ object HomeNativeGlassHook {
         }
         bindMethod.isAccessible = true
         mod.hook(bindMethod).intercept { chain ->
-            val result = chain.proceed()
             val card = chain.thisObject as? View
+            if (
+                card != null &&
+                ConfigManager.isHomeNativeGlassEnabled &&
+                hasPageBackgroundOverride() &&
+                isInsideHomeNativePage(card)
+            ) {
+                rememberHomeFeedCardGlassTargets(card)
+            }
+            val result = chain.proceed()
             if (card != null) {
                 applyCardStyleSafely(card)
                 card.post { applyCardStyleSafely(card) }
@@ -1735,6 +1745,9 @@ object HomeNativeGlassHook {
                     val colorResId = (chain.args.getOrNull(0) as? Number)?.toInt()
                         ?: return@intercept chain.proceed()
                     val view = readEmManagerView(manager) ?: return@intercept chain.proceed()
+                    if (interceptHomeFeedCardNativeBackgroundWrite(view)) {
+                        return@intercept null
+                    }
                     if (interceptPbCommentNativeBackgroundWrite(view)) {
                         afterEmManagerPbBackgroundWrite(view)
                         return@intercept null
@@ -1756,8 +1769,48 @@ object HomeNativeGlassHook {
                 }
                 installedCount++
             }
+            installedCount += installHomeFeedCardEmManagerBackgroundBlock(emManagerClass)
         }
 
+        return installedCount
+    }
+
+    private fun installHomeFeedCardEmManagerBackgroundBlock(emManagerClass: Class<*>): Int {
+        val mod = XposedCompat.module ?: return 0
+        var installedCount = 0
+        XposedCompat.findMethodOrNull(
+            emManagerClass,
+            "setBackGroundSelectorColor",
+            java.lang.Integer.TYPE,
+        )?.let { method ->
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val manager = chain.thisObject ?: return@intercept chain.proceed()
+                val view = readEmManagerView(manager) ?: return@intercept chain.proceed()
+                if (interceptHomeFeedCardNativeBackgroundWrite(view)) {
+                    return@intercept null
+                }
+                chain.proceed()
+            }
+            installedCount++
+        }
+        XposedCompat.findMethodOrNull(
+            emManagerClass,
+            "setBackGroundSelectorColor",
+            java.lang.Integer.TYPE,
+            java.lang.Integer.TYPE,
+        )?.let { method ->
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val manager = chain.thisObject ?: return@intercept chain.proceed()
+                val view = readEmManagerView(manager) ?: return@intercept chain.proceed()
+                if (interceptHomeFeedCardNativeBackgroundWrite(view)) {
+                    return@intercept null
+                }
+                chain.proceed()
+            }
+            installedCount++
+        }
         return installedCount
     }
 
@@ -2508,10 +2561,13 @@ object HomeNativeGlassHook {
                 return
             }
 
-            markFeedListPath(page, clearBackgrounds = hasPageBackground)
+            markFeedListPath(page, clearBackgrounds = true)
             if (backgroundDrawable != null) {
                 clearHomeNativeDefaultBackgrounds(page)
                 page.background = backgroundDrawable
+            } else {
+                clearHomeNativeDefaultBackgrounds(page)
+                applyHomeNativePageFallbackBackground(page)
             }
             applyHomeChromeGlassSafely(page)
         } catch (t: Throwable) {
@@ -2718,6 +2774,7 @@ object HomeNativeGlassHook {
         card.setBackgroundColor(Color.TRANSPARENT)
         clearCardNativePressVisuals(card)
         clearNestedRecyclerBackgrounds(card)
+        rememberHomeFeedCardGlassTargets(card)
 
         val radius = card.resources.displayMetrics.density * effectiveCardRadiusDp()
 
@@ -2734,6 +2791,83 @@ object HomeNativeGlassHook {
             setGlassBackground(card, page, radius)
         }
         clearCardNativePressVisuals(card)
+    }
+
+    private fun rememberHomeFeedCardGlassTargets(card: View) {
+        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        val group = card as? ViewGroup
+        val backgroundHolder = group?.getChildAt(0)
+        if (backgroundHolder != null) {
+            rememberHomeFeedCardGlassTarget(backgroundHolder)
+            val innerHolder = (backgroundHolder as? ViewGroup)?.let { holder ->
+                firstNonRecyclerChild(holder)
+            }
+            if (innerHolder != null) {
+                rememberHomeFeedCardGlassTarget(innerHolder)
+            }
+        } else {
+            rememberHomeFeedCardGlassTarget(card)
+        }
+    }
+
+    private fun rememberHomeFeedCardGlassTarget(view: View) {
+        homeFeedCardGlassTargets[view] = true
+    }
+
+    private fun interceptHomeFeedCardNativeBackgroundWrite(view: View): Boolean {
+        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
+        if (!homeFeedCardGlassTargets.containsKey(view) && view.background !is CardGlassDrawable) return false
+        if (view.background !is CardGlassDrawable) {
+            findHomeFeedCardAncestor(view)?.let { card ->
+                card.post { applyCardStyleSafely(card) }
+            }
+        }
+        return true
+    }
+
+    private fun findHomeFeedCardAncestor(view: View): View? {
+        if (isFeedCardView(view)) return view
+        var current = view.parent
+        var depth = 0
+        while (current is View && depth < HOME_FEED_CARD_BACKGROUND_PARENT_SCAN_DEPTH) {
+            if (isFeedCardView(current)) return current
+            current = current.parent
+            depth++
+        }
+        return null
+    }
+
+    private fun applyHomeNativePageFallbackBackground(page: View) {
+        if (page.background is CenterCropBitmapDrawable) return
+        val color = resolveHomeNativePageFallbackColor(page)
+        if ((page.background as? ColorDrawable)?.color == color) return
+        page.background = ColorDrawable(color)
+    }
+
+    private fun resolveHomeNativePageFallbackColor(view: View): Int {
+        val base = if (usesDarkMaterial(view)) {
+            Color.rgb(18, 20, 24)
+        } else {
+            Color.rgb(246, 248, 250)
+        }
+        val tint = ConfigManager.homeNativeGlassTintColor
+        if (tint == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR) return base
+        val alpha = (
+            255f * ConfigManager.homeNativeGlassTintAlphaPercent.coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ) / 100f
+            ).toInt().coerceIn(0, 255)
+        return blendOpaqueColor(base, tint, alpha)
+    }
+
+    private fun blendOpaqueColor(base: Int, overlay: Int, overlayAlpha: Int): Int {
+        val inv = 255 - overlayAlpha
+        return Color.rgb(
+            (Color.red(base) * inv + Color.red(overlay) * overlayAlpha) / 255,
+            (Color.green(base) * inv + Color.green(overlay) * overlayAlpha) / 255,
+            (Color.blue(base) * inv + Color.blue(overlay) * overlayAlpha) / 255,
+        )
     }
 
     private fun applyHomeFeedImageContainerRadius(card: View) {
@@ -6032,7 +6166,7 @@ object HomeNativeGlassHook {
             when (method.name) {
                 "onChildViewAttachedToWindow" -> {
                     (args?.getOrNull(0) as? View)?.let { child ->
-                        scheduleHomeRecyclerChildReadableTextRefresh(child)
+                        handleHomeRecyclerChildAttached(child)
                     }
                     null
                 }
@@ -6045,16 +6179,26 @@ object HomeNativeGlassHook {
         }
         runCatching {
             addListenerMethod.invoke(recycler, listener)
-            refreshAttachedHomeRecyclerChildrenReadableText(recycler)
+            refreshAttachedHomeRecyclerChildren(recycler)
         }.onFailure {
             homeRecyclerChildAttachRefreshInstalled.remove(recycler)
         }
     }
 
-    private fun refreshAttachedHomeRecyclerChildrenReadableText(recycler: View) {
+    private fun refreshAttachedHomeRecyclerChildren(recycler: View) {
         val group = recycler as? ViewGroup ?: return
         for (index in 0 until group.childCount) {
-            scheduleHomeRecyclerChildReadableTextRefresh(group.getChildAt(index) ?: continue)
+            handleHomeRecyclerChildAttached(group.getChildAt(index) ?: continue)
+        }
+    }
+
+    private fun handleHomeRecyclerChildAttached(child: View) {
+        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (isFeedCardView(child)) {
+            applyCardStyleSafely(child)
+            child.post { applyCardStyleSafely(child) }
+        } else {
+            scheduleHomeRecyclerChildReadableTextRefresh(child)
         }
     }
 
@@ -6252,6 +6396,30 @@ object HomeNativeGlassHook {
         return CenterCropBitmapDrawable(bitmap)
     }
 
+    private fun prewarmBackgroundCacheIfNeeded() {
+        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        val path = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
+        if (path.isEmpty()) return
+        val context = ConfigManager.getAppContext() ?: return
+        val metrics = context.resources.displayMetrics
+        val targetWidth = metrics.widthPixels.coerceAtLeast(1)
+        val targetHeight = metrics.heightPixels.coerceAtLeast(1)
+        if (findCachedBackgroundEntry(path, targetWidth, targetHeight) != null) return
+        val key = "prewarm|" + backgroundDecodeKey(path, targetWidth, targetHeight)
+        if (!backgroundDecodeKeys.add(key)) return
+        thread(name = "tbhook-glass-bg-prewarm", isDaemon = true) {
+            try {
+                decodeBackgroundEntry(path, targetWidth, targetHeight)
+            } catch (t: Throwable) {
+                if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
+                    XposedCompat.logD { "$TAG background image prewarm failed: ${t.message}" }
+                }
+            } finally {
+                backgroundDecodeKeys.remove(key)
+            }
+        }
+    }
+
     private fun findCachedBackgroundEntry(path: String, targetWidth: Int, targetHeight: Int): CachedBackgroundBitmap? {
         val trimmedPath = path.trim()
         if (trimmedPath.isEmpty()) return null
@@ -6334,6 +6502,20 @@ object HomeNativeGlassHook {
         val blurCacheFile = java.io.File(blurCachePath)
         val blurCacheLastModified = runCatching { blurCacheFile.lastModified() }.getOrDefault(0L)
         val blurCacheLength = runCatching { blurCacheFile.length() }.getOrDefault(0L)
+        cachedBackgroundBitmap?.let { cached ->
+            if (
+                cached.path == trimmedPath &&
+                cached.lastModified == lastModified &&
+                cached.length == length &&
+                cached.blurCachePath == blurCachePath &&
+                cached.blurCacheLastModified == blurCacheLastModified &&
+                cached.blurCacheLength == blurCacheLength &&
+                cached.targetWidth >= targetWidth &&
+                cached.targetHeight >= targetHeight
+            ) {
+                return cached
+            }
+        }
 
         val canDecode = runCatching { file.isFile && length > 0L }.getOrDefault(false)
         val bitmap = if (canDecode) {
@@ -6713,6 +6895,7 @@ object HomeNativeGlassHook {
     private const val NOISE_TEXTURE_SIZE = 64
     private const val HOME_TOP_BACKGROUND_CLEAR_DEPTH = 2
     private const val HOME_TOP_RECYCLER_CHILD_CLEAR_DEPTH = 1
+    private const val HOME_FEED_CARD_BACKGROUND_PARENT_SCAN_DEPTH = 4
     private const val HOME_IMAGE_CONTAINER_RADIUS_SCAN_DEPTH = 8
     private const val PB_COMMENT_TOP_CONTAINER_CLEAR_DEPTH = 2
     private const val PB_COMMENT_HOST_CLEAR_DEPTH = 5

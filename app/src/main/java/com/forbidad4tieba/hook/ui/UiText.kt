@@ -129,7 +129,7 @@ object UiText {
         fun homeNativeGlassTintColorSwatch(index: Int): String = "动态取色色块 $index"
 
         const val AUTO_LOAD_MORE_LABEL = "预加载"
-        const val AUTO_LOAD_MORE_DESC = "浏览信息流和帖子评论时自动静默加载下一页，滑动卡顿尝试关闭此功能"
+        const val AUTO_LOAD_MORE_DESC = "浏览信息流和帖子评论时自动静默加载下一页\n*滑动卡顿尝试关闭此功能"
         const val DISABLE_AUTO_REFRESH_LABEL = "禁止自动刷新"
         const val DISABLE_AUTO_REFRESH_DESC = "避免首页被强制重置刷新列表"
         const val DISABLE_PB_GESTURE_FONT_SCALE_LABEL = "禁用调整字号手势"
@@ -162,7 +162,7 @@ object UiText {
         const val FORCE_LOW_END_DEVICE_CONFIG_LABEL = "强制低端机精简"
         const val FORCE_LOW_END_DEVICE_CONFIG_DESC = "强制低端机优化开关和禁用列表生效，关闭动画、图片预取、Home 数据预取、WebView proxy 等"
         const val BLOCK_TITAN_PATCH_LABEL = "禁用热修复"
-        const val BLOCK_TITAN_PATCH_DESC = "阻止热修复框架加载补丁并清除已下载的补丁文件\n如无异常，保持为关闭状态"
+        const val BLOCK_TITAN_PATCH_DESC = "阻止热修复框架加载补丁并清除已下载的补丁文件\n*如无异常，保持为关闭状态"
         const val PRIVATE_READ_RECEIPT_INVISIBLE_LABEL = "拦截已读检测"
         const val PRIVATE_READ_RECEIPT_INVISIBLE_DESC = "仅在回复后标记对面信息为已读状态"
         const val DEFAULT_ORIGINAL_IMAGE_LABEL = "默认查看原图"
