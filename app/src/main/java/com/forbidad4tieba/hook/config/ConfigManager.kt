@@ -4,8 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
 import com.forbidad4tieba.hook.BuildConfig
-import com.forbidad4tieba.hook.HookFeatureState
-import com.forbidad4tieba.hook.HookFeatureStatus
+import com.forbidad4tieba.hook.symbol.model.HookFeatureState
+import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -128,84 +128,95 @@ object ConfigManager {
     @Volatile private var prefs: SharedPreferences? = null
     @Volatile private var appContext: Context? = null
     @Volatile private var scanFeatureAvailability: Map<String, Boolean> = emptyMap()
+    @Volatile private var settingsSnapshot: SettingsSnapshot = SettingsSnapshot()
+    @Volatile private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
     @Volatile private var environmentWarningDialogActive: Boolean = false
-    @Volatile var areRestrictedFeaturesUnlocked: Boolean = false
-    @Volatile var isAdBlockEnabled: Boolean = false
-    @Volatile var isHomeTopTabsCustomEnabled: Boolean = false
-    @Volatile var isHomeTopTabMaterialEnabled: Boolean = true
-    @Volatile var isHomeTopTabRecommendEnabled: Boolean = true
-    @Volatile var isHomeTopTabLiveEnabled: Boolean = true
-    @Volatile var isHomeTopTabFollowedEnabled: Boolean = true
-    @Volatile var isHomeTabAutoHideEnabled: Boolean = false
-    @Volatile var isBottomTabsCustomEnabled: Boolean = false
-    @Volatile var isBottomTabHomeEnabled: Boolean = true
-    @Volatile var isBottomTabEnterForumEnabled: Boolean = true
-    @Volatile var isBottomTabRetailStoreEnabled: Boolean = true
-    @Volatile var isBottomTabMessageEnabled: Boolean = true
-    @Volatile var isBottomTabMineEnabled: Boolean = true
-    @Volatile var isEnterForumWebFilterEnabled: Boolean = false
-    @Volatile var isOpenWebLinkInSystemBrowserEnabled: Boolean = false
-    @Volatile var isHomeNativeGlassEnabled: Boolean = false
-    @Volatile var isHomeTabDynamicTintEnabled: Boolean = false
-    @Volatile var homeNativeGlassBackgroundImagePath: String = DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH
-    @Volatile var homeNativeGlassBlurCacheImagePath: String = DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH
-    @Volatile var homeNativeGlassTextPaletteLight: String = DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE
-    @Volatile var homeNativeGlassTextPaletteDark: String = DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE
-    @Volatile var homeNativeGlassTintColor: Int = DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
-    @Volatile var homeNativeGlassTintAlphaPercent: Int = DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
-    @Volatile var homeNativeGlassCardBlurPercent: Int = DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
-    @Volatile var homeNativeGlassCardRadiusDp: Int = DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP
-    @Volatile var isHomeNativeGlassStrokeEnabled: Boolean = DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
-    @Volatile var isHomeNativeGlassShadowEnabled: Boolean = DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED
-    @Volatile var isAutoRefreshDisabled: Boolean = false
-    @Volatile var isAutoLoadMoreEnabled: Boolean = false
-    @Volatile var isPbLikeAutoReplyEnabled: Boolean = false
-    @Volatile var pbLikeAutoReplyText: String = ""
-    @Volatile var isPbScrollCoalesceEnabled: Boolean = false
-    @Volatile var isDefaultNotifyTabEnabled: Boolean = true
-    @Volatile var isDefaultOriginalImageEnabled: Boolean = false
-    @Volatile var isCleanShareTrackingParamsEnabled: Boolean = true
-    @Volatile var isAiComponentsDisabled: Boolean = false
-    @Volatile var isCustomPostFilterEnabled: Boolean = false
-    @Volatile var isLocationComponentsDisabled: Boolean = false
-    @Volatile var isAdSdkComponentsDisabled: Boolean = false
-    @Volatile var isHeavyFeatureComponentsDisabled: Boolean = false
-    @Volatile var isVideoComponentsDisabled: Boolean = false
-    @Volatile var isMonitorSyncComponentsDisabled: Boolean = false
-    @Volatile var isUpdateDownloadComponentsDisabled: Boolean = false
-    @Volatile var isPbPerformanceModeEnabled: Boolean = false
-    @Volatile var isFeedUiOptForced: Boolean = false
-    @Volatile var isHostPerformanceFlagsForced: Boolean = false
-    @Volatile var isApsarasScheduleDisabled: Boolean = false
-    @Volatile var isFlutterPreinitDisabled: Boolean = false
-    @Volatile var isLowEndDeviceConfigForced: Boolean = false
-    @Volatile var isTitanPatchBlockEnabled: Boolean = false
-    @Volatile var isPrivateReadReceiptInvisibleEnabled: Boolean = false
-    @Volatile var isPostVoteFilterEnabled: Boolean = false
-    @Volatile var isPostVideoFilterEnabled: Boolean = false
-    @Volatile var isPostReplyFilterEnabled: Boolean = false
-    @Volatile var isPostHotFilterEnabled: Boolean = false
-    @Volatile var isPostGoodsFilterEnabled: Boolean = false
-    @Volatile var isPostGameBookingFilterEnabled: Boolean = false
-    @Volatile var isPostHelpFilterEnabled: Boolean = false
-    @Volatile var isPostScoreFilterEnabled: Boolean = false
-    @Volatile var isPostLiveFilterEnabled: Boolean = false
-    @Volatile var isPostRecommendForumFilterEnabled: Boolean = false
-    @Volatile var isPostUnfollowedForumFilterEnabled: Boolean = false
-    @Volatile var isPostForumKeywordFilterEnabled: Boolean = false
-    @Volatile var postForumKeywordList: List<String> = emptyList()
-    @Volatile var isPostModelScoreFilterEnabled: Boolean = false
-    @Volatile var postModelScoreThresholds: List<ModelScoreThreshold> = emptyList()
-    @Volatile var postModelScoreAutoPercentiles: Map<String, Int> = emptyMap()
-    @Volatile var postModelScoreStatsPostLimit: Int = DEFAULT_MODEL_SCORE_STATS_POST_LIMIT
-    @Volatile var isDetailedLoggingEnabled: Boolean = false
+    val areRestrictedFeaturesUnlocked: Boolean get() = settingsSnapshot.areRestrictedFeaturesUnlocked
+    val isAdBlockEnabled: Boolean get() = settingsSnapshot.isAdBlockEnabled
+    val isHomeTopTabsCustomEnabled: Boolean get() = settingsSnapshot.isHomeTopTabsCustomEnabled
+    val isHomeTopTabMaterialEnabled: Boolean get() = settingsSnapshot.isHomeTopTabMaterialEnabled
+    val isHomeTopTabRecommendEnabled: Boolean get() = settingsSnapshot.isHomeTopTabRecommendEnabled
+    val isHomeTopTabLiveEnabled: Boolean get() = settingsSnapshot.isHomeTopTabLiveEnabled
+    val isHomeTopTabFollowedEnabled: Boolean get() = settingsSnapshot.isHomeTopTabFollowedEnabled
+    val isHomeTabAutoHideEnabled: Boolean get() = settingsSnapshot.isHomeTabAutoHideEnabled
+    val isBottomTabsCustomEnabled: Boolean get() = settingsSnapshot.isBottomTabsCustomEnabled
+    val isBottomTabHomeEnabled: Boolean get() = settingsSnapshot.isBottomTabHomeEnabled
+    val isBottomTabEnterForumEnabled: Boolean get() = settingsSnapshot.isBottomTabEnterForumEnabled
+    val isBottomTabRetailStoreEnabled: Boolean get() = settingsSnapshot.isBottomTabRetailStoreEnabled
+    val isBottomTabMessageEnabled: Boolean get() = settingsSnapshot.isBottomTabMessageEnabled
+    val isBottomTabMineEnabled: Boolean get() = settingsSnapshot.isBottomTabMineEnabled
+    val isEnterForumWebFilterEnabled: Boolean get() = settingsSnapshot.isEnterForumWebFilterEnabled
+    val isOpenWebLinkInSystemBrowserEnabled: Boolean
+        get() = settingsSnapshot.isOpenWebLinkInSystemBrowserEnabled
+    val isHomeNativeGlassEnabled: Boolean get() = settingsSnapshot.isHomeNativeGlassEnabled
+    val isHomeTabDynamicTintEnabled: Boolean get() = settingsSnapshot.isHomeTabDynamicTintEnabled
+    val homeNativeGlassBackgroundImagePath: String
+        get() = settingsSnapshot.homeNativeGlassBackgroundImagePath
+    var homeNativeGlassBlurCacheImagePath: String
+        get() = settingsSnapshot.homeNativeGlassBlurCacheImagePath
+        set(value) {
+            replaceSettingsSnapshot(settingsSnapshot.copy(homeNativeGlassBlurCacheImagePath = value))
+        }
+    val homeNativeGlassTextPaletteLight: String get() = settingsSnapshot.homeNativeGlassTextPaletteLight
+    val homeNativeGlassTextPaletteDark: String get() = settingsSnapshot.homeNativeGlassTextPaletteDark
+    val homeNativeGlassTintColor: Int get() = settingsSnapshot.homeNativeGlassTintColor
+    val homeNativeGlassTintAlphaPercent: Int get() = settingsSnapshot.homeNativeGlassTintAlphaPercent
+    val homeNativeGlassCardBlurPercent: Int get() = settingsSnapshot.homeNativeGlassCardBlurPercent
+    val homeNativeGlassCardRadiusDp: Int get() = settingsSnapshot.homeNativeGlassCardRadiusDp
+    val isHomeNativeGlassStrokeEnabled: Boolean get() = settingsSnapshot.isHomeNativeGlassStrokeEnabled
+    val isHomeNativeGlassShadowEnabled: Boolean get() = settingsSnapshot.isHomeNativeGlassShadowEnabled
+    val isAutoRefreshDisabled: Boolean get() = settingsSnapshot.isAutoRefreshDisabled
+    val isAutoLoadMoreEnabled: Boolean get() = settingsSnapshot.isAutoLoadMoreEnabled
+    val isPbLikeAutoReplyEnabled: Boolean get() = settingsSnapshot.isPbLikeAutoReplyEnabled
+    val pbLikeAutoReplyText: String get() = settingsSnapshot.pbLikeAutoReplyText
+    val isPbScrollCoalesceEnabled: Boolean get() = settingsSnapshot.isPbScrollCoalesceEnabled
+    val isDefaultNotifyTabEnabled: Boolean get() = settingsSnapshot.isDefaultNotifyTabEnabled
+    val isDefaultOriginalImageEnabled: Boolean get() = settingsSnapshot.isDefaultOriginalImageEnabled
+    val isCleanShareTrackingParamsEnabled: Boolean get() = settingsSnapshot.isCleanShareTrackingParamsEnabled
+    val isAiComponentsDisabled: Boolean get() = settingsSnapshot.isAiComponentsDisabled
+    val isCustomPostFilterEnabled: Boolean get() = settingsSnapshot.isCustomPostFilterEnabled
+    val isLocationComponentsDisabled: Boolean get() = settingsSnapshot.isLocationComponentsDisabled
+    val isAdSdkComponentsDisabled: Boolean get() = settingsSnapshot.isAdSdkComponentsDisabled
+    val isHeavyFeatureComponentsDisabled: Boolean get() = settingsSnapshot.isHeavyFeatureComponentsDisabled
+    val isVideoComponentsDisabled: Boolean get() = settingsSnapshot.isVideoComponentsDisabled
+    val isMonitorSyncComponentsDisabled: Boolean get() = settingsSnapshot.isMonitorSyncComponentsDisabled
+    val isUpdateDownloadComponentsDisabled: Boolean get() = settingsSnapshot.isUpdateDownloadComponentsDisabled
+    val isPbPerformanceModeEnabled: Boolean get() = settingsSnapshot.isPbPerformanceModeEnabled
+    val isFeedUiOptForced: Boolean get() = settingsSnapshot.isFeedUiOptForced
+    val isHostPerformanceFlagsForced: Boolean get() = settingsSnapshot.isHostPerformanceFlagsForced
+    val isApsarasScheduleDisabled: Boolean get() = settingsSnapshot.isApsarasScheduleDisabled
+    val isFlutterPreinitDisabled: Boolean get() = settingsSnapshot.isFlutterPreinitDisabled
+    val isLowEndDeviceConfigForced: Boolean get() = settingsSnapshot.isLowEndDeviceConfigForced
+    val isTitanPatchBlockEnabled: Boolean get() = settingsSnapshot.isTitanPatchBlockEnabled
+    val isPrivateReadReceiptInvisibleEnabled: Boolean
+        get() = settingsSnapshot.isPrivateReadReceiptInvisibleEnabled
+    val isPostVoteFilterEnabled: Boolean get() = settingsSnapshot.isPostVoteFilterEnabled
+    val isPostVideoFilterEnabled: Boolean get() = settingsSnapshot.isPostVideoFilterEnabled
+    val isPostReplyFilterEnabled: Boolean get() = settingsSnapshot.isPostReplyFilterEnabled
+    val isPostHotFilterEnabled: Boolean get() = settingsSnapshot.isPostHotFilterEnabled
+    val isPostGoodsFilterEnabled: Boolean get() = settingsSnapshot.isPostGoodsFilterEnabled
+    val isPostGameBookingFilterEnabled: Boolean get() = settingsSnapshot.isPostGameBookingFilterEnabled
+    val isPostHelpFilterEnabled: Boolean get() = settingsSnapshot.isPostHelpFilterEnabled
+    val isPostScoreFilterEnabled: Boolean get() = settingsSnapshot.isPostScoreFilterEnabled
+    val isPostLiveFilterEnabled: Boolean get() = settingsSnapshot.isPostLiveFilterEnabled
+    val isPostRecommendForumFilterEnabled: Boolean
+        get() = settingsSnapshot.isPostRecommendForumFilterEnabled
+    val isPostUnfollowedForumFilterEnabled: Boolean
+        get() = settingsSnapshot.isPostUnfollowedForumFilterEnabled
+    val isPostForumKeywordFilterEnabled: Boolean get() = settingsSnapshot.isPostForumKeywordFilterEnabled
+    val postForumKeywordList: List<String> get() = settingsSnapshot.postForumKeywordList
+    val isPostModelScoreFilterEnabled: Boolean get() = settingsSnapshot.isPostModelScoreFilterEnabled
+    var postModelScoreThresholds: List<ModelScoreThreshold>
+        get() = settingsSnapshot.postModelScoreThresholds
+        set(value) {
+            replaceSettingsSnapshot(settingsSnapshot.copy(postModelScoreThresholds = value))
+        }
+    val postModelScoreAutoPercentiles: Map<String, Int> get() = settingsSnapshot.postModelScoreAutoPercentiles
+    val postModelScoreStatsPostLimit: Int get() = settingsSnapshot.postModelScoreStatsPostLimit
+    val isDetailedLoggingEnabled: Boolean get() = settingsSnapshot.isDetailedLoggingEnabled
 
-
-    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
-        updateMemory(sharedPreferences, key)
-    }
 
     fun init(context: Context) {
         if (prefs != null) return
@@ -224,58 +235,27 @@ object ConfigManager {
             if (restrictedFeatureUnlockBlockedByRemote && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
                 p.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
             }
-            areRestrictedFeaturesUnlocked =
-                p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) && !restrictedFeatureUnlockBlockedByRemote
-            refreshRestrictedRuntimeFlags(p)
-            isHomeTopTabsCustomEnabled = featureBoolean(p, KEY_CUSTOM_HOME_TOP_TABS)
-            isHomeTopTabMaterialEnabled = p.getBoolean(KEY_HOME_TOP_TAB_MATERIAL, true)
-            isHomeTopTabRecommendEnabled = p.getBoolean(KEY_HOME_TOP_TAB_RECOMMEND, true)
-            isHomeTopTabLiveEnabled = p.getBoolean(KEY_HOME_TOP_TAB_LIVE, true)
-            isHomeTopTabFollowedEnabled = p.getBoolean(KEY_HOME_TOP_TAB_FOLLOWED, true)
-            isHomeTabAutoHideEnabled = featureBoolean(p, KEY_AUTO_HIDE_HOME_TAB)
-            isBottomTabsCustomEnabled = featureBoolean(p, KEY_CUSTOM_BOTTOM_TABS)
-            applyBottomTabSelection(loadBottomTabSelectionFromPrefs(p, persistNormalized = isBottomTabsCustomEnabled))
-            isEnterForumWebFilterEnabled = featureBoolean(p, KEY_FILTER_ENTER_FORUM_WEB)
-            isOpenWebLinkInSystemBrowserEnabled = featureBoolean(p, KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER, false)
-            isHomeNativeGlassEnabled = featureBoolean(p, KEY_ENABLE_HOME_NATIVE_GLASS)
-            isHomeTabDynamicTintEnabled = featureBoolean(p, KEY_ENABLE_HOME_TAB_DYNAMIC_TINT, DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED)
-            refreshHomeNativeGlassStyle(p)
-            refreshHomeFeedUiOptFlags(p)
-            isAutoRefreshDisabled = featureBoolean(p, KEY_DISABLE_AUTO_REFRESH)
-            isAutoLoadMoreEnabled = featureBoolean(p, KEY_ENABLE_AUTO_LOAD_MORE)
-            isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)
-            pbLikeAutoReplyText = p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty()
-            isDefaultNotifyTabEnabled = isScanFeatureAvailable(KEY_DEFAULT_NOTIFY_TAB)
-            isDefaultOriginalImageEnabled = featureBoolean(p, KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE)
-            isCleanShareTrackingParamsEnabled = isScanFeatureAvailable(KEY_CLEAN_SHARE_TRACKING_PARAMS)
-            isCustomPostFilterEnabled = featureBoolean(p, KEY_ENABLE_CUSTOM_POST_FILTER)
-            isPostVoteFilterEnabled = p.getBoolean(KEY_FILTER_POST_VOTE, false)
-            isPostVideoFilterEnabled = p.getBoolean(KEY_FILTER_POST_VIDEO, false)
-            isPostReplyFilterEnabled = p.getBoolean(KEY_FILTER_POST_REPLY, false)
-            isPostHotFilterEnabled = p.getBoolean(KEY_FILTER_POST_HOT, false)
-            isPostGoodsFilterEnabled = p.getBoolean(KEY_FILTER_POST_GOODS, false)
-            isPostGameBookingFilterEnabled = p.getBoolean(KEY_FILTER_POST_GAME_BOOKING, false)
-            isPostHelpFilterEnabled = p.getBoolean(KEY_FILTER_POST_HELP, false)
-            isPostScoreFilterEnabled = p.getBoolean(KEY_FILTER_POST_SCORE, false)
-            isPostLiveFilterEnabled = p.getBoolean(KEY_FILTER_POST_LIVE, false)
-            isPostRecommendForumFilterEnabled = p.getBoolean(KEY_FILTER_POST_RECOMMEND_FORUM, false)
-            isPostUnfollowedForumFilterEnabled = p.getBoolean(KEY_FILTER_POST_UNFOLLOWED_FORUM, false)
-            isPostForumKeywordFilterEnabled = p.getBoolean(KEY_FILTER_POST_FORUM_KEYWORD, false)
-            postForumKeywordList = parseKeywordList(p.getString(KEY_FILTER_POST_FORUM_KEYWORD_LIST, ""))
-            isPostModelScoreFilterEnabled = restrictedBoolean(p, KEY_FILTER_POST_MODEL_SCORE)
-            postModelScoreThresholds = parseModelScoreThresholds(p.getString(KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, ""))
-            postModelScoreAutoPercentiles = parseModelScoreAutoPercentiles(
-                p.getString(KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES, "")
-            )
-            postModelScoreStatsPostLimit = p.getInt(
-                KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT,
-                DEFAULT_MODEL_SCORE_STATS_POST_LIMIT
-            ).coerceAtLeast(MIN_MODEL_SCORE_STATS_POST_LIMIT)
-            isDetailedLoggingEnabled = restrictedBoolean(p, KEY_ENABLE_DETAILED_LOGGING)
-
-
-            p.registerOnSharedPreferenceChangeListener(listener)
+            refreshUserSettingsSnapshot(p)
+            ensurePrefsListener(p)
         }
+    }
+
+    fun snapshot(): SettingsSnapshot = settingsSnapshot
+
+    private fun replaceSettingsSnapshot(snapshot: SettingsSnapshot) {
+        settingsSnapshot = snapshot
+    }
+
+    private fun ensurePrefsListener(p: SharedPreferences) {
+        if (prefsListener != null) return
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, _ ->
+            synchronized(this@ConfigManager) {
+                if (prefs !== sharedPrefs) return@OnSharedPreferenceChangeListener
+                replaceSettingsSnapshot(buildSettingsSnapshot(sharedPrefs))
+            }
+        }
+        prefsListener = listener
+        p.registerOnSharedPreferenceChangeListener(listener)
     }
 
     private fun ensureUserSettingsVersion(p: SharedPreferences) {
@@ -304,108 +284,6 @@ object ConfigManager {
         }
     }
 
-    private fun updateMemory(p: SharedPreferences, key: String?) {
-        when (key) {
-            KEY_RESTRICTED_FEATURES_UNLOCKED -> {
-                if (restrictedFeatureUnlockBlockedByRemote && p.getBoolean(key, false)) {
-                    p.edit().putBoolean(key, false).apply()
-                }
-                areRestrictedFeaturesUnlocked = p.getBoolean(key, false) && !restrictedFeatureUnlockBlockedByRemote
-                refreshRestrictedRuntimeFlags(p)
-            }
-            KEY_BLOCK_AD -> refreshRestrictedRuntimeFlags(p)
-            KEY_SIMPLIFY_HOME_TABS -> {
-                isHomeTopTabsCustomEnabled = featureBoolean(p, key)
-            }
-            KEY_HOME_TOP_TAB_MATERIAL -> {
-                isHomeTopTabMaterialEnabled = p.getBoolean(key, true)
-            }
-            KEY_HOME_TOP_TAB_RECOMMEND -> {
-                isHomeTopTabRecommendEnabled = p.getBoolean(key, true)
-            }
-            KEY_HOME_TOP_TAB_LIVE -> {
-                isHomeTopTabLiveEnabled = p.getBoolean(key, true)
-            }
-            KEY_HOME_TOP_TAB_FOLLOWED -> {
-                isHomeTopTabFollowedEnabled = p.getBoolean(key, true)
-            }
-            KEY_AUTO_HIDE_HOME_TAB -> isHomeTabAutoHideEnabled = featureBoolean(p, key)
-            KEY_SIMPLIFY_BOTTOM_TABS -> {
-                isBottomTabsCustomEnabled = featureBoolean(p, key)
-            }
-            KEY_BOTTOM_TAB_HOME,
-            KEY_BOTTOM_TAB_ENTER_FORUM,
-            KEY_BOTTOM_TAB_RETAIL_STORE,
-            KEY_BOTTOM_TAB_MESSAGE,
-            KEY_BOTTOM_TAB_MINE -> {
-                applyBottomTabSelection(loadBottomTabSelectionFromPrefs(p, persistNormalized = true))
-            }
-            KEY_FILTER_ENTER_FORUM_WEB -> isEnterForumWebFilterEnabled = featureBoolean(p, key)
-            KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER -> isOpenWebLinkInSystemBrowserEnabled = featureBoolean(p, key, false)
-            KEY_ENABLE_HOME_NATIVE_GLASS -> isHomeNativeGlassEnabled = featureBoolean(p, key)
-            KEY_ENABLE_HOME_TAB_DYNAMIC_TINT -> isHomeTabDynamicTintEnabled = featureBoolean(p, key, DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED)
-            KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-            KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-            KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_LIGHT,
-            KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_DARK,
-            KEY_HOME_NATIVE_GLASS_TINT_COLOR,
-            KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-            KEY_HOME_NATIVE_GLASS_STROKE_ENABLED,
-            KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED -> refreshHomeNativeGlassStyle(p)
-            KEY_FORCE_FEED_UI_OPT,
-            KEY_DISABLE_MONITOR_SYNC_COMPONENTS -> refreshHomeFeedUiOptFlags(p)
-            KEY_DISABLE_AUTO_REFRESH -> isAutoRefreshDisabled = featureBoolean(p, key)
-            KEY_ENABLE_AUTO_LOAD_MORE -> isAutoLoadMoreEnabled = featureBoolean(p, key)
-            KEY_ENABLE_PB_LIKE_AUTO_REPLY -> isPbLikeAutoReplyEnabled = restrictedBoolean(p, key)
-            KEY_PB_LIKE_AUTO_REPLY_TEXT -> pbLikeAutoReplyText = p.getString(key, "")?.trim().orEmpty()
-            KEY_DEFAULT_NOTIFY_TAB -> isDefaultNotifyTabEnabled = isScanFeatureAvailable(KEY_DEFAULT_NOTIFY_TAB)
-            KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE -> isDefaultOriginalImageEnabled = featureBoolean(p, key)
-            KEY_CLEAN_SHARE_TRACKING_PARAMS -> isCleanShareTrackingParamsEnabled = isScanFeatureAvailable(KEY_CLEAN_SHARE_TRACKING_PARAMS)
-            KEY_ENABLE_CUSTOM_POST_FILTER -> isCustomPostFilterEnabled = featureBoolean(p, key)
-            KEY_DISABLE_AI_COMPONENTS,
-            KEY_DISABLE_LOCATION_COMPONENTS,
-            KEY_DISABLE_AD_SDK_COMPONENTS,
-            KEY_DISABLE_HEAVY_FEATURE_COMPONENTS,
-            KEY_DISABLE_VIDEO_COMPONENTS,
-            KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS,
-            KEY_ENABLE_PB_PERFORMANCE_MODE,
-            KEY_ENABLE_PB_SCROLL_COALESCE,
-            KEY_ENABLE_PERFORMANCE_OPTIMIZATION,
-            KEY_FORCE_HOST_PERFORMANCE_FLAGS,
-            KEY_DISABLE_APSARAS_SCHEDULE,
-            KEY_DISABLE_FLUTTER_PREINIT,
-            KEY_FORCE_LOW_END_DEVICE_CONFIG,
-            KEY_BLOCK_TITAN_PATCH,
-            KEY_PRIVATE_READ_RECEIPT_INVISIBLE -> refreshRestrictedRuntimeFlags(p)
-            KEY_FILTER_POST_VOTE -> isPostVoteFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_VIDEO -> isPostVideoFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_REPLY -> isPostReplyFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_HOT -> isPostHotFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_GOODS -> isPostGoodsFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_GAME_BOOKING -> isPostGameBookingFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_HELP -> isPostHelpFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_SCORE -> isPostScoreFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_LIVE -> isPostLiveFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_RECOMMEND_FORUM -> isPostRecommendForumFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_UNFOLLOWED_FORUM -> isPostUnfollowedForumFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_FORUM_KEYWORD -> isPostForumKeywordFilterEnabled = p.getBoolean(key, false)
-            KEY_FILTER_POST_FORUM_KEYWORD_LIST -> postForumKeywordList = parseKeywordList(p.getString(key, ""))
-            KEY_FILTER_POST_MODEL_SCORE -> isPostModelScoreFilterEnabled = restrictedBoolean(p, key)
-            KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS -> postModelScoreThresholds = parseModelScoreThresholds(p.getString(key, ""))
-            KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES -> postModelScoreAutoPercentiles = parseModelScoreAutoPercentiles(
-                p.getString(key, "")
-            )
-            KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT -> postModelScoreStatsPostLimit = p.getInt(
-                key,
-                DEFAULT_MODEL_SCORE_STATS_POST_LIMIT
-            ).coerceAtLeast(MIN_MODEL_SCORE_STATS_POST_LIMIT)
-            KEY_ENABLE_DETAILED_LOGGING -> isDetailedLoggingEnabled = restrictedBoolean(p, key)
-
-        }
-    }
-
     fun getPrefs(context: Context): SharedPreferences {
         return prefs ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).also {
             init(context)
@@ -421,36 +299,32 @@ object ConfigManager {
 
     fun resetRuntimeAfterUserDataClear(context: Context) {
         synchronized(this) {
-            prefs?.unregisterOnSharedPreferenceChangeListener(listener)
+            prefsListener?.let { listener ->
+                prefs?.unregisterOnSharedPreferenceChangeListener(listener)
+            }
+            prefsListener = null
             prefs = null
             appContext = null
+            settingsSnapshot = SettingsSnapshot()
         }
         init(context.applicationContext ?: context)
     }
 
     fun shouldOutputDetailedLogs(): Boolean {
-        return isDetailedLoggingEnabled
+        return settingsSnapshot.isDetailedLoggingEnabled
     }
 
     fun shouldStabilizeHomeChrome(): Boolean {
-        return isAdBlockEnabled || isHomeNativeGlassRuntimeActive()
+        return settingsSnapshot.shouldStabilizeHomeChrome()
     }
 
     fun shouldForceFeedUiOpt(): Boolean {
-        return isFeedUiOptForced ||
-            (isHomeNativeGlassRuntimeActive() && isScanFeatureAvailable(KEY_FORCE_FEED_UI_OPT))
-    }
-
-    private fun isHomeNativeGlassRuntimeActive(): Boolean {
-        return isHomeNativeGlassEnabled && homeNativeGlassBackgroundImagePath.isNotBlank()
+        return settingsSnapshot.shouldForceFeedUiOpt()
     }
 
     fun isAutoSignInEnabled(context: Context): Boolean {
-        val p = getPrefs(context)
-        return p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) &&
-            !isRestrictedFeatureUnlockBlocked(context) &&
-            p.getBoolean(KEY_ENABLE_AUTO_SIGN_IN, false) &&
-            isScanFeatureAvailable(KEY_ENABLE_AUTO_SIGN_IN)
+        if (prefs == null) init(context)
+        return settingsSnapshot.isAutoSignInEnabled
     }
 
     fun isRestrictedFeaturesUnlocked(context: Context): Boolean {
@@ -464,8 +338,6 @@ object ConfigManager {
         p.edit()
             .putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, finalUnlocked)
             .apply()
-        areRestrictedFeaturesUnlocked = finalUnlocked
-        refreshRestrictedRuntimeFlags(p)
     }
 
     fun isRestrictedFeatureUnlockBlocked(context: Context): Boolean {
@@ -514,113 +386,259 @@ object ConfigManager {
         if (lockHiddenFeatures && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
             p.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
         }
-        areRestrictedFeaturesUnlocked =
-            p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) && !lockHiddenFeatures
-        refreshRestrictedRuntimeFlags(p)
+        refreshUserSettingsSnapshot(p)
     }
 
-    private fun refreshRestrictedRuntimeFlags(p: SharedPreferences) {
-        val performanceOptimizationEnabled = restrictedBoolean(p, KEY_ENABLE_PERFORMANCE_OPTIMIZATION)
-        isAdBlockEnabled = restrictedBoolean(p, KEY_BLOCK_AD)
-        isHostPerformanceFlagsForced = performanceChildBoolean(p, KEY_FORCE_HOST_PERFORMANCE_FLAGS, performanceOptimizationEnabled, true)
-        isApsarasScheduleDisabled = performanceChildBoolean(p, KEY_DISABLE_APSARAS_SCHEDULE, performanceOptimizationEnabled, true)
-        isFlutterPreinitDisabled = performanceChildBoolean(p, KEY_DISABLE_FLUTTER_PREINIT, performanceOptimizationEnabled, true)
-        isLowEndDeviceConfigForced = performanceChildBoolean(p, KEY_FORCE_LOW_END_DEVICE_CONFIG, performanceOptimizationEnabled, true)
-        isAiComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_AI_COMPONENTS, performanceOptimizationEnabled, true)
-        isLocationComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_LOCATION_COMPONENTS, performanceOptimizationEnabled, true)
-        isAdSdkComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_AD_SDK_COMPONENTS, performanceOptimizationEnabled, true)
-        isHeavyFeatureComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_HEAVY_FEATURE_COMPONENTS, performanceOptimizationEnabled, true)
-        isVideoComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_VIDEO_COMPONENTS, performanceOptimizationEnabled, true)
-        isUpdateDownloadComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS, performanceOptimizationEnabled, true)
-        isPbPerformanceModeEnabled = performanceChildBoolean(p, KEY_ENABLE_PB_PERFORMANCE_MODE, performanceOptimizationEnabled, true)
-        isPbScrollCoalesceEnabled = performanceChildBoolean(p, KEY_ENABLE_PB_SCROLL_COALESCE, performanceOptimizationEnabled, true)
-        isTitanPatchBlockEnabled = performanceChildBoolean(p, KEY_BLOCK_TITAN_PATCH, performanceOptimizationEnabled, false)
-        isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(p, KEY_PRIVATE_READ_RECEIPT_INVISIBLE)
-        isPostModelScoreFilterEnabled = restrictedBoolean(p, KEY_FILTER_POST_MODEL_SCORE)
-        isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)
-        isDetailedLoggingEnabled = restrictedBoolean(p, KEY_ENABLE_DETAILED_LOGGING)
+    private fun refreshUserSettingsSnapshot(p: SharedPreferences) {
+        replaceSettingsSnapshot(buildSettingsSnapshot(p))
     }
 
-    private fun refreshHomeFeedUiOptFlags(p: SharedPreferences) {
-        val enabled = featureBoolean(p, KEY_FORCE_FEED_UI_OPT) ||
-            featureBoolean(p, KEY_DISABLE_MONITOR_SYNC_COMPONENTS)
-        isFeedUiOptForced = enabled
-        isMonitorSyncComponentsDisabled = enabled
-    }
+    private fun buildSettingsSnapshot(p: SharedPreferences): SettingsSnapshot {
+        val restrictedUnlocked =
+            p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false) && !restrictedFeatureUnlockBlockedByRemote
 
-    private fun restrictedBoolean(p: SharedPreferences, key: String): Boolean {
-        return areRestrictedFeaturesUnlocked && !restrictedFeatureUnlockBlockedByRemote && featureBoolean(p, key)
-    }
-
-    private fun performanceChildBoolean(
-        p: SharedPreferences,
-        key: String,
-        masterEnabled: Boolean,
-        defaultValue: Boolean,
-    ): Boolean {
-        if (!areRestrictedFeaturesUnlocked || !masterEnabled || !isScanFeatureAvailable(key)) return false
-        return if (p.contains(key)) {
-            p.getBoolean(key, false)
-        } else {
-            defaultValue
+        fun featureBoolean(key: String, defaultValue: Boolean = false): Boolean {
+            return p.getBoolean(key, defaultValue) && isScanFeatureAvailable(key)
         }
+
+        fun restrictedBoolean(key: String): Boolean {
+            return restrictedUnlocked && featureBoolean(key)
+        }
+
+        fun performanceChildBoolean(
+            key: String,
+            masterEnabled: Boolean,
+            defaultValue: Boolean,
+        ): Boolean {
+            if (!restrictedUnlocked || !masterEnabled || !isScanFeatureAvailable(key)) return false
+            return if (p.contains(key)) {
+                p.getBoolean(key, false)
+            } else {
+                defaultValue
+            }
+        }
+
+        val performanceOptimizationEnabled = restrictedBoolean(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)
+        val homeNativeGlassStyle = readHomeNativeGlassStyle(p)
+        val homeNativeGlassEnabled = featureBoolean(KEY_ENABLE_HOME_NATIVE_GLASS)
+        val bottomTabsCustomEnabled = featureBoolean(KEY_CUSTOM_BOTTOM_TABS)
+        val bottomTabSelection = loadBottomTabSelectionFromPrefs(
+            p,
+            persistNormalized = bottomTabsCustomEnabled,
+        )
+        val homeFeedUiOptEnabled = featureBoolean(KEY_FORCE_FEED_UI_OPT) ||
+            featureBoolean(KEY_DISABLE_MONITOR_SYNC_COMPONENTS)
+        val forceFeedUiOptRuntimeEnabled = homeFeedUiOptEnabled ||
+            (
+                homeNativeGlassEnabled &&
+                    homeNativeGlassStyle.backgroundImagePath.isNotBlank() &&
+                    isScanFeatureAvailable(KEY_FORCE_FEED_UI_OPT)
+                )
+
+        return SettingsSnapshot(
+            areRestrictedFeaturesUnlocked = restrictedUnlocked,
+            isAdBlockEnabled = restrictedBoolean(KEY_BLOCK_AD),
+            isHomeTopTabsCustomEnabled = featureBoolean(KEY_CUSTOM_HOME_TOP_TABS),
+            isHomeTopTabMaterialEnabled = p.getBoolean(KEY_HOME_TOP_TAB_MATERIAL, true),
+            isHomeTopTabRecommendEnabled = p.getBoolean(KEY_HOME_TOP_TAB_RECOMMEND, true),
+            isHomeTopTabLiveEnabled = p.getBoolean(KEY_HOME_TOP_TAB_LIVE, true),
+            isHomeTopTabFollowedEnabled = p.getBoolean(KEY_HOME_TOP_TAB_FOLLOWED, true),
+            isHomeTabAutoHideEnabled = featureBoolean(KEY_AUTO_HIDE_HOME_TAB),
+            isBottomTabsCustomEnabled = bottomTabsCustomEnabled,
+            isBottomTabHomeEnabled = bottomTabSelection.homeEnabled,
+            isBottomTabEnterForumEnabled = bottomTabSelection.enterForumEnabled,
+            isBottomTabRetailStoreEnabled = bottomTabSelection.retailStoreEnabled,
+            isBottomTabMessageEnabled = bottomTabSelection.messageEnabled,
+            isBottomTabMineEnabled = bottomTabSelection.mineEnabled,
+            isEnterForumWebFilterEnabled = featureBoolean(KEY_FILTER_ENTER_FORUM_WEB),
+            isOpenWebLinkInSystemBrowserEnabled = featureBoolean(KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER),
+            isHomeNativeGlassEnabled = homeNativeGlassEnabled,
+            isHomeTabDynamicTintEnabled = featureBoolean(
+                KEY_ENABLE_HOME_TAB_DYNAMIC_TINT,
+                DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED,
+            ),
+            homeNativeGlassBackgroundImagePath = homeNativeGlassStyle.backgroundImagePath,
+            homeNativeGlassBlurCacheImagePath = homeNativeGlassStyle.blurCacheImagePath,
+            homeNativeGlassTextPaletteLight = homeNativeGlassStyle.textPaletteLight,
+            homeNativeGlassTextPaletteDark = homeNativeGlassStyle.textPaletteDark,
+            homeNativeGlassTintColor = homeNativeGlassStyle.tintColor,
+            homeNativeGlassTintAlphaPercent = homeNativeGlassStyle.tintAlphaPercent,
+            homeNativeGlassCardBlurPercent = homeNativeGlassStyle.cardBlurPercent,
+            homeNativeGlassCardRadiusDp = homeNativeGlassStyle.cardRadiusDp,
+            isHomeNativeGlassStrokeEnabled = homeNativeGlassStyle.strokeEnabled,
+            isHomeNativeGlassShadowEnabled = homeNativeGlassStyle.shadowEnabled,
+            isAutoRefreshDisabled = featureBoolean(KEY_DISABLE_AUTO_REFRESH),
+            isAutoLoadMoreEnabled = featureBoolean(KEY_ENABLE_AUTO_LOAD_MORE),
+            isPbLikeAutoReplyEnabled = restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY),
+            pbLikeAutoReplyText = p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty(),
+            isPbScrollCoalesceEnabled = performanceChildBoolean(
+                KEY_ENABLE_PB_SCROLL_COALESCE,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isDefaultNotifyTabEnabled = featureBoolean(KEY_DEFAULT_NOTIFY_TAB, true),
+            isDefaultOriginalImageEnabled = featureBoolean(KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE),
+            isAutoSignInEnabled = restrictedBoolean(KEY_ENABLE_AUTO_SIGN_IN),
+            isCleanShareTrackingParamsEnabled = featureBoolean(KEY_CLEAN_SHARE_TRACKING_PARAMS, true),
+            isAiComponentsDisabled = performanceChildBoolean(
+                KEY_DISABLE_AI_COMPONENTS,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isCustomPostFilterEnabled = featureBoolean(KEY_ENABLE_CUSTOM_POST_FILTER),
+            isLocationComponentsDisabled = performanceChildBoolean(
+                KEY_DISABLE_LOCATION_COMPONENTS,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isAdSdkComponentsDisabled = performanceChildBoolean(
+                KEY_DISABLE_AD_SDK_COMPONENTS,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isHeavyFeatureComponentsDisabled = performanceChildBoolean(
+                KEY_DISABLE_HEAVY_FEATURE_COMPONENTS,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isVideoComponentsDisabled = performanceChildBoolean(
+                KEY_DISABLE_VIDEO_COMPONENTS,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isMonitorSyncComponentsDisabled = homeFeedUiOptEnabled,
+            isUpdateDownloadComponentsDisabled = performanceChildBoolean(
+                KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isPbPerformanceModeEnabled = performanceChildBoolean(
+                KEY_ENABLE_PB_PERFORMANCE_MODE,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isFeedUiOptForced = homeFeedUiOptEnabled,
+            isForceFeedUiOptRuntimeEnabled = forceFeedUiOptRuntimeEnabled,
+            isHostPerformanceFlagsForced = performanceChildBoolean(
+                KEY_FORCE_HOST_PERFORMANCE_FLAGS,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isApsarasScheduleDisabled = performanceChildBoolean(
+                KEY_DISABLE_APSARAS_SCHEDULE,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isFlutterPreinitDisabled = performanceChildBoolean(
+                KEY_DISABLE_FLUTTER_PREINIT,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isLowEndDeviceConfigForced = performanceChildBoolean(
+                KEY_FORCE_LOW_END_DEVICE_CONFIG,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isTitanPatchBlockEnabled = performanceChildBoolean(
+                KEY_BLOCK_TITAN_PATCH,
+                performanceOptimizationEnabled,
+                false,
+            ),
+            isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(KEY_PRIVATE_READ_RECEIPT_INVISIBLE),
+            isPostVoteFilterEnabled = p.getBoolean(KEY_FILTER_POST_VOTE, false),
+            isPostVideoFilterEnabled = p.getBoolean(KEY_FILTER_POST_VIDEO, false),
+            isPostReplyFilterEnabled = p.getBoolean(KEY_FILTER_POST_REPLY, false),
+            isPostHotFilterEnabled = p.getBoolean(KEY_FILTER_POST_HOT, false),
+            isPostGoodsFilterEnabled = p.getBoolean(KEY_FILTER_POST_GOODS, false),
+            isPostGameBookingFilterEnabled = p.getBoolean(KEY_FILTER_POST_GAME_BOOKING, false),
+            isPostHelpFilterEnabled = p.getBoolean(KEY_FILTER_POST_HELP, false),
+            isPostScoreFilterEnabled = p.getBoolean(KEY_FILTER_POST_SCORE, false),
+            isPostLiveFilterEnabled = p.getBoolean(KEY_FILTER_POST_LIVE, false),
+            isPostRecommendForumFilterEnabled = p.getBoolean(KEY_FILTER_POST_RECOMMEND_FORUM, false),
+            isPostUnfollowedForumFilterEnabled = p.getBoolean(KEY_FILTER_POST_UNFOLLOWED_FORUM, false),
+            isPostForumKeywordFilterEnabled = p.getBoolean(KEY_FILTER_POST_FORUM_KEYWORD, false),
+            postForumKeywordList = parseKeywordList(p.getString(KEY_FILTER_POST_FORUM_KEYWORD_LIST, "")),
+            isPostModelScoreFilterEnabled = restrictedBoolean(KEY_FILTER_POST_MODEL_SCORE),
+            postModelScoreThresholds = parseModelScoreThresholds(
+                p.getString(KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
+            ),
+            postModelScoreAutoPercentiles = parseModelScoreAutoPercentiles(
+                p.getString(KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES, "")
+            ),
+            postModelScoreStatsPostLimit = p.getInt(
+                KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT,
+                DEFAULT_MODEL_SCORE_STATS_POST_LIMIT
+            ).coerceAtLeast(MIN_MODEL_SCORE_STATS_POST_LIMIT),
+            isDetailedLoggingEnabled = restrictedBoolean(KEY_ENABLE_DETAILED_LOGGING),
+        )
     }
 
-    private fun featureBoolean(p: SharedPreferences, key: String, defaultValue: Boolean = false): Boolean {
-        return p.getBoolean(key, defaultValue) && isScanFeatureAvailable(key)
-    }
+    private data class HomeNativeGlassStyle(
+        val backgroundImagePath: String,
+        val blurCacheImagePath: String,
+        val textPaletteLight: String,
+        val textPaletteDark: String,
+        val tintColor: Int,
+        val tintAlphaPercent: Int,
+        val cardBlurPercent: Int,
+        val cardRadiusDp: Int,
+        val strokeEnabled: Boolean,
+        val shadowEnabled: Boolean,
+    )
 
-    private fun refreshHomeNativeGlassStyle(p: SharedPreferences) {
-        homeNativeGlassBackgroundImagePath = p.getString(
-            KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-            DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-        )?.trim().orEmpty()
-        homeNativeGlassBlurCacheImagePath = p.getString(
-            KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-            DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-        )?.trim().orEmpty()
-        homeNativeGlassTextPaletteLight = p.getString(
-            KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_LIGHT,
-            DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
-        )?.trim().orEmpty()
-        homeNativeGlassTextPaletteDark = p.getString(
-            KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_DARK,
-            DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
-        )?.trim().orEmpty()
-        homeNativeGlassTintColor = normalizeHomeNativeGlassTintColor(
-            p.getInt(
-                KEY_HOME_NATIVE_GLASS_TINT_COLOR,
-                DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
-            )
-        )
-        homeNativeGlassTintAlphaPercent = p.getInt(
-            KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-        ).coerceIn(
-            MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-        )
-        homeNativeGlassCardBlurPercent = p.getInt(
-            KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-        ).coerceIn(
-            MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-        )
-        homeNativeGlassCardRadiusDp = p.getInt(
-            KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-            DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-        ).coerceIn(
-            MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-            MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-        )
-        isHomeNativeGlassStrokeEnabled = p.getBoolean(
-            KEY_HOME_NATIVE_GLASS_STROKE_ENABLED,
-            DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
-        )
-        isHomeNativeGlassShadowEnabled = p.getBoolean(
-            KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED,
-            DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED,
+    private fun readHomeNativeGlassStyle(p: SharedPreferences): HomeNativeGlassStyle {
+        return HomeNativeGlassStyle(
+            backgroundImagePath = p.getString(
+                KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
+                DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
+            )?.trim().orEmpty(),
+            blurCacheImagePath = p.getString(
+                KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
+                DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
+            )?.trim().orEmpty(),
+            textPaletteLight = p.getString(
+                KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_LIGHT,
+                DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
+            )?.trim().orEmpty(),
+            textPaletteDark = p.getString(
+                KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_DARK,
+                DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
+            )?.trim().orEmpty(),
+            tintColor = normalizeHomeNativeGlassTintColor(
+                p.getInt(
+                    KEY_HOME_NATIVE_GLASS_TINT_COLOR,
+                    DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
+                )
+            ),
+            tintAlphaPercent = p.getInt(
+                KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ).coerceIn(
+                MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ),
+            cardBlurPercent = p.getInt(
+                KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            ).coerceIn(
+                MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            ),
+            cardRadiusDp = p.getInt(
+                KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+            ).coerceIn(
+                MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+            ),
+            strokeEnabled = p.getBoolean(
+                KEY_HOME_NATIVE_GLASS_STROKE_ENABLED,
+                DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
+            ),
+            shadowEnabled = p.getBoolean(
+                KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED,
+                DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED,
+            ),
         )
     }
 
@@ -635,34 +653,19 @@ object ConfigManager {
         return scanFeatureAvailability[featureKey] != false
     }
 
-    fun applyScanAvailability(context: Context, featureStatusMap: Map<String, HookFeatureStatus>) {
+    fun applyScanAvailability(
+        context: Context,
+        featureStatusMap: Map<String, HookFeatureStatus>,
+        refreshRuntime: Boolean = false,
+    ) {
         if (featureStatusMap.isEmpty()) return
         scanFeatureAvailability = featureStatusMap.mapValues { (_, status) ->
             status.state != HookFeatureState.DISABLED
         }
 
-        val p = getPrefs(context)
-        refreshRestrictedRuntimeFlags(p)
-
-        isHomeTopTabsCustomEnabled = featureBoolean(p, KEY_CUSTOM_HOME_TOP_TABS)
-        isHomeTabAutoHideEnabled = featureBoolean(p, KEY_AUTO_HIDE_HOME_TAB)
-        isBottomTabsCustomEnabled = featureBoolean(p, KEY_CUSTOM_BOTTOM_TABS)
-        applyBottomTabSelection(loadBottomTabSelectionFromPrefs(p, persistNormalized = isBottomTabsCustomEnabled))
-
-        isEnterForumWebFilterEnabled = featureBoolean(p, KEY_FILTER_ENTER_FORUM_WEB)
-        isOpenWebLinkInSystemBrowserEnabled = featureBoolean(p, KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER, false)
-        isHomeNativeGlassEnabled = featureBoolean(p, KEY_ENABLE_HOME_NATIVE_GLASS)
-        isHomeTabDynamicTintEnabled = featureBoolean(p, KEY_ENABLE_HOME_TAB_DYNAMIC_TINT, DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED)
-        refreshHomeNativeGlassStyle(p)
-        refreshHomeFeedUiOptFlags(p)
-        isAutoRefreshDisabled = featureBoolean(p, KEY_DISABLE_AUTO_REFRESH)
-        isAutoLoadMoreEnabled = featureBoolean(p, KEY_ENABLE_AUTO_LOAD_MORE)
-        isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)
-        pbLikeAutoReplyText = p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty()
-        isDefaultNotifyTabEnabled = isScanFeatureAvailable(KEY_DEFAULT_NOTIFY_TAB)
-        isDefaultOriginalImageEnabled = featureBoolean(p, KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE)
-        isCleanShareTrackingParamsEnabled = isScanFeatureAvailable(KEY_CLEAN_SHARE_TRACKING_PARAMS)
-        isCustomPostFilterEnabled = featureBoolean(p, KEY_ENABLE_CUSTOM_POST_FILTER)
+        if (refreshRuntime) {
+            refreshUserSettingsSnapshot(getPrefs(context))
+        }
     }
 
     data class ModelScoreThreshold(
@@ -746,7 +749,7 @@ object ConfigManager {
 
     fun normalizeHomeTopTabSelection(selection: HomeTopTabSelection): HomeTopTabSelection {
         if (selection.hasEnabledTab()) return selection
-        // 外部改偏好导致状态无效时，保留 "推荐" 作为兜底值。
+        // Keep a valid fallback when external preferences become inconsistent.
         return selection.copy(
             materialEnabled = false,
             recommendEnabled = true,
@@ -756,11 +759,12 @@ object ConfigManager {
     }
 
     fun resolveHomeTopTabSelection(): HomeTopTabSelection {
+        val settings = settingsSnapshot
         val current = HomeTopTabSelection(
-            materialEnabled = isHomeTopTabMaterialEnabled,
-            recommendEnabled = isHomeTopTabRecommendEnabled,
-            liveEnabled = isHomeTopTabLiveEnabled,
-            followedEnabled = isHomeTopTabFollowedEnabled,
+            materialEnabled = settings.isHomeTopTabMaterialEnabled,
+            recommendEnabled = settings.isHomeTopTabRecommendEnabled,
+            liveEnabled = settings.isHomeTopTabLiveEnabled,
+            followedEnabled = settings.isHomeTopTabFollowedEnabled,
         )
         return normalizeHomeTopTabSelection(current)
     }
@@ -779,7 +783,7 @@ object ConfigManager {
 
     fun normalizeBottomTabSelection(selection: BottomTabSelection): BottomTabSelection {
         if (selection.hasEnabledTab()) return selection
-        // 外部改偏好导致状态无效时，保留 "首页" 作为兜底值。
+        // Keep a valid fallback when external preferences become inconsistent.
         return selection.copy(
             homeEnabled = true,
             enterForumEnabled = false,
@@ -790,12 +794,13 @@ object ConfigManager {
     }
 
     fun resolveBottomTabSelection(): BottomTabSelection {
+        val settings = settingsSnapshot
         val current = BottomTabSelection(
-            homeEnabled = isBottomTabHomeEnabled,
-            enterForumEnabled = isBottomTabEnterForumEnabled,
-            retailStoreEnabled = isBottomTabRetailStoreEnabled,
-            messageEnabled = isBottomTabMessageEnabled,
-            mineEnabled = isBottomTabMineEnabled,
+            homeEnabled = settings.isBottomTabHomeEnabled,
+            enterForumEnabled = settings.isBottomTabEnterForumEnabled,
+            retailStoreEnabled = settings.isBottomTabRetailStoreEnabled,
+            messageEnabled = settings.isBottomTabMessageEnabled,
+            mineEnabled = settings.isBottomTabMineEnabled,
         )
         return normalizeBottomTabSelection(current)
     }
@@ -824,14 +829,6 @@ object ConfigManager {
                 .apply()
         }
         return normalized
-    }
-
-    private fun applyBottomTabSelection(selection: BottomTabSelection) {
-        isBottomTabHomeEnabled = selection.homeEnabled
-        isBottomTabEnterForumEnabled = selection.enterForumEnabled
-        isBottomTabRetailStoreEnabled = selection.retailStoreEnabled
-        isBottomTabMessageEnabled = selection.messageEnabled
-        isBottomTabMineEnabled = selection.mineEnabled
     }
 
     private fun parseKeywordList(raw: String?): List<String> {

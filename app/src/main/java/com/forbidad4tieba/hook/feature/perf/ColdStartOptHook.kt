@@ -8,11 +8,9 @@ import java.lang.reflect.Modifier
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 强制开启贴吧自身性能配置里已有的 AB 标志。
- *
- * 这里保持表驱动写法，让多个性能子开关共用同一个 UbsABTestHelper hook 点，
- * 避免重复安装 hook。
- */
+ * 寮哄埗寮€鍚创鍚ц嚜韬€ц兘閰嶇疆閲屽凡鏈夌殑 AB 鏍囧織銆? *
+ * 杩欓噷淇濇寔琛ㄩ┍鍔ㄥ啓娉曪紝璁╁涓€ц兘瀛愬紑鍏冲叡鐢ㄥ悓涓€涓?UbsABTestHelper hook 鐐癸紝
+ * 閬垮厤閲嶅瀹夎 hook銆? */
 object ColdStartOptHook {
     private const val TAG = "[ColdStartOptHook]"
     private val installed = AtomicBoolean(false)
@@ -24,10 +22,7 @@ object ColdStartOptHook {
     )
 
     /**
-     * 这里不加入 isColdNetDataOpt。
-     * 启用它后目标应用会直接调用 B0() 而不是 w1()，
-     * 会绕过 AutoRefreshHook 的阻断窗口。
-     */
+     * 杩欓噷涓嶅姞鍏?isColdNetDataOpt銆?     * 鍚敤瀹冨悗鐩爣搴旂敤浼氱洿鎺ヨ皟鐢?B0() 鑰屼笉鏄?w1()锛?     * 浼氱粫杩?AutoRefreshHook 鐨勯樆鏂獥鍙ｃ€?     */
     private val overrides = arrayOf(
         BooleanOverride("coldStartTTIOpt", true) { ConfigManager.isHostPerformanceFlagsForced },
         BooleanOverride("coldStartTTIOpt2", true) { ConfigManager.isHostPerformanceFlagsForced },

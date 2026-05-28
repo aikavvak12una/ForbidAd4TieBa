@@ -1,12 +1,10 @@
 package com.forbidad4tieba.hook.feature.web
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.EnterForumWebSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -16,57 +14,30 @@ object EnterForumWebHook {
 
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
 
-    fun hook(
-        classLoader: ClassLoader,
-        symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols(),
-    ) {
+    internal fun hook(targets: EnterForumWebSymbols) {
         val mod = XposedCompat.module ?: return
         var attempted = false
 
-        val initInfoDataClassName = symbols?.enterForumInitInfoDataClass
-        val initInfoGetUrlMethodName = symbols?.enterForumInitInfoGetUrlMethod
-        if (!initInfoDataClassName.isNullOrBlank() && !initInfoGetUrlMethodName.isNullOrBlank()) {
+        val sourceGetUrlMethod = targets.sourceGetUrlMethod
+        if (sourceGetUrlMethod != null) {
             attempted = true
-            hookInitInfoUrlSource(mod, classLoader, initInfoDataClassName, initInfoGetUrlMethodName)
+            hookInitInfoUrlSource(mod, sourceGetUrlMethod)
         }
 
-        val controllerClassName = symbols?.enterForumWebControllerClass
-        val loadMethodName = symbols?.enterForumWebLoadMethod
-        if (controllerClassName.isNullOrBlank() || loadMethodName.isNullOrBlank()) {
+        val loadMethod = targets.webLoadMethod
+        if (loadMethod == null) {
             if (!attempted) {
-                XposedCompat.log(
-                    "[EnterForumWebHook] skipped: missing symbols " +
-                        "enterForumInitInfoDataClass/enterForumInitInfoGetUrlMethod and " +
-                        "enterForumWebControllerClass/enterForumWebLoadMethod",
-                )
+                XposedCompat.log("[EnterForumWebHook] skipped: no resolved install targets")
             }
             return
         }
 
         try {
-            val controllerClass = XposedCompat.findClassOrNull(controllerClassName, classLoader)
-            if (controllerClass == null) {
-                XposedCompat.log("[EnterForumWebHook] skipped: class not found $controllerClassName")
-                return
-            }
-
-            val loadMethod = ReflectionUtils.findMethodInHierarchy(
-                controllerClass,
-                loadMethodName,
-                String::class.java,
-            )
-            if (loadMethod == null || !isStringVoidInstanceMethod(loadMethod)) {
-                XposedCompat.log(
-                    "[EnterForumWebHook] skipped: invalid target ${controllerClass.name}.$loadMethodName(String)",
-                )
-                return
-            }
-            loadMethod.isAccessible = true
             if (!installUrlReplaceHook(mod, loadMethod)) {
                 XposedCompat.log("[EnterForumWebHook] already installed: ${ReflectionUtils.methodSignature(loadMethod)}")
                 return
             }
-            XposedCompat.log("[EnterForumWebHook] hook INSTALLED: ${controllerClass.name}.${loadMethod.name}(String)")
+            XposedCompat.log("[EnterForumWebHook] hook INSTALLED: ${loadMethod.declaringClass.name}.${loadMethod.name}(String)")
         } catch (t: Throwable) {
             XposedCompat.log("[EnterForumWebHook] FAILED: ${t.message}")
             XposedCompat.log(t)
@@ -75,32 +46,17 @@ object EnterForumWebHook {
 
     private fun hookInitInfoUrlSource(
         mod: io.github.libxposed.api.XposedModule,
-        classLoader: ClassLoader,
-        dataClassName: String,
-        getUrlMethodName: String,
+        getUrlMethod: Method,
     ) {
         try {
-            val dataClass = XposedCompat.findClassOrNull(dataClassName, classLoader)
-            if (dataClass == null) {
-                XposedCompat.log("[EnterForumWebHook] source skipped: class not found $dataClassName")
-                return
-            }
-
-            val getUrlMethod = ReflectionUtils.findMethodInHierarchy(dataClass, getUrlMethodName) { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.returnType == String::class.java &&
-                    method.parameterTypes.isEmpty()
-            }
-            if (getUrlMethod == null) {
-                XposedCompat.log("[EnterForumWebHook] source skipped: method not found $dataClassName.$getUrlMethodName()")
-                return
-            }
-
             if (!installForumUrlSourceHook(mod, getUrlMethod)) {
                 XposedCompat.log("[EnterForumWebHook] source already installed: ${ReflectionUtils.methodSignature(getUrlMethod)}")
                 return
             }
-            XposedCompat.log("[EnterForumWebHook] source hook INSTALLED: ${dataClass.name}.${getUrlMethod.name}()")
+            XposedCompat.log(
+                "[EnterForumWebHook] source hook INSTALLED: " +
+                    "${getUrlMethod.declaringClass.name}.${getUrlMethod.name}()",
+            )
         } catch (t: Throwable) {
             XposedCompat.log("[EnterForumWebHook] source FAILED: ${t.message}")
             XposedCompat.log(t)
@@ -148,13 +104,6 @@ object EnterForumWebHook {
             replacement
         }
         return true
-    }
-
-    private fun isStringVoidInstanceMethod(method: Method): Boolean {
-        if (Modifier.isStatic(method.modifiers)) return false
-        if (method.returnType != Void.TYPE) return false
-        val p = method.parameterTypes
-        return p.size == 1 && p[0] == String::class.java
     }
 
     private fun shouldReplaceUrl(url: String?): Boolean {

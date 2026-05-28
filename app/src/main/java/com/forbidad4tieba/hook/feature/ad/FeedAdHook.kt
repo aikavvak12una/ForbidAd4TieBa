@@ -1,8 +1,7 @@
 package com.forbidad4tieba.hook.feature.ad
 
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.FeedAdSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Method
 import java.util.IdentityHashMap
@@ -15,39 +14,30 @@ object FeedAdHook {
 
     private val NO_METHOD = Any()
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols) {
-        val templateKeyMethodName = symbols.feedTemplateKeyMethod?.takeIf { it.isNotBlank() } ?: run {
-            XposedCompat.log("[FeedAdHook] skipped: feedTemplateKeyMethod missing")
-            return
-        }
+    internal fun hook(targets: FeedAdSymbols) {
+        val templateKeyMethodName = targets.templateKeyMethodName
         if (sTemplateKeyMethodName != templateKeyMethodName) {
             sKeyMethodCache.clear()
             sTemplateKeyMethodName = templateKeyMethodName
         }
         hookTemplateAdapterSetList(
-            cl = cl,
-            symbols = symbols,
+            targets = targets,
             templateKeyMethodName = templateKeyMethodName,
-            customPostFilter = CustomPostCardBlockHook.createRuntimeFilter(symbols),
+            customPostFilter = targets.customPostFilter?.let(CustomPostCardBlockHook::createRuntimeFilter),
         )
     }
 
     private fun hookTemplateAdapterSetList(
-        cl: ClassLoader,
-        symbols: HookSymbols,
+        targets: FeedAdSymbols,
         templateKeyMethodName: String,
         customPostFilter: CustomPostCardBlockHook.RuntimeFilter?,
     ) {
         val mod = XposedCompat.module ?: return
 
-        fun hookListMethod(className: String, methodName: String) {
-            val method = XposedCompat.findMethodOrNull(className, cl, methodName, List::class.java)
-            if (method == null) {
-                XposedCompat.log("[FeedAdHook] method NOT FOUND: $className.$methodName(List)")
-                return
-            }
+        fun hookListMethod(method: Method) {
             val methodKey = method.toGenericString()
             if (!sInstalledMethodKeys.add(methodKey)) return
+            val methodName = method.name
 
             mod.hook(method).intercept { chain ->
                 val list = chain.args.firstOrNull() as? List<*>
@@ -84,18 +74,11 @@ object FeedAdHook {
                 }
                 chain.proceed()
             }
-            XposedCompat.log("[FeedAdHook] hook INSTALLED: $className.$methodName")
+            XposedCompat.log("[FeedAdHook] hook INSTALLED: ${method.declaringClass.name}.$methodName")
         }
 
-        hookListMethod(StableTiebaHookPoints.TEMPLATE_ADAPTER_CLASS, StableTiebaHookPoints.METHOD_SET_LIST)
-
-        val loadMoreMethod = symbols.feedTemplateLoadMoreMethod
-            ?.takeIf { it.isNotBlank() }
-        if (loadMoreMethod != null) {
-            hookListMethod(StableTiebaHookPoints.FEED_TEMPLATE_ADAPTER_CLASS, loadMoreMethod)
-        } else {
-            XposedCompat.log("[FeedAdHook] FeedTemplateAdapter loadMore skipped: scan symbol missing")
-        }
+        hookListMethod(targets.setListMethod)
+        targets.loadMoreMethod?.let(::hookListMethod)
     }
 
     private fun filterItems(

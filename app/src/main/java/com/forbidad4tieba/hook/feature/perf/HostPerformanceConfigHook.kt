@@ -6,11 +6,8 @@ import org.json.JSONArray
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 覆盖目标应用稳定性能配置的读取结果。
- *
- * 这个 hook 不处理混淆业务类，只碰稳定的辅助类和配置类。
- * 复杂策略提前算成 ConfigManager 里的布尔值。
- */
+ * 瑕嗙洊鐩爣搴旂敤绋冲畾鎬ц兘閰嶇疆鐨勮鍙栫粨鏋溿€? *
+ * 杩欎釜 hook 涓嶅鐞嗘贩娣嗕笟鍔＄被锛屽彧纰扮ǔ瀹氱殑杈呭姪绫诲拰閰嶇疆绫汇€? * 澶嶆潅绛栫暐鎻愬墠绠楁垚 ConfigManager 閲岀殑甯冨皵鍊笺€? */
 object HostPerformanceConfigHook {
     private const val TAG = "[HostPerformanceConfigHook]"
     private const val SHARED_PREF_HELPER_CLASS = "com.baidu.tbadk.core.sharedPref.SharedPrefHelper"

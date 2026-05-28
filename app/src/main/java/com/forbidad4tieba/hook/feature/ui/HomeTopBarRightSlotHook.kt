@@ -1,69 +1,33 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import android.view.View
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.HomeTopBarRightSlotSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
+import java.lang.reflect.Method
 
 object HomeTopBarRightSlotHook {
-    private data class RuntimeTargets(
-        val slotClass: String,
-        val stateMethods: Set<String>,
-    )
-
     @Volatile
     private var hooked = false
 
     @Volatile
     private var hooking = false
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols()) {
+    internal fun hook(targets: HomeTopBarRightSlotSymbols) {
         if (!tryBeginHook()) return
 
         var success = false
         try {
             val mod = XposedCompat.module ?: return
-            val targets = resolveTargets(symbols)
-            if (targets == null) {
-                XposedCompat.log(
-                    "[HomeTopBarRightSlotHook] skipped: scan symbols missing " +
-                        "(homeRightSlotClass/homeRightSlotStateMethods)",
-                )
-                return
-            }
-
-            val rightSlotClass = XposedCompat.findClassOrNull(targets.slotClass, cl)
-            if (rightSlotClass == null) {
-                XposedCompat.log("[HomeTopBarRightSlotHook] class NOT FOUND: ${targets.slotClass}")
-                return
-            }
-
-            val methods = targets.stateMethods.map { methodName ->
-                XposedCompat.findMethodOrNull(rightSlotClass, methodName)
-                    ?: run {
-                        XposedCompat.log(
-                            "[HomeTopBarRightSlotHook] method NOT FOUND: " +
-                                "${targets.slotClass}.$methodName()",
-                        )
-                        return
-                    }
-            }
+            val methods = targets.stateMethods
             if (methods.isEmpty()) return
 
             for (method in methods.distinctBy { it.name }) {
-                if (method.returnType != Void.TYPE || method.parameterTypes.isNotEmpty()) {
-                    XposedCompat.log(
-                        "[HomeTopBarRightSlotHook] rejected unexpected method: " +
-                            "${method.declaringClass.name}.${method.name}",
-                    )
-                    return
-                }
                 mod.hook(method).intercept { chain ->
                     val result = chain.proceed()
                     if (ConfigManager.shouldStabilizeHomeChrome()) {
-                        applySlotUiState(chain.thisObject)
+                        applySlotUiState(chain.thisObject, targets)
                     }
                     result
                 }
@@ -71,7 +35,7 @@ object HomeTopBarRightSlotHook {
             success = true
             XposedCompat.log(
                 "[HomeTopBarRightSlotHook] hook INSTALLED: " +
-                    "${targets.slotClass} methods=${targets.stateMethods.joinToString(",")}",
+                    "${targets.slotClass.name} methods=${methods.joinToString(",") { it.name }}",
             )
         } catch (t: Throwable) {
             XposedCompat.log("[HomeTopBarRightSlotHook] FAILED: ${t.message}")
@@ -79,21 +43,6 @@ object HomeTopBarRightSlotHook {
         } finally {
             finishHook(success)
         }
-    }
-
-    private fun resolveTargets(symbols: HookSymbols?): RuntimeTargets? {
-        val scanSymbols = symbols ?: return null
-        val slotClass = scanSymbols.homeRightSlotClass?.takeIf { it.isNotBlank() } ?: return null
-        val stateMethods = scanSymbols.homeRightSlotStateMethods.orEmpty()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .toSet()
-        if (stateMethods.isEmpty()) return null
-
-        return RuntimeTargets(
-            slotClass = slotClass,
-            stateMethods = stateMethods,
-        )
     }
 
     private fun tryBeginHook(): Boolean {
@@ -111,20 +60,19 @@ object HomeTopBarRightSlotHook {
         }
     }
 
-    private fun applySlotUiState(slotObj: Any?) {
+    private fun applySlotUiState(slotObj: Any?, targets: HomeTopBarRightSlotSymbols) {
         val slot = slotObj ?: return
         try {
-            val searchIcon = safeGetView(slot, "getSearchIconView")
-            val gameIcon = safeGetView(slot, "getGameIconView")
-            val topBarTip = safeGetView(slot, "getTopBarTip")
-            val redDotView = safeGetView(slot, "getRedDotView")
+            val searchIcon = safeGetView(slot, targets.searchIconViewMethod)
+            val gameIcon = safeGetView(slot, targets.gameIconViewMethod)
+            val topBarTip = safeGetView(slot, targets.topBarTipMethod)
+            val redDotView = safeGetView(slot, targets.redDotViewMethod)
 
             searchIcon?.visibility = View.VISIBLE
             searchIcon?.alpha = 1.0f
             searchIcon?.isEnabled = true
             searchIcon?.isClickable = true
-
-            // 缓存搜索图标 drawable，给 HistorySearchHook 和 CollectionSearchHook 复用。
+            // Cache the search icon drawable for history and collection hooks.
             (searchIcon as? android.widget.ImageView)?.drawable?.let {
                 NavBarSearchButton.cacheSearchIconDrawable(it)
             }
@@ -142,9 +90,9 @@ object HomeTopBarRightSlotHook {
         }
     }
 
-    private fun safeGetView(owner: Any, methodName: String): View? {
+    private fun safeGetView(owner: Any, method: Method): View? {
         return try {
-            XposedCompat.callMethod(owner, methodName) as? View
+            method.invoke(owner) as? View
         } catch (_: Throwable) {
             null
         }

@@ -5,53 +5,13 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.TitanRuntimeState
 import com.forbidad4tieba.hook.core.XposedCompat
-import com.forbidad4tieba.hook.feature.ad.FeedAdHook
-import com.forbidad4tieba.hook.feature.ad.FeedInfoLogHook
-import com.forbidad4tieba.hook.feature.ad.PbAdRequestBlockHook
-import com.forbidad4tieba.hook.feature.ad.PbEarlyAdBlockHook
-import com.forbidad4tieba.hook.feature.ad.PbFallingAdHook
-import com.forbidad4tieba.hook.feature.ad.PostAdHook
-import com.forbidad4tieba.hook.feature.ad.SearchBoxTextAdHook
-import com.forbidad4tieba.hook.feature.ad.StrategyAdHook
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
-import com.forbidad4tieba.hook.feature.im.PrivateReadReceiptBlockHook
 import com.forbidad4tieba.hook.feature.perf.ComponentDisableHook
-import com.forbidad4tieba.hook.feature.perf.AiComponentDisableHook
-import com.forbidad4tieba.hook.feature.perf.ForceFeedUiOptHook
-import com.forbidad4tieba.hook.feature.perf.HostPerformanceConfigHook
-import com.forbidad4tieba.hook.feature.perf.PbPerformanceModeHook
-import com.forbidad4tieba.hook.feature.perf.AdSdkInitBlockHook
-import com.forbidad4tieba.hook.feature.perf.ColdStartOptHook
 import com.forbidad4tieba.hook.feature.perf.TitanPatchBlockHook
-import com.forbidad4tieba.hook.feature.perf.TrackingBlockHook
-import com.forbidad4tieba.hook.feature.perf.VideoPreloadBlockHook
-import com.forbidad4tieba.hook.feature.share.ImageViewerNativeShareHook
-import com.forbidad4tieba.hook.feature.share.ShareTrackingParamCleanerHook
-import com.forbidad4tieba.hook.feature.ui.HomeBottomTabAutoHideHook
-import com.forbidad4tieba.hook.feature.ui.HomeTabHook
-import com.forbidad4tieba.hook.feature.ui.HomeTopTabAutoHideHook
-import com.forbidad4tieba.hook.feature.ui.HomeTopBarRightSlotHook
-import com.forbidad4tieba.hook.feature.ui.ImageViewerSwipeEnterForumBlockHook
-import com.forbidad4tieba.hook.feature.ui.MainTabBottomHook
-import com.forbidad4tieba.hook.feature.ui.MsgTabDefaultNotifyHook
-import com.forbidad4tieba.hook.feature.ui.FreeCopyHook
-import com.forbidad4tieba.hook.feature.ui.DefaultOriginalImageHook
-import com.forbidad4tieba.hook.feature.ui.CollectionSearchHook
-import com.forbidad4tieba.hook.feature.ui.HistorySearchHook
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHook
-import com.forbidad4tieba.hook.feature.ui.HomeSideBarSettingsEntryHook
-import com.forbidad4tieba.hook.feature.ui.ForumNativeTopShiftBlockHook
-import com.forbidad4tieba.hook.feature.ui.PbDisableGestureFontScaleHook
-import com.forbidad4tieba.hook.feature.ui.PbLikeAutoReplyHook
-import com.forbidad4tieba.hook.feature.ui.PbCommentAutoLoadHook
-import com.forbidad4tieba.hook.feature.ui.PbScrollCoalesceHook
-import com.forbidad4tieba.hook.feature.ui.UpgradePopWindowBlockHook
-import com.forbidad4tieba.hook.feature.web.EnterForumWebHook
-import com.forbidad4tieba.hook.feature.web.FollowedTabWebHook
 import com.forbidad4tieba.hook.feature.web.MineTabWebBlockHook
-import com.forbidad4tieba.hook.feature.web.PlainUrlDirectBrowserHook
 import com.forbidad4tieba.hook.ui.AboutInfoManager
 import com.forbidad4tieba.hook.ui.SettingsMenuHook
+import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
@@ -62,32 +22,6 @@ class MainHook : XposedModule() {
         val symbols: HookSymbols,
         val pendingScan: Boolean,
     )
-
-    private data class StaticHookPlan(
-        val adHooks: Boolean,
-        val topAndBottomBarHooks: Boolean,
-        val webHooks: Boolean,
-        val copyAndImageHooks: Boolean,
-        val imageViewerNativeShareHook: Boolean,
-        val defaultOriginalImageHook: Boolean,
-        val imageViewerSwipeEnterForumBlockHook: Boolean,
-        val pbPerformanceModeHook: Boolean,
-        val homeTabAutoHideHooks: Boolean,
-        val upgradeDialogHook: Boolean,
-    ) {
-        fun isEmpty(): Boolean {
-            return !adHooks &&
-                !topAndBottomBarHooks &&
-                !webHooks &&
-                !copyAndImageHooks &&
-                !imageViewerNativeShareHook &&
-                !defaultOriginalImageHook &&
-                !imageViewerSwipeEnterForumBlockHook &&
-                !pbPerformanceModeHook &&
-                !homeTabAutoHideHooks &&
-                !upgradeDialogHook
-        }
-    }
 
     @Volatile private var sAppContext: Context? = null
     @Volatile private var sAttachHookInstalled = false
@@ -109,12 +43,9 @@ class MainHook : XposedModule() {
         XposedCompat.log("[MainHook] onPackageLoaded: pkg=${param.packageName}, cl=${param.defaultClassLoader}")
 
         if (param.packageName != Constants.TARGET_PACKAGE) return
-        // 只在主进程安装，Titan 只在主进程加载补丁。
+        // Titan patch loading only runs in the main process.
         if (processName != Constants.TARGET_PACKAGE) return
-
-        // 尽早安装 TitanPatchBlockHook，在 Application.attach 之前。
-        // 目标应用会在 TiebaBaseApplication.attachBaseContext() 里调用 LoaderManager.load()，
-        // 所以要在 Application 生命周期开始前完成 hook。
+        // Install before Application.attach so Titan patch loading can be blocked early.
         TitanPatchBlockHook.hook(param.defaultClassLoader)
     }
 
@@ -142,12 +73,14 @@ class MainHook : XposedModule() {
 
     private fun handleLoadPackage(packageName: String, cl: ClassLoader) {
         XposedCompat.log("[MainHook] handleLoadPackage: pkg=$packageName, cl=$cl")
-        val staticPlan = resolveStaticHookPlan(processName)
+        val staticPlan = HookInstallPlanner.staticPlan(processName)
         if (staticPlan.isEmpty()) {
             XposedCompat.logD("[MainHook] static hook plan empty for process=$processName, skip")
         } else if (markStaticHooksInstalled()) {
             try {
-                installStaticHooks(cl, staticPlan)
+                XposedCompat.log("[MainHook] initialized. version=${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})")
+                HookInstaller.install(staticPlan, cl)
+                XposedCompat.log("[MainHook] All static hooks dispatched.")
             } catch (t: Throwable) {
                 synchronized(this) { sStaticHooksInstalled = false }
                 XposedCompat.log("[MainHook] static hook install FAILED: ${t.message}")
@@ -206,7 +139,7 @@ class MainHook : XposedModule() {
                                 logTitanStartupIfNeeded(app, cl)
                             }
                             runStartupTask("schedule auto sign in") {
-                                // 延后自动签到，减少启动阶段卡顿。
+                                // Delay auto sign-in to keep startup hooks light.
                                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                                     runStartupTask("auto sign in") {
                                         com.forbidad4tieba.hook.feature.signin.AutoSignInManager.tryAutoSignIn(app)
@@ -240,10 +173,22 @@ class MainHook : XposedModule() {
                 }
                 val symbols = symbolLoadResult.symbols
                 if (!symbolLoadResult.pendingScan) {
-                    ConfigManager.applyScanAvailability(appContext, HookSymbolResolver.featureStatusMap(symbols))
+                    ConfigManager.applyScanAvailability(
+                        appContext,
+                        HookSymbolResolver.featureStatusMap(symbols),
+                        refreshRuntime = true,
+                    )
                 }
+                val settingsSnapshot = ConfigManager.snapshot()
                 if (markPostAttachStaticHooksInstalled()) {
-                    installPostAttachStaticHooks(cl, resolveStaticHookPlan(processName), symbols)
+                    HookInstaller.install(
+                        HookInstallPlanner.postAttachPlan(
+                            processName = processName,
+                            symbols = symbols,
+                            settings = settingsSnapshot,
+                        ),
+                        cl,
+                    )
                 }
 
                 if (!markSymbolHooksInstalled()) {
@@ -252,10 +197,13 @@ class MainHook : XposedModule() {
                 }
 
                 val isMainProcess = processName == Constants.TARGET_PACKAGE
+                val symbolPlan = HookInstallPlanner.symbolPlan(
+                    processName = processName,
+                    symbols = symbols,
+                    settings = ConfigManager.snapshot(),
+                )
                 if (!isMainProcess) {
-                    if (processName == "${Constants.TARGET_PACKAGE}:remote") {
-                        AiComponentDisableHook.hookImageViewerJumpButton(cl, symbols)
-                    }
+                    HookInstaller.install(symbolPlan, cl)
                     XposedCompat.log("[MainHook] > Skip remaining symbol-dependent hooks in non-main process: $processName")
                     return@intercept result
                 }
@@ -283,48 +231,7 @@ class MainHook : XposedModule() {
                         XposedCompat.log("[MainHook] > $line")
                     }
 
-                    SettingsMenuHook.hook(cl, symbols)
-                    HomeSideBarSettingsEntryHook.hook(cl)
-                    FeedAdHook.hook(cl, symbols)
-                    PostAdHook.hook(cl, symbols)
-                    HomeTabHook.hook(cl, symbols)
-                    XposedCompat.log(
-                        "[MainHook] Installing MainTabBottomHook via symbols: " +
-                            "data=${symbols.mainTabDataClass}, add=${symbols.mainTabAddMethod}, " +
-                            "getList=${symbols.mainTabGetListMethod}, " +
-                            "delegate=${symbols.mainTabDelegateGetStructureMethod}, " +
-                            "typeField=${symbols.mainTabStructureTypeField}"
-                    )
-                    MainTabBottomHook.hook(cl, symbols)
-                    StrategyAdHook.hookWithSymbols(cl, symbols)
-                    SearchBoxTextAdHook.hook(cl, symbols)
-                    HomeTopBarRightSlotHook.hook(cl, symbols)
-                    PbEarlyAdBlockHook.hook(cl, symbols)
-                    PbAdRequestBlockHook.hook(cl, symbols)
-                    PbFallingAdHook.hook(cl, symbols)
-                    EnterForumWebHook.hook(cl, symbols)
-                    PlainUrlDirectBrowserHook.hook(cl, symbols)
-                    ForumNativeTopShiftBlockHook.hook(cl, symbols)
-                    HomeNativeGlassHook.hook(cl, symbols)
-
-                    com.forbidad4tieba.hook.feature.ui.AutoRefreshHook.hook(cl, symbols)
-
-                    com.forbidad4tieba.hook.feature.ui.AutoLoadMoreHook.hook(cl, symbols)
-                    PbCommentAutoLoadHook.hook(cl, symbols)
-                    PbScrollCoalesceHook.hook(cl, symbols)
-                    PbDisableGestureFontScaleHook.hook(cl, symbols)
-                    PbLikeAutoReplyHook.hook(cl, symbols)
-                    AiComponentDisableHook.hook(cl, symbols)
-
-                    MsgTabDefaultNotifyHook.hook(cl, symbols)
-                    PrivateReadReceiptBlockHook.hook(cl, symbols)
-                    CollectionSearchHook.hook(cl, symbols)
-                    HistorySearchHook.hook(cl, symbols)
-                    ShareTrackingParamCleanerHook.hook(cl, symbols)
-
-                    if (ConfigManager.shouldOutputDetailedLogs()) {
-                        FeedInfoLogHook.hook(cl, symbols)
-                    }
+                    HookInstaller.install(symbolPlan, cl)
 
                 } catch (t: Throwable) {
                     synchronized(this@MainHook) { sSymbolHooksInstalled = false }
@@ -343,88 +250,6 @@ class MainHook : XposedModule() {
             synchronized(this) { sAttachHookInstalled = false }
             XposedCompat.log("[MainHook] FAILED to hook Application.attach: ${t.message}")
             XposedCompat.log(t)
-        }
-    }
-
-    private fun installStaticHooks(cl: ClassLoader, plan: StaticHookPlan) {
-        XposedCompat.log("[MainHook] initialized. version=${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})")
-
-        if (plan.adHooks) {
-            XposedCompat.log("[MainHook] Installing StrategyAdHook (static)...")
-            StrategyAdHook.hookStatic(cl)
-        }
-
-        if (plan.topAndBottomBarHooks) {
-            XposedCompat.log("[MainHook] Installing PbBottomEnterBarHook...")
-            com.forbidad4tieba.hook.feature.ui.PbBottomEnterBarHook.hook(cl)
-        }
-
-        if (plan.webHooks) {
-            XposedCompat.log("[MainHook] Installing FollowedTabWebHook...")
-            FollowedTabWebHook.hook(cl)
-
-            XposedCompat.log("[MainHook] Installing MineTabWebBlockHook...")
-            MineTabWebBlockHook.hook(cl)
-        }
-
-        if (plan.upgradeDialogHook) {
-            XposedCompat.log("[MainHook] Installing UpgradePopWindowBlockHook...")
-            UpgradePopWindowBlockHook.hook(cl)
-        }
-
-        XposedCompat.log("[MainHook] All static hooks dispatched.")
-    }
-
-    private fun installPostAttachStaticHooks(cl: ClassLoader, plan: StaticHookPlan, symbols: HookSymbols) {
-        if (plan.copyAndImageHooks) {
-            XposedCompat.log("[MainHook] Installing FreeCopyHook...")
-            FreeCopyHook.hook(cl, symbols)
-        }
-
-        if (plan.homeTabAutoHideHooks && ConfigManager.isHomeTabAutoHideEnabled) {
-            XposedCompat.log("[MainHook] Installing HomeTopTabAutoHideHook...")
-            HomeTopTabAutoHideHook.hook(cl)
-
-            XposedCompat.log("[MainHook] Installing HomeBottomTabAutoHideHook...")
-            HomeBottomTabAutoHideHook.hook(cl)
-        }
-
-        if (plan.pbPerformanceModeHook) {
-            XposedCompat.log("[MainHook] Installing PbPerformanceModeHook...")
-            PbPerformanceModeHook.hook(cl)
-
-            XposedCompat.log("[MainHook] Installing ForceFeedUiOptHook...")
-            ForceFeedUiOptHook.hook(cl)
-
-            XposedCompat.log("[MainHook] Installing AdSdkInitBlockHook...")
-            AdSdkInitBlockHook.hook(cl)
-
-            XposedCompat.log("[MainHook] Installing TrackingBlockHook...")
-            TrackingBlockHook.hook(cl)
-
-            XposedCompat.log("[MainHook] Installing VideoPreloadBlockHook...")
-            VideoPreloadBlockHook.hook(cl)
-
-            XposedCompat.log("[MainHook] Installing ColdStartOptHook...")
-            ColdStartOptHook.hook(cl)
-
-            XposedCompat.log("[MainHook] Installing HostPerformanceConfigHook...")
-            HostPerformanceConfigHook.hook(cl)
-        }
-
-        if (plan.imageViewerNativeShareHook) {
-            XposedCompat.log("[MainHook] Installing ImageViewerNativeShareHook...")
-            ImageViewerNativeShareHook.hook(cl, symbols)
-        }
-
-        if (plan.defaultOriginalImageHook) {
-            XposedCompat.log("[MainHook] Installing DefaultOriginalImageHook...")
-            DefaultOriginalImageHook.hook(cl, symbols)
-        }
-
-        if (plan.imageViewerSwipeEnterForumBlockHook) {
-            XposedCompat.log("[MainHook] Installing ImageViewerSwipeEnterForumBlockHook...")
-            ImageViewerSwipeEnterForumBlockHook.hook(cl)
         }
     }
 
@@ -499,33 +324,12 @@ class MainHook : XposedModule() {
     }
 
     private fun shouldHandleProcess(name: String): Boolean {
-        return shouldInstallAttachHook(name) || !resolveStaticHookPlan(name).isEmpty()
+        return HookInstallPlanner.shouldHandleProcess(name)
     }
 
     private fun shouldInstallAttachHook(name: String): Boolean {
-        // 图片查看器 Activity 声明在 :remote，其他服务或辅助进程
-        // 不需要初始化 ConfigManager、加载符号缓存或安装图片查看器 hook。
-        return name == Constants.TARGET_PACKAGE || isImageViewerRemoteProcess(name)
+        // Only the main process and image-viewer remote process need attach hooks.
+        return HookInstallPlanner.shouldInstallAttachHook(name)
     }
 
-    private fun resolveStaticHookPlan(name: String): StaticHookPlan {
-        val isMain = name == Constants.TARGET_PACKAGE
-        val isImageViewerProcess = isMain || isImageViewerRemoteProcess(name)
-        return StaticHookPlan(
-            adHooks = isMain,
-            topAndBottomBarHooks = isMain,
-            webHooks = isMain,
-            copyAndImageHooks = isMain,
-            imageViewerNativeShareHook = isImageViewerProcess,
-            defaultOriginalImageHook = isImageViewerProcess,
-            imageViewerSwipeEnterForumBlockHook = isImageViewerProcess,
-            pbPerformanceModeHook = isMain,
-            homeTabAutoHideHooks = isMain,
-            upgradeDialogHook = isMain,
-        )
-    }
-
-    private fun isImageViewerRemoteProcess(name: String): Boolean {
-        return name == "${Constants.TARGET_PACKAGE}:remote"
-    }
 }

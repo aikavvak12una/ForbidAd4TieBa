@@ -20,8 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.CollectionSearchSymbols
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
@@ -41,32 +40,11 @@ import java.util.concurrent.Executors
 import org.json.JSONObject
 
 /**
- * 收藏页搜索：
- * - 添加独立的右上角搜索按钮。
- * - 在本地过滤 adapter 列表。
- * - 保持完整 model 数据不变，过滤后重映射点击下标。
- * - 混淆成员由扫描符号解析一次，运行期作为固定目标使用。
- */
+ * 鏀惰棌椤垫悳绱細
+ * - 娣诲姞鐙珛鐨勫彸涓婅鎼滅储鎸夐挳銆? * - 鍦ㄦ湰鍦拌繃婊?adapter 鍒楄〃銆? * - 淇濇寔瀹屾暣 model 鏁版嵁涓嶅彉锛岃繃婊ゅ悗閲嶆槧灏勭偣鍑讳笅鏍囥€? * - 娣锋穯鎴愬憳鐢辨壂鎻忕鍙疯В鏋愪竴娆★紝杩愯鏈熶綔涓哄浐瀹氱洰鏍囦娇鐢ㄣ€? */
 object CollectionSearchHook {
     private const val FULL_CACHE_MAX_ACCOUNTS = 3
     private const val PAGE_SIZE = 20
-
-    private data class RuntimeTargets(
-        val presenterField: String,
-        val presenterListSetterMethod: String,
-        val modelField: String,
-        val modelListGetterMethod: String,
-        val modelParseMethod: String,
-        val modelListField: String,
-        val fragmentDisplayListField: String,
-        val activityNavControllerField: String?,
-        val navBarField: String,
-        val presenterAdapterField: String?,
-        val adapterShowFooterMethod: String?,
-        val adapterLoadingMethod: String?,
-        val adapterHasMoreMethod: String?,
-        val editModeMethod: String?,
-    )
 
     private data class FilterState(
         var query: String = "",
@@ -167,75 +145,20 @@ object CollectionSearchHook {
     }
 
     @Volatile
-    private var sRuntimeTargets: RuntimeTargets? = null
+    private var sRuntimeTargets: CollectionSearchSymbols? = null
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols()) {
+    internal fun hook(symbols: CollectionSearchSymbols) {
         val mod = XposedCompat.module ?: return
-        val targets = resolveTargets(symbols)
-        if (targets == null) {
-            XposedCompat.log(
-                "[CollectionSearchHook] skipped: scan symbols missing " +
-                    "(collectionPresenterField/collectionPresenterListSetterMethod/" +
-                    "collectionModelField/collectionModelListGetterMethod/collectionModelParseMethod/" +
-                    "collectionModelListField/collectionFragmentDisplayListField/" +
-                    "collectionNavBarField)",
-            )
-            return
-        }
-        sRuntimeTargets = targets
-        val activityClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.COLLECT_TAB_ACTIVITY_CLASS, cl)
-        val fragmentClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.COLLECTION_THREAD_FRAGMENT_CLASS, cl)
-        if (activityClass == null || fragmentClass == null) {
-            XposedCompat.log("[CollectionSearchHook] class NOT FOUND: activity=$activityClass, fragment=$fragmentClass")
-            return
-        }
+        sRuntimeTargets = symbols
 
         try {
-            installActivityHooks(mod, activityClass)
-            installFragmentHooks(mod, fragmentClass)
+            installActivityHooks(mod, symbols.activityClass)
+            installFragmentHooks(mod, symbols.fragmentClass)
             XposedCompat.log("[CollectionSearchHook] hook INSTALLED")
         } catch (t: Throwable) {
             XposedCompat.log("[CollectionSearchHook] FAILED: ${t.message}")
             XposedCompat.log(t)
         }
-    }
-
-    private fun resolveTargets(symbols: HookSymbols?): RuntimeTargets? {
-        val scanSymbols = symbols ?: return null
-        val presenterField = scanSymbols.collectionPresenterField?.takeIf { it.isNotBlank() } ?: return null
-        val presenterListSetterMethod =
-            scanSymbols.collectionPresenterListSetterMethod?.takeIf { it.isNotBlank() } ?: return null
-        val modelField = scanSymbols.collectionModelField?.takeIf { it.isNotBlank() } ?: return null
-        val modelListGetterMethod =
-            scanSymbols.collectionModelListGetterMethod?.takeIf { it.isNotBlank() } ?: return null
-        val modelParseMethod = scanSymbols.collectionModelParseMethod?.takeIf { it.isNotBlank() } ?: return null
-        val modelListField = scanSymbols.collectionModelListField?.takeIf { it.isNotBlank() } ?: return null
-        val fragmentDisplayListField =
-            scanSymbols.collectionFragmentDisplayListField?.takeIf { it.isNotBlank() } ?: return null
-        val activityNavControllerField =
-            scanSymbols.collectionActivityNavControllerField?.takeIf { it.isNotBlank() }
-        val navBarField = scanSymbols.collectionNavBarField?.takeIf { it.isNotBlank() } ?: return null
-        val presenterAdapterField = scanSymbols.collectionPresenterAdapterField?.takeIf { it.isNotBlank() }
-        val adapterShowFooterMethod = scanSymbols.collectionAdapterShowFooterMethod?.takeIf { it.isNotBlank() }
-        val adapterLoadingMethod = scanSymbols.collectionAdapterLoadingMethod?.takeIf { it.isNotBlank() }
-        val adapterHasMoreMethod = scanSymbols.collectionAdapterHasMoreMethod?.takeIf { it.isNotBlank() }
-        val editModeMethod = scanSymbols.collectionEditModeMethod?.takeIf { it.isNotBlank() }
-        return RuntimeTargets(
-            presenterField = presenterField,
-            presenterListSetterMethod = presenterListSetterMethod,
-            modelField = modelField,
-            modelListGetterMethod = modelListGetterMethod,
-            modelParseMethod = modelParseMethod,
-            modelListField = modelListField,
-            fragmentDisplayListField = fragmentDisplayListField,
-            activityNavControllerField = activityNavControllerField,
-            navBarField = navBarField,
-            presenterAdapterField = presenterAdapterField,
-            adapterShowFooterMethod = adapterShowFooterMethod,
-            adapterLoadingMethod = adapterLoadingMethod,
-            adapterHasMoreMethod = adapterHasMoreMethod,
-            editModeMethod = editModeMethod,
-        )
     }
 
     private fun installActivityHooks(mod: io.github.libxposed.api.XposedModule, activityClass: Class<*>) {

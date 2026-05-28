@@ -2,15 +2,13 @@ package com.forbidad4tieba.hook.feature.ui
 
 import android.graphics.Color
 import android.widget.TextView
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.FreeCopyPopupSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 只在原生评论长按弹窗里启用文本选择。
- */
+ * 鍙湪鍘熺敓璇勮闀挎寜寮圭獥閲屽惎鐢ㄦ枃鏈€夋嫨銆? */
 object FreeCopyHook {
     private const val MAX_PATCH_TRACE_LOG = 2
     private const val FORCED_HIGHLIGHT_COLOR = 0x6633B5E5
@@ -18,17 +16,16 @@ object FreeCopyHook {
     private val entryInstalled = AtomicBoolean(false)
     private val popupPatchCount = AtomicInteger(0)
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols()) {
+    internal fun hook(popupSymbols: FreeCopyPopupSymbols) {
         if (!entryInstalled.compareAndSet(false, true)) return
-        if (!hookPopupMenuText(cl, symbols)) {
+        if (!hookPopupMenuText(popupSymbols)) {
             entryInstalled.set(false)
         }
     }
 
-    private fun hookPopupMenuText(cl: ClassLoader, symbols: HookSymbols?): Boolean {
+    private fun hookPopupMenuText(popupSymbols: FreeCopyPopupSymbols): Boolean {
         val mod = XposedCompat.module ?: return false
         try {
-            val popupSymbols = HookSymbolResolver.resolveFreeCopyPopupSymbols(cl, symbols) ?: return false
             mod.hook(popupSymbols.contentViewMethod).intercept { chain ->
                 val result = chain.proceed()
                 val menu = chain.thisObject ?: return@intercept result

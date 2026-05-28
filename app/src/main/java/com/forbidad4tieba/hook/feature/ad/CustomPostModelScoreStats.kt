@@ -17,12 +17,10 @@ internal object CustomPostModelScoreStats {
     private const val HISTOGRAM_TAIL_PERCENTILE = 0.90
 
     // 持久化失败退避：连续写盘失败达到这个次数后，
-    // 切到仅内存模式，直到进程重启或调用 clear()。
+    // Disable persistence for this process after repeated write failures.
     private const val PERSISTENCE_FAILURE_LIMIT = 3
-    // 距离上次裁剪累积了足够多的新帖子后，才裁剪存储文件。
-    // 文件已经在限制内时，避免不必要的全量读取。
-    private const val TRIM_POST_THRESHOLD_RATIO = 0.1 // 新帖子达到限制的 10% 时裁剪。
-
+    // Trim only after enough new posts accumulate.
+    private const val TRIM_POST_THRESHOLD_RATIO = 0.1
     private val lock = Any()
     private val fileLock = Any()
     private val autoPercentileReadyLock = Any()
@@ -31,7 +29,7 @@ internal object CustomPostModelScoreStats {
     private val postIdGenerator = AtomicLong(System.currentTimeMillis())
     @Volatile private var autoPercentileReadyKeys: Set<String> = emptySet()
     private var statsGeneration = 0L
-    // 由 fileLock 保护。
+    // Guarded by fileLock.
     private var persistenceFailureCount = 0
     private var persistenceDisabled = false
     private var postsSinceLastTrim = 0
@@ -240,8 +238,7 @@ internal object CustomPostModelScoreStats {
         val file = File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME)
         synchronized(fileLock) {
             if (persistenceDisabled) {
-                // 本轮会话禁用持久化后，直接丢弃记录。
-                // 避免 pendingRecords 无限制增长。
+                // Drop buffered records after persistence is disabled.
                 return
             }
             val activeRecords = synchronized(lock) {
@@ -265,8 +262,8 @@ internal object CustomPostModelScoreStats {
                                 "$persistenceFailureCount consecutive failures: ${t.message}"
                         )
                     }
-                    // 丢弃缓冲记录，避免 pendingRecords 无限制增长。
-                    return
+                // Drop buffered records after persistence is disabled.
+                return
                 }
                 synchronized(lock) {
                     pendingRecords.addAll(0, activeRecords)
@@ -277,7 +274,7 @@ internal object CustomPostModelScoreStats {
                 )
                 return
             }
-            // 成功后重置失败计数。
+            // Reset failure count after a successful write.
             persistenceFailureCount = 0
             val newPostCount = activeRecords.map { it.postId }.distinct().size
             postsSinceLastTrim += newPostCount
@@ -295,22 +292,20 @@ internal object CustomPostModelScoreStats {
     }
 
     /**
-     * 读取 [modelKey] 的已存储值和待写入值。
-     * 按帖子数量限制处理，只让最近 [ConfigManager.postModelScoreStatsPostLimit] 个帖子参与统计。
-     */
+     * 读取 [modelKey] 的已存储值和待写入值�?     * 按帖子数量限制处理，只让最�?[ConfigManager.postModelScoreStatsPostLimit] 个帖子参与统计�?     */
     private fun readLimitedValues(modelKey: String): ArrayList<Double> {
         val limit = ConfigManager.postModelScoreStatsPostLimit
         val storedRecords = readStoredRecordsForKey(modelKey)
         val pendingForKey = synchronized(lock) {
             pendingRecords.filter { it.modelKey == modelKey }
         }
-        // 合并已存储和待写入记录，只保留最近 `limit` 个唯一 postId。
+        // Merge stored and pending records, keeping the newest unique post ids.
         val allRecords = ArrayList<StoredRecord>(storedRecords.size + pendingForKey.size)
         allRecords.addAll(storedRecords)
         allRecords.addAll(pendingForKey)
         if (allRecords.isEmpty()) return ArrayList()
 
-        // 从末尾开始收集最新的唯一 postId，直到达到限制。
+        // Walk from the tail to collect the newest unique post ids.
         val keepPostIds = LinkedHashSet<Long>(limit)
         for (index in allRecords.indices.reversed()) {
             keepPostIds.add(allRecords[index].postId)
@@ -359,6 +354,7 @@ internal object CustomPostModelScoreStats {
             file.delete()
             return
         }
+        // Walk from the tail to collect the newest unique post ids.
         val keepPostIds = LinkedHashSet<Long>(limit)
         for (index in records.indices.reversed()) {
             keepPostIds.add(records[index].postId)

@@ -18,12 +18,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 隐藏贴吧 369492229 及之后版本 WebView 我的页里的广告和推广块。
- *
- * 这里 hook TbWebView.loadUrl，而不是 android.webkit.WebView.loadUrl。
- * 目标 TbWebView 可能直接显示内部 MonitorWebView 来使用预渲染或通用缓存页，
- * 这样会绕过内部 WebView 的 load 和 page-finished 路径。
- */
+ * 闅愯棌璐村惂 369492229 鍙婁箣鍚庣増鏈?WebView 鎴戠殑椤甸噷鐨勫箍鍛婂拰鎺ㄥ箍鍧椼€? *
+ * 杩欓噷 hook TbWebView.loadUrl锛岃€屼笉鏄?android.webkit.WebView.loadUrl銆? * 鐩爣 TbWebView 鍙兘鐩存帴鏄剧ず鍐呴儴 MonitorWebView 鏉ヤ娇鐢ㄩ娓叉煋鎴栭€氱敤缂撳瓨椤碉紝
+ * 杩欐牱浼氱粫杩囧唴閮?WebView 鐨?load 鍜?page-finished 璺緞銆? */
 object MineTabWebBlockHook {
     private const val MIN_WEB_MINE_TAB_VERSION_CODE = 369491968L
     private const val MINE_TAB_PATH = "/mo/q/hybrid-main-forumtab/mineTab"

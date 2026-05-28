@@ -7,13 +7,11 @@ import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
-import com.forbidad4tieba.hook.HookSymbols
-import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.symbol.model.PbLikeAutoReplySymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.util.Collections
 import java.util.WeakHashMap
 
@@ -32,78 +30,34 @@ object PbLikeAutoReplyHook {
     @Volatile private var hooked = false
     @Volatile private var runtimeDisabled = false
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols) {
-        if (!ConfigManager.isPbLikeAutoReplyEnabled) {
-            XposedCompat.log("$TAG skipped: config disabled")
+    internal fun hook(symbols: PbLikeAutoReplySymbols, replyText: String) {
+        val mod = XposedCompat.module ?: return
+        val normalizedReplyText = replyText.trim()
+        if (normalizedReplyText.isBlank()) {
+            XposedCompat.log("$TAG skipped: reply text empty")
             return
         }
-        val mod = XposedCompat.module ?: return
         if (!tryMarkHooked()) return
 
         try {
-            val agreeViewClass = resolveClass(cl, symbols.pbLikeAutoReplyAgreeViewClass, "agreeViewClass")
-            val inputContainerClass = resolveClass(cl, symbols.pbLikeAutoReplyInputContainerClass, "inputContainerClass")
-            val agreeClickMethod = resolveAgreeClickMethod(
-                agreeViewClass,
-                symbols.pbLikeAutoReplyAgreeClickMethod,
-            )
-            val getDataMethod = resolveNoArgMethod(
-                agreeViewClass,
-                symbols.pbLikeAutoReplyAgreeViewGetDataMethod,
-                "agreeViewGetDataMethod",
-            )
-            val agreeDataClass = resolveClass(cl, symbols.pbLikeAutoReplyAgreeDataClass, "agreeDataClass")
-            if (!agreeDataClass.isAssignableFrom(getDataMethod.returnType)) {
-                error("agreeViewGetDataMethod return mismatch: ${getDataMethod.returnType.name}")
-            }
-            val hasAgreeField = resolveField(agreeDataClass, symbols.pbLikeAutoReplyAgreeDataHasAgreeField, "hasAgreeField")
-            val agreeTypeField = resolveField(agreeDataClass, symbols.pbLikeAutoReplyAgreeDataAgreeTypeField, "agreeTypeField")
-            val isInThreadField = resolveField(
-                agreeDataClass,
-                symbols.pbLikeAutoReplyAgreeDataIsInThreadField,
-                "isInThreadField",
-            )
-            val getInputViewMethod = resolveNoArgMethod(
-                inputContainerClass,
-                symbols.pbLikeAutoReplyInputContainerGetInputViewMethod,
-                "inputContainerGetInputViewMethod",
-            )
-            if (
-                !EditText::class.java.isAssignableFrom(getInputViewMethod.returnType) &&
-                !View::class.java.isAssignableFrom(getInputViewMethod.returnType)
-            ) {
-                error("inputContainerGetInputViewMethod return mismatch: ${getInputViewMethod.returnType.name}")
-            }
-            val getSendViewMethod = resolveNoArgMethod(
-                inputContainerClass,
-                symbols.pbLikeAutoReplyInputContainerGetSendViewMethod,
-                "inputContainerGetSendViewMethod",
-            )
-            if (!View::class.java.isAssignableFrom(getSendViewMethod.returnType)) {
-                error("inputContainerGetSendViewMethod return mismatch: ${getSendViewMethod.returnType.name}")
-            }
-
-            mod.hook(agreeClickMethod).intercept { chain ->
+            mod.hook(symbols.agreeClickMethod).intercept { chain ->
                 val agreeView = chain.thisObject
                 val clicked = chain.args.getOrNull(0) as? View
-                val replyText = ConfigManager.pbLikeAutoReplyText
                 var beforeKnown = false
                 var wasSelected = false
                 var isThread = false
                 if (
-                    ConfigManager.isPbLikeAutoReplyEnabled &&
                     !runtimeDisabled &&
-                    replyText.isNotBlank() &&
                     agreeView != null &&
                     clicked != null
                 ) {
                     try {
-                        val agreeData = getDataMethod.invoke(agreeView)
-                        isThread = isThreadLike(agreeData, isInThreadField)
+                        val agreeData = symbols.getDataMethod.invoke(agreeView)
+                        isThread = isThreadLike(agreeData, symbols.isInThreadField)
                         wasSelected = isSelectedLike(
                             data = agreeData,
-                            hasAgreeField = hasAgreeField,
-                            agreeTypeField = agreeTypeField,
+                            hasAgreeField = symbols.hasAgreeField,
+                            agreeTypeField = symbols.agreeTypeField,
                         )
                         beforeKnown = true
                     } catch (t: Throwable) {
@@ -118,26 +72,24 @@ object PbLikeAutoReplyHook {
                 }
                 try {
                     if (
-                        !ConfigManager.isPbLikeAutoReplyEnabled ||
                         runtimeDisabled ||
-                        replyText.isBlank() ||
                         !isThread ||
                         wasSelected
                     ) {
                         return@intercept result
                     }
-                    val agreeData = getDataMethod.invoke(agreeView)
+                    val agreeData = symbols.getDataMethod.invoke(agreeView)
                     if (
-                        isThreadLike(agreeData, isInThreadField) &&
-                        isSelectedLike(agreeData, hasAgreeField, agreeTypeField) &&
+                        isThreadLike(agreeData, symbols.isInThreadField) &&
+                        isSelectedLike(agreeData, symbols.hasAgreeField, symbols.agreeTypeField) &&
                         markTriggered(agreeData ?: agreeView)
                     ) {
                         scheduleSendPresetReply(
                             clicked = clicked,
-                            replyText = replyText,
-                            inputContainerClass = inputContainerClass,
-                            getInputViewMethod = getInputViewMethod,
-                            getSendViewMethod = getSendViewMethod,
+                            replyText = normalizedReplyText,
+                            inputContainerClass = symbols.inputContainerClass,
+                            getInputViewMethod = symbols.getInputViewMethod,
+                            getSendViewMethod = symbols.getSendViewMethod,
                         )
                     }
                 } catch (t: Throwable) {
@@ -147,7 +99,7 @@ object PbLikeAutoReplyHook {
                 }
                 result
             }
-            XposedCompat.log("$TAG hook INSTALLED: ${agreeViewClass.name}.${agreeClickMethod.name}(View)")
+            XposedCompat.log("$TAG hook INSTALLED: ${symbols.agreeViewClass.name}.${symbols.agreeClickMethod.name}(View)")
         } catch (t: Throwable) {
             resetHooked()
             XposedCompat.log("$TAG install FAILED: ${t.message}")
@@ -186,8 +138,7 @@ object PbLikeAutoReplyHook {
         getInputViewMethod: Method,
         getSendViewMethod: Method,
     ) {
-        val normalizedText = replyText.trim()
-        if (!ConfigManager.isPbLikeAutoReplyEnabled || runtimeDisabled || normalizedText.isBlank()) return
+        if (runtimeDisabled || replyText.isBlank()) return
         val activity = ReflectionUtils.findActivityFromContext(clicked.context) ?: return
         val inputContainer = findInputContainer(
             activity = activity,
@@ -196,14 +147,14 @@ object PbLikeAutoReplyHook {
             getSendViewMethod = getSendViewMethod,
         ) ?: return
         val inputView = getInputViewMethod.invoke(inputContainer) as? EditText ?: return
-        if (inputView.text?.toString() != normalizedText) {
-            inputView.setText(normalizedText)
+        if (inputView.text?.toString() != replyText) {
+            inputView.setText(replyText)
             inputView.setSelection(inputView.text?.length ?: 0)
         }
         val sendView = getSendViewMethod.invoke(inputContainer) as? View ?: return
         inputView.postDelayed({
             try {
-                if (!ConfigManager.isPbLikeAutoReplyEnabled || runtimeDisabled) return@postDelayed
+                if (runtimeDisabled) return@postDelayed
                 if (!sendView.isEnabled) return@postDelayed
                 sendView.performClick()
                 XposedCompat.logD { "$TAG sent preset reply after thread like" }
@@ -268,34 +219,6 @@ object PbLikeAutoReplyHook {
             triggerDebounce[key] = now
             return true
         }
-    }
-
-    private fun resolveClass(cl: ClassLoader, className: String?, label: String): Class<*> {
-        val name = className?.takeIf { it.isNotBlank() } ?: error("missing $label")
-        return XposedCompat.findClassOrNull(name, cl) ?: error("class not found: $name")
-    }
-
-    private fun resolveAgreeClickMethod(clazz: Class<*>, methodName: String?): Method {
-        val name = methodName?.takeIf { it.isNotBlank() } ?: error("missing agreeClickMethod")
-        return clazz.declaredMethods.firstOrNull { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.name == name &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                method.parameterTypes[0] == View::class.java
-        }?.apply { isAccessible = true } ?: error("method not found: ${clazz.name}.$name(View)")
-    }
-
-    private fun resolveNoArgMethod(clazz: Class<*>, methodName: String?, label: String): Method {
-        val name = methodName?.takeIf { it.isNotBlank() } ?: error("missing $label")
-        return clazz.methods.firstOrNull { method ->
-            method.name == name && method.parameterTypes.isEmpty()
-        }?.apply { isAccessible = true } ?: error("method not found: ${clazz.name}.$name()")
-    }
-
-    private fun resolveField(clazz: Class<*>, fieldName: String?, label: String): Field {
-        val name = fieldName?.takeIf { it.isNotBlank() } ?: error("missing $label")
-        return XposedCompat.findField(clazz, name)
     }
 
     private fun tryMarkHooked(): Boolean {

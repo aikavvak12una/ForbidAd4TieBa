@@ -2,7 +2,7 @@ package com.forbidad4tieba.hook.feature.ui
 
 import android.view.View
 import android.view.ViewGroup
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.DefaultOriginalImageSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -14,15 +14,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 图片页成为当前页时，自动触发查看原图。
- *
- * 处理方式是 hook ImagePagerAdapter.setPrimaryItem(ViewGroup, int, Object)，
- * 同时把 UrlDragImageView 构造函数作为备用入口。
- * 新页面成为当前页且查看原图按钮可用时，自动触发。
- *
- * 这个 hook 需要安装到所有贴吧进程，不只主进程。
- * 图片查看器 Activity ImageViewerActivity 运行在子进程。
- */
+ * 图片页成为当前页时，自动触发查看原图�? *
+ * 处理方式�?hook ImagePagerAdapter.setPrimaryItem(ViewGroup, int, Object)�? * 同时�?UrlDragImageView 构造函数作为备用入口�? * 新页面成为当前页且查看原图按钮可用时，自动触发�? *
+ * 这个 hook 需要安装到所有贴吧进程，不只主进程�? * 图片查看�?Activity ImageViewerActivity 运行在子进程�? */
 object DefaultOriginalImageHook {
     private const val PREF_KEY_ORIGINAL_IMG_DOWN_TIP = "original_img_down_tip"
 
@@ -30,31 +24,10 @@ object DefaultOriginalImageHook {
     private const val RETRY_DELAY_MS = 200L
     private const val VERIFY_DELAY_MS = 300L
 
-    private data class RuntimeTargets(
-        val pagerAdapterClass: String?,
-        val urlDragImageViewClass: String,
-        val dataClass: String,
-        val setPrimaryItemMethod: String?,
-        val setAssistUrlMethod: String?,
-        val assistDataMethod: String,
-        val originTextMethod: String?,
-        val showButtonField: String,
-        val blockedField: String,
-        val originalProcessField: String,
-        val originalUrlField: String,
-        val sharedPrefHelperClass: String?,
-        val sharedPrefGetInstanceMethod: String?,
-        val sharedPrefPutBooleanMethod: String?,
-        val md5Class: String?,
-        val md5Method: String?,
-        val triggerMethod: String,
-        val directStartMethod: String?,
-    )
-
     private val hookInstalled = AtomicBoolean(false)
     private val tipBypassApplied = AtomicBoolean(false)
 
-    // 一次性警告和日志标记。
+    // One-shot warning and log markers.
     private val firstPrimaryCallbackLogged = AtomicBoolean(false)
     private val firstCtorCallbackLogged = AtomicBoolean(false)
     private val warnedTriggerMethodMissing = AtomicBoolean(false)
@@ -66,13 +39,12 @@ object DefaultOriginalImageHook {
 
     private val setPrimaryDispatchDepth = ThreadLocal<Int>()
 
-    // 使用 View tag 跟踪自动触发状态，不用 WeakHashMap。
-    // 高频回调里可以少一次同步 map 开销。
+    // View tags avoid WeakHashMap work in high-frequency callbacks.
     private const val TAG_AUTO_TRIGGERED_DATA_ID = 0x7E000010
     private const val TAG_PENDING_TRIGGER_DATA_ID = 0x7E000011
     private const val TAG_DIRECT_START_DATA_ID = 0x7E000012
 
-    // 反射缓存。
+    // Reflection lookup cache.
     private data class FieldLookupCache(
         val fields: ConcurrentHashMap<String, Field> = ConcurrentHashMap(),
         val misses: MutableSet<String> = ConcurrentHashMap.newKeySet(),
@@ -99,20 +71,16 @@ object DefaultOriginalImageHook {
     @Volatile private var urlDragImageViewClass: Class<*>? = null
     @Volatile private var sharedPrefHelperClass: Class<*>? = null
     @Volatile private var tbMd5Class: Class<*>? = null
-    @Volatile private var runtimeTargets: RuntimeTargets? = null
+    @Volatile private var runtimeTargets: DefaultOriginalImageSymbols? = null
 
-    fun hook(
-        cl: ClassLoader,
-        symbols: HookSymbols,
-    ) {
-        val targets = resolveRuntimeTargets(symbols) ?: return
+    internal fun hook(targets: DefaultOriginalImageSymbols) {
         runtimeTargets = targets
         if (loggedSymbolSourceParameter.compareAndSet(false, true)) {
-            XposedCompat.log("[DefaultOriginalImageHook] scan symbols loaded from hook parameter")
+            XposedCompat.log("[DefaultOriginalImageHook] scan symbols loaded from resolver targets")
         }
         if (!hookInstalled.compareAndSet(false, true)) return
         try {
-            if (!hookInternal(cl)) {
+            if (!hookInternal()) {
                 hookInstalled.set(false)
             }
         } catch (t: Throwable) {
@@ -122,51 +90,7 @@ object DefaultOriginalImageHook {
         }
     }
 
-    private fun resolveRuntimeTargets(symbols: HookSymbols): RuntimeTargets? {
-        val missing = ArrayList<String>(8)
-        fun requireSymbol(name: String, value: String?): String? {
-            if (value.isNullOrBlank()) {
-                missing.add(name)
-                return null
-            }
-            return value
-        }
-
-        val urlDragClass = requireSymbol("origImageUrlDragImageViewClass", symbols.origImageUrlDragImageViewClass)
-        val dataClass = requireSymbol("origImageDataClass", symbols.origImageDataClass)
-        val assistDataMethod = requireSymbol("origImageAssistDataMethod", symbols.origImageAssistDataMethod)
-        val showButtonField = requireSymbol("origImageShowButtonField", symbols.origImageShowButtonField)
-        val blockedField = requireSymbol("origImageBlockedField", symbols.origImageBlockedField)
-        val originalProcessField = requireSymbol("origImageOriginalProcessField", symbols.origImageOriginalProcessField)
-        val originalUrlField = requireSymbol("origImageOriginalUrlField", symbols.origImageOriginalUrlField)
-        val triggerMethod = requireSymbol("origImageTriggerMethod", symbols.origImageTriggerMethod)
-        if (missing.isNotEmpty()) {
-            XposedCompat.log("[DefaultOriginalImageHook] disabled: missing scan symbols ${missing.joinToString(",")}")
-            return null
-        }
-        return RuntimeTargets(
-            pagerAdapterClass = symbols.origImagePagerAdapterClass,
-            urlDragImageViewClass = urlDragClass!!,
-            dataClass = dataClass!!,
-            setPrimaryItemMethod = symbols.origImageSetPrimaryItemMethod,
-            setAssistUrlMethod = symbols.origImageSetAssistUrlMethod,
-            assistDataMethod = assistDataMethod!!,
-            originTextMethod = symbols.origImageOriginTextMethod,
-            showButtonField = showButtonField!!,
-            blockedField = blockedField!!,
-            originalProcessField = originalProcessField!!,
-            originalUrlField = originalUrlField!!,
-            sharedPrefHelperClass = symbols.origImageSharedPrefHelperClass,
-            sharedPrefGetInstanceMethod = symbols.origImageSharedPrefGetInstanceMethod,
-            sharedPrefPutBooleanMethod = symbols.origImageSharedPrefPutBooleanMethod,
-            md5Class = symbols.origImageMd5Class,
-            md5Method = symbols.origImageMd5Method,
-            triggerMethod = triggerMethod!!,
-            directStartMethod = symbols.origImageDirectStartMethod,
-        )
-    }
-
-    private fun hookInternal(cl: ClassLoader): Boolean {
+    private fun hookInternal(): Boolean {
         val mod = XposedCompat.module ?: run {
             XposedCompat.log("[DefaultOriginalImageHook] FAILED: module is null")
             return false
@@ -176,16 +100,16 @@ object DefaultOriginalImageHook {
             return false
         }
 
-        // 解析类。
-        val adapterClass = targets.pagerAdapterClass?.let { XposedCompat.findClassOrNull(it, cl) }
-        val dataClass = XposedCompat.findClassOrNull(targets.dataClass, cl)
-        urlDragImageViewClass = XposedCompat.findClassOrNull(targets.urlDragImageViewClass, cl)
-        sharedPrefHelperClass = targets.sharedPrefHelperClass?.let { XposedCompat.findClassOrNull(it, cl) }
-        tbMd5Class = targets.md5Class?.let { XposedCompat.findClassOrNull(it, cl) }
+        // Resolve classes from precomputed targets.
+        val adapterClass = targets.pagerAdapterClass
+        val dataClass = targets.dataClass
+        urlDragImageViewClass = targets.urlDragImageViewClass
+        sharedPrefHelperClass = targets.sharedPrefHelperClass
+        tbMd5Class = targets.md5Class
 
         var hookCount = 0
 
-        // 第 1 个 hook：ImagePagerAdapter.setPrimaryItem。
+        // Primary hook: ImagePagerAdapter.setPrimaryItem.
         if (adapterClass != null) {
             val setPrimaryMethod = resolveSetPrimaryItemMethod(adapterClass)
             if (setPrimaryMethod != null) {
@@ -225,7 +149,7 @@ object DefaultOriginalImageHook {
             XposedCompat.log("[DefaultOriginalImageHook] warn: primary adapter hook unavailable: ${targets.pagerAdapterClass}")
         }
 
-        // 第 2 个 hook：UrlDragImageView 构造函数，作为备用入口。
+        // Fallback entry: UrlDragImageView constructors.
         val urlDragClass = urlDragImageViewClass
         if (urlDragClass != null) {
             for (ctor in urlDragClass.declaredConstructors) {
@@ -239,7 +163,7 @@ object DefaultOriginalImageHook {
                         XposedCompat.log("[DefaultOriginalImageHook] UrlDragImageView ctor observed")
                     }
 
-                    // 不在 setPrimaryItem 分发中时才触发。
+                    // Trigger only outside setPrimaryItem dispatch.
                     if (!isInSetPrimaryDispatch()) {
                         view.postDelayed({
                             try {
@@ -288,8 +212,7 @@ object DefaultOriginalImageHook {
         return true
     }
 
-    // 触发入口。
-
+    // 触发入口�?
     private fun tryAutoTriggerFromView(
         view: View,
         source: String,
@@ -304,8 +227,7 @@ object DefaultOriginalImageHook {
         scheduleAutoTrigger(view, retryCount = 0, source = source, requireCurrentItem = requireCurrentItem)
     }
 
-    // 方法解析。
-
+    // 方法解析�?
     private fun resolveSetPrimaryItemMethod(clazz: Class<*>): Method? {
         val methodName = runtimeTargets?.setPrimaryItemMethod ?: return null
         return XposedCompat.findMethodOrNull(
@@ -318,9 +240,7 @@ object DefaultOriginalImageHook {
     }
 
     /**
-     * 解析 UrlDragImageView 上的触发方法。
-     * 这是启动原图下载的无参 void 方法。
-     */
+     * 解析 UrlDragImageView 上的触发方法�?     * 这是启动原图下载的无�?void 方法�?     */
     private fun resolveTriggerMethod(item: Any): Method? {
         val clazz = item.javaClass
         triggerMethodCache[clazz]?.let { return it }
@@ -352,7 +272,7 @@ object DefaultOriginalImageHook {
         ) {
             val targets = runtimeTargets ?: return@resolveCachedMethod null
             XposedCompat.findMethodOrNull(clazz, targets.assistDataMethod)
-                ?.takeIf { it.parameterTypes.isEmpty() && it.returnType.name == targets.dataClass }
+                ?.takeIf { it.parameterTypes.isEmpty() && targets.dataClass.isAssignableFrom(it.returnType) }
                 ?.apply { isAccessible = true }
         }
     }
@@ -451,8 +371,7 @@ object DefaultOriginalImageHook {
         return null
     }
 
-    // 数据访问辅助。
-
+    // 数据访问辅助�?
     private fun resolveImageUrlDataField(clazz: Class<*>, fieldName: String): Field? {
         val fieldCache = imageUrlDataFieldCache.getOrPut(clazz) { FieldLookupCache() }
         fieldCache.fields[fieldName]?.let { return it }
@@ -497,8 +416,7 @@ object DefaultOriginalImageHook {
         return process >= 0
     }
 
-    // 自动触发调度。
-
+    // 自动触发调度�?
     private fun scheduleAutoTrigger(
         item: Any,
         retryCount: Int,
@@ -589,8 +507,7 @@ object DefaultOriginalImageHook {
         }, VERIFY_DELAY_MS)
     }
 
-    // 下载提示绕过和直接启动辅助。
-
+    // 下载提示绕过和直接启动辅助�?
     private fun ensureOriginalDownloadTipBypassed() {
         if (tipBypassApplied.get()) return
         val helperClass = sharedPrefHelperClass ?: return
@@ -637,8 +554,7 @@ object DefaultOriginalImageHook {
         return digest.joinToString(separator = "") { b -> "%02x".format(b) }
     }
 
-    // 场景和分发辅助。
-
+    // 场景和分发辅助�?
     private fun isImageViewerScene(item: Any): Boolean {
         val view = item as? View ?: return false
         val activity = ReflectionUtils.findActivityFromContext(view.context) ?: return false
@@ -665,12 +581,15 @@ object DefaultOriginalImageHook {
     private fun isAutoTriggeredForCurrentData(item: Any): Boolean {
         val view = item as? View ?: return false
         val dataIdentity = currentDataIdentity(item)
-        return view.getTag(TAG_AUTO_TRIGGERED_DATA_ID) == dataIdentity
+        return dataIdentity != 0 && view.getTag(TAG_AUTO_TRIGGERED_DATA_ID) == dataIdentity
     }
 
     private fun markAutoTriggered(item: Any) {
         val view = item as? View ?: return
-        view.setTag(TAG_AUTO_TRIGGERED_DATA_ID, currentDataIdentity(item))
+        val dataIdentity = currentDataIdentity(item)
+        if (dataIdentity != 0) {
+            view.setTag(TAG_AUTO_TRIGGERED_DATA_ID, dataIdentity)
+        }
     }
 
     private fun clearAutoTriggered(item: Any) {

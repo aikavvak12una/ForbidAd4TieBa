@@ -1,41 +1,13 @@
 package com.forbidad4tieba.hook.feature.ad
 
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.PostAdDataFilterSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
-import java.util.Collections
-import java.util.IdentityHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 object PostAdHook {
-    private const val ADVERT_APP_INFO_CLASS = "com.baidu.tbadk.core.data.AdvertAppInfo"
-
-    private val ADVERT_APP_TYPE_FIELDS = arrayOf(
-        "TYPE_FRS_ADVERT_APP_EMPTY",
-        "TYPE_FRS_ADVERT_APP_SINGLE_PIC",
-        "TYPE_FRS_ADVERT_APP_MULTI_PIC",
-        "TYPE_FRS_ADVERT_APP_VIDEO",
-        "TYPE_FRS_ADVERT_APP_VR_VIDEO",
-        "TYPE_PB_ADVERT_APP_EMPTY",
-        "TYPE_RECOMMEND_ADVERT_APP_EMPTY",
-        "TYPE_RECOMMEND_ADVERT_APP_SINGLE_PIC",
-        "TYPE_RECOMMEND_ADVERT_APP_VIDEO",
-        "TYPE_ADVERT_LEGO_APP",
-        "TYPE_ADVERT_LEGO_APP_SINGLE",
-        "TYPE_ADVERT_LEGO_APP_MULTI",
-        "TYPE_ADVERT_LEGO_APP_VIDEO",
-        "TYPE_ADVERT_LEGO_APP_SMALL_PIC",
-        "TYPE_ADVERT_LEGO_APP_SMALL_VIDEO_PIC",
-        "TYPE_ADVERT_FUN_AD_TEMPLETE",
-        "TYPE_ADVERT_FUN_AD_EMPTY",
-        "TYPE_ADVERT_FUN_AD_PLACEHOLDER",
-        "TYPE_ADVERT_FUN_AD_COMMENT_PLACEHOLDER",
-    )
-
     private data class RuntimeFilter(
         val itemClass: Class<*>,
         val getTypeMethod: Method,
@@ -53,26 +25,18 @@ object PostAdHook {
     @Volatile private var hooked = false
     private val filterErrorLogged = AtomicBoolean(false)
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols) {
+    internal fun hook(targets: PostAdDataFilterSymbols) {
         val mod = XposedCompat.module ?: return
         if (!tryMarkHooked()) return
 
         try {
-            val setDataMethodName = symbols.typeAdapterSetDataMethod?.takeIf { it.isNotBlank() } ?: run {
-                resetHooked()
-                XposedCompat.log("[PostAdHook] skipped: typeAdapterSetDataMethod missing")
-                return
-            }
-            val setDataMethod = resolveTypeAdapterSetDataMethod(cl, setDataMethodName) ?: run {
-                resetHooked()
-                XposedCompat.log("[PostAdHook] method NOT FOUND: TypeAdapter.$setDataMethodName(List)")
-                return
-            }
-            val runtimeFilter = resolveRuntimeFilter(cl, symbols) ?: run {
-                resetHooked()
-                XposedCompat.log("[PostAdHook] skipped: runtime filter incomplete")
-                return
-            }
+            val setDataMethod = targets.setDataMethod
+            val runtimeFilter = RuntimeFilter(
+                itemClass = targets.itemClass,
+                getTypeMethod = targets.getTypeMethod,
+                blockedTypes = targets.blockedTypes,
+                blockedItemClasses = targets.blockedItemClasses,
+            )
 
             mod.hook(setDataMethod).intercept { chain ->
                 if (!ConfigManager.isAdBlockEnabled) {
@@ -84,7 +48,7 @@ object PostAdHook {
                     chain.proceed()
                 } else {
                     XposedCompat.logD {
-                        "[PostAdHook] > TypeAdapter.$setDataMethodName filtered: ${list.size} -> ${filtered.size}"
+                        "[PostAdHook] > TypeAdapter.${setDataMethod.name} filtered: ${list.size} -> ${filtered.size}"
                     }
                     chain.proceed(arrayOf<Any?>(filtered))
                 }
@@ -94,58 +58,6 @@ object PostAdHook {
             resetHooked()
             XposedCompat.log("[PostAdHook] install FAILED: ${t.message}")
             XposedCompat.log(t)
-        }
-    }
-
-    private fun resolveTypeAdapterSetDataMethod(cl: ClassLoader, methodName: String): Method? {
-        val adapterClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.TYPE_ADAPTER_CLASS, cl) ?: return null
-        return try {
-            adapterClass.getDeclaredMethod(methodName, List::class.java).takeIf { method ->
-                !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE
-            }?.apply { isAccessible = true }
-        } catch (_: NoSuchMethodException) {
-            null
-        }
-    }
-
-    private fun resolveRuntimeFilter(cl: ClassLoader, symbols: HookSymbols): RuntimeFilter? {
-        val itemClassName = symbols.typeAdapterDataItemClass?.takeIf { it.isNotBlank() } ?: return null
-        val getTypeMethodName = symbols.typeAdapterDataGetTypeMethod?.takeIf { it.isNotBlank() } ?: return null
-        val itemClass = XposedCompat.findClassOrNull(itemClassName, cl) ?: return null
-        val getTypeMethod = try {
-            itemClass.getMethod(getTypeMethodName).apply { isAccessible = true }
-        } catch (_: NoSuchMethodException) {
-            return null
-        }
-
-        val blockedTypes = Collections.newSetFromMap(IdentityHashMap<Any, Boolean>())
-        addAdvertAppTypes(cl, blockedTypes)
-        val blockedItemClasses = resolveBlockedItemClasses(cl)
-        if (blockedTypes.isEmpty() && blockedItemClasses.isEmpty()) return null
-
-        return RuntimeFilter(
-            itemClass = itemClass,
-            getTypeMethod = getTypeMethod,
-            blockedTypes = blockedTypes,
-            blockedItemClasses = blockedItemClasses,
-        )
-    }
-
-    private fun resolveBlockedItemClasses(cl: ClassLoader): Array<Class<*>> {
-        return arrayOf(
-            XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_FIRST_FLOOR_RECOMMEND_DATA_CLASS, cl),
-        ).filterNotNull().toTypedArray()
-    }
-
-    private fun addAdvertAppTypes(cl: ClassLoader, out: MutableSet<Any>) {
-        val advertAppInfoClass = XposedCompat.findClassOrNull(ADVERT_APP_INFO_CLASS, cl) ?: return
-        for (fieldName in ADVERT_APP_TYPE_FIELDS) {
-            val value = try {
-                XposedCompat.findField(advertAppInfoClass, fieldName).get(null)
-            } catch (_: Throwable) {
-                null
-            } ?: continue
-            out.add(value)
         }
     }
 

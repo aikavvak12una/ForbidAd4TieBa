@@ -6,11 +6,8 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import io.github.libxposed.api.XposedInterface
 
 /**
- * 一次性安装器。
- * 模块启动后如果没有可用符号缓存，目标应用 Activity 第一次进入 onResume 时显示初始符号扫描弹窗。
- *
- * 弹窗显示一次后，移除这里安装的所有 onResume hook，后续不再承担这部分开销。
- */
+ * 涓€娆℃€у畨瑁呭櫒銆? * 妯″潡鍚姩鍚庡鏋滄病鏈夊彲鐢ㄧ鍙风紦瀛橈紝鐩爣搴旂敤 Activity 绗竴娆¤繘鍏?onResume 鏃舵樉绀哄垵濮嬬鍙锋壂鎻忓脊绐椼€? *
+ * 寮圭獥鏄剧ず涓€娆″悗锛岀Щ闄よ繖閲屽畨瑁呯殑鎵€鏈?onResume hook锛屽悗缁笉鍐嶆壙鎷呰繖閮ㄥ垎寮€閿€銆? */
 internal object InitialScanDialogInstaller {
     @Volatile private var hookInstalled = false
     @Volatile private var dialogShown = false

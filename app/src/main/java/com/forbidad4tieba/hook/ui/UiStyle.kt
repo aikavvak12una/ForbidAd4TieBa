@@ -21,11 +21,8 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
 
 /**
- * 样式入口，集中管理亮暗模式色盘、对话框容器背景、进度条和轻量动效。
- *
- * 这些逻辑运行在 UI 事件路径上，比如 `onShow`、点击和扫描完成，不参与 hook 回调。
- * 每次按当前 `Configuration` 计算 tokens，避免跨 Activity 切换主题后状态过期。
- */
+ * 鏍峰紡鍏ュ彛锛岄泦涓鐞嗕寒鏆楁ā寮忚壊鐩樸€佸璇濇瀹瑰櫒鑳屾櫙銆佽繘搴︽潯鍜岃交閲忓姩鏁堛€? *
+ * 杩欎簺閫昏緫杩愯鍦?UI 浜嬩欢璺緞涓婏紝姣斿 `onShow`銆佺偣鍑诲拰鎵弿瀹屾垚锛屼笉鍙備笌 hook 鍥炶皟銆? * 姣忔鎸夊綋鍓?`Configuration` 璁＄畻 tokens锛岄伩鍏嶈法 Activity 鍒囨崲涓婚鍚庣姸鎬佽繃鏈熴€? */
 internal object UiStyle {
     private const val CARD_CORNER_DP = 22f
     private const val CARD_INSET_DP = 14f
@@ -292,9 +289,7 @@ internal object UiStyle {
     }
 
     /**
-     * 开关行切换时的背景脉冲。
-     * 短暂显示 accent 色后恢复透明。
-     */
+     * 寮€鍏宠鍒囨崲鏃剁殑鑳屾櫙鑴夊啿銆?     * 鐭殏鏄剧ず accent 鑹插悗鎭㈠閫忔槑銆?     */
     internal fun animateSwitchPulse(row: View, tokens: Tokens) {
         val from = 0x00000000
         val peak = tokens.accentSoft
@@ -309,8 +304,7 @@ internal object UiStyle {
     }
 
     /**
-     * 按钮启用时的缩放动画。
-     */
+     * 鎸夐挳鍚敤鏃剁殑缂╂斁鍔ㄧ敾銆?     */
     internal fun animateButtonEnable(button: View) {
         button.scaleX = 0.88f
         button.scaleY = 0.88f
@@ -325,8 +319,7 @@ internal object UiStyle {
     }
 
     /**
-     * 列表项逐条入场，用于子弹窗的 switch 行。
-     */
+     * 鍒楄〃椤归€愭潯鍏ュ満锛岀敤浜庡瓙寮圭獥鐨?switch 琛屻€?     */
     internal fun animateListItemsStagger(items: List<View>, density: Float) {
         if (items.isEmpty()) return
         val interp = DecelerateInterpolator(1.4f)
@@ -344,8 +337,7 @@ internal object UiStyle {
     }
 
     /**
-     * 进度条完成时的亮度脉冲。
-     */
+     * 杩涘害鏉″畬鎴愭椂鐨勪寒搴﹁剦鍐层€?     */
     internal fun animateProgressComplete(progressView: View) {
         progressView.animate()
             .alpha(0.5f)
@@ -385,8 +377,7 @@ internal object UiStyle {
     }
 
     /**
-     * 对话框关闭时的退出动画，缩小并淡出。
-     */
+     * 瀵硅瘽妗嗗叧闂椂鐨勯€€鍑哄姩鐢伙紝缂╁皬骞舵贰鍑恒€?     */
     internal fun animateDialogExit(root: View, density: Float, onEnd: () -> Unit) {
         root.animate()
             .alpha(0f)
@@ -400,8 +391,7 @@ internal object UiStyle {
     }
 
     /**
-     * 标题区域品牌 tag 的一次性淡入动画。
-     */
+     * 鏍囬鍖哄煙鍝佺墝 tag 鐨勪竴娆℃€ф贰鍏ュ姩鐢汇€?     */
     internal fun animateBrandTagShimmer(view: View) {
         view.alpha = 0f
         view.animate()
@@ -413,8 +403,7 @@ internal object UiStyle {
     }
 
     /**
-     * 操作图标按压缩放，用于小按钮点击。
-     */
+     * 鎿嶄綔鍥炬爣鎸夊帇缂╂斁锛岀敤浜庡皬鎸夐挳鐐瑰嚮銆?     */
     internal fun animateActionPress(view: View) {
         view.animate().cancel()
         view.scaleX = 0.82f
@@ -428,9 +417,7 @@ internal object UiStyle {
     }
 
     /**
-     * 展开和收起箭头的旋转动画。
-     * 使用 U+2335 字符，初始角度 0 度，展开后旋转到 180 度。
-     */
+     * 灞曞紑鍜屾敹璧风澶寸殑鏃嬭浆鍔ㄧ敾銆?     * 浣跨敤 U+2335 瀛楃锛屽垵濮嬭搴?0 搴︼紝灞曞紑鍚庢棆杞埌 180 搴︺€?     */
     internal fun animateExpandArrow(view: View, expanding: Boolean) {
         val target = if (expanding) 180f else 0f
         view.animate()
@@ -441,8 +428,7 @@ internal object UiStyle {
     }
 
     /**
-     * 卡片展开动画，从高度 0 和透明状态展开到完整高度和不透明状态。
-     */
+     * 鍗＄墖灞曞紑鍔ㄧ敾锛屼粠楂樺害 0 鍜岄€忔槑鐘舵€佸睍寮€鍒板畬鏁撮珮搴﹀拰涓嶉€忔槑鐘舵€併€?     */
     internal fun animateCardExpand(view: View) {
         view.visibility = View.VISIBLE
         view.alpha = 0f
@@ -457,8 +443,7 @@ internal object UiStyle {
     }
 
     /**
-     * 卡片收起动画，缩小并淡出后隐藏。
-     */
+     * 鍗＄墖鏀惰捣鍔ㄧ敾锛岀缉灏忓苟娣″嚭鍚庨殣钘忋€?     */
     internal fun animateCardCollapse(view: View) {
         view.pivotY = 0f
         view.animate()

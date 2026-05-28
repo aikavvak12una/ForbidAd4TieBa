@@ -1,21 +1,13 @@
 package com.forbidad4tieba.hook.feature.share
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.ShareTrackingParamCleanerSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
-import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.Locale
 
 object ShareTrackingParamCleanerHook {
-
-    private data class RuntimeTargets(
-        val builderClass: String,
-        val buildUrlMethod: String,
-    )
 
     private val TRACKING_PARAM_KEYS = hashSetOf(
         "sfc",
@@ -26,30 +18,9 @@ object ShareTrackingParamCleanerHook {
         "unique",
     )
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols()) {
+    internal fun hook(targets: ShareTrackingParamCleanerSymbols) {
         val mod = XposedCompat.module ?: return
-        val targets = resolveTargets(symbols)
-        if (targets == null) {
-            XposedCompat.log(
-                "[ShareTrackingParamCleanerHook] skipped: scan symbols missing " +
-                    "(shareTrackBuilderClass/shareTrackBuildUrlMethod)",
-            )
-            return
-        }
-
-        val targetClass = XposedCompat.findClassOrNull(targets.builderClass, cl)
-        if (targetClass == null) {
-            XposedCompat.log("[ShareTrackingParamCleanerHook] class NOT FOUND: ${targets.builderClass}")
-            return
-        }
-        val targetMethod = resolveBuildUrlMethod(targetClass, targets.buildUrlMethod)
-        if (targetMethod == null) {
-            XposedCompat.log(
-                "[ShareTrackingParamCleanerHook] method NOT FOUND: " +
-                    "${targets.builderClass}.${targets.buildUrlMethod}(String,String,String,boolean)",
-            )
-            return
-        }
+        val targetMethod = targets.buildUrlMethod
 
         try {
             mod.hook(targetMethod).intercept { chain ->
@@ -59,37 +30,13 @@ object ShareTrackingParamCleanerHook {
                 sanitizeTrackingParams(url)
             }
             XposedCompat.log(
-                "[ShareTrackingParamCleanerHook] hook INSTALLED: ${targetClass.name}.${targetMethod.name}(String,String,String,boolean)"
+                "[ShareTrackingParamCleanerHook] hook INSTALLED: " +
+                    "${targetMethod.declaringClass.name}.${targetMethod.name}(String,String,String,boolean)",
             )
         } catch (t: Throwable) {
             XposedCompat.log("[ShareTrackingParamCleanerHook] FAILED: ${t.message}")
             XposedCompat.log(t)
         }
-    }
-
-    private fun resolveTargets(symbols: HookSymbols?): RuntimeTargets? {
-        val scanSymbols = symbols ?: return null
-        val builderClass = scanSymbols.shareTrackBuilderClass?.takeIf { it.isNotBlank() } ?: return null
-        val buildUrlMethod = scanSymbols.shareTrackBuildUrlMethod?.takeIf { it.isNotBlank() } ?: return null
-        return RuntimeTargets(
-            builderClass = builderClass,
-            buildUrlMethod = buildUrlMethod,
-        )
-    }
-
-    private fun resolveBuildUrlMethod(clazz: Class<*>, methodName: String): Method? {
-        val method = clazz.declaredMethods.firstOrNull { target ->
-            target.name == methodName &&
-                Modifier.isStatic(target.modifiers) &&
-                target.returnType == String::class.java &&
-                target.parameterTypes.size == 4 &&
-                target.parameterTypes[0] == String::class.java &&
-                target.parameterTypes[1] == String::class.java &&
-                target.parameterTypes[2] == String::class.java &&
-                target.parameterTypes[3] == Boolean::class.javaPrimitiveType
-        } ?: return null
-        method.isAccessible = true
-        return method
     }
 
     private fun sanitizeTrackingParams(url: String): String {

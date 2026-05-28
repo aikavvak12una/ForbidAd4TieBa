@@ -42,11 +42,11 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.HookFeatureState
-import com.forbidad4tieba.hook.HookFeatureStatus
+import com.forbidad4tieba.hook.symbol.model.HookFeatureState
+import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
-import com.forbidad4tieba.hook.ScanLogger
+import com.forbidad4tieba.hook.symbol.model.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.config.ModuleUserDataCleaner
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
@@ -204,7 +204,7 @@ object SettingsMenuHook {
                 return
             }
             precacheSettingsContainerField(settingsClass, containerField)
-            // 先试旧签名 (Context, NavigationBar)，再试 (View) 写法。
+            // Try the older Context/NavigationBar signature before the View signature.
             val method = XposedCompat.findMethodOrNull(settingsClass, methodName, Context::class.java, navClass)
                 ?: XposedCompat.findMethodOrNull(settingsClass, methodName, View::class.java)
             if (method == null) {
@@ -826,7 +826,7 @@ object SettingsMenuHook {
             )
             val featureStatusMap = HookSymbolResolver.featureStatusMap(scanSymbols)
             if (scanSymbols != null) {
-                ConfigManager.applyScanAvailability(context, featureStatusMap)
+                ConfigManager.applyScanAvailability(context, featureStatusMap, refreshRuntime = false)
             }
 
             val root = LinearLayout(context).apply {
@@ -1049,7 +1049,7 @@ object SettingsMenuHook {
                     gap.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (12 * density).toInt())
                     root.addView(gap)
                 }
-                
+
                 val tokens = UiStyle.tokens(context)
                 val headerLabel = TextView(context).apply {
                     text = group.name
@@ -1148,11 +1148,11 @@ object SettingsMenuHook {
             val aboutContainer = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(0, 0, 0, padding)
-                
+
                 val gap = View(context)
                 gap.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (12 * density).toInt())
                 addView(gap)
-                
+
                 addView(TextView(context).apply {
                     text = UiText.Settings.ABOUT
                     textSize = 12.5f
@@ -1486,7 +1486,7 @@ object SettingsMenuHook {
             setPadding(padding, padding, padding, padding)
         }
 
-        // 标题。
+        // Title area.
         val titleContainer = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 0, 0, (16 * density).toInt())
@@ -1508,7 +1508,7 @@ object SettingsMenuHook {
         }.also { UiStyle.animateBrandTagShimmer(it) })
         root.addView(titleContainer)
 
-        // 进度条。
+        // Progress bar.
         val progressBar = UiStyle.ThinProgressBar(activity, tokens).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1536,7 +1536,7 @@ object SettingsMenuHook {
             ui.postDelayed(scanPulseRunnable!!, SCAN_RUNNING_PULSE_INITIAL_DELAY_MS)
         }
 
-        // 状态文本。
+        // Status text.
         val statusView = TextView(activity).apply {
             text = UiText.Settings.SCAN_PREPARING
             textSize = 13f
@@ -1545,7 +1545,7 @@ object SettingsMenuHook {
         }
         root.addView(statusView)
 
-        // 结果卡片，扫描完成前隐藏。
+        // Result card is hidden until scanning finishes.
         val resultCard = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             background = UiStyle.createResultCardBackground(tokens, density)
@@ -1569,7 +1569,7 @@ object SettingsMenuHook {
         resultCard.addView(resultVersionView)
         root.addView(resultCard)
 
-        // 重启按钮。
+        // Restart button.
         val restartBtn = Button(activity).apply {
             text = UiText.Settings.BUTTON_RESTART
             UiStyle.paintScanActionButton(this, density, tokens.accent)
@@ -1612,7 +1612,7 @@ object SettingsMenuHook {
                     dialog.dismiss()
                     true
                 } else {
-                    true // 扫描中消费返回键。
+                    true // Consume Back while scanning.
                 }
             } else false
         }
@@ -1642,7 +1642,7 @@ object SettingsMenuHook {
             Toast.makeText(activity, UiText.Settings.SCAN_LOG_COPIED, Toast.LENGTH_SHORT).show()
         }
 
-        // 进度估算：把扫描日志行映射到进度比例。
+        // Map scan log hints to a rough progress ratio.
         fun advanceProgress(hint: String) {
             progressSteps++
             val ratio = when {
@@ -1697,7 +1697,11 @@ object SettingsMenuHook {
                         advanceProgress(line)
                     },
                 )
-                ConfigManager.applyScanAvailability(activity, HookSymbolResolver.featureStatusMap(symbols))
+                ConfigManager.applyScanAvailability(
+                    activity,
+                    HookSymbolResolver.featureStatusMap(symbols),
+                    refreshRuntime = false,
+                )
                 if (symbols.source != "unsupported") {
                     ConfigManager.markPostScanEnvironmentWarningPending(activity)
                 }
@@ -1736,7 +1740,7 @@ object SettingsMenuHook {
 
                     val versionInfo = buildVersionDisplayInfo(activity, scanSymbols)
 
-                    // 先判断失败的 hook 点，用来决定颜色。
+                    // Failed hook points decide the result severity color.
                     val failedLines = HookSymbolResolver.formatHookPointStatusLines(scanSymbols)
                         .filter { it.contains("MISSING") || it.contains("ERROR") }
                     val hasScanErrors = HookSymbolResolver.hasScanErrors(scanSymbols, failedLines)
@@ -1758,7 +1762,7 @@ object SettingsMenuHook {
                         else -> tokens.danger
                     }
 
-                    // 隐藏状态行，改由结果卡片展示。
+                    // Result card replaces the inline status row after completion.
                     statusView.visibility = View.GONE
 
                     resultStatusView.text = "${UiText.Settings.SCAN_RESULT_LABEL}  $summaryText"
@@ -1802,7 +1806,7 @@ object SettingsMenuHook {
                         resultCard.addView(exceptionView)
                     }
 
-                    // 展示失败或缺失的 hook 点。
+                    // Show failed or missing hook points.
                     if (failedLines.isNotEmpty()) {
                         val failedView = TextView(activity).apply {
                             text = failedLines.joinToString("\n")
@@ -2906,9 +2910,6 @@ object SettingsMenuHook {
                 val thresholds = merged.map { (key, threshold) ->
                     ConfigManager.ModelScoreThreshold(key, threshold)
                 }
-                ConfigManager.postModelScoreThresholds = thresholds
-                ConfigManager.postModelScoreAutoPercentiles = autoPercentiles.toMap()
-                CustomPostModelScoreStats.setAutoPercentileThresholdReady(modelKey, applyThreshold)
                 prefs.edit()
                     .putString(
                         ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
@@ -2925,9 +2926,6 @@ object SettingsMenuHook {
                 val thresholds = ConfigManager.parseModelScoreThresholds(
                     prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
                 ).filter { it.key != modelKey }
-                ConfigManager.postModelScoreThresholds = thresholds
-                ConfigManager.postModelScoreAutoPercentiles = autoPercentiles.toMap()
-                CustomPostModelScoreStats.setAutoPercentileThresholdReady(modelKey, false)
                 prefs.edit()
                     .putString(
                         ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
@@ -3252,11 +3250,9 @@ object SettingsMenuHook {
                         val raw = input.text?.toString().orEmpty().trim()
                         if (raw.isEmpty()) {
                             if (nextAutoPercentiles.containsKey(item.key) && thresholdByKey[item.key] == null) {
-                                CustomPostModelScoreStats.setAutoPercentileThresholdReady(item.key, false)
                                 continue
                             }
                             nextAutoPercentiles.remove(item.key)
-                            CustomPostModelScoreStats.setAutoPercentileThresholdReady(item.key, false)
                             continue
                         }
                         val threshold = raw.toDoubleOrNull()
@@ -3281,13 +3277,9 @@ object SettingsMenuHook {
                             ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT
                         ) {
                             thresholdByKey.remove(item.key)
-                            CustomPostModelScoreStats.setAutoPercentileThresholdReady(item.key, false)
                             continue
                         }
                         thresholds.add(ConfigManager.ModelScoreThreshold(item.key, threshold))
-                        if (nextAutoPercentiles.containsKey(item.key)) {
-                            CustomPostModelScoreStats.setAutoPercentileThresholdReady(item.key, true)
-                        }
                     }
                     prefs.edit()
                         .putInt(
@@ -3303,14 +3295,17 @@ object SettingsMenuHook {
                             ConfigManager.serializeModelScoreAutoPercentiles(nextAutoPercentiles)
                         )
                         .apply()
-                    ConfigManager.postModelScoreAutoPercentiles = nextAutoPercentiles.toMap()
                     CustomPostModelScoreStats.trimToPostLimitAsync(statsPostLimit)
                     val toastText = if (thresholds.isEmpty()) {
                         UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_EMPTY
                     } else {
                         UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_SAVED
                     }
-                    Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        UiText.Settings.withRestartHint(toastText),
+                        Toast.LENGTH_SHORT
+                    ).show()
                     dialog.dismiss()
                 }
             }
@@ -3757,8 +3752,11 @@ object SettingsMenuHook {
                     prefs.edit()
                         .putString(ConfigManager.KEY_PB_LIKE_AUTO_REPLY_TEXT, content)
                         .apply()
-                    ConfigManager.pbLikeAutoReplyText = content
-                    Toast.makeText(context, UiText.Settings.PB_LIKE_AUTO_REPLY_CONTENT_SAVED, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        UiText.Settings.withRestartHint(UiText.Settings.PB_LIKE_AUTO_REPLY_CONTENT_SAVED),
+                        Toast.LENGTH_SHORT
+                    ).show()
                     dialog.dismiss()
                 }
             }
@@ -4652,7 +4650,7 @@ object SettingsMenuHook {
                 defaultValue
             }
             isEnabled = enabled
-            
+
             val states = arrayOf(
                 intArrayOf(android.R.attr.state_checked),
                 intArrayOf(-android.R.attr.state_checked)
@@ -4713,7 +4711,7 @@ object SettingsMenuHook {
                 isClickable = true
                 setOnClickListener { onClick() }
             }
-            
+
             addView(TextView(context).apply {
                 text = title
                 textSize = 14.5f
@@ -4722,7 +4720,7 @@ object SettingsMenuHook {
                 includeFontPadding = false
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
             })
-            
+
             addView(TextView(context).apply {
                 text = content
                 textSize = 13f
@@ -4730,7 +4728,7 @@ object SettingsMenuHook {
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 includeFontPadding = false
                 setPadding(0, (3 * density).toInt(), 0, 0)
-                
+
                 if (url != null) {
                     setOnClickListener {
                         try {

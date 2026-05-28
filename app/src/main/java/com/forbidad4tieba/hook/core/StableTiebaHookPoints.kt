@@ -1,9 +1,7 @@
 package com.forbidad4tieba.hook.core
 
 /**
- * 目标应用里按稳定且未混淆处理的类名和方法名。
- * 混淆符号仍然要通过 HookSymbolResolver 解析。
- */
+ * 鐩爣搴旂敤閲屾寜绋冲畾涓旀湭娣锋穯澶勭悊鐨勭被鍚嶅拰鏂规硶鍚嶃€? * 娣锋穯绗﹀彿浠嶇劧瑕侀€氳繃 HookSymbolResolver 瑙ｆ瀽銆? */
 object StableTiebaHookPoints {
     const val MAIN_TAB_ACTIVITY_CLASS = "com.baidu.tieba.tblauncher.MainTabActivity"
     const val FRAGMENT_TAB_HOST_CLASS = "com.baidu.tbadk.core.tabHost.FragmentTabHost"
