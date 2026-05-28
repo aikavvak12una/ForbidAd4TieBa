@@ -9,6 +9,7 @@
     }
   ],
   "controls": {
+<<<<<<< HEAD
     "environmentLevels": {
       "0": {
         "showWarningDialog": false,
@@ -24,6 +25,23 @@
       }
     }
   },
+=======
+  "environmentLevels": {
+    "0": {
+      "showWarningDialog": false,
+      "lockHiddenFeatures": false
+    },
+    "1": {
+      "showWarningDialog": true,
+      "lockHiddenFeatures": false
+    },
+    "2": {
+      "showWarningDialog": true,
+      "lockHiddenFeatures": false
+    }
+  }
+},
+>>>>>>> 9307d16c300078d4de09c400ba8c0041afe5ead6
   "telemetry": [
     {
       "name": "usage_daily",
