@@ -1,4 +1,4 @@
-﻿package com.forbidad4tieba.hook.ui
+package com.forbidad4tieba.hook.ui
 
 object UiText {
     object Settings {

@@ -1,8 +1,8 @@
 package com.forbidad4tieba.hook.feature.perf
 
 import android.view.View
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.AiComponentSymbols
+import com.forbidad4tieba.hook.symbol.model.AiImageViewerJumpButtonSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ViewExt
@@ -15,10 +15,7 @@ object AiComponentDisableHook {
     private val installed = AtomicBoolean(false)
     private val imageViewerInstalled = AtomicBoolean(false)
 
-    fun hook(
-        cl: ClassLoader,
-        symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols(),
-    ) {
+    internal fun hook(targets: AiComponentSymbols) {
         if (!ConfigManager.isAiComponentsDisabled) {
             XposedCompat.log("[AiComponentDisableHook] skipped: config disabled")
             return
@@ -26,13 +23,6 @@ object AiComponentDisableHook {
         val mod = XposedCompat.module ?: return
         if (!installed.compareAndSet(false, true)) {
             XposedCompat.logD("[AiComponentDisableHook] already installed, skip")
-            return
-        }
-
-        val targets = HookSymbolResolver.resolveAiComponentSymbols(cl, symbols)
-        if (targets == null) {
-            installed.set(false)
-            XposedCompat.log("[AiComponentDisableHook] skipped: scan symbols missing")
             return
         }
 
@@ -56,20 +46,12 @@ object AiComponentDisableHook {
         }
     }
 
-    fun hookImageViewerJumpButton(
-        cl: ClassLoader,
-        symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols(),
-    ) {
+    internal fun hookImageViewerJumpButton(targets: AiImageViewerJumpButtonSymbols) {
         if (!ConfigManager.isAiComponentsDisabled) {
             XposedCompat.log("[AiComponentDisableHook] image viewer skipped: config disabled")
             return
         }
         val mod = XposedCompat.module ?: return
-        val targets = HookSymbolResolver.resolveAiImageViewerJumpButtonSymbols(cl, symbols)
-        if (targets == null) {
-            XposedCompat.log("[AiComponentDisableHook] image viewer skipped: scan symbols missing")
-            return
-        }
 
         try {
             if (!installImageViewerJumpButtonHook(mod, targets.initMethod)) {
@@ -104,7 +86,7 @@ object AiComponentDisableHook {
 
     private fun installPbAiEmojiCreationHooks(
         mod: io.github.libxposed.api.XposedModule,
-        targets: com.forbidad4tieba.hook.AiComponentSymbols,
+        targets: AiComponentSymbols,
     ): Int {
         var installed = 0
         val viewClass = targets.pbAiEmojiCreationViewBindMethod?.declaringClass

@@ -1,23 +1,20 @@
 package com.forbidad4tieba.hook.feature.ui
 
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
+import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 
 object HomeTabHook {
     /**
-     * 集中定义 tab item 字段解析规则。
-     * 第一次遇到某个类时一次性解析所有字段，
-     * 把缓存未命中次数从 4 次降到 1 次。
-     */
+     * 集中定义 tab item 字段解析规则�?     * 第一次遇到某个类时一次性解析所有字段，
+     * 把缓存未命中次数�?4 次降�?1 次�?     */
     private data class TabItemFieldSchema(
         val typeField: Field? = null,
         val codeField: Field? = null,
@@ -25,7 +22,6 @@ object HomeTabHook {
         val urlField: Field? = null,
     )
 
-    private val sListFieldCache = ConcurrentHashMap<Class<*>, Field>()
     private val sSchemaCache = ConcurrentHashMap<Class<*>, TabItemFieldSchema>()
     private val sMainSetterMethodCache = ConcurrentHashMap<Class<*>, Method>()
     private val sMainSetterMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
@@ -36,7 +32,6 @@ object HomeTabHook {
     private val sNoArgCtorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
     private val sNoArgCtorMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
     private val sInstanceFieldsCache = ConcurrentHashMap<Class<*>, Array<Field>>()
-    private val sInvalidSelectionLogged = AtomicBoolean(false)
     @Volatile private var sLastTabItemClass: Class<*>? = null
 
     private const val TAB_TYPE_RECOMMEND = 1
@@ -75,33 +70,14 @@ object HomeTabHook {
             get() = added || removed > 0
     }
 
-    private data class RuntimeTargets(
-        val hostClass: String,
-        val rebuildMethod: String,
-        val listField: String,
-        val itemTypeField: String,
-        val itemCodeField: String,
-        val itemNameField: String,
-        val itemUrlField: String,
-        val itemMainSetterMethod: String?,
-        val itemMainIntField: String?,
-        val itemMainBooleanField: String?,
-    )
+    @Volatile private var sRuntimeTargets: HomeTabResolvedSymbols? = null
 
-    @Volatile private var sRuntimeTargets: RuntimeTargets? = null
-
-    internal fun hook(cl: ClassLoader, symbols: HookSymbols) {
+    internal fun hook(
+        symbols: HomeTabResolvedSymbols,
+        selection: ConfigManager.HomeTopTabSelection,
+    ) {
         val mod = XposedCompat.module ?: return
-        val targets = resolveTargets(symbols)
-        if (targets == null) {
-            XposedCompat.log(
-                "[HomeTabHook] SKIP - missing symbols: " +
-                    "(homeTabClass/homeTabRebuildMethod/homeTabListField/" +
-                    "homeTabItemTypeField/homeTabItemCodeField/homeTabItemNameField/homeTabItemUrlField)"
-            )
-            return
-        }
-        sRuntimeTargets = targets
+        sRuntimeTargets = symbols
         sSchemaCache.clear()
         sMainSetterMethodCache.clear()
         sMainSetterMethodMissCache.clear()
@@ -110,103 +86,35 @@ object HomeTabHook {
         sMainBooleanFieldCache.clear()
         sMainBooleanFieldMissCache.clear()
         try {
-            val hostClass = XposedCompat.findClassOrNull(targets.hostClass, cl)
-            if (hostClass == null) {
-                XposedCompat.log("[HomeTabHook] class NOT FOUND: ${targets.hostClass}")
-                return
-            }
-            precacheMutableListField(hostClass, targets.listField)
-            val method = XposedCompat.findMethodOrNull(hostClass, targets.rebuildMethod)
-            if (method == null) {
-                XposedCompat.log("[HomeTabHook] method NOT FOUND: ${targets.hostClass}.${targets.rebuildMethod}")
-                return
-            }
-            mod.hook(method).intercept { chain ->
+            mod.hook(symbols.rebuildMethod).intercept { chain ->
                 val result = chain.proceed()
-                if (ConfigManager.isHomeTopTabsCustomEnabled) {
-                    val selection = resolveCurrentSelection()
-                    @Suppress("UNCHECKED_CAST")
-                    val list = resolveMutableListField(chain.thisObject, targets.listField) as? MutableList<Any?>
-                    if (list != null) {
-                        val templateContext = resolveFollowedTemplateContext(list)
-                        val sizeBefore = list.size
-                        val filteredCount = filterTabsInPlace(list, selection)
-                        val followedSync = syncFollowedTabState(list, selection, templateContext)
-                        if (filteredCount > 0 || followedSync.changed || followedSync.failed) {
-                            XposedCompat.logD {
-                                "[HomeTabHook] > top tabs rebuilt: $sizeBefore -> ${list.size}, " +
-                                    "removed=$filteredCount, followedAdded=${followedSync.added}, " +
-                                    "followedRemoved=${followedSync.removed}, followedFailed=${followedSync.failed}, " +
-                                    "selection=(material=${selection.materialEnabled}, " +
-                                    "recommend=${selection.recommendEnabled}, live=${selection.liveEnabled}, " +
-                                    "followed=${selection.followedEnabled})"
-                            }
+                @Suppress("UNCHECKED_CAST")
+                val list = resolveMutableListField(chain.thisObject) as? MutableList<Any?>
+                if (list != null) {
+                    val templateContext = resolveFollowedTemplateContext(list)
+                    val sizeBefore = list.size
+                    val filteredCount = filterTabsInPlace(list, selection)
+                    val followedSync = syncFollowedTabState(list, selection, templateContext)
+                    if (filteredCount > 0 || followedSync.changed || followedSync.failed) {
+                        XposedCompat.logD {
+                            "[HomeTabHook] > top tabs rebuilt: $sizeBefore -> ${list.size}, " +
+                                "removed=$filteredCount, followedAdded=${followedSync.added}, " +
+                                "followedRemoved=${followedSync.removed}, followedFailed=${followedSync.failed}, " +
+                                "selection=(material=${selection.materialEnabled}, " +
+                                "recommend=${selection.recommendEnabled}, live=${selection.liveEnabled}, " +
+                                "followed=${selection.followedEnabled})"
                         }
                     }
                 }
                 result
             }
-            XposedCompat.log("[HomeTabHook] hook INSTALLED: ${targets.hostClass}.${targets.rebuildMethod}")
+            XposedCompat.log("[HomeTabHook] hook INSTALLED: ${symbols.hostClass.name}.${symbols.rebuildMethod.name}")
         } catch (t: Throwable) {
-            XposedCompat.log("[HomeTabHook] FAILED (${targets.hostClass}.${targets.rebuildMethod}): ${t.message}")
+            XposedCompat.log(
+                "[HomeTabHook] FAILED (${symbols.hostClass.name}.${symbols.rebuildMethod.name}): ${t.message}",
+            )
             XposedCompat.log(t)
         }
-    }
-
-    private fun resolveTargets(symbols: HookSymbols): RuntimeTargets? {
-        val hostClass = symbols.homeTabClass?.takeIf { it.isNotBlank() } ?: return null
-        val rebuildMethod = symbols.homeTabRebuildMethod?.takeIf { it.isNotBlank() } ?: return null
-        val listField = symbols.homeTabListField?.takeIf { it.isNotBlank() } ?: return null
-        val itemTypeField = symbols.homeTabItemTypeField?.takeIf { it.isNotBlank() } ?: return null
-        val itemCodeField = symbols.homeTabItemCodeField?.takeIf { it.isNotBlank() } ?: return null
-        val itemNameField = symbols.homeTabItemNameField?.takeIf { it.isNotBlank() } ?: return null
-        val itemUrlField = symbols.homeTabItemUrlField?.takeIf { it.isNotBlank() } ?: return null
-        val itemMainSetterMethod = symbols.homeTabItemMainSetterMethod?.takeIf { it.isNotBlank() }
-        val itemMainIntField = symbols.homeTabItemMainIntField?.takeIf { it.isNotBlank() }
-        val itemMainBooleanField = symbols.homeTabItemMainBooleanField?.takeIf { it.isNotBlank() }
-        return RuntimeTargets(
-            hostClass = hostClass,
-            rebuildMethod = rebuildMethod,
-            listField = listField,
-            itemTypeField = itemTypeField,
-            itemCodeField = itemCodeField,
-            itemNameField = itemNameField,
-            itemUrlField = itemUrlField,
-            itemMainSetterMethod = itemMainSetterMethod,
-            itemMainIntField = itemMainIntField,
-            itemMainBooleanField = itemMainBooleanField,
-        )
-    }
-
-    private fun precacheMutableListField(cls: Class<*>, preferredFieldName: String) {
-        val field = runCatching { cls.getDeclaredField(preferredFieldName) }.getOrNull()
-        if (field != null && List::class.java.isAssignableFrom(field.type)) {
-            runCatching {
-                field.isAccessible = true
-                sListFieldCache[cls] = field
-            }
-        }
-    }
-
-    private fun resolveCurrentSelection(): ConfigManager.HomeTopTabSelection {
-        val raw = ConfigManager.HomeTopTabSelection(
-            materialEnabled = ConfigManager.isHomeTopTabMaterialEnabled,
-            recommendEnabled = ConfigManager.isHomeTopTabRecommendEnabled,
-            liveEnabled = ConfigManager.isHomeTopTabLiveEnabled,
-            followedEnabled = ConfigManager.isHomeTopTabFollowedEnabled,
-        )
-        val normalized = ConfigManager.normalizeHomeTopTabSelection(raw)
-        if (raw != normalized) {
-            if (sInvalidSelectionLogged.compareAndSet(false, true)) {
-                XposedCompat.log(
-                    "[HomeTabHook] invalid home-top-tab selection detected; " +
-                        "fallback to recommend-only"
-                )
-            }
-        } else {
-            sInvalidSelectionLogged.set(false)
-        }
-        return normalized
     }
 
     private fun filterTabsInPlace(
@@ -457,7 +365,7 @@ object HomeTabHook {
             try {
                 field.set(target, field.get(source))
             } catch (_: Throwable) {
-                // 跳过不可变或类型不兼容的字段。
+                // Skip and continue.
             }
         }
     }
@@ -473,7 +381,7 @@ object HomeTabHook {
                         field.isAccessible = true
                         fields.add(field)
                     } catch (_: Throwable) {
-                        // 跳过不可访问的字段。
+                        // Skip and continue.
                     }
                 }
                 current = current.superclass
@@ -546,7 +454,7 @@ object HomeTabHook {
                 mainSetter.invoke(item, enabled)
                 return true
             } catch (_: Throwable) {
-                // 跳过并走兜底路径。
+                // Skip and continue.
             }
         }
 
@@ -625,27 +533,14 @@ object HomeTabHook {
         return null
     }
 
-    private fun resolveMutableListField(owner: Any?, preferredFieldName: String): Any? {
+    private fun resolveMutableListField(owner: Any?): Any? {
         if (owner == null) return null
-        val cls = owner.javaClass
-        val cached = sListFieldCache[cls]
-        if (cached != null) {
-            return try {
-                cached.get(owner)
-            } catch (_: Throwable) {
-                null
-            }
-        }
-
-        try {
-            val field = cls.getDeclaredField(preferredFieldName)
-            if (!List::class.java.isAssignableFrom(field.type)) return null
-            field.isAccessible = true
-            sListFieldCache[cls] = field
-            return field.get(owner)
+        val field = sRuntimeTargets?.listField ?: return null
+        return try {
+            field.get(owner)
         } catch (t: Throwable) {
             XposedCompat.logD { "HomeTabHook: ${t.message}" }
-            return null
+            null
         }
     }
 

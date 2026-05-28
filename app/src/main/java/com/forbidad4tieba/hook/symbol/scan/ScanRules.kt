@@ -1,4 +1,8 @@
-package com.forbidad4tieba.hook
+package com.forbidad4tieba.hook.symbol.scan
+
+import com.forbidad4tieba.hook.symbol.model.*
+
+import com.forbidad4tieba.hook.HookSymbolResolver
 
 import android.content.Context
 import android.net.Uri
@@ -46,7 +50,7 @@ internal class SettingsLevel1Rule(private val navClass: Class<*>) : ScanRule() {
         val methods = runCatching { cls.declaredMethods }.getOrNull() ?: return null
         val fields = runCatching { cls.declaredFields }.getOrNull() ?: return null
 
-        // 模式 A：void xxx(Context, NavigationBar)，旧版侧边栏写法。
+        // Pattern A: void xxx(Context, NavigationBar).
         val methodA = methods.firstOrNull { m ->
             runCatching {
                 if (m.returnType != Void.TYPE) return@runCatching false
@@ -57,9 +61,8 @@ internal class SettingsLevel1Rule(private val navClass: Class<*>) : ScanRule() {
             }.getOrDefault(false)
         }
 
-        // 模式 B：void xxx(View)，我的页面写法，NavigationBar 在内部通过 findViewById 获取。
-        // 类不能是 abstract，需要有 RelativeLayout 字段、ImageView 字段和 Context 构造函数，
-        // 方法也不能是 onClick。
+        // 模式 B：void xxx(View)，我的页面写法，NavigationBar 在内部通过 findViewById 获取�?        // 类不能是 abstract，需要有 RelativeLayout 字段、ImageView 字段�?Context 构造函数，
+        // Method cannot be onClick.
         val methodB = if (methodA == null) {
             if (Modifier.isAbstract(cls.modifiers)) null
             else {
@@ -99,7 +102,7 @@ internal class SettingsLevel1Rule(private val navClass: Class<*>) : ScanRule() {
         var score = 100
         score -= methods.size / 5
         score -= cls.simpleName.length
-        // 模式 B 是主要设置入口，给它加一档评分。
+        // Pattern B is the primary settings entry; score it higher.
         if (methodB != null) score += 20
         return ScanMatch(cls.name, method.name, containerField.name, score)
     }
@@ -751,7 +754,7 @@ internal class SplashAdHelperRule : ScanRule() {
         val fields = cls.declaredFields
         val methods = cls.declaredMethods
         
-        // 特征：顶层 Kotlin 辅助类，带静态 Lazy 字段和静态 boolean 方法。
+        // Top-level Kotlin helper: static Lazy field plus static boolean methods.
         val hasLazy = fields.any {
             Modifier.isStatic(it.modifiers) && it.type.name == "kotlin.Lazy"
         }
@@ -764,7 +767,7 @@ internal class SplashAdHelperRule : ScanRule() {
         }
         if (boolMethods.size < 2) return null
         
-        // 这个类通常名字唯一，原名是 SplashForbidAdHelperKt，混淆后仍保留这些结构特征。
+        // Pick the stable short method name when present.
         val aMethod = boolMethods.minWithOrNull(
             compareBy<java.lang.reflect.Method>(
                 { if (it.name == "a") 0 else 1 },
@@ -1496,10 +1499,7 @@ internal class ImageViewerShareIconResourceRule : ScanRule() {
 }
 
 /**
- * 查找 FeedCardView 上的数据绑定方法。
- * 签名是 void w(CardData)，CardData 也就是 y99，是一个数据类。
- * 它包含 List、String、boolean 字段，toString() 以 "CardData(" 开头。
- */
+ * 查找 FeedCardView 上的数据绑定方法�? * 签名�?void w(CardData)，CardData 也就�?y99，是一个数据类�? * 它包�?List、String、boolean 字段，toString() �?"CardData(" 开头�? */
 internal class FeedCardBindRule : ScanRule() {
     override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
         if (cls.name != "com.baidu.tieba.feed.card.FeedCardView") return null
@@ -1533,11 +1533,10 @@ internal class FeedCardBindRule : ScanRule() {
     }
 
     /**
-     * 用这些特征识别 CardData 类，也就是 y99：
-     * - 有 List 字段 dataList
-     * - 有多个 String 字段，比如 schema、threadId、userId
-     * - 有 boolean 字段，比如 isGreyMode、canMultiManage、supportLongClick
-     * - 有 Map 字段 appendixMap
+     * 用这些特征识�?CardData 类，也就�?y99�?     * - �?List 字段 dataList
+     * - 有多�?String 字段，比�?schema、threadId、userId
+     * - �?boolean 字段，比�?isGreyMode、canMultiManage、supportLongClick
+     * - �?Map 字段 appendixMap
      */
     private fun isCardDataLike(cls: Class<*>): Boolean {
         val fields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
@@ -1550,9 +1549,7 @@ internal class FeedCardBindRule : ScanRule() {
 }
 
 /**
- * 解析 CardHeadUiState.businessInfoMap。
- * 这里保存 feed_head 参数，比如 thread_id、thread_type 和 card_type。
- */
+ * 解析 CardHeadUiState.businessInfoMap�? * 这里保存 feed_head 参数，比�?thread_id、thread_type �?card_type�? */
 internal class FeedHeadParamsFieldRule : ScanRule() {
     override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
         if (cls.name != "com.baidu.tieba.feed.component.uistate.CardHeadUiState") return null

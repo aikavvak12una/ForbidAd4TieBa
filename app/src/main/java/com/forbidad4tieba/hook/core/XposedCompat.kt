@@ -5,20 +5,15 @@ import io.github.libxposed.api.XposedModule
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 这里放 API 101 模块生命周期持有处和工具函数。
- *
- * 功能 hook 直接使用 [module] 安装：
- * ```
+ * 杩欓噷鏀?API 101 妯″潡鐢熷懡鍛ㄦ湡鎸佹湁澶勫拰宸ュ叿鍑芥暟銆? *
+ * 鍔熻兘 hook 鐩存帴浣跨敤 [module] 瀹夎锛? * ```
  * XposedCompat.module?.hook(method)?.intercept { chain ->
- *     // 这里可用 chain.thisObject、chain.args、chain.proceed(args)
+ *     // 杩欓噷鍙敤 chain.thisObject銆乧hain.args銆乧hain.proceed(args)
  * }
  * ```
  *
- * 这里提供这些工具：
- * - 模块引用管理
- * - 结构化日志
- * - 反射辅助，包含字段、方法和类查找
- */
+ * 杩欓噷鎻愪緵杩欎簺宸ュ叿锛? * - 妯″潡寮曠敤绠＄悊
+ * - 缁撴瀯鍖栨棩蹇? * - 鍙嶅皠杈呭姪锛屽寘鍚瓧娈点€佹柟娉曞拰绫绘煡鎵? */
 object XposedCompat {
 
     @Volatile
@@ -26,7 +21,7 @@ object XposedCompat {
 
     private val installInfoOnce = ConcurrentHashMap.newKeySet<String>()
 
-    // 日志
+    // 鏃ュ織
 
     fun log(msg: String) {
         if (isSuccessfulHookInstallLog(msg)) {
@@ -104,12 +99,11 @@ object XposedCompat {
             msg.contains("unavailable", ignoreCase = true)
     }
 
-    // 类解析
-
+    // 绫昏В鏋?
     fun findClassOrNull(name: String, cl: ClassLoader): Class<*>? =
         try { Class.forName(name, false, cl) } catch (_: ClassNotFoundException) { null }
 
-    // 反射辅助
+    // 鍙嶅皠杈呭姪
 
     fun findField(clazz: Class<*>, fieldName: String): java.lang.reflect.Field {
         var current: Class<*>? = clazz
@@ -140,8 +134,7 @@ object XposedCompat {
         throw NoSuchMethodError(methodName)
     }
 
-    // 方法和构造函数解析
-
+    // 鏂规硶鍜屾瀯閫犲嚱鏁拌В鏋?
     fun findMethodOrNull(
         className: String, cl: ClassLoader,
         methodName: String, vararg paramTypes: Class<*>,

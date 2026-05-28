@@ -3,9 +3,7 @@ package com.forbidad4tieba.hook.feature.im
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
-import com.forbidad4tieba.hook.PrivateReadReceiptSymbols
+import com.forbidad4tieba.hook.symbol.model.PrivateReadReceiptSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
@@ -24,20 +22,10 @@ object PrivateReadReceiptBlockHook {
         val msgId: Long,
     )
 
-    fun hook(
-        cl: ClassLoader,
-        symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols(),
-    ) {
+    internal fun hook(targets: PrivateReadReceiptSymbols) {
         val mod = XposedCompat.module ?: return
         if (!installed.compareAndSet(false, true)) {
             XposedCompat.logD("[PrivateReadReceiptBlockHook] already installed, skip")
-            return
-        }
-
-        val targets = HookSymbolResolver.resolvePrivateReadReceiptSymbols(cl, symbols)
-        if (targets == null) {
-            installed.set(false)
-            XposedCompat.log("[PrivateReadReceiptBlockHook] skipped: scan symbols missing")
             return
         }
 

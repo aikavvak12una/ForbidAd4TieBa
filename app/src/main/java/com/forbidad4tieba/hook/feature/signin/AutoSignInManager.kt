@@ -6,7 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.CookieManager
 import android.widget.Toast
-import com.forbidad4tieba.hook.AutoSignInHybridNativeProxySymbols
+import com.forbidad4tieba.hook.symbol.model.AutoSignInHybridNativeProxySymbols
 import com.forbidad4tieba.hook.HookSymbolResolver
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints

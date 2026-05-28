@@ -9,15 +9,14 @@ import android.text.Spanned
 import android.util.Patterns
 import android.view.View
 import android.widget.TextView
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
-import com.forbidad4tieba.hook.MountCardLinkLayoutSymbols
+import com.forbidad4tieba.hook.symbol.model.MountCardLinkLayoutSymbols
+import com.forbidad4tieba.hook.symbol.model.PlainUrlClickableSpanSymbols
+import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDataSymbols
+import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDispatchSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -25,7 +24,6 @@ import java.util.regex.Pattern
 
 object PlainUrlDirectBrowserHook {
     private const val ORDINARY_URL_TYPE = 2
-    private const val CLICK_SPAN_FIELD = "isClickSpan"
     private val installed = AtomicBoolean(false)
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
     private val webUrlPattern = Pattern.compile(
@@ -33,9 +31,17 @@ object PlainUrlDirectBrowserHook {
         Pattern.CASE_INSENSITIVE,
     )
 
-    fun hook(
-        classLoader: ClassLoader,
-        symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols(),
+    internal data class RuntimeTargets(
+        val spanTargets: PlainUrlClickableSpanSymbols?,
+        val messageTarget: PlainUrlMessageDispatchSymbols?,
+        val mountCardTargets: MountCardLinkLayoutSymbols?,
+        val clickSpanMarkerField: Field?,
+        val isClickMessageCmd: (Int) -> Boolean,
+        val resolveMessageDataSymbols: (Any) -> PlainUrlMessageDataSymbols?,
+    )
+
+    internal fun hook(
+        targets: RuntimeTargets,
     ) {
         val mod = XposedCompat.module ?: return
         if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) {
@@ -48,10 +54,10 @@ object PlainUrlDirectBrowserHook {
         }
 
         try {
-            val clickSpanField = resolveClickSpanField(classLoader)
+            val clickSpanField = targets.clickSpanMarkerField
 
             var installedCount = 0
-            val spanTargets = HookSymbolResolver.resolvePlainUrlClickableSpanSymbols(classLoader, symbols)
+            val spanTargets = targets.spanTargets
             if (spanTargets != null) {
                 for (onClickMethod in spanTargets.onClickMethods) {
                     if (!installedMethodKeys.add(methodKey(onClickMethod))) continue
@@ -69,7 +75,7 @@ object PlainUrlDirectBrowserHook {
                     installedCount++
                 }
             }
-            val messageTarget = HookSymbolResolver.resolvePlainUrlMessageDispatchSymbols(classLoader, symbols)
+            val messageTarget = targets.messageTarget
             if (messageTarget != null && installedMethodKeys.add(methodKey(messageTarget.dispatchMethod))) {
                 mod.hook(messageTarget.dispatchMethod).intercept { chain ->
                     if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
@@ -79,10 +85,10 @@ object PlainUrlDirectBrowserHook {
                     }
                     val cmd = runCatching { messageTarget.getCmdMethod.invoke(message) as? Int }.getOrNull()
                         ?: return@intercept chain.proceed()
-                    if (!HookSymbolResolver.isPlainUrlClickMessageCmd(cmd)) return@intercept chain.proceed()
+                    if (!targets.isClickMessageCmd(cmd)) return@intercept chain.proceed()
                     val data = runCatching { messageTarget.getDataMethod.invoke(message) }.getOrNull()
                         ?: return@intercept chain.proceed()
-                    val dataSymbols = HookSymbolResolver.resolvePlainUrlMessageDataSymbols(data)
+                    val dataSymbols = targets.resolveMessageDataSymbols(data)
                         ?: return@intercept chain.proceed()
                     val type = readIntField(dataSymbols.typeField, data)
                         ?: return@intercept chain.proceed()
@@ -97,7 +103,7 @@ object PlainUrlDirectBrowserHook {
                 }
                 installedCount++
             }
-            val mountCardTargets = HookSymbolResolver.resolveMountCardLinkLayoutSymbols(classLoader, symbols)
+            val mountCardTargets = targets.mountCardTargets
             if (mountCardTargets != null && installedMethodKeys.add(methodKey(mountCardTargets.onClickMethod))) {
                 mod.hook(mountCardTargets.onClickMethod).intercept { chain ->
                     if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
@@ -134,16 +140,6 @@ object PlainUrlDirectBrowserHook {
     private fun methodKey(method: Method): String {
         return method.declaringClass.name + "#" + method.name + "(" +
             method.parameterTypes.joinToString(",") { it.name } + ")"
-    }
-
-    private fun resolveClickSpanField(classLoader: ClassLoader): Field? {
-        val tbSingletonClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.TB_SINGLETON_CLASS, classLoader)
-            ?: return null
-        return tbSingletonClass.declaredFields.singleOrNull { field ->
-            field.name == CLICK_SPAN_FIELD &&
-                Modifier.isStatic(field.modifiers) &&
-                field.type == Boolean::class.javaPrimitiveType
-        }?.apply { isAccessible = true }
     }
 
     private fun markClickSpan(field: Field?) {

@@ -1,6 +1,6 @@
 package com.forbidad4tieba.hook.feature.ad
 
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.CustomPostCardFilterSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -40,22 +40,13 @@ object CustomPostCardBlockHook {
 
     @Volatile private var sFilterSignature: FilterSignature? = null
 
-    internal fun createRuntimeFilter(symbols: HookSymbols): RuntimeFilter? {
-        val templateKeyMethodName = symbols.feedTemplateKeyMethod?.takeIf { it.isNotBlank() } ?: run {
-            XposedCompat.log("[CustomPostCardBlockHook] SKIP: feedTemplateKeyMethod missing")
-            return null
-        }
-        val templatePayloadMethodName = symbols.feedTemplatePayloadMethod?.takeIf { it.isNotBlank() } ?: run {
-            XposedCompat.log("[CustomPostCardBlockHook] SKIP: feedTemplatePayloadMethod missing")
-            return null
-        }
-        val dataListFieldName = symbols.feedCardDataListField?.takeIf { it.isNotBlank() } ?: run {
-            XposedCompat.log("[CustomPostCardBlockHook] SKIP: feedCardDataListField missing")
-            return null
-        }
-        val headParamsFieldName = symbols.feedHeadParamsField?.takeIf { it.isNotBlank() }
-        val recommendNestedDataMethodName = symbols.feedRecommendCardNestedDataMethod?.takeIf { it.isNotBlank() }
-        val recommendNestedDataListFieldName = symbols.feedRecommendCardNestedDataListField?.takeIf { it.isNotBlank() }
+    internal fun createRuntimeFilter(symbols: CustomPostCardFilterSymbols): RuntimeFilter {
+        val templateKeyMethodName = symbols.templateKeyMethodName
+        val templatePayloadMethodName = symbols.templatePayloadMethodName
+        val dataListFieldName = symbols.dataListFieldName
+        val headParamsFieldName = symbols.headParamsFieldName
+        val recommendNestedDataMethodName = symbols.recommendNestedDataMethodName
+        val recommendNestedDataListFieldName = symbols.recommendNestedDataListFieldName
         val signature = FilterSignature(
             templateKeyMethodName = templateKeyMethodName,
             templatePayloadMethodName = templatePayloadMethodName,

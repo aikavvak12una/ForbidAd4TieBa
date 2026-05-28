@@ -8,11 +8,11 @@ import android.widget.AbsListView
 import com.forbidad4tieba.hook.core.XposedCompat
 
 object ViewExt {
-    // 安全 tag ID，0x7E 前缀避开目标应用 R.id 的 0x7F 段。
+    // Safe tag ids use a non-app-resource prefix.
     const val TAG_SQUASH_STATE = 0x7E000001.toInt()
     const val TAG_EMPTY_VIEW = 0x7E000002.toInt()
     const val TAG_SETTINGS_BOUND = 0x7E000003.toInt()
-    
+
     private const val LP_UNSET = Int.MIN_VALUE
 
     fun markSettingsLongPressBound(view: View): Boolean {

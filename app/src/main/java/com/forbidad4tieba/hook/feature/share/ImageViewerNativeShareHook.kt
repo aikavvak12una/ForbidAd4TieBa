@@ -1,4 +1,4 @@
-﻿package com.forbidad4tieba.hook.feature.share
+package com.forbidad4tieba.hook.feature.share
 
 import android.app.Activity
 import android.content.ClipData
@@ -11,11 +11,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.Toast
-import com.forbidad4tieba.hook.HookSymbols
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.symbol.model.ImageViewerNativeShareSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.io.File
 import java.io.FileOutputStream
 import java.lang.reflect.Field
@@ -39,8 +37,6 @@ import kotlin.concurrent.thread
  */
 object ImageViewerNativeShareHook {
 
-    private const val FILE_PROVIDER_CLASS = "androidx.core.content.FileProvider"
-
     private const val CUSTOM_LABEL_MARKER_RES_ID = -19042601
     private const val REQUEST_MARK_KEY = "tbhook_image_viewer_native_share_added"
     private const val IMAGE_FETCH_CONNECT_TIMEOUT_MS = 10000
@@ -50,59 +46,27 @@ object ImageViewerNativeShareHook {
 
     private val entryInstalled = AtomicBoolean(false)
     private val itemNameHookInstalled = AtomicBoolean(false)
-    private val warnedSymbolUnavailable = AtomicBoolean(false)
     private val injectedConfigCache = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
 
-    private var fileProviderGetUriMethod: Method? = null
-    @Volatile
-    private var fileProviderMethodClassLoader: ClassLoader? = null
-    @Volatile
-    private var targetAppClassLoader: ClassLoader? = null
-    @Volatile
-    private var resolvedRuntime: Runtime? = null
-    @Volatile
-    private var resolvedTargets: SymbolTargets? = null
-
-    fun hook(cl: ClassLoader, symbols: HookSymbols) {
+    internal fun hook(targets: ImageViewerNativeShareSymbols) {
         if (!entryInstalled.compareAndSet(false, true)) return
         try {
-            targetAppClassLoader = cl
-            val targets = toSymbolTargets(symbols)
-            if (targets == null) {
-                entryInstalled.set(false)
-                if (warnedSymbolUnavailable.compareAndSet(false, true)) {
-                    XposedCompat.log(
-                        "[ImageViewerNativeShareHook] skipped: missing symbol fields " +
-                            "(imageViewerShareConfigClass/itemClass/itemViewClass/iconResId)",
-                    )
-                }
-                return
-            }
-            resolvedTargets = targets
-            val baseRuntime = resolveBaseRuntime(cl)
-            if (baseRuntime == null) {
-                entryInstalled.set(false)
-                XposedCompat.log("[ImageViewerNativeShareHook] skipped: base runtime unavailable")
-                return
-            }
             val mod = XposedCompat.module ?: run {
                 entryInstalled.set(false)
                 XposedCompat.log("[ImageViewerNativeShareHook] skipped: module unavailable")
                 return
             }
+            val runtime = targets.toRuntime()
 
-            mod.hook(baseRuntime.sendMessageMethod).intercept { chain ->
-                val runtime = ensureRuntime(cl, baseRuntime)
-                if (runtime != null) {
-                    tryInjectNativeShareItem(chain.args.firstOrNull(), runtime)
-                }
+            mod.hook(runtime.sendMessageMethod).intercept { chain ->
+                tryInjectNativeShareItem(chain.args.firstOrNull(), runtime)
                 chain.proceed()
             }
-            ensureRuntime(cl, baseRuntime)
+            ensureItemNameHookInstalled(runtime)
 
             XposedCompat.log(
                 "[ImageViewerNativeShareHook] hook INSTALLED: " +
-                    "${baseRuntime.sendMessageMethod.declaringClass.name}.${baseRuntime.sendMessageMethod.name}(Message)",
+                    "${runtime.sendMessageMethod.declaringClass.name}.${runtime.sendMessageMethod.name}(Message)",
             )
         } catch (t: Throwable) {
             entryInstalled.set(false)
@@ -110,33 +74,6 @@ object ImageViewerNativeShareHook {
             XposedCompat.log(t)
         }
     }
-
-    private data class BaseRuntime(
-        val customMessageClass: Class<*>,
-        val sendMessageMethod: Method,
-        val customMessageGetDataMethod: Method,
-    )
-
-    private data class SymbolTargets(
-        val shareDialogConfigClass: String,
-        val isImageViewerDialogField: String,
-        val shareItemField: String,
-        val addOutsideTextViewMethod: String,
-        val getRequestDataMethod: String,
-        val setRequestDataMethod: String,
-        val getContextMethod: String,
-        val shareItemClass: String,
-        val shareItemTitleField: String?,
-        val shareItemContentField: String?,
-        val shareItemLinkUrlField: String?,
-        val shareItemImageUriField: String,
-        val shareItemImageUrlField: String?,
-        val shareItemLocalFileField: String?,
-        val shareDialogItemViewClass: String,
-        val itemNameByResMethod: String,
-        val itemNameByTextMethod: String,
-        val shareIconResId: Int,
-    )
 
     private data class Runtime(
         val customMessageClass: Class<*>,
@@ -157,105 +94,16 @@ object ImageViewerNativeShareHook {
         val shareItemLocalFileField: Field?,
         val itemNameByResMethod: Method,
         val itemNameByTextMethod: Method,
+        val fileProviderGetUriMethod: Method,
         val shareIconResId: Int,
     )
 
-    private data class SharePayload(
-        val title: String,
-        val shareText: String?,
-        val imageContentUri: Uri?,
-        val remoteImageUrl: String?,
-    )
-
-    private fun resolveBaseRuntime(cl: ClassLoader): BaseRuntime? {
-        val messageManagerClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.MESSAGE_MANAGER_CLASS, cl)
-            ?: return null
-        val messageClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.MESSAGE_CLASS, cl) ?: return null
-        val customMessageClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.CUSTOM_MESSAGE_CLASS, cl)
-            ?: return null
-
-        val sendMessageMethod = XposedCompat.findMethodOrNull(
-            messageManagerClass,
-            StableTiebaHookPoints.METHOD_SEND_MESSAGE,
-            messageClass,
-        ) ?: return null
-        val customMessageGetDataMethod =
-            ReflectionUtils.findMethodInHierarchy(customMessageClass, StableTiebaHookPoints.METHOD_GET_DATA)
-                ?: return null
-        return BaseRuntime(
+    private fun ImageViewerNativeShareSymbols.toRuntime(): Runtime {
+        return Runtime(
             customMessageClass = customMessageClass,
+            shareDialogConfigClass = shareDialogConfigClass,
             sendMessageMethod = sendMessageMethod,
             customMessageGetDataMethod = customMessageGetDataMethod,
-        )
-    }
-
-    private fun ensureRuntime(cl: ClassLoader, baseRuntime: BaseRuntime): Runtime? {
-        resolvedRuntime?.let { return it }
-        val targets = resolvedTargets ?: return null
-        synchronized(this) {
-            resolvedRuntime?.let { return it }
-            val runtime = resolveRuntime(cl, baseRuntime, targets) ?: return null
-            resolvedRuntime = runtime
-            ensureItemNameHookInstalled(runtime)
-            return runtime
-        }
-    }
-
-    private fun resolveRuntime(cl: ClassLoader, baseRuntime: BaseRuntime, targets: SymbolTargets): Runtime? {
-        val shareDialogConfigClass = XposedCompat.findClassOrNull(targets.shareDialogConfigClass, cl) ?: return null
-        val shareItemClass = XposedCompat.findClassOrNull(targets.shareItemClass, cl) ?: return null
-        val shareDialogItemViewClass = XposedCompat.findClassOrNull(targets.shareDialogItemViewClass, cl) ?: return null
-
-        val isImageViewerDialogField = findFieldOrNull(shareDialogConfigClass, targets.isImageViewerDialogField) ?: return null
-        val shareItemField = findFieldOrNull(shareDialogConfigClass, targets.shareItemField) ?: return null
-        val addOutsideTextViewMethod = XposedCompat.findMethodOrNull(
-            shareDialogConfigClass,
-            targets.addOutsideTextViewMethod,
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            View.OnClickListener::class.java,
-        ) ?: return null
-        val getRequestDataMethod = ReflectionUtils.findMethodInHierarchy(
-            shareDialogConfigClass,
-            targets.getRequestDataMethod,
-        )?.takeIf { method ->
-            method.parameterTypes.isEmpty() && Map::class.java.isAssignableFrom(method.returnType)
-        } ?: return null
-        val setRequestDataMethod = XposedCompat.findMethodOrNull(
-            shareDialogConfigClass,
-            targets.setRequestDataMethod,
-            Map::class.java,
-        ) ?: return null
-        val getContextMethod = ReflectionUtils.findMethodInHierarchy(
-            shareDialogConfigClass,
-            targets.getContextMethod,
-        )?.takeIf { method ->
-            method.parameterTypes.isEmpty() && Context::class.java.isAssignableFrom(method.returnType)
-        } ?: return null
-
-        val shareItemTitleField = targets.shareItemTitleField?.let { findFieldOrNull(shareItemClass, it) }
-        val shareItemContentField = targets.shareItemContentField?.let { findFieldOrNull(shareItemClass, it) }
-        val shareItemLinkUrlField = targets.shareItemLinkUrlField?.let { findFieldOrNull(shareItemClass, it) }
-        val shareItemImageUriField = findFieldOrNull(shareItemClass, targets.shareItemImageUriField)
-        val shareItemImageUrlField = targets.shareItemImageUrlField?.let { findFieldOrNull(shareItemClass, it) }
-        val shareItemLocalFileField = targets.shareItemLocalFileField?.let { findFieldOrNull(shareItemClass, it) }
-
-        val itemNameByResMethod = XposedCompat.findMethodOrNull(
-            shareDialogItemViewClass,
-            targets.itemNameByResMethod,
-            Int::class.javaPrimitiveType!!,
-        ) ?: return null
-        val itemNameByTextMethod = XposedCompat.findMethodOrNull(
-            shareDialogItemViewClass,
-            targets.itemNameByTextMethod,
-            String::class.java,
-        ) ?: return null
-
-        return Runtime(
-            customMessageClass = baseRuntime.customMessageClass,
-            shareDialogConfigClass = shareDialogConfigClass,
-            sendMessageMethod = baseRuntime.sendMessageMethod,
-            customMessageGetDataMethod = baseRuntime.customMessageGetDataMethod,
             isImageViewerDialogField = isImageViewerDialogField,
             shareItemField = shareItemField,
             addOutsideTextViewMethod = addOutsideTextViewMethod,
@@ -270,45 +118,17 @@ object ImageViewerNativeShareHook {
             shareItemLocalFileField = shareItemLocalFileField,
             itemNameByResMethod = itemNameByResMethod,
             itemNameByTextMethod = itemNameByTextMethod,
-            shareIconResId = targets.shareIconResId,
-        )
-    }
-
-    private fun toSymbolTargets(symbols: HookSymbols): SymbolTargets? {
-        val configClass = symbols.imageViewerShareConfigClass?.takeIf { it.isNotBlank() } ?: return null
-        val isDialogField = symbols.imageViewerShareIsDialogField?.takeIf { it.isNotBlank() } ?: return null
-        val shareItemField = symbols.imageViewerShareItemField?.takeIf { it.isNotBlank() } ?: return null
-        val addOutsideMethod = symbols.imageViewerShareAddOutsideMethod?.takeIf { it.isNotBlank() } ?: return null
-        val getRequestDataMethod = symbols.imageViewerShareGetRequestDataMethod?.takeIf { it.isNotBlank() } ?: return null
-        val setRequestDataMethod = symbols.imageViewerShareSetRequestDataMethod?.takeIf { it.isNotBlank() } ?: return null
-        val getContextMethod = symbols.imageViewerShareGetContextMethod?.takeIf { it.isNotBlank() } ?: return null
-        val shareItemClass = symbols.imageViewerShareItemClass?.takeIf { it.isNotBlank() } ?: return null
-        val imageUriField = symbols.imageViewerShareItemImageUriField?.takeIf { it.isNotBlank() } ?: return null
-        val itemViewClass = symbols.imageViewerShareItemViewClass?.takeIf { it.isNotBlank() } ?: return null
-        val itemNameByResMethod = symbols.imageViewerShareItemNameByResMethod?.takeIf { it.isNotBlank() } ?: return null
-        val itemNameByTextMethod = symbols.imageViewerShareItemNameByTextMethod?.takeIf { it.isNotBlank() } ?: return null
-        val shareIconResId = symbols.imageViewerShareIconResId?.takeIf { it != 0 } ?: return null
-        return SymbolTargets(
-            shareDialogConfigClass = configClass,
-            isImageViewerDialogField = isDialogField,
-            shareItemField = shareItemField,
-            addOutsideTextViewMethod = addOutsideMethod,
-            getRequestDataMethod = getRequestDataMethod,
-            setRequestDataMethod = setRequestDataMethod,
-            getContextMethod = getContextMethod,
-            shareItemClass = shareItemClass,
-            shareItemTitleField = symbols.imageViewerShareItemTitleField,
-            shareItemContentField = symbols.imageViewerShareItemContentField,
-            shareItemLinkUrlField = symbols.imageViewerShareItemLinkUrlField,
-            shareItemImageUriField = imageUriField,
-            shareItemImageUrlField = symbols.imageViewerShareItemImageUrlField,
-            shareItemLocalFileField = symbols.imageViewerShareItemLocalFileField,
-            shareDialogItemViewClass = itemViewClass,
-            itemNameByResMethod = itemNameByResMethod,
-            itemNameByTextMethod = itemNameByTextMethod,
+            fileProviderGetUriMethod = fileProviderGetUriMethod,
             shareIconResId = shareIconResId,
         )
     }
+
+    private data class SharePayload(
+        val title: String,
+        val shareText: String?,
+        val imageContentUri: Uri?,
+        val remoteImageUrl: String?,
+    )
 
     private fun ensureItemNameHookInstalled(runtime: Runtime) {
         if (!itemNameHookInstalled.compareAndSet(false, true)) return
@@ -422,7 +242,7 @@ object ImageViewerNativeShareHook {
 
         val appContext = context.applicationContext ?: context
         thread(name = "tbhook-native-share-fetch", isDaemon = true) {
-            val downloadedUri = downloadRemoteImageToContentUri(appContext, remoteUrl)
+            val downloadedUri = downloadRemoteImageToContentUri(appContext, remoteUrl, runtime)
             Handler(Looper.getMainLooper()).post {
                 if (downloadedUri != null) {
                     launchNativeShare(context, payload.title, payload.shareText, downloadedUri)
@@ -464,7 +284,7 @@ object ImageViewerNativeShareHook {
             .getOrNull()
             .orEmpty()
             .trim()
-        val localContentUri = resolveLocalContentUri(context, imageUri, localFile)
+        val localContentUri = resolveLocalContentUri(context, imageUri, localFile, runtime)
         val remoteImageUrl = imageUri?.toString()?.takeIf { localContentUri == null && it.isHttpUrl() }
             ?: imageUrl.takeIf { localContentUri == null && it.isHttpUrl() }
         if (localContentUri == null && remoteImageUrl == null) return null
@@ -493,11 +313,11 @@ object ImageViewerNativeShareHook {
         }
     }
 
-    private fun resolveLocalContentUri(context: Context, imageUri: Uri?, localFile: String): Uri? {
+    private fun resolveLocalContentUri(context: Context, imageUri: Uri?, localFile: String, runtime: Runtime): Uri? {
         if (localFile.isNotBlank()) {
             val file = File(localFile)
             if (file.exists() && file.length() > 0L) {
-                val uri = stageLocalFileToContentUri(context, file)
+                val uri = stageLocalFileToContentUri(context, file, runtime)
                 if (uri != null) return uri
             }
         }
@@ -509,7 +329,7 @@ object ImageViewerNativeShareHook {
                 if (path.isBlank()) null else {
                     val file = File(path)
                     if (file.exists() && file.length() > 0L) {
-                        stageLocalFileToContentUri(context, file)
+                        stageLocalFileToContentUri(context, file, runtime)
                     } else {
                         null
                     }
@@ -519,7 +339,7 @@ object ImageViewerNativeShareHook {
         }
     }
 
-    private fun downloadRemoteImageToContentUri(context: Context, imageUrl: String): Uri? {
+    private fun downloadRemoteImageToContentUri(context: Context, imageUrl: String, runtime: Runtime): Uri? {
         if (imageUrl.isBlank()) return null
         val targetFile = createShareStagingFile(context, imageUrl) ?: return null
 
@@ -549,7 +369,7 @@ object ImageViewerNativeShareHook {
         }
 
         if (!ok) return null
-        return fileToContentUri(context, targetFile)
+        return fileToContentUri(context, targetFile, runtime)
     }
 
     private fun createShareStagingFile(context: Context, nameHint: String): File? {
@@ -560,7 +380,7 @@ object ImageViewerNativeShareHook {
         return runCatching { File.createTempFile("share_", ext, dir) }.getOrNull()
     }
 
-    private fun stageLocalFileToContentUri(context: Context, sourceFile: File): Uri? {
+    private fun stageLocalFileToContentUri(context: Context, sourceFile: File, runtime: Runtime): Uri? {
         val targetFile = createShareStagingFile(context, sourceFile.name) ?: return null
         val copied = runCatching {
             sourceFile.inputStream().use { input ->
@@ -574,7 +394,7 @@ object ImageViewerNativeShareHook {
             false
         }
         if (!copied) return null
-        return fileToContentUri(context, targetFile)
+        return fileToContentUri(context, targetFile, runtime)
     }
 
     private fun guessImageExt(imageUrl: String): String {
@@ -589,16 +409,15 @@ object ImageViewerNativeShareHook {
         }
     }
 
-    private fun fileToContentUri(context: Context, file: File): Uri? {
+    private fun fileToContentUri(context: Context, file: File, runtime: Runtime): Uri? {
         val authority = "${context.packageName}.fileprovider"
-        val uri = getUriByFileProvider(context, authority, file) ?: return null
+        val uri = getUriByFileProvider(context, authority, file, runtime) ?: return null
         return if (canOpenUri(context, uri)) uri else null
     }
 
-    private fun getUriByFileProvider(context: Context, authority: String, file: File): Uri? {
+    private fun getUriByFileProvider(context: Context, authority: String, file: File, runtime: Runtime): Uri? {
         return runCatching {
-            val method = resolveFileProviderGetUriMethod()
-            method.invoke(null, context, authority, file) as? Uri
+            runtime.fileProviderGetUriMethod.invoke(null, context, authority, file) as? Uri
         }.onFailure { t ->
             val root = t.rootCause()
             XposedCompat.logW(
@@ -607,23 +426,6 @@ object ImageViewerNativeShareHook {
                     "errType=${root.javaClass.name} err=${root.message}",
             )
         }.getOrNull()
-    }
-
-    private fun resolveFileProviderGetUriMethod(): Method {
-        val targetClassLoader = targetAppClassLoader
-            ?: throw ClassNotFoundException("target app classloader unavailable")
-        val cached = fileProviderGetUriMethod
-        if (cached != null && fileProviderMethodClassLoader === targetClassLoader) return cached
-        val method = Class.forName(FILE_PROVIDER_CLASS, false, targetClassLoader).getDeclaredMethod(
-            "getUriForFile",
-            Context::class.java,
-            String::class.java,
-            File::class.java,
-        )
-        method.isAccessible = true
-        fileProviderGetUriMethod = method
-        fileProviderMethodClassLoader = targetClassLoader
-        return method
     }
 
     private fun canOpenUri(context: Context, uri: Uri): Boolean {
@@ -664,12 +466,6 @@ object ImageViewerNativeShareHook {
                 Toast.LENGTH_SHORT,
             ).show()
         }
-    }
-
-    private fun findFieldOrNull(clazz: Class<*>, fieldName: String): Field? {
-        return runCatching {
-            clazz.getDeclaredField(fieldName).apply { isAccessible = true }
-        }.getOrNull()
     }
 
     private fun String.isHttpUrl(): Boolean {

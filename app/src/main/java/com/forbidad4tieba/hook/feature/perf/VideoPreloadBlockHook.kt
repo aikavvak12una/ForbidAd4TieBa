@@ -6,17 +6,10 @@ import java.lang.reflect.Modifier
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 阻断信息流视频预加载，减少网络、内存和 CPU 开销。
- *
- * 目标应用会通过这些入口预加载后续信息流视频：
- * 1. PreLoadVideoSwitchManager.isOpen() 做开关判断。
- * 2. PreLoadVideoHelper.load() 做调度。
- * 3. DuMediaPrefetch.prefetch() 和 preConnect() 发起网络预取。
- *
- * 三层都 hook 后，不管哪条路径触发，都不会继续预取视频。
- *
- * 由视频组件开关控制。
- */
+ * 阻断信息流视频预加载，减少网络、内存和 CPU 开销�? *
+ * 目标应用会通过这些入口预加载后续信息流视频�? * 1. PreLoadVideoSwitchManager.isOpen() 做开关判断�? * 2. PreLoadVideoHelper.load() 做调度�? * 3. DuMediaPrefetch.prefetch() �?preConnect() 发起网络预取�? *
+ * 三层�?hook 后，不管哪条路径触发，都不会继续预取视频�? *
+ * 由视频组件开关控制�? */
 object VideoPreloadBlockHook {
     private const val TAG = "[VideoPreloadBlockHook]"
 
@@ -43,7 +36,7 @@ object VideoPreloadBlockHook {
 
         var totalInstalled = 0
 
-        // 1. hook PreLoadVideoSwitchManager.isOpen()，返回 false。
+        // Hook PreLoadVideoSwitchManager.isOpen() and return false.
         val switchClass = XposedCompat.findClassOrNull(PRELOAD_SWITCH_MANAGER_CLASS, cl)
         if (switchClass != null) {
             val isOpenMethod = XposedCompat.findMethodOrNull(switchClass, "isOpen")
@@ -60,7 +53,7 @@ object VideoPreloadBlockHook {
             }
         }
 
-        // 2. hook PreLoadVideoHelper.load()，直接空返回。
+        // Hook PreLoadVideoHelper.load() and return without work.
         val helperClass = XposedCompat.findClassOrNull(PRELOAD_VIDEO_HELPER_CLASS, cl)
         if (helperClass != null) {
             val loadMethods = helperClass.declaredMethods.filter { method ->
@@ -80,7 +73,7 @@ object VideoPreloadBlockHook {
             }
         }
 
-        // 3. hook DuMediaPrefetch.prefetch() 和 preConnect()，直接空返回。
+        // Hook DuMediaPrefetch network prefetch entry points.
         val prefetchClass = XposedCompat.findClassOrNull(DU_MEDIA_PREFETCH_CLASS, cl)
         if (prefetchClass != null) {
             val targetMethods = prefetchClass.declaredMethods.filter { method ->

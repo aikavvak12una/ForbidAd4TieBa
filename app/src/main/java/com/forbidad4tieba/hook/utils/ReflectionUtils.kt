@@ -6,17 +6,12 @@ import android.content.ContextWrapper
 import java.lang.reflect.Method
 
 /**
- * 多个 hook 类共用的反射工具。
- * 放在这里可以减少重复代码，并让行为保持一致。
- */
+ * 澶氫釜 hook 绫诲叡鐢ㄧ殑鍙嶅皠宸ュ叿銆? * 鏀惧湪杩欓噷鍙互鍑忓皯閲嶅浠ｇ爜锛屽苟璁╄涓轰繚鎸佷竴鑷淬€? */
 object ReflectionUtils {
 
     /**
-     * 沿类继承链按名称和参数类型查找声明方法。
-     *
-     * 遇到 [Any] 也就是 java.lang.Object 就停止，避免扫到框架内部。
-     * 返回的方法会设置为可访问。
-     */
+     * 娌跨被缁ф壙閾炬寜鍚嶇О鍜屽弬鏁扮被鍨嬫煡鎵惧０鏄庢柟娉曘€?     *
+     * 閬囧埌 [Any] 涔熷氨鏄?java.lang.Object 灏卞仠姝紝閬垮厤鎵埌妗嗘灦鍐呴儴銆?     * 杩斿洖鐨勬柟娉曚細璁剧疆涓哄彲璁块棶銆?     */
     fun findMethodInHierarchy(
         clazz: Class<*>,
         name: String,
@@ -35,9 +30,7 @@ object ReflectionUtils {
     }
 
     /**
-     * 沿类继承链查找声明方法。
-     * 方法需要同时匹配 [name] 和自定义 [predicate]。
-     */
+     * 娌跨被缁ф壙閾炬煡鎵惧０鏄庢柟娉曘€?     * 鏂规硶闇€瑕佸悓鏃跺尮閰?[name] 鍜岃嚜瀹氫箟 [predicate]銆?     */
     fun findMethodInHierarchy(
         clazz: Class<*>,
         name: String,
@@ -56,9 +49,7 @@ object ReflectionUtils {
     }
 
     /**
-     * 从 [Context] 里取宿主 [Activity]。
-     * 最多向外拆 [maxDepth] 层 [ContextWrapper]。
-     */
+     * 浠?[Context] 閲屽彇瀹夸富 [Activity]銆?     * 鏈€澶氬悜澶栨媶 [maxDepth] 灞?[ContextWrapper]銆?     */
     fun findActivityFromContext(context: Context?, maxDepth: Int = 12): Activity? {
         var current = context
         var guard = 0
@@ -71,9 +62,7 @@ object ReflectionUtils {
     }
 
     /**
-     * 为 [Method] 生成便于阅读的唯一键。
-     * 内容包含声明类、方法名和参数类型。
-     */
+     * 涓?[Method] 鐢熸垚渚夸簬闃呰鐨勫敮涓€閿€?     * 鍐呭鍖呭惈澹版槑绫汇€佹柟娉曞悕鍜屽弬鏁扮被鍨嬨€?     */
     fun methodSignature(method: Method): String {
         val params = method.parameterTypes.joinToString(",") { it.name }
         return "${method.declaringClass.name}#${method.name}($params)"

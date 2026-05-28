@@ -15,12 +15,9 @@ import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 /**
- * 给目标应用 NavigationBar 注入搜索按钮的共用工具。
- * 类名是 com.baidu.tbadk.core.view.NavigationBar。
- *
- * 调用方仍然自己决定：
- * - 怎么拿到 NavigationBar 实例，比如 Activity 字段或控制器链
- * - 按哪个目标重排位置，比如清除按钮或右侧同级 View
+ * 缁欑洰鏍囧簲鐢?NavigationBar 娉ㄥ叆鎼滅储鎸夐挳鐨勫叡鐢ㄥ伐鍏枫€? * 绫诲悕鏄?com.baidu.tbadk.core.view.NavigationBar銆? *
+ * 璋冪敤鏂逛粛鐒惰嚜宸卞喅瀹氾細
+ * - 鎬庝箞鎷垮埌 NavigationBar 瀹炰緥锛屾瘮濡?Activity 瀛楁鎴栨帶鍒跺櫒閾? * - 鎸夊摢涓洰鏍囬噸鎺掍綅缃紝姣斿娓呴櫎鎸夐挳鎴栧彸渚у悓绾?View
  */
 internal object NavBarSearchButton {
 
@@ -28,16 +25,12 @@ internal object NavBarSearchButton {
     private const val NAV_ALIGN_RIGHT_FIELD = "HORIZONTAL_RIGHT"
 
     /**
-     * 缓存从 HomeTabBarRightSlot 拿到的搜索图标 ConstantState。
-     * 由 [cacheSearchIconDrawable] 写入一次，再由 [resolveSearchIconDrawable] 使用。
-     */
+     * 缂撳瓨浠?HomeTabBarRightSlot 鎷垮埌鐨勬悳绱㈠浘鏍?ConstantState銆?     * 鐢?[cacheSearchIconDrawable] 鍐欏叆涓€娆★紝鍐嶇敱 [resolveSearchIconDrawable] 浣跨敤銆?     */
     @Volatile
     private var sCachedSearchIconState: Drawable.ConstantState? = null
 
     /**
-     * 缓存 HomeTabBarRightSlot.getSearchIconView() 返回的搜索图标 drawable。
-     * 由 HomeTopBarRightSlotHook 在确认槽位搜索图标可用后调用。
-     */
+     * 缂撳瓨 HomeTabBarRightSlot.getSearchIconView() 杩斿洖鐨勬悳绱㈠浘鏍?drawable銆?     * 鐢?HomeTopBarRightSlotHook 鍦ㄧ‘璁ゆЫ浣嶆悳绱㈠浘鏍囧彲鐢ㄥ悗璋冪敤銆?     */
     fun cacheSearchIconDrawable(drawable: Drawable?) {
         if (drawable == null) return
         if (sCachedSearchIconState != null) return
@@ -45,8 +38,7 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 从目标应用读取静态常量 `ControlAlign.HORIZONTAL_RIGHT`。
-     */
+     * 浠庣洰鏍囧簲鐢ㄨ鍙栭潤鎬佸父閲?`ControlAlign.HORIZONTAL_RIGHT`銆?     */
     fun resolveNavigationRightAlign(cl: ClassLoader?): Any? {
         val targetCl = cl ?: return null
         return try {
@@ -58,8 +50,7 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 按签名形状解析 `NavigationBar.addCustomView(Align, View, ...)`。
-     */
+     * 鎸夌鍚嶅舰鐘惰В鏋?`NavigationBar.addCustomView(Align, View, ...)`銆?     */
     fun resolveAddCustomViewMethod(navClass: Class<*>): Method? {
         return navClass.declaredMethods.firstOrNull { method ->
             method.name == NAV_ADD_CUSTOM_VIEW_METHOD &&
@@ -69,9 +60,7 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 构建标准的 40dp 容器，里面放居中的 32dp 图标。
-     * [iconDrawable] 为空时使用 Android 系统搜索图标。
-     */
+     * 鏋勫缓鏍囧噯鐨?40dp 瀹瑰櫒锛岄噷闈㈡斁灞呬腑鐨?32dp 鍥炬爣銆?     * [iconDrawable] 涓虹┖鏃朵娇鐢?Android 绯荤粺鎼滅储鍥炬爣銆?     */
     fun buildSearchButton(
         activity: Activity,
         iconDrawable: Drawable?,
@@ -100,11 +89,8 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 解析搜索图标 Drawable，查找顺序如下：
-     * 1. HomeTopBarRightSlotHook 缓存的 HomeTabBarRightSlot 图标。
-     * 2. 当前 Activity decor view 里的 HomeTabBarRightSlot.getSearchIconView()。
-     * 3. Android 内置菜单搜索图标。
-     */
+     * 瑙ｆ瀽鎼滅储鍥炬爣 Drawable锛屾煡鎵鹃『搴忓涓嬶細
+     * 1. HomeTopBarRightSlotHook 缂撳瓨鐨?HomeTabBarRightSlot 鍥炬爣銆?     * 2. 褰撳墠 Activity decor view 閲岀殑 HomeTabBarRightSlot.getSearchIconView()銆?     * 3. Android 鍐呯疆鑿滃崟鎼滅储鍥炬爣銆?     */
     fun resolveSearchIconDrawable(activity: Activity, @Suppress("UNUSED_PARAMETER") navigationBar: Any): Drawable? {
         sCachedSearchIconState?.newDrawable()?.mutate()?.let { return it }
         findHomeRightSlotSearchDrawable(activity.window?.decorView)?.let { return it }
@@ -112,9 +98,7 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 从 NavigationBar 实例取根 View。
-     * 兼容实例本身就是 View，或实例内部持有 View 类型字段这两种情况。
-     */
+     * 浠?NavigationBar 瀹炰緥鍙栨牴 View銆?     * 鍏煎瀹炰緥鏈韩灏辨槸 View锛屾垨瀹炰緥鍐呴儴鎸佹湁 View 绫诲瀷瀛楁杩欎袱绉嶆儏鍐点€?     */
     fun extractNavigationRootView(navigationBar: Any): View? {
         if (navigationBar is View) return navigationBar
         findFieldValue(navigationBar) { it is View }?.let { return it as? View }
@@ -122,8 +106,7 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 在 [root] 内沿 [target] 的父链向上找，返回它的直接父级 ViewGroup。
-     */
+     * 鍦?[root] 鍐呮部 [target] 鐨勭埗閾惧悜涓婃壘锛岃繑鍥炲畠鐨勭洿鎺ョ埗绾?ViewGroup銆?     */
     fun findParentOfView(root: View, target: View): ViewGroup? {
         if (root !is ViewGroup) return null
         for (i in 0 until root.childCount) {
@@ -135,9 +118,7 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 在按钮上按 0、80、220ms 投递 [reposition]。
-     * 等布局稳定后执行，不阻塞调用方。
-     */
+     * 鍦ㄦ寜閽笂鎸?0銆?0銆?20ms 鎶曢€?[reposition]銆?     * 绛夊竷灞€绋冲畾鍚庢墽琛岋紝涓嶉樆濉炶皟鐢ㄦ柟銆?     */
     fun scheduleReposition(button: View, reposition: () -> Unit) {
         button.post(reposition)
         button.postDelayed(reposition, 80L)
@@ -182,7 +163,7 @@ internal object NavBarSearchButton {
         }.getOrNull()
     }
 
-    // 内部工具
+    // 鍐呴儴宸ュ叿
 
     private fun findHomeRightSlotSearchDrawable(root: View?): Drawable? {
         val decor = root ?: return null

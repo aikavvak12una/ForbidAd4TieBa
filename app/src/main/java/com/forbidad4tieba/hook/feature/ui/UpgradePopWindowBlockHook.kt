@@ -6,13 +6,10 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 屏蔽更新弹窗。
- *
- * 目标应用通过启动 `com.baidu.tieba.UpdateDialog` Activity 展示更新对话框，
- * 对它的 onCreate 做 hook 并立即 finish，阻止弹窗显示。
- *
- * 更新弹窗类 UpdateDialog 是未混淆的稳定类名，无需通过 HookSymbolResolver 解析。
- */
+ * 灞忚斀鏇存柊寮圭獥銆? *
+ * 鐩爣搴旂敤閫氳繃鍚姩 `com.baidu.tieba.UpdateDialog` Activity 灞曠ず鏇存柊瀵硅瘽妗嗭紝
+ * 瀵瑰畠鐨?onCreate 鍋?hook 骞剁珛鍗?finish锛岄樆姝㈠脊绐楁樉绀恒€? *
+ * 鏇存柊寮圭獥绫?UpdateDialog 鏄湭娣锋穯鐨勭ǔ瀹氱被鍚嶏紝鏃犻渶閫氳繃 HookSymbolResolver 瑙ｆ瀽銆? */
 object UpgradePopWindowBlockHook {
     private const val UPDATE_DIALOG_CLASS = "com.baidu.tieba.UpdateDialog"
     private val installed = AtomicBoolean(false)

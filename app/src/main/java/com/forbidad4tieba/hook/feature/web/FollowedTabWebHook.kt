@@ -14,11 +14,7 @@ import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 在严格范围内移除关注页导航条：
- * 1. 用户启用了自定义首页顶部 tab。
- * 2. 用户启用了关注 tab。
- * 3. URL 是关注页，并带有顶部 tab 标记 `tbhook_from_home_top_tab=1`。
- */
+ * 在严格范围内移除关注页导航条�? * 1. 用户启用了自定义首页顶部 tab�? * 2. 用户启用了关�?tab�? * 3. URL 是关注页，并带有顶部 tab 标记 `tbhook_from_home_top_tab=1`�? */
 object FollowedTabWebHook {
     private const val FOLLOWED_PAGE_PATH = "/hybrid-usergrow-base/myfollowed/hybrid"
     private const val HOME_TOP_SCOPE_MARKER = "tbhook_from_home_top_tab=1"
@@ -70,8 +66,8 @@ object FollowedTabWebHook {
               'padding-top': '0'
             });
 
-            // `render-list-phantom` 是虚拟列表占位，只折叠很小的值。
-            // 这些值通常来自导航补偿，避免影响列表逻辑。
+            // Collapse tiny virtual-list phantom spacing only.
+            // These values usually come from navigation compensation.
             var phantom = root.querySelector('.render-list-phantom');
             if (phantom && phantom.style) {
               var rawHeight = (phantom.style.height || '').trim();

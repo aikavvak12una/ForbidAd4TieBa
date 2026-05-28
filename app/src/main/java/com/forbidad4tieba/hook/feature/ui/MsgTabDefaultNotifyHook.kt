@@ -1,51 +1,24 @@
 package com.forbidad4tieba.hook.feature.ui
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.MsgTabDefaultNotifySymbols
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
-import java.lang.reflect.Method
 
 /**
- * 消息 tab 默认策略：
- * - 显式定位目标保持不变，比如 selected_tab_id 和 ext。
- * - 只把默认兜底从私信 chat(-2) 改成通知 notify(-1)。
- */
+ * 娑堟伅 tab 榛樿绛栫暐锛? * - 鏄惧紡瀹氫綅鐩爣淇濇寔涓嶅彉锛屾瘮濡?selected_tab_id 鍜?ext銆? * - 鍙妸榛樿鍏滃簳浠庣淇?chat(-2) 鏀规垚閫氱煡 notify(-1)銆? */
 object MsgTabDefaultNotifyHook {
     private const val TAB_ID_NOTIFY = -1L
     private const val TAB_ID_CHAT = -2L
 
-    private data class RuntimeTargets(
-        val locateToTabMethod: String,
-    )
-
-    fun hook(cl: ClassLoader, symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols()) {
-        val targets = resolveTargets(symbols)
-        if (targets == null) {
-            XposedCompat.log(
-                "[MsgTabDefaultNotifyHook] skipped: scan symbols missing " +
-                    "(msgTabLocateToTabMethod)",
-            )
-            return
-        }
-        if (!installViewModelStrategy(cl, targets)) {
+    internal fun hook(targets: MsgTabDefaultNotifySymbols) {
+        if (!installViewModelStrategy(targets)) {
             XposedCompat.log("[MsgTabDefaultNotifyHook] skipped: ViewModel strategy unavailable")
         }
     }
 
-    private fun resolveTargets(symbols: HookSymbols?): RuntimeTargets? {
-        val scanSymbols = symbols ?: return null
-        val locateToTabMethod = scanSymbols.msgTabLocateToTabMethod?.takeIf { it.isNotBlank() }
-        if (locateToTabMethod == null) return null
-        return RuntimeTargets(locateToTabMethod = locateToTabMethod)
-    }
-
-    private fun installViewModelStrategy(cl: ClassLoader, targets: RuntimeTargets): Boolean {
+    private fun installViewModelStrategy(targets: MsgTabDefaultNotifySymbols): Boolean {
         val mod = XposedCompat.module ?: return false
-        val vmClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.MSG_CENTER_CONTAINER_VIEW_MODEL_CLASS, cl)
-            ?: return false
-        val locateMethod = resolveLocateToTabMethod(vmClass, targets.locateToTabMethod) ?: return false
+        val locateMethod = targets.locateToTabMethod
         return try {
             mod.hook(locateMethod).intercept { chain ->
                 val result = chain.proceed()
@@ -64,7 +37,8 @@ object MsgTabDefaultNotifyHook {
                 TAB_ID_NOTIFY
             }
             XposedCompat.log(
-                "[MsgTabDefaultNotifyHook] hook INSTALLED: ${vmClass.name}.${locateMethod.name}(long,String)"
+                "[MsgTabDefaultNotifyHook] hook INSTALLED: " +
+                    "${locateMethod.declaringClass.name}.${locateMethod.name}(long,String)",
             )
             true
         } catch (t: Throwable) {
@@ -72,18 +46,6 @@ object MsgTabDefaultNotifyHook {
             XposedCompat.log(t)
             false
         }
-    }
-
-    private fun resolveLocateToTabMethod(vmClass: Class<*>, methodName: String): Method? {
-        val method = XposedCompat.findMethodOrNull(
-            vmClass,
-            methodName,
-            Long::class.javaPrimitiveType!!,
-            String::class.java,
-        ) ?: return null
-        if (method.returnType != Long::class.javaPrimitiveType) return null
-        method.isAccessible = true
-        return method
     }
 
     private fun asLong(value: Any?): Long? = when (value) {

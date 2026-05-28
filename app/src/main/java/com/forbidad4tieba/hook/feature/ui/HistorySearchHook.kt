@@ -5,7 +5,6 @@ import android.app.AlertDialog
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.os.Build
-import android.os.Bundle
 import android.text.InputType
 import android.view.View
 import android.view.ViewGroup
@@ -13,8 +12,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.HistorySearchSymbols
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
@@ -23,35 +21,16 @@ import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.utils.ClearableInputRow
 import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.util.ArrayList
 import java.util.Collections
 import java.util.Locale
 import java.util.WeakHashMap
 
 /**
- * 历史页 PbHistoryActivity 的本地搜索。
- *
- * 这个 hook 只过滤已经加载的本地历史列表。
- * 不触发网络请求。
- */
+ * 鍘嗗彶椤?PbHistoryActivity 鐨勬湰鍦版悳绱€? *
+ * 杩欎釜 hook 鍙繃婊ゅ凡缁忓姞杞界殑鏈湴鍘嗗彶鍒楄〃銆? * 涓嶈Е鍙戠綉缁滆姹傘€? */
 object HistorySearchHook {
     private val MULTI_SPACE_REGEX = Regex("\\s+")
-
-    private data class RuntimeTargets(
-        val adapterField: String,
-        val adapterSetListMethod: String,
-        val listField: String,
-        val activityListUpdateMethod: String?,
-        val activityNavBarField: String,
-        val threadNameMethod: String,
-        val forumNameMethod: String,
-        val userNameMethod: String,
-        val descriptionMethod: String,
-        val threadIdMethod: String,
-        val postIdMethod: String,
-        val liveIdMethod: String,
-    )
 
     private data class ActivityState(
         var buttonView: View? = null,
@@ -77,36 +56,20 @@ object HistorySearchHook {
     private val sItemSearchTextCache = Collections.synchronizedMap(WeakHashMap<Any, String>())
     private val sFieldLookupCache = Collections.synchronizedMap(WeakHashMap<Class<*>, MutableMap<String, Field?>>())
     @Volatile
-    private var sRuntimeTargets: RuntimeTargets? = null
+    private var sRuntimeTargets: HistorySearchSymbols? = null
 
     private fun dbg(msg: String) {
         XposedCompat.logD("[HistorySearchHook][dbg] $msg")
     }
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols? = HookSymbolResolver.getMemorySymbols()) {
+    internal fun hook(symbols: HistorySearchSymbols) {
         val mod = XposedCompat.module ?: return
-        val targets = resolveTargets(symbols)
-        if (targets == null) {
-            XposedCompat.log(
-                "[HistorySearchHook] skipped: scan symbols missing " +
-                    "(historyAdapterField/historyAdapterSetListMethod/historyListField/" +
-                    "historyActivityNavBarField/" +
-                    "historyThreadNameMethod/historyForumNameMethod/historyUserNameMethod/" +
-                    "historyDescriptionMethod/historyThreadIdMethod/historyPostIdMethod/historyLiveIdMethod)",
-            )
-            return
-        }
-        sRuntimeTargets = targets
+        sRuntimeTargets = symbols
         sHistoryAccessorCache.clear()
-        val activityClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_HISTORY_ACTIVITY_CLASS, cl)
-        if (activityClass == null) {
-            XposedCompat.log("[HistorySearchHook] class NOT FOUND: ${StableTiebaHookPoints.PB_HISTORY_ACTIVITY_CLASS}")
-            return
-        }
 
         try {
-            installLifecycleHooks(mod, activityClass)
-            installListUpdateHooks(mod, activityClass)
+            installLifecycleHooks(mod, symbols)
+            installListUpdateHooks(mod, symbols)
             XposedCompat.log("[HistorySearchHook] hook INSTALLED")
         } catch (t: Throwable) {
             XposedCompat.log("[HistorySearchHook] FAILED: ${t.message}")
@@ -114,38 +77,8 @@ object HistorySearchHook {
         }
     }
 
-    private fun resolveTargets(symbols: HookSymbols?): RuntimeTargets? {
-        val scanSymbols = symbols ?: return null
-        val adapterField = scanSymbols.historyAdapterField?.takeIf { it.isNotBlank() } ?: return null
-        val adapterSetListMethod = scanSymbols.historyAdapterSetListMethod?.takeIf { it.isNotBlank() } ?: return null
-        val listField = scanSymbols.historyListField?.takeIf { it.isNotBlank() } ?: return null
-        val activityListUpdateMethod = scanSymbols.historyActivityListUpdateMethod?.takeIf { it.isNotBlank() }
-        val activityNavBarField = scanSymbols.historyActivityNavBarField?.takeIf { it.isNotBlank() } ?: return null
-        val threadNameMethod = scanSymbols.historyThreadNameMethod?.takeIf { it.isNotBlank() } ?: return null
-        val forumNameMethod = scanSymbols.historyForumNameMethod?.takeIf { it.isNotBlank() } ?: return null
-        val userNameMethod = scanSymbols.historyUserNameMethod?.takeIf { it.isNotBlank() } ?: return null
-        val descriptionMethod = scanSymbols.historyDescriptionMethod?.takeIf { it.isNotBlank() } ?: return null
-        val threadIdMethod = scanSymbols.historyThreadIdMethod?.takeIf { it.isNotBlank() } ?: return null
-        val postIdMethod = scanSymbols.historyPostIdMethod?.takeIf { it.isNotBlank() } ?: return null
-        val liveIdMethod = scanSymbols.historyLiveIdMethod?.takeIf { it.isNotBlank() } ?: return null
-        return RuntimeTargets(
-            adapterField = adapterField,
-            adapterSetListMethod = adapterSetListMethod,
-            listField = listField,
-            activityListUpdateMethod = activityListUpdateMethod,
-            activityNavBarField = activityNavBarField,
-            threadNameMethod = threadNameMethod,
-            forumNameMethod = forumNameMethod,
-            userNameMethod = userNameMethod,
-            descriptionMethod = descriptionMethod,
-            threadIdMethod = threadIdMethod,
-            postIdMethod = postIdMethod,
-            liveIdMethod = liveIdMethod,
-        )
-    }
-
-    private fun installLifecycleHooks(mod: io.github.libxposed.api.XposedModule, activityClass: Class<*>) {
-        XposedCompat.findMethodOrNull(activityClass, "onCreate", Bundle::class.java)?.let { method ->
+    private fun installLifecycleHooks(mod: io.github.libxposed.api.XposedModule, symbols: HistorySearchSymbols) {
+        symbols.onCreateMethod?.let { method ->
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
                 val activity = chain.thisObject as? Activity
@@ -157,7 +90,7 @@ object HistorySearchHook {
             }
         }
 
-        XposedCompat.findMethodOrNull(activityClass, "onResume")?.let { method ->
+        symbols.onResumeMethod?.let { method ->
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
                 val activity = chain.thisObject as? Activity
@@ -175,7 +108,7 @@ object HistorySearchHook {
             }
         }
 
-        XposedCompat.findMethodOrNull(activityClass, "onDestroy")?.let { method ->
+        symbols.onDestroyMethod?.let { method ->
             mod.hook(method).intercept { chain ->
                 val activity = chain.thisObject as? Activity
                 val result = chain.proceed()
@@ -187,16 +120,8 @@ object HistorySearchHook {
         }
     }
 
-    private fun installListUpdateHooks(mod: io.github.libxposed.api.XposedModule, activityClass: Class<*>) {
-        val methodName = sRuntimeTargets?.activityListUpdateMethod ?: return
-        val method = findMethodInHierarchy(activityClass, methodName) { target ->
-            !Modifier.isStatic(target.modifiers) &&
-                target.returnType == Void.TYPE &&
-                target.parameterTypes.size == 1 &&
-                (List::class.java.isAssignableFrom(target.parameterTypes[0]) ||
-                    ArrayList::class.java.isAssignableFrom(target.parameterTypes[0]))
-        } ?: return
-        method.isAccessible = true
+    private fun installListUpdateHooks(mod: io.github.libxposed.api.XposedModule, symbols: HistorySearchSymbols) {
+        val method = symbols.activityListUpdateMethod ?: return
         mod.hook(method).intercept { chain ->
             val result = chain.proceed()
             val activity = chain.thisObject as? Activity ?: return@intercept result
