@@ -183,15 +183,27 @@ internal object HomeNativeGlassSymbolScanner {
             log(logger, "homeNativeGlassSortSwitch: declaredMethods failed: ${t.message}")
             emptyList()
         }
-        val slideDrawMethod = when (slideDrawCandidates.size) {
+        val slideDrawInnerCandidates = slideDrawCandidates.filter { method ->
+            method.name != "onDraw"
+        }
+        if (slideDrawInnerCandidates.size != slideDrawCandidates.size) {
+            log(
+                logger,
+                "homeNativeGlassSortSwitch: slide draw ignored framework candidates=" +
+                    slideDrawCandidates
+                        .filterNot { it in slideDrawInnerCandidates }
+                        .joinToString(",") { describeMethodShape(it) },
+            )
+        }
+        val slideDrawMethod = when (slideDrawInnerCandidates.size) {
             0 -> {
                 log(logger, "homeNativeGlassSortSwitch: slide draw method missing")
                 null
             }
-            1 -> slideDrawCandidates.first()
+            1 -> slideDrawInnerCandidates.first()
             2 -> {
-                val structural = slideDrawCandidates.last()
-                val legacy = slideDrawCandidates.singleOrNull { it.name == SORT_SWITCH_SLIDE_DRAW_METHOD }
+                val structural = slideDrawInnerCandidates.last()
+                val legacy = slideDrawInnerCandidates.singleOrNull { it.name == SORT_SWITCH_SLIDE_DRAW_METHOD }
                 if (legacy != null && legacy != structural) {
                     log(
                         logger,
@@ -205,7 +217,7 @@ internal object HomeNativeGlassSymbolScanner {
                 log(
                     logger,
                     "homeNativeGlassSortSwitch: slide draw method ambiguous candidates=" +
-                        slideDrawCandidates.joinToString(",") { describeMethodShape(it) },
+                        slideDrawInnerCandidates.joinToString(",") { describeMethodShape(it) },
                 )
                 null
             }
