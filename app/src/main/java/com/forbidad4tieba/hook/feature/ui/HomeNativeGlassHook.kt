@@ -98,6 +98,7 @@ object HomeNativeGlassHook {
     private val pbReplyBarInputApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbReplyTitleDynamicTintScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbSortSwitchOriginalBackgroundColors = Collections.synchronizedMap(WeakHashMap<View, Int>())
+    private val pbSortSwitchTintStates = Collections.synchronizedMap(WeakHashMap<View, PbSortSwitchTintState>())
     private val pbSortSwitchSelectedSlidePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pbSortSwitchNativeSelectedSlideLayerPaint = Paint().apply { alpha = 0 }
     private val pbEnterForumCapsuleOriginalStates =
@@ -114,6 +115,8 @@ object HomeNativeGlassHook {
     private val cardComponentAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val cardComponentBootstrapScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val homeFeedCardGlassTargets = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val homeFeedCardStyleApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val homeFeedCardStyleStates = Collections.synchronizedMap(WeakHashMap<View, HomeFeedCardStyleState>())
     private val richTextReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val chromeGlassOriginalStates = Collections.synchronizedMap(WeakHashMap<View, ChromeGlassOriginalState>())
     private val imageContainerRadiusStates = Collections.synchronizedMap(WeakHashMap<View, Float>())
@@ -130,6 +133,15 @@ object HomeNativeGlassHook {
         ConcurrentHashMap<String, Map<Int, Set<HomeNativeGlassTextRole>>>()
     private val readableTextSpanRoles = Collections.synchronizedMap(WeakHashMap<Any, HomeNativeGlassTextRole>())
     private val readableTextViewRoles = Collections.synchronizedMap(WeakHashMap<View, ReadableTextViewRoleState>())
+    private val emManagerFromViewFields = ConcurrentHashMap<Class<*>, Field>()
+    private val emManagerFromViewMissingClasses =
+        Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
+    private val emManagerRealBackgroundColorMethods = ConcurrentHashMap<Class<*>, Method>()
+    private val emManagerRealBackgroundColorMissingClasses =
+        Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
+    private val emManagerFromMethods = ConcurrentHashMap<Class<*>, Method>()
+    private val emManagerFromMethodMissingClasses =
+        Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
 
     @Volatile private var recyclerViewClass: Class<*>? = null
     @Volatile private var cachedBackgroundBitmap: CachedBackgroundBitmap? = null
@@ -149,6 +161,7 @@ object HomeNativeGlassHook {
         val blurCachePath: String,
         val blurCacheLastModified: Long,
         val blurCacheLength: Long,
+        val blurPercent: Int,
         val targetWidth: Int,
         val targetHeight: Int,
         val bitmap: Bitmap?,
@@ -174,6 +187,27 @@ object HomeNativeGlassHook {
         val enterForumCapsuleViewField: String?,
         val enterForumCapsuleTitleField: String?,
         val pbCommonLayoutPreloaderGetOrDefaultMethod: String?,
+    )
+
+    private data class HomeFeedCardStyleState(
+        val page: View?,
+        val width: Int,
+        val height: Int,
+        val childCount: Int,
+        val sourcePath: String,
+        val blurCachePath: String,
+        val sourceLastModified: Long,
+        val sourceLength: Long,
+        val blurCacheLastModified: Long,
+        val blurCacheLength: Long,
+        val tintAlphaPercent: Int,
+        val cardBlurPercent: Int,
+        val cardRadiusDp: Int,
+        val strokeEnabled: Boolean,
+        val shadowEnabled: Boolean,
+        val textPaletteLight: String,
+        val textPaletteDark: String,
+        val darkMode: Boolean,
     )
 
     private data class ChromeGlassOriginalState(
@@ -210,6 +244,21 @@ object HomeNativeGlassHook {
         val lastModified: Long,
         val length: Long,
         val color: Int?,
+    )
+
+    private data class PbSortSwitchTintState(
+        val sourcePath: String,
+        val blurCachePath: String,
+        val blurPercent: Int,
+        val tintColor: Int,
+        val tintAlphaPercent: Int,
+        val darkMode: Boolean,
+        val sampledTintPath: String?,
+        val sampledTintLastModified: Long,
+        val sampledTintLength: Long,
+        val sampledTintColor: Int?,
+        val backgroundColor: Int?,
+        val selectedColor: Int?,
     )
 
     private data class ReadableTextPaletteState(
@@ -313,7 +362,11 @@ object HomeNativeGlassHook {
             val dynamicColorHooks = installPbDynamicBackgroundColorHooks(cl)
             val sortSwitchHooks = installPbSortSwitchButtonDynamicTintHooks(cl)
             val enterForumCapsuleHooks = installPbEnterForumCapsuleDynamicTintHooks(cl)
-            val readableTextColorHooks = installReadableTextColorHooks(cl)
+            val readableTextColorHooks = if (hasReadableTextPaletteConfigured()) {
+                installReadableTextColorHooks(cl)
+            } else {
+                0
+            }
             val tabDynamicTintEnabled = ConfigManager.isHomeTabDynamicTintEnabled
             val topTabObservers = if (tabDynamicTintEnabled) installHomeTopTabObservers(cl) else 0
             val bottomTabDynamicTintHooks = if (tabDynamicTintEnabled) {
@@ -443,8 +496,8 @@ object HomeNativeGlassHook {
             }
             val result = chain.proceed()
             if (card != null) {
-                applyCardStyleSafely(card)
-                card.post { applyCardStyleSafely(card) }
+                applyCardStyleSafely(card, force = true)
+                scheduleHomeFeedCardStyleReapply(card)
             }
             result
         }
@@ -1445,6 +1498,11 @@ object HomeNativeGlassHook {
         } else {
             state.light
         }
+    }
+
+    private fun hasReadableTextPaletteConfigured(): Boolean {
+        return ConfigManager.homeNativeGlassTextPaletteLight.trim().isNotEmpty() ||
+            ConfigManager.homeNativeGlassTextPaletteDark.trim().isNotEmpty()
     }
 
     private fun canApplyReadableTextPalette(view: View): Boolean {
@@ -2577,7 +2635,7 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun applyCardStyleSafely(card: View) {
+    private fun applyCardStyleSafely(card: View, force: Boolean = false) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         val hasBackgroundOverride = hasPageBackgroundOverride()
         if (!hasBackgroundOverride) return
@@ -2586,10 +2644,15 @@ object HomeNativeGlassHook {
             if (page == null && !isInsideHomeNativePage(card)) {
                 return
             }
+            val state = homeFeedCardStyleState(card, page)
+            if (!force && homeFeedCardStyleStates[card] == state && isHomeFeedCardStyleApplied(card, page)) {
+                return
+            }
             applyCardGlass(card, page)
             applyCardComponentGlassToDescendants(card, page)
             applyHomeFeedImageContainerRadius(card)
             applyReadableTextPaletteToTree(card, READABLE_TEXT_HOME_CARD_DEPTH)
+            homeFeedCardStyleStates[card] = state
             if (page != null) {
                 schedulePageStyleReapply(page)
             }
@@ -2598,6 +2661,61 @@ object HomeNativeGlassHook {
                 XposedCompat.logD { "$TAG card style failed: ${t.message}" }
             }
         }
+    }
+
+    private fun scheduleHomeFeedCardStyleReapply(card: View) {
+        synchronized(homeFeedCardStyleApplyScheduled) {
+            if (homeFeedCardStyleApplyScheduled.containsKey(card)) return
+            homeFeedCardStyleApplyScheduled[card] = true
+        }
+        card.post {
+            homeFeedCardStyleApplyScheduled.remove(card)
+            applyCardStyleSafely(card)
+        }
+    }
+
+    private fun homeFeedCardStyleState(card: View, page: View?): HomeFeedCardStyleState {
+        val cached = cachedBackgroundBitmap
+        val group = card as? ViewGroup
+        return HomeFeedCardStyleState(
+            page = page,
+            width = card.width,
+            height = card.height,
+            childCount = group?.childCount ?: 0,
+            sourcePath = ConfigManager.homeNativeGlassBackgroundImagePath.trim(),
+            blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim(),
+            sourceLastModified = cached?.lastModified ?: 0L,
+            sourceLength = cached?.length ?: 0L,
+            blurCacheLastModified = cached?.blurCacheLastModified ?: 0L,
+            blurCacheLength = cached?.blurCacheLength ?: 0L,
+            tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent,
+            cardBlurPercent = ConfigManager.homeNativeGlassCardBlurPercent,
+            cardRadiusDp = ConfigManager.homeNativeGlassCardRadiusDp,
+            strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled,
+            shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled,
+            textPaletteLight = ConfigManager.homeNativeGlassTextPaletteLight,
+            textPaletteDark = ConfigManager.homeNativeGlassTextPaletteDark,
+            darkMode = usesDarkMaterial(card),
+        )
+    }
+
+    private fun hasHomeFeedCardGlassState(card: View): Boolean {
+        val group = card as? ViewGroup
+        val backgroundHolder = group?.getChildAt(0)
+        if (backgroundHolder != null) {
+            if (backgroundHolder.background is CardGlassDrawable) return true
+            val innerHolder = (backgroundHolder as? ViewGroup)?.let { holder ->
+                firstNonRecyclerChild(holder)
+            }
+            return innerHolder?.background is CardGlassDrawable
+        }
+        return card.background is CardGlassDrawable
+    }
+
+    private fun isHomeFeedCardStyleApplied(card: View, page: View?): Boolean {
+        if (hasHomeFeedCardGlassState(card)) return true
+        if (page == null) return true
+        return cachedBackgroundBitmap?.blurredBitmap == null
     }
 
     private fun clearHomeNativeDefaultBackgrounds(page: View) {
@@ -2819,7 +2937,7 @@ object HomeNativeGlassHook {
         if (!homeFeedCardGlassTargets.containsKey(view) && view.background !is CardGlassDrawable) return false
         if (view.background !is CardGlassDrawable) {
             findHomeFeedCardAncestor(view)?.let { card ->
-                card.post { applyCardStyleSafely(card) }
+                scheduleHomeFeedCardStyleReapply(card)
             }
         }
         return true
@@ -3552,12 +3670,19 @@ object HomeNativeGlassHook {
         ) {
             return
         }
-        val cachedEntry = findCachedBackgroundEntry(ConfigManager.homeNativeGlassBackgroundImagePath, 1, 1)
+        val cachedEntry = findCachedBackgroundEntry(
+            ConfigManager.homeNativeGlassBackgroundImagePath,
+            BACKGROUND_CACHE_SAMPLE_EDGE,
+            BACKGROUND_CACHE_SAMPLE_EDGE,
+        )
         if (cachedEntry == null) {
             applyPbCommentFallbackBackgroundHost(host, state)
-            scheduleBackgroundDecode(ConfigManager.homeNativeGlassBackgroundImagePath, 1, 1, host) { target ->
-                applyPbCommentBackgroundHost(target)
-            }
+            scheduleBackgroundDecode(
+                ConfigManager.homeNativeGlassBackgroundImagePath,
+                BACKGROUND_CACHE_SAMPLE_EDGE,
+                BACKGROUND_CACHE_SAMPLE_EDGE,
+                host,
+            ) { target -> applyPbCommentBackgroundHost(target) }
             return
         }
         val bitmap = cachedEntry.blurredBitmap ?: run {
@@ -4649,17 +4774,9 @@ object HomeNativeGlassHook {
             }
             null
         } ?: return
-        val color = if (isPbSortSwitchInCommentList(view)) {
-            if (!shouldApplyPbSortSwitchDynamicTint(view)) {
-                restorePbSortSwitchOriginalBackgroundColor(view, paint, invalidateOnChange)
-                return
-            }
-            Color.TRANSPARENT
-        } else {
-            resolvePbSortSwitchCachedDynamicTintColor(view) ?: run {
-                restorePbSortSwitchOriginalBackgroundColor(view, paint, invalidateOnChange)
-                return
-            }
+        val color = resolvePbSortSwitchTintState(view)?.backgroundColor ?: run {
+            restorePbSortSwitchOriginalBackgroundColor(view, paint, invalidateOnChange)
+            return
         }
         rememberPbSortSwitchOriginalBackgroundColor(view, paint.color)
         if (paint.color != color) {
@@ -4671,7 +4788,7 @@ object HomeNativeGlassHook {
     private fun drawPbSortSwitchSelectedDynamicTint(view: View, canvas: Canvas) {
         if (!isPbSortSwitchButton(view)) return
         val pathField = pbSortSwitchSlidePathField ?: return
-        val color = resolvePbSortSwitchSelectedCachedDynamicTintColor(view) ?: return
+        val color = resolvePbSortSwitchTintState(view)?.selectedColor ?: return
         val slidePath = try {
             pathField.get(view) as? Path
         } catch (t: Throwable) {
@@ -4689,12 +4806,51 @@ object HomeNativeGlassHook {
         canvas.drawPath(slidePath, paint)
     }
 
-    private fun resolvePbSortSwitchSelectedCachedDynamicTintColor(view: View): Int? {
-        if (!shouldApplyPbSortSwitchDynamicTint(view)) return null
+    private fun resolvePbSortSwitchTintState(view: View): PbSortSwitchTintState? {
+        val sampledTint = pbCommentDynamicTintColor
+        synchronized(pbSortSwitchTintStates) {
+            pbSortSwitchTintStates[view]?.let { cached ->
+                if (cached.matchesPbSortSwitchTintState(sampledTint, view)) return cached
+            }
+        }
+        val sourcePath = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
+        val blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
+        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
+        val tintColor = ConfigManager.homeNativeGlassTintColor
+        val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
         val darkMode = usesDarkMaterial(view)
-        val color = resolveCachedPbCommentDynamicTintColorOrNull(darkMode) ?: return null
-        if (isPbSortSwitchInCommentList(view)) return color
-        return applyPbSortSwitchSelectedTintOverlay(color, darkMode)
+        val inCommentList = isPbSortSwitchInCommentList(view)
+        val canApply = isPbSortSwitchDynamicTintHost(view)
+        if (!canApply) {
+            pbSortSwitchTintStates.remove(view)
+            return null
+        }
+        val baseColor = resolveCachedPbCommentDynamicTintColorOrNull(darkMode)
+        val backgroundColor = when {
+            inCommentList -> Color.TRANSPARENT
+            else -> baseColor
+        }
+        val selectedColor = if (baseColor != null) {
+            if (inCommentList) baseColor else applyPbSortSwitchSelectedTintOverlay(baseColor, darkMode)
+        } else {
+            null
+        }
+        val state = PbSortSwitchTintState(
+            sourcePath = sourcePath,
+            blurCachePath = blurCachePath,
+            blurPercent = blurPercent,
+            tintColor = tintColor,
+            tintAlphaPercent = tintAlphaPercent,
+            darkMode = darkMode,
+            sampledTintPath = sampledTint?.path,
+            sampledTintLastModified = sampledTint?.lastModified ?: 0L,
+            sampledTintLength = sampledTint?.length ?: 0L,
+            sampledTintColor = sampledTint?.color,
+            backgroundColor = backgroundColor,
+            selectedColor = selectedColor,
+        )
+        pbSortSwitchTintStates[view] = state
+        return state
     }
 
     private fun applyPbSortSwitchSelectedTintOverlay(color: Int, darkMode: Boolean): Int {
@@ -4707,18 +4863,30 @@ object HomeNativeGlassHook {
         )
     }
 
-    private fun resolvePbSortSwitchCachedDynamicTintColor(view: View): Int? {
-        return resolvePbCachedDynamicTintColor(view)
+    private fun PbSortSwitchTintState.matchesPbSortSwitchTintState(
+        sampledTint: PbCommentDynamicTintColorState?,
+        view: View,
+    ): Boolean {
+        return sourcePath == ConfigManager.homeNativeGlassBackgroundImagePath.trim() &&
+            blurCachePath == ConfigManager.homeNativeGlassBlurCacheImagePath.trim() &&
+            blurPercent == ConfigManager.homeNativeGlassCardBlurPercent &&
+            tintColor == ConfigManager.homeNativeGlassTintColor &&
+            tintAlphaPercent == ConfigManager.homeNativeGlassTintAlphaPercent &&
+            darkMode == usesDarkMaterial(view) &&
+            sampledTintPath == sampledTint?.path &&
+            sampledTintLastModified == (sampledTint?.lastModified ?: 0L) &&
+            sampledTintLength == (sampledTint?.length ?: 0L) &&
+            sampledTintColor == sampledTint?.color
     }
 
-    private fun shouldApplyPbSortSwitchDynamicTint(view: View): Boolean {
+    private fun isPbSortSwitchDynamicTintHost(view: View): Boolean {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
         val activity = findCachedActivityFromContext(view.context) ?: return false
         return isPbActivity(activity) || isSubPbReplyHostActivity(activity)
     }
 
     private fun shouldReplacePbSortSwitchNativeSelectedSlide(view: View): Boolean {
-        return resolvePbSortSwitchSelectedCachedDynamicTintColor(view) != null
+        return resolvePbSortSwitchTintState(view)?.selectedColor != null
     }
 
     private fun savePbSortSwitchNativeSelectedTransparentLayer(view: View, canvas: Canvas): Int? {
@@ -5122,7 +5290,12 @@ object HomeNativeGlassHook {
 
     private fun readEmManagerView(manager: Any): View? {
         return try {
-            findFieldInHierarchy(manager.javaClass, "fromView")?.get(manager) as? View
+            cachedFieldInHierarchy(
+                manager.javaClass,
+                "fromView",
+                emManagerFromViewFields,
+                emManagerFromViewMissingClasses,
+            )?.get(manager) as? View
         } catch (t: Throwable) {
             if (firstPbDynamicBackgroundColorErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG EMManager.fromView unavailable: ${t.message}" }
@@ -5136,7 +5309,13 @@ object HomeNativeGlassHook {
             val classLoader = view.javaClass.classLoader ?: return null
             val managerClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.EM_MANAGER_CLASS, classLoader)
                 ?: return null
-            val fromMethod = managerClass.getDeclaredMethod("from", View::class.java).apply { isAccessible = true }
+            val fromMethod = cachedMethodInHierarchy(
+                managerClass,
+                "from",
+                emManagerFromMethods,
+                emManagerFromMethodMissingClasses,
+                View::class.java,
+            ) ?: return null
             fromMethod.invoke(null, view)
         } catch (t: Throwable) {
             if (firstPbDynamicBackgroundColorErrorLogged.compareAndSet(false, true)) {
@@ -5148,7 +5327,13 @@ object HomeNativeGlassHook {
 
     private fun applyEmManagerRealBackgroundColor(manager: Any, color: Int): Boolean {
         return try {
-            findMethodInHierarchy(manager.javaClass, "setBackGroundRealColor", java.lang.Integer.TYPE)
+            cachedMethodInHierarchy(
+                manager.javaClass,
+                "setBackGroundRealColor",
+                emManagerRealBackgroundColorMethods,
+                emManagerRealBackgroundColorMissingClasses,
+                java.lang.Integer.TYPE,
+            )
                 ?.invoke(manager, color)
                 ?: return false
             true
@@ -5158,6 +5343,41 @@ object HomeNativeGlassHook {
             }
             false
         }
+    }
+
+    private fun cachedFieldInHierarchy(
+        clazz: Class<*>,
+        name: String,
+        cache: ConcurrentHashMap<Class<*>, Field>,
+        missing: MutableSet<Class<*>>,
+    ): Field? {
+        cache[clazz]?.let { return it }
+        if (missing.contains(clazz)) return null
+        val field = findFieldInHierarchy(clazz, name)
+        if (field != null) {
+            cache[clazz] = field
+        } else {
+            missing.add(clazz)
+        }
+        return field
+    }
+
+    private fun cachedMethodInHierarchy(
+        clazz: Class<*>,
+        name: String,
+        cache: ConcurrentHashMap<Class<*>, Method>,
+        missing: MutableSet<Class<*>>,
+        vararg paramTypes: Class<*>,
+    ): Method? {
+        cache[clazz]?.let { return it }
+        if (missing.contains(clazz)) return null
+        val method = findMethodInHierarchy(clazz, name, *paramTypes)
+        if (method != null) {
+            cache[clazz] = method
+        } else {
+            missing.add(clazz)
+        }
+        return method
     }
 
     private fun findFieldInHierarchy(clazz: Class<*>, name: String): java.lang.reflect.Field? {
@@ -5219,8 +5439,12 @@ object HomeNativeGlassHook {
         resolveCachedPbCommentDynamicTintColorOrNull(darkMode)?.let { return it }
         val path = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
         if (path.isEmpty()) return null
-        val entry = cachedBackgroundBitmap
-        if (entry == null || entry.path != path || entry.bitmap == null) return null
+        val entry = findCachedBackgroundEntry(
+            path,
+            PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE,
+            PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE,
+        ) ?: return null
+        val bitmap = entry.bitmap ?: return null
         pbCommentDynamicTintColor?.let { cached ->
             if (
                 cached.path == entry.path &&
@@ -5230,7 +5454,7 @@ object HomeNativeGlassHook {
                 return null
             }
         }
-        val color = extractPbCommentDynamicTintColor(entry.bitmap)
+        val color = extractPbCommentDynamicTintColor(bitmap)
         pbCommentDynamicTintColor = PbCommentDynamicTintColorState(
             path = entry.path,
             lastModified = entry.lastModified,
@@ -6195,8 +6419,8 @@ object HomeNativeGlassHook {
     private fun handleHomeRecyclerChildAttached(child: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         if (isFeedCardView(child)) {
-            applyCardStyleSafely(child)
-            child.post { applyCardStyleSafely(child) }
+            applyCardStyleSafely(child, force = true)
+            scheduleHomeFeedCardStyleReapply(child)
         } else {
             scheduleHomeRecyclerChildReadableTextRefresh(child)
         }
@@ -6267,11 +6491,16 @@ object HomeNativeGlassHook {
     ) {
         val imagePath = ConfigManager.homeNativeGlassBackgroundImagePath
         val cachedEntry = page?.let {
-            findCachedBackgroundEntry(imagePath, 1, 1)
+            findCachedBackgroundEntry(imagePath, BACKGROUND_CACHE_SAMPLE_EDGE, BACKGROUND_CACHE_SAMPLE_EDGE)
         }
         if (page != null && cachedEntry == null) {
             val pageRef = WeakReference(page)
-            scheduleBackgroundDecode(imagePath, 1, 1, view) { target ->
+            scheduleBackgroundDecode(
+                imagePath,
+                BACKGROUND_CACHE_SAMPLE_EDGE,
+                BACKGROUND_CACHE_SAMPLE_EDGE,
+                view,
+            ) { target ->
                 setGlassBackground(target, pageRef.get(), radius, tintAlphaExtra)
             }
         }
@@ -6423,24 +6652,10 @@ object HomeNativeGlassHook {
     private fun findCachedBackgroundEntry(path: String, targetWidth: Int, targetHeight: Int): CachedBackgroundBitmap? {
         val trimmedPath = path.trim()
         if (trimmedPath.isEmpty()) return null
-        val file = java.io.File(trimmedPath)
-        val lastModified = runCatching { file.lastModified() }.getOrDefault(0L)
-        val length = runCatching { file.length() }.getOrDefault(0L)
         val blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
-        val blurCacheFile = java.io.File(blurCachePath)
-        val blurCacheLastModified = runCatching { blurCacheFile.lastModified() }.getOrDefault(0L)
-        val blurCacheLength = runCatching { blurCacheFile.length() }.getOrDefault(0L)
+        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
         cachedBackgroundBitmap?.let { cached ->
-            if (
-                cached.path == trimmedPath &&
-                cached.lastModified == lastModified &&
-                cached.length == length &&
-                cached.blurCachePath == blurCachePath &&
-                cached.blurCacheLastModified == blurCacheLastModified &&
-                cached.blurCacheLength == blurCacheLength &&
-                cached.targetWidth >= targetWidth &&
-                cached.targetHeight >= targetHeight
-            ) {
+            if (cached.matchesBackground(trimmedPath, blurCachePath, blurPercent, targetWidth, targetHeight)) {
                 return cached
             }
         }
@@ -6478,16 +6693,12 @@ object HomeNativeGlassHook {
     }
 
     private fun backgroundDecodeKey(path: String, targetWidth: Int, targetHeight: Int): String {
-        val file = java.io.File(path)
         val blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
-        val blurCacheFile = java.io.File(blurCachePath)
+        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
         return listOf(
             path,
-            runCatching { file.lastModified() }.getOrDefault(0L).toString(),
-            runCatching { file.length() }.getOrDefault(0L).toString(),
             blurCachePath,
-            runCatching { blurCacheFile.lastModified() }.getOrDefault(0L).toString(),
-            runCatching { blurCacheFile.length() }.getOrDefault(0L).toString(),
+            blurPercent.toString(),
             targetWidth.coerceAtLeast(1).toString(),
             targetHeight.coerceAtLeast(1).toString(),
         ).joinToString("|")
@@ -6498,7 +6709,8 @@ object HomeNativeGlassHook {
         val file = java.io.File(trimmedPath)
         val lastModified = runCatching { file.lastModified() }.getOrDefault(0L)
         val length = runCatching { file.length() }.getOrDefault(0L)
-        val blurCachePath = resolveUsableBlurCachePath(trimmedPath)
+        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
+        val blurCachePath = resolveUsableBlurCachePath(trimmedPath, blurPercent)
         val blurCacheFile = java.io.File(blurCachePath)
         val blurCacheLastModified = runCatching { blurCacheFile.lastModified() }.getOrDefault(0L)
         val blurCacheLength = runCatching { blurCacheFile.length() }.getOrDefault(0L)
@@ -6510,6 +6722,7 @@ object HomeNativeGlassHook {
                 cached.blurCachePath == blurCachePath &&
                 cached.blurCacheLastModified == blurCacheLastModified &&
                 cached.blurCacheLength == blurCacheLength &&
+                cached.blurPercent == blurPercent &&
                 cached.targetWidth >= targetWidth &&
                 cached.targetHeight >= targetHeight
             ) {
@@ -6540,11 +6753,28 @@ object HomeNativeGlassHook {
             blurCachePath = blurCachePath,
             blurCacheLastModified = blurCacheLastModified,
             blurCacheLength = blurCacheLength,
+            blurPercent = blurPercent,
             targetWidth = targetWidth,
             targetHeight = targetHeight,
             bitmap = bitmap,
             blurredBitmap = blurredBitmap,
         )
+        cachedBackgroundBitmap?.let { cached ->
+            if (
+                cached.path == entry.path &&
+                cached.lastModified == entry.lastModified &&
+                cached.length == entry.length &&
+                cached.blurCachePath == entry.blurCachePath &&
+                cached.blurCacheLastModified == entry.blurCacheLastModified &&
+                cached.blurCacheLength == entry.blurCacheLength &&
+                cached.blurPercent == entry.blurPercent &&
+                cached.targetWidth >= entry.targetWidth &&
+                cached.targetHeight >= entry.targetHeight
+            ) {
+                recycleBackgroundEntryBitmaps(entry)
+                return cached
+            }
+        }
         cachedBackgroundBitmap = entry
         if (bitmap == null && firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
             XposedCompat.logD { "$TAG background image unavailable: $path" }
@@ -6552,7 +6782,28 @@ object HomeNativeGlassHook {
         return entry
     }
 
-    private fun resolveUsableBlurCachePath(sourcePath: String): String {
+    private fun CachedBackgroundBitmap.matchesBackground(
+        path: String,
+        blurCachePath: String,
+        blurPercent: Int,
+        targetWidth: Int,
+        targetHeight: Int,
+    ): Boolean {
+        return this.path == path &&
+            this.blurCachePath == blurCachePath &&
+            this.blurPercent == blurPercent &&
+            this.targetWidth >= targetWidth &&
+            this.targetHeight >= targetHeight
+    }
+
+    private fun recycleBackgroundEntryBitmaps(entry: CachedBackgroundBitmap) {
+        runCatching { entry.bitmap?.recycle() }
+        if (entry.blurredBitmap !== entry.bitmap) {
+            runCatching { entry.blurredBitmap?.recycle() }
+        }
+    }
+
+    private fun resolveUsableBlurCachePath(sourcePath: String, blurPercent: Int): String {
         val configuredPath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
         if (configuredPath.isNotBlank()) {
             val configuredFile = java.io.File(configuredPath)
@@ -6566,7 +6817,7 @@ object HomeNativeGlassHook {
             HomeNativeGlassImageCache.ensureBlurCache(
                 context = context,
                 sourcePath = sourcePath,
-                blurPercent = ConfigManager.homeNativeGlassCardBlurPercent,
+                blurPercent = blurPercent,
                 appleMaterial = true,
             )
         }.onFailure {
@@ -6808,8 +7059,8 @@ object HomeNativeGlassHook {
     private const val HOME_SEARCH_BOX_HEADER_CONTAINER_CLASS =
         "androidx.coordinatorlayout.widget.CoordinatorLayout"
     private const val TB_RICH_TEXT_MODEL_CLASS = "com.baidu.tbadk.widget.richText.TbRichText"
-    private val HOME_SEARCH_BOX_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 80L, 240L, 600L)
-    private val CARD_COMPONENT_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 80L, 240L, 600L)
+    private val HOME_SEARCH_BOX_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 160L)
+    private val CARD_COMPONENT_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 160L)
     private val READABLE_TEXT_PRIMARY_RESOURCE_NAMES = setOf(
         "CAM_X0101",
         "CAM_X0105",
@@ -6902,7 +7153,8 @@ object HomeNativeGlassHook {
     private const val PB_COMMENT_BACKGROUND_PATH_CLEAR_DEPTH = 18
     private const val PB_COMMENT_BACKGROUND_WRITE_PARENT_SCAN_DEPTH = 8
     private const val PB_COMMENT_LIST_ITEM_CLEAR_DEPTH = 4
-    private const val PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE = 48
+    private const val BACKGROUND_CACHE_SAMPLE_EDGE = 48
+    private const val PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE = BACKGROUND_CACHE_SAMPLE_EDGE
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_PIXEL_ALPHA = 32
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_LUMA = 24
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MAX_LUMA = 232

@@ -268,7 +268,7 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (adBlockHooks || homeNativeGlassHook) {
+        if (adBlockHooks) {
             entries += HookInstallEntry("SearchBoxTextAdHook") { cl ->
                 HookSymbolResolver.resolveSearchBoxTextAdSymbols(cl, symbols)?.let { targets ->
                     SearchBoxTextAdHook.hook(targets)
