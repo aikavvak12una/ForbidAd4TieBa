@@ -240,6 +240,7 @@ object ConfigManager {
             isHomeNativeGlassEnabled = featureBoolean(p, KEY_ENABLE_HOME_NATIVE_GLASS)
             isHomeTabDynamicTintEnabled = featureBoolean(p, KEY_ENABLE_HOME_TAB_DYNAMIC_TINT, DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED)
             refreshHomeNativeGlassStyle(p)
+            refreshHomeFeedUiOptFlags(p)
             isAutoRefreshDisabled = featureBoolean(p, KEY_DISABLE_AUTO_REFRESH)
             isAutoLoadMoreEnabled = featureBoolean(p, KEY_ENABLE_AUTO_LOAD_MORE)
             isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)
@@ -353,6 +354,8 @@ object ConfigManager {
             KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
             KEY_HOME_NATIVE_GLASS_STROKE_ENABLED,
             KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED -> refreshHomeNativeGlassStyle(p)
+            KEY_FORCE_FEED_UI_OPT,
+            KEY_DISABLE_MONITOR_SYNC_COMPONENTS -> refreshHomeFeedUiOptFlags(p)
             KEY_DISABLE_AUTO_REFRESH -> isAutoRefreshDisabled = featureBoolean(p, key)
             KEY_ENABLE_AUTO_LOAD_MORE -> isAutoLoadMoreEnabled = featureBoolean(p, key)
             KEY_ENABLE_PB_LIKE_AUTO_REPLY -> isPbLikeAutoReplyEnabled = restrictedBoolean(p, key)
@@ -366,11 +369,9 @@ object ConfigManager {
             KEY_DISABLE_AD_SDK_COMPONENTS,
             KEY_DISABLE_HEAVY_FEATURE_COMPONENTS,
             KEY_DISABLE_VIDEO_COMPONENTS,
-            KEY_DISABLE_MONITOR_SYNC_COMPONENTS,
             KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS,
             KEY_ENABLE_PB_PERFORMANCE_MODE,
             KEY_ENABLE_PB_SCROLL_COALESCE,
-            KEY_FORCE_FEED_UI_OPT,
             KEY_ENABLE_PERFORMANCE_OPTIMIZATION,
             KEY_FORCE_HOST_PERFORMANCE_FLAGS,
             KEY_DISABLE_APSARAS_SCHEDULE,
@@ -530,16 +531,21 @@ object ConfigManager {
         isAdSdkComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_AD_SDK_COMPONENTS, performanceOptimizationEnabled, true)
         isHeavyFeatureComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_HEAVY_FEATURE_COMPONENTS, performanceOptimizationEnabled, true)
         isVideoComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_VIDEO_COMPONENTS, performanceOptimizationEnabled, true)
-        isMonitorSyncComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_MONITOR_SYNC_COMPONENTS, performanceOptimizationEnabled, true)
         isUpdateDownloadComponentsDisabled = performanceChildBoolean(p, KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS, performanceOptimizationEnabled, true)
         isPbPerformanceModeEnabled = performanceChildBoolean(p, KEY_ENABLE_PB_PERFORMANCE_MODE, performanceOptimizationEnabled, true)
         isPbScrollCoalesceEnabled = performanceChildBoolean(p, KEY_ENABLE_PB_SCROLL_COALESCE, performanceOptimizationEnabled, true)
-        isFeedUiOptForced = performanceChildBoolean(p, KEY_FORCE_FEED_UI_OPT, performanceOptimizationEnabled, true)
         isTitanPatchBlockEnabled = performanceChildBoolean(p, KEY_BLOCK_TITAN_PATCH, performanceOptimizationEnabled, false)
         isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(p, KEY_PRIVATE_READ_RECEIPT_INVISIBLE)
         isPostModelScoreFilterEnabled = restrictedBoolean(p, KEY_FILTER_POST_MODEL_SCORE)
         isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)
         isDetailedLoggingEnabled = restrictedBoolean(p, KEY_ENABLE_DETAILED_LOGGING)
+    }
+
+    private fun refreshHomeFeedUiOptFlags(p: SharedPreferences) {
+        val enabled = featureBoolean(p, KEY_FORCE_FEED_UI_OPT) ||
+            featureBoolean(p, KEY_DISABLE_MONITOR_SYNC_COMPONENTS)
+        isFeedUiOptForced = enabled
+        isMonitorSyncComponentsDisabled = enabled
     }
 
     private fun restrictedBoolean(p: SharedPreferences, key: String): Boolean {
@@ -648,6 +654,7 @@ object ConfigManager {
         isHomeNativeGlassEnabled = featureBoolean(p, KEY_ENABLE_HOME_NATIVE_GLASS)
         isHomeTabDynamicTintEnabled = featureBoolean(p, KEY_ENABLE_HOME_TAB_DYNAMIC_TINT, DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED)
         refreshHomeNativeGlassStyle(p)
+        refreshHomeFeedUiOptFlags(p)
         isAutoRefreshDisabled = featureBoolean(p, KEY_DISABLE_AUTO_REFRESH)
         isAutoLoadMoreEnabled = featureBoolean(p, KEY_ENABLE_AUTO_LOAD_MORE)
         isPbLikeAutoReplyEnabled = restrictedBoolean(p, KEY_ENABLE_PB_LIKE_AUTO_REPLY)

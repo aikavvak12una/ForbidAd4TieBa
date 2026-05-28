@@ -109,7 +109,8 @@ object SettingsMenuHook {
         val supported: Boolean,
         val defaultValue: Boolean = false,
         val actionIcon: String? = null,
-        val onActionClick: (() -> Unit)? = null
+        val linkedPrefKeys: List<String> = emptyList(),
+        val onActionClick: (() -> Unit)? = null,
     )
 
     private data class SettingGroup(
@@ -928,7 +929,6 @@ object SettingsMenuHook {
                             SwitchItem(UiText.Settings.DISABLE_APSARAS_SCHEDULE_LABEL, UiText.Settings.DISABLE_APSARAS_SCHEDULE_DESC, ConfigManager.KEY_DISABLE_APSARAS_SCHEDULE, true, true),
                             SwitchItem(UiText.Settings.PB_PERFORMANCE_MODE_LABEL, UiText.Settings.PB_PERFORMANCE_MODE_DESC, ConfigManager.KEY_ENABLE_PB_PERFORMANCE_MODE, true, true),
                             SwitchItem(UiText.Settings.PB_SCROLL_COALESCE_LABEL, UiText.Settings.PB_SCROLL_COALESCE_DESC, ConfigManager.KEY_ENABLE_PB_SCROLL_COALESCE, true, true),
-                            SwitchItem(UiText.Settings.FORCE_FEED_UI_OPT_LABEL, UiText.Settings.FORCE_FEED_UI_OPT_DESC, ConfigManager.KEY_FORCE_FEED_UI_OPT, true, true),
                         ),
                     ),
                     SettingGroup(
@@ -946,7 +946,6 @@ object SettingsMenuHook {
                             SwitchItem(UiText.Settings.DISABLE_AI_COMPONENTS_LABEL, UiText.Settings.DISABLE_AI_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_AI_COMPONENTS, true, true),
                             SwitchItem(UiText.Settings.DISABLE_HEAVY_FEATURE_COMPONENTS_LABEL, UiText.Settings.DISABLE_HEAVY_FEATURE_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_HEAVY_FEATURE_COMPONENTS, true, true),
                             SwitchItem(UiText.Settings.DISABLE_VIDEO_COMPONENTS_LABEL, UiText.Settings.DISABLE_VIDEO_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_VIDEO_COMPONENTS, true, true),
-                            SwitchItem(UiText.Settings.DISABLE_MONITOR_SYNC_COMPONENTS_LABEL, UiText.Settings.DISABLE_MONITOR_SYNC_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS, true, true),
                             SwitchItem(UiText.Settings.DISABLE_UPDATE_DOWNLOAD_COMPONENTS_LABEL, UiText.Settings.DISABLE_UPDATE_DOWNLOAD_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS, true, true),
                         ),
                     ),
@@ -1015,6 +1014,14 @@ object SettingsMenuHook {
                         showHomeNativeGlassDialog(context, prefs)
                     },
                     SwitchItem(
+                        UiText.Settings.FORCE_FEED_UI_OPT_LABEL,
+                        UiText.Settings.FORCE_FEED_UI_OPT_DESC,
+                        ConfigManager.KEY_FORCE_FEED_UI_OPT,
+                        true,
+                        false,
+                        linkedPrefKeys = listOf(ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS),
+                    ),
+                    SwitchItem(
                         UiText.Settings.SIMPLIFY_BOTTOM_TAB_LABEL,
                         UiText.Settings.SIMPLIFY_BOTTOM_TAB_DESC,
                         ConfigManager.KEY_CUSTOM_BOTTOM_TABS,
@@ -1075,6 +1082,7 @@ object SettingsMenuHook {
                         if (support.supported) item.defaultValue else false,
                         item.actionIcon,
                         item.onActionClick,
+                        item.linkedPrefKeys,
                     )
                     root.addView(rowView)
                 }
@@ -4580,7 +4588,8 @@ object SettingsMenuHook {
         label: String, description: String?, prefKey: String?, padding: Int, enabled: Boolean = true,
         defaultValue: Boolean = false,
         actionIcon: String? = null,
-        onActionClick: (() -> Unit)? = null
+        onActionClick: (() -> Unit)? = null,
+        linkedPrefKeys: List<String> = emptyList(),
     ): View {
         val tokens = UiStyle.tokens(context)
         val density = context.resources.displayMetrics.density
@@ -4637,7 +4646,11 @@ object SettingsMenuHook {
 
         @Suppress("DEPRECATION")
         val sw = Switch(context).apply {
-            isChecked = if (enabled && prefKey != null) prefs.getBoolean(prefKey, defaultValue) else defaultValue
+            isChecked = if (enabled && prefKey != null) {
+                resolveSwitchChecked(prefs, prefKey, linkedPrefKeys, defaultValue)
+            } else {
+                defaultValue
+            }
             isEnabled = enabled
             
             val states = arrayOf(
@@ -4656,7 +4669,11 @@ object SettingsMenuHook {
             setOnCheckedChangeListener { _, isChecked ->
                 if (enabled) {
                     if (prefKey != null) {
-                        prefs.edit().putBoolean(prefKey, isChecked).apply()
+                        val editor = prefs.edit().putBoolean(prefKey, isChecked)
+                        for (linkedPrefKey in linkedPrefKeys) {
+                            editor.putBoolean(linkedPrefKey, isChecked)
+                        }
+                        editor.apply()
                     }
                 }
             }
@@ -4664,6 +4681,19 @@ object SettingsMenuHook {
         row.addView(sw)
 
         return row
+    }
+
+    private fun resolveSwitchChecked(
+        prefs: android.content.SharedPreferences,
+        prefKey: String,
+        linkedPrefKeys: List<String>,
+        defaultValue: Boolean,
+    ): Boolean {
+        if (!prefs.contains(prefKey) && linkedPrefKeys.none { prefs.contains(it) }) {
+            return defaultValue
+        }
+        if (prefs.getBoolean(prefKey, false)) return true
+        return linkedPrefKeys.any { prefs.getBoolean(it, false) }
     }
 
     private fun createAboutItem(
