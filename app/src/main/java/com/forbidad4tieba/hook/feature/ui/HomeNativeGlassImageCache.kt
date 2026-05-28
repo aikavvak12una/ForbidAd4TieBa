@@ -120,10 +120,17 @@ object HomeNativeGlassImageCache {
         val targetHeight = (sourceHeight * scale).roundToInt().coerceAtLeast(1)
         val decoded = decodeSampledBitmap(path, targetWidth, targetHeight) ?: return null
         if (decoded.width == targetWidth && decoded.height == targetHeight) return decoded
-        return runCatching {
+        val scaled = runCatching {
             Bitmap.createScaledBitmap(decoded, targetWidth, targetHeight, true)
-                .copy(Bitmap.Config.ARGB_8888, true)
         }.getOrNull()
+        runCatching { decoded.recycle() }
+        val copy = scaled?.let { bitmap ->
+            runCatching { bitmap.copy(Bitmap.Config.ARGB_8888, true) }.getOrNull()
+        }
+        if (copy !== scaled) {
+            runCatching { scaled?.recycle() }
+        }
+        return copy
     }
 
     private fun createBlurredBitmap(source: Bitmap, blurPercent: Int, appleMaterial: Boolean): Bitmap? {

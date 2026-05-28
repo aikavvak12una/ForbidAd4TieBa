@@ -142,26 +142,16 @@ internal object HomeNativeGlassSymbolScanner {
             log(logger, "homeNativeGlassSortSwitch: insufficient Paint fields count=${paintFields.size}")
             null
         } else {
-            paintFields.singleOrNull {
-                it.name == SORT_SWITCH_BACKGROUND_PAINT_FIELD
-            }?.takeIf { field ->
-                val valid = paintFields.first() == field
-                if (!valid) {
-                    log(
-                        logger,
-                        "homeNativeGlassSortSwitch: background Paint field order mismatch, " +
-                            "first=${paintFields.first().name}, selected=${field.name}",
-                    )
-                }
-                valid
-            } ?: run {
+            val structural = paintFields.first()
+            val legacy = paintFields.singleOrNull { it.name == SORT_SWITCH_BACKGROUND_PAINT_FIELD }
+            if (legacy != null && legacy != structural) {
                 log(
                     logger,
-                    "homeNativeGlassSortSwitch: background Paint field missing, " +
-                        "paintFields=${paintFields.joinToString(",") { it.name }}",
+                    "homeNativeGlassSortSwitch: background Paint legacy hint differs, " +
+                        "structural=${structural.name}, legacy=${legacy.name}",
                 )
-                null
             }
+            structural
         }
         val pathFields = fields.filter { field ->
             !Modifier.isStatic(field.modifiers) &&
@@ -171,49 +161,54 @@ internal object HomeNativeGlassSymbolScanner {
             log(logger, "homeNativeGlassSortSwitch: insufficient Path fields count=${pathFields.size}")
             null
         } else {
-            pathFields.singleOrNull {
-                it.name == SORT_SWITCH_SLIDE_PATH_FIELD
-            }?.takeIf { field ->
-                val valid = pathFields.last() == field
-                if (!valid) {
-                    log(
-                        logger,
-                        "homeNativeGlassSortSwitch: slide Path field order mismatch, " +
-                            "last=${pathFields.last().name}, selected=${field.name}",
-                    )
-                }
-                valid
-            } ?: run {
+            val structural = pathFields.last()
+            val legacy = pathFields.singleOrNull { it.name == SORT_SWITCH_SLIDE_PATH_FIELD }
+            if (legacy != null && legacy != structural) {
                 log(
                     logger,
-                    "homeNativeGlassSortSwitch: slide Path field missing, " +
-                        "pathFields=${pathFields.joinToString(",") { it.name }}",
+                    "homeNativeGlassSortSwitch: slide Path legacy hint differs, " +
+                        "structural=${structural.name}, legacy=${legacy.name}",
+                )
+            }
+            structural
+        }
+        val slideDrawCandidates = try {
+            sortSwitchClass.declaredMethods.filter { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == java.lang.Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0].name == "android.graphics.Canvas"
+            }
+        } catch (t: Throwable) {
+            log(logger, "homeNativeGlassSortSwitch: declaredMethods failed: ${t.message}")
+            emptyList()
+        }
+        val slideDrawMethod = when (slideDrawCandidates.size) {
+            0 -> {
+                log(logger, "homeNativeGlassSortSwitch: slide draw method missing")
+                null
+            }
+            1 -> slideDrawCandidates.first()
+            2 -> {
+                val structural = slideDrawCandidates.last()
+                val legacy = slideDrawCandidates.singleOrNull { it.name == SORT_SWITCH_SLIDE_DRAW_METHOD }
+                if (legacy != null && legacy != structural) {
+                    log(
+                        logger,
+                        "homeNativeGlassSortSwitch: slide draw legacy hint differs, " +
+                            "structural=${structural.name}, legacy=${legacy.name}",
+                    )
+                }
+                structural
+            }
+            else -> {
+                log(
+                    logger,
+                    "homeNativeGlassSortSwitch: slide draw method ambiguous candidates=" +
+                        slideDrawCandidates.joinToString(",") { describeMethodShape(it) },
                 )
                 null
             }
-        }
-        val slideDrawMethod = try {
-            sortSwitchClass.getDeclaredMethod(
-                SORT_SWITCH_SLIDE_DRAW_METHOD,
-                android.graphics.Canvas::class.java,
-            )
-        } catch (t: Throwable) {
-            log(
-                logger,
-                "homeNativeGlassSortSwitch: slide draw method missing " +
-                    "${SORT_SWITCH_SLIDE_DRAW_METHOD}(Canvas): ${t.message}",
-            )
-            null
-        }?.takeIf { method ->
-            val valid = !Modifier.isStatic(method.modifiers) && method.returnType == java.lang.Void.TYPE
-            if (!valid) {
-                log(
-                    logger,
-                    "homeNativeGlassSortSwitch: slide draw method rejected " +
-                        "${method.name} return=${method.returnType.name} static=${Modifier.isStatic(method.modifiers)}",
-                )
-            }
-            valid
         }
         log(
             logger,
@@ -354,7 +349,7 @@ internal object HomeNativeGlassSymbolScanner {
         emTextViewClass: Class<*>,
         logger: ScanLogger?,
     ): List<HomeNativeGlassEnterForumCapsuleClassCandidate> {
-        val names = (listOf(ENTER_FORUM_CAPSULE_CONTROLLER_CLASS) + candidateClassNames).distinct()
+        val names = (candidateClassNames + ENTER_FORUM_CAPSULE_CONTROLLER_CLASS).distinct()
         val out = ArrayList<HomeNativeGlassEnterForumCapsuleClassCandidate>(8)
         var skippedByReflection = 0
         var firstReflectionError: String? = null
@@ -441,7 +436,7 @@ internal object HomeNativeGlassSymbolScanner {
         val evidence = ArrayList<String>(10)
         evidence.add(if (exactCtor) "ctorExact" else "ctorCompatible")
         if (clazz.name == ENTER_FORUM_CAPSULE_CONTROLLER_CLASS) {
-            score += 35
+            score += 8
             evidence.add("legacyClass")
         }
         if (hasNavigationBarField) {
@@ -517,15 +512,15 @@ internal object HomeNativeGlassSymbolScanner {
             preferredNames = listOfNotNull(
                 initDex?.viewFieldName,
                 refreshDex?.viewFieldName,
-                ENTER_FORUM_CAPSULE_VIEW_FIELD,
             ),
+            legacyName = ENTER_FORUM_CAPSULE_VIEW_FIELD,
         ) ?: return null
         val titleField = selectEnterForumCapsuleTitleField(
             fields = candidate.fields,
             preferredNames = listOfNotNull(
                 refreshDex?.titleFieldName,
-                ENTER_FORUM_CAPSULE_TITLE_FIELD,
             ),
+            legacyName = ENTER_FORUM_CAPSULE_TITLE_FIELD,
         ) ?: return null
 
         var score = candidate.score
@@ -564,21 +559,32 @@ internal object HomeNativeGlassSymbolScanner {
         )
     }
 
-    private fun selectEnterForumCapsuleViewField(fields: List<Field>, preferredNames: List<String>): Field? {
+    private fun selectEnterForumCapsuleViewField(
+        fields: List<Field>,
+        preferredNames: List<String>,
+        legacyName: String,
+    ): Field? {
         val viewFields = fields.filter { View::class.java.isAssignableFrom(it.type) }
         for (name in preferredNames.distinct()) {
             viewFields.singleOrNull { it.name == name }?.let { return it }
         }
         val primary = viewFields.filter { ViewGroup::class.java.isAssignableFrom(it.type) }
-        return primary.singleOrNull()
+        primary.singleOrNull()?.let { return it }
+        viewFields.singleOrNull { it.name == legacyName }?.let { return it }
+        return viewFields.singleOrNull()
     }
 
-    private fun selectEnterForumCapsuleTitleField(fields: List<Field>, preferredNames: List<String>): Field? {
+    private fun selectEnterForumCapsuleTitleField(
+        fields: List<Field>,
+        preferredNames: List<String>,
+        legacyName: String,
+    ): Field? {
         val stringFields = fields.filter { it.type == String::class.java }
         for (name in preferredNames.distinct()) {
             stringFields.singleOrNull { it.name == name }?.let { return it }
         }
-        return stringFields.singleOrNull()
+        stringFields.singleOrNull()?.let { return it }
+        return stringFields.singleOrNull { it.name == legacyName }
     }
 
     private fun isNoArgVoidMethod(method: Method): Boolean {
