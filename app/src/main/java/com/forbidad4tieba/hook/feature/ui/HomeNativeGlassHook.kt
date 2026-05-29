@@ -1946,12 +1946,14 @@ object HomeNativeGlassHook {
         if (activity != null && (isPbActivity(activity) || isSubPbReplyHostActivity(activity))) {
             return true
         }
+        if (activity != null && isForumActivity(activity)) {
+            return false
+        }
         var current: View? = view
         var depth = 0
         while (current != null && depth < READABLE_TEXT_TARGET_PARENT_DEPTH) {
             val className = current.javaClass.name
             if (
-                className == StableTiebaHookPoints.FEED_CARD_VIEW_CLASS ||
                 className == StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS ||
                 className == StableTiebaHookPoints.PB_ITEM_FRAME_VIEW_CLASS ||
                 className == StableTiebaHookPoints.PB_ITEM_RELATIVE_VIEW_CLASS ||
@@ -4100,6 +4102,10 @@ object HomeNativeGlassHook {
 
     private fun isSubPbReplyHostActivity(activity: Activity): Boolean {
         return pbActivityTypeFor(activity).isSubPbReplyHost
+    }
+
+    private fun isForumActivity(activity: Activity): Boolean {
+        return activity.javaClass.name == StableTiebaHookPoints.FORUM_ACTIVITY_CLASS
     }
 
     private fun pbActivityTypeFor(activity: Activity): PbActivityType {
