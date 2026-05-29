@@ -103,6 +103,9 @@ object StableTiebaHookPoints {
     const val SIDEBAR_PERSON_INFO_BINDING_CLASS =
         "com.baidu.tieba.recommendfrs.databinding.SidePersonInfoViewBinding"
     const val TB_STACK_IMAGE_VIEW_CLASS = "com.baidu.tieba.feed.widget.TbStackImageView"
+    const val AUTO_DEGRADE_TAG_VIEW_CLASS = "com.baidu.tieba.feed.widget.AutoDegradeTagView"
+    const val CARD_SOCIAL_BAR_VIEW_CLASS = "com.baidu.tieba.feed.component.CardSocialBarView"
+    const val SOCIAL_BAR_WRAPPER_CLASS = "com.baidu.tieba.compact.SocialBarWrapper"
     const val HEAD_PENDANT_CLICKABLE_VIEW_CLASS =
         "com.baidu.tbadk.core.view.HeadPendantClickableView"
     const val EM_TEXT_VIEW_CLASS = "com.baidu.tbadk.core.elementsMaven.view.EMTextView"

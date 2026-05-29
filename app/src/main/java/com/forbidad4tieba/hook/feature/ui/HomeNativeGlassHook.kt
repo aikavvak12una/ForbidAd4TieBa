@@ -118,6 +118,9 @@ object HomeNativeGlassHook {
     private val homeFeedCardStyleApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val homeFeedCardStyleStates = Collections.synchronizedMap(WeakHashMap<View, HomeFeedCardStyleState>())
     private val richTextReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val subPbRichTextViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val autoDegradeTagReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val socialBarReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val chromeGlassOriginalStates = Collections.synchronizedMap(WeakHashMap<View, ChromeGlassOriginalState>())
     private val imageContainerRadiusStates = Collections.synchronizedMap(WeakHashMap<View, Float>())
     private val scrollInvalidateScheduled = AtomicBoolean(false)
@@ -968,13 +971,31 @@ object HomeNativeGlassHook {
         XposedCompat.findClassOrNull(StableTiebaHookPoints.EM_MANAGER_CLASS, cl)?.let { emManagerClass ->
             installedCount += installEmManagerReadableTextHook(emManagerClass, "setTextColor", linkText = false)
             installedCount += installEmManagerReadableTextHook(emManagerClass, "setLinkTextColor", linkText = true)
+            installedCount += installEmManagerReadableTextHook(emManagerClass, "setTextSelectorColor", linkText = false)
         } ?: XposedCompat.logD { "$TAG readable text SKIP: EMManager class not found" }
 
         XposedCompat.findClassOrNull(StableTiebaHookPoints.TB_RICH_TEXT_VIEW_CLASS, cl)?.let { richTextClass ->
             installedCount += installDirectReadableTextHook(richTextClass, "setTextColor", linkText = false)
             installedCount += installDirectReadableTextHook(richTextClass, "setLinkTextColor", linkText = true)
+            installedCount += installRichTextSubPbPostHook(richTextClass)
             installedCount += installRichTextReadableTextContentHook(richTextClass)
         } ?: XposedCompat.logD { "$TAG readable text SKIP: TbRichTextView class not found" }
+
+        XposedCompat.findClassOrNull(StableTiebaHookPoints.AUTO_DEGRADE_TAG_VIEW_CLASS, cl)?.let { tagClass ->
+            installedCount += installAutoDegradeTagReadableTextHooks(tagClass)
+        } ?: XposedCompat.logD { "$TAG readable text SKIP: AutoDegradeTagView class not found" }
+
+        XposedCompat.findClassOrNull(StableTiebaHookPoints.CARD_SOCIAL_BAR_VIEW_CLASS, cl)?.let { socialBarClass ->
+            installedCount += installSocialBarRootReadableTextHooks(socialBarClass)
+        } ?: XposedCompat.logD { "$TAG readable text SKIP: CardSocialBarView class not found" }
+
+        XposedCompat.findClassOrNull(StableTiebaHookPoints.SOCIAL_BAR_WRAPPER_CLASS, cl)?.let { socialWrapperClass ->
+            installedCount += installSocialBarRootReadableTextHooks(socialWrapperClass)
+        } ?: XposedCompat.logD { "$TAG readable text SKIP: SocialBarWrapper class not found" }
+
+        XposedCompat.findClassOrNull(StableTiebaHookPoints.AGREE_VIEW_CLASS, cl)?.let { agreeViewClass ->
+            installedCount += installAgreeViewReadableTextHooks(agreeViewClass)
+        } ?: XposedCompat.logD { "$TAG readable text SKIP: AgreeView class not found" }
 
         return installedCount
     }
@@ -1047,6 +1068,113 @@ object HomeNativeGlassHook {
         return 1
     }
 
+    private fun installAutoDegradeTagReadableTextHooks(tagClass: Class<*>): Int {
+        val mod = XposedCompat.module ?: return 0
+        var installedCount = 0
+        for (ctor in tagClass.declaredConstructors) {
+            ctor.isAccessible = true
+            mod.hook(ctor).intercept { chain ->
+                val result = chain.proceed()
+                (chain.thisObject as? View)?.let { scheduleAutoDegradeTagReadableTextRefresh(it) }
+                result
+            }
+            installedCount++
+        }
+        XposedCompat.findMethodOrNull(
+            tagClass,
+            "setTagConfig",
+            java.lang.Integer.TYPE,
+            java.lang.Integer.TYPE,
+            java.lang.Integer.TYPE,
+            java.lang.Integer.TYPE,
+        )?.let { method ->
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                val tagView = chain.thisObject as? View
+                val colorResId = (chain.args.getOrNull(3) as? Number)?.toInt()
+                if (tagView != null) {
+                    rememberAutoDegradeTagReadableTextRole(tagView, colorResId)
+                }
+                result
+            }
+            installedCount++
+        }
+        XposedCompat.findMethodOrNull(tagClass, "setTextColor", java.lang.Integer.TYPE)?.let { method ->
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                val tagView = chain.thisObject as? View
+                val colorResId = (chain.args.getOrNull(0) as? Number)?.toInt()
+                if (tagView != null) {
+                    rememberAutoDegradeTagReadableTextRole(tagView, colorResId)
+                }
+                result
+            }
+            installedCount++
+        }
+        XposedCompat.findMethodOrNull(tagClass, "onAttachedToWindow")?.let { method ->
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                (chain.thisObject as? View)?.let { scheduleAutoDegradeTagReadableTextRefresh(it) }
+                result
+            }
+            installedCount++
+        }
+        return installedCount
+    }
+
+    private fun installSocialBarRootReadableTextHooks(rootClass: Class<*>): Int {
+        val mod = XposedCompat.module ?: return 0
+        var installedCount = 0
+        for (ctor in rootClass.declaredConstructors) {
+            ctor.isAccessible = true
+            mod.hook(ctor).intercept { chain ->
+                val result = chain.proceed()
+                (chain.thisObject as? View)?.let { scheduleSocialBarReadableTextRefresh(it) }
+                result
+            }
+            installedCount++
+        }
+        val methods = LinkedHashSet<Method>()
+        XposedCompat.findMethodOrNull(rootClass, "onAttachedToWindow")?.let { methods.add(it) }
+        installedCount += installSocialBarReadableTextRefreshHooks(methods)
+        return installedCount
+    }
+
+    private fun installAgreeViewReadableTextHooks(agreeViewClass: Class<*>): Int {
+        val methods = LinkedHashSet<Method>()
+        val agreeDataClass = agreeViewClass.classLoader?.let { cl ->
+            XposedCompat.findClassOrNull(StableTiebaHookPoints.AGREE_DATA_CLASS, cl)
+        }
+        if (agreeDataClass != null) {
+            XposedCompat.findMethodOrNull(agreeViewClass, "setData", agreeDataClass)?.let { methods.add(it) }
+        }
+        XposedCompat.findMethodOrNull(agreeViewClass, "setNormalColorResourceId", java.lang.Integer.TYPE)
+            ?.let { methods.add(it) }
+        ReflectionUtils.findMethodInHierarchy(agreeViewClass, "setSelectedColor") { method ->
+            method.returnType == Void.TYPE && method.parameterTypes.size == 1
+        }?.let { methods.add(it) }
+        XposedCompat.findMethodOrNull(agreeViewClass, "onClick", View::class.java)?.let { methods.add(it) }
+        return installSocialBarReadableTextRefreshHooks(methods)
+    }
+
+    private fun installSocialBarReadableTextRefreshHooks(methods: Set<Method>): Int {
+        val mod = XposedCompat.module ?: return 0
+        var installedCount = 0
+        for (method in methods) {
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                (chain.thisObject as? View)?.let { scheduleSocialBarReadableTextRefresh(it) }
+                result
+            }
+            installedCount++
+        }
+        return installedCount
+    }
+
     private fun installDirectReadableTextHook(
         targetClass: Class<*>,
         methodName: String,
@@ -1092,6 +1220,33 @@ object HomeNativeGlassHook {
         return installedCount
     }
 
+    private fun installRichTextSubPbPostHook(richTextClass: Class<*>): Int {
+        val mod = XposedCompat.module ?: return 0
+        val method = XposedCompat.findMethodOrNull(
+            richTextClass,
+            "setSubPbPost",
+            java.lang.Boolean.TYPE,
+        ) ?: return 0
+        method.isAccessible = true
+        mod.hook(method).intercept { chain ->
+            val result = chain.proceed()
+            val view = chain.thisObject as? View
+            val isSubPbPost = (chain.args.getOrNull(0) as? Boolean) == true
+            if (view != null) {
+                if (isSubPbPost) {
+                    subPbRichTextViews[view] = true
+                    if (!isReadableTextWriteInProgress()) {
+                        scheduleRichTextReadableTextRefresh(view)
+                    }
+                } else {
+                    subPbRichTextViews.remove(view)
+                }
+            }
+            result
+        }
+        return 1
+    }
+
     private fun isRichTextSetTextMethod(method: Method): Boolean {
         if (method.name != "setText" || method.returnType != Void.TYPE) return false
         val params = method.parameterTypes
@@ -1113,13 +1268,142 @@ object HomeNativeGlassHook {
         }
     }
 
+    private fun rememberAutoDegradeTagReadableTextRole(tagView: View, colorResId: Int?) {
+        runReadableTextSafely {
+            val role = colorResId?.let { readableTextRoleForResourceId(tagView, it, linkText = false) }
+                ?: HomeNativeGlassTextRole.SECONDARY
+            rememberReadableTextRole(tagView, role, linkText = false)
+            scheduleAutoDegradeTagReadableTextRefresh(tagView)
+        }
+    }
+
+    private fun scheduleAutoDegradeTagReadableTextRefresh(tagView: View) {
+        runReadableTextSafely {
+            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
+            if (readableTextPaletteFor(tagView) == null) return@runReadableTextSafely
+            synchronized(autoDegradeTagReadableTextRefreshScheduled) {
+                if (autoDegradeTagReadableTextRefreshScheduled.containsKey(tagView)) return@runReadableTextSafely
+                autoDegradeTagReadableTextRefreshScheduled[tagView] = true
+            }
+            tagView.post {
+                autoDegradeTagReadableTextRefreshScheduled.remove(tagView)
+                applyAutoDegradeTagReadableText(tagView)
+            }
+        }
+    }
+
+    private fun applyAutoDegradeTagReadableText(tagView: View) {
+        runReadableTextSafely {
+            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
+            if (!isReadableTextTarget(tagView)) return@runReadableTextSafely
+            val palette = readableTextPaletteFor(tagView) ?: return@runReadableTextSafely
+            val fallbackRole = readableTextRoleForView(tagView, linkText = false)
+                ?: HomeNativeGlassTextRole.SECONDARY
+            withReadableTextWrite {
+                applyAutoDegradeTagReadableText(tagView, palette, fallbackRole, depth = 0)
+            }
+        }
+    }
+
+    private fun applyAutoDegradeTagReadableText(
+        view: View,
+        palette: HomeNativeGlassReadableTextPalette,
+        fallbackRole: HomeNativeGlassTextRole,
+        depth: Int,
+    ) {
+        if (depth > READABLE_TEXT_DIRECT_GROUP_DEPTH) return
+        if (view is TextView) {
+            val role = refineReadableTextRoleForTextView(
+                view,
+                readableTextRoleForView(view, linkText = false)
+                    ?: readableTextRoleForPaletteColor(palette, view.currentTextColor)
+                    ?: readableTextRoleForRawColor(view, view.currentTextColor, linkText = false)
+                    ?: fallbackRole,
+            ) ?: fallbackRole
+            rememberReadableTextRole(view, role, linkText = false)
+            val color = palette.colorFor(role)
+            if (view.currentTextColor != color) {
+                view.setTextColor(color)
+            }
+            applyReadableTextPaletteToTextSpans(view, palette)
+        }
+        val group = view as? ViewGroup ?: return
+        for (index in 0 until group.childCount) {
+            applyAutoDegradeTagReadableText(
+                group.getChildAt(index) ?: continue,
+                palette,
+                fallbackRole,
+                depth + 1,
+            )
+        }
+    }
+
+    private fun scheduleSocialBarReadableTextRefresh(anchor: View) {
+        runReadableTextSafely {
+            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
+            val root = findSocialBarReadableTextRoot(anchor) ?: return@runReadableTextSafely
+            if (readableTextPaletteFor(root) == null) return@runReadableTextSafely
+            synchronized(socialBarReadableTextRefreshScheduled) {
+                if (socialBarReadableTextRefreshScheduled.containsKey(root)) return@runReadableTextSafely
+                socialBarReadableTextRefreshScheduled[root] = true
+            }
+            root.post {
+                socialBarReadableTextRefreshScheduled.remove(root)
+                applySocialBarReadableText(root)
+            }
+        }
+    }
+
+    private fun applySocialBarReadableText(root: View) {
+        runReadableTextSafely {
+            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
+            val socialRoot = findSocialBarReadableTextRoot(root) ?: return@runReadableTextSafely
+            if (!isReadableTextTarget(socialRoot)) return@runReadableTextSafely
+            val palette = readableTextPaletteFor(socialRoot) ?: return@runReadableTextSafely
+            withReadableTextWrite {
+                applySocialBarReadableText(socialRoot, palette, depth = 0)
+            }
+        }
+    }
+
+    private fun applySocialBarReadableText(
+        view: View,
+        palette: HomeNativeGlassReadableTextPalette,
+        depth: Int,
+    ) {
+        if (depth > READABLE_TEXT_SOCIAL_BAR_DEPTH) return
+        if (view is TextView) {
+            val role = refineReadableTextRoleForTextView(
+                view,
+                readableTextRoleForView(view, linkText = false)
+                    ?: readableTextRoleForPaletteColor(palette, view.currentTextColor)
+                    ?: readableTextRoleForRawColor(view, view.currentTextColor, linkText = false)
+                    ?: HomeNativeGlassTextRole.SECONDARY,
+            )
+            if (role != null) {
+                rememberReadableTextRole(view, role, linkText = false)
+                val color = palette.colorFor(role)
+                if (view.currentTextColor != color) {
+                    view.setTextColor(color)
+                }
+            }
+            applyReadableTextPaletteToTextSpans(view, palette)
+        }
+        val group = view as? ViewGroup ?: return
+        for (index in 0 until group.childCount) {
+            applySocialBarReadableText(group.getChildAt(index) ?: continue, palette, depth + 1)
+        }
+    }
+
     private fun applyReadableTextColorFromResource(
         view: View,
         colorResId: Int,
         linkText: Boolean,
     ) {
         runReadableTextSafely {
-            val role = readableTextRoleForResourceId(view, colorResId, linkText) ?: return@runReadableTextSafely
+            val role = readableTextRoleForResourceId(view, colorResId, linkText)
+                ?: readableTextFallbackRoleForComponent(view, linkText)
+                ?: return@runReadableTextSafely
             applyReadableTextColorFromRole(view, role, linkText)
         }
     }
@@ -1287,8 +1571,10 @@ object HomeNativeGlassHook {
         palette: HomeNativeGlassReadableTextPalette,
     ): Boolean {
         if (span is ReadableTextClickableSpan) {
-            val color = palette.colorFor(span.role)
-            return if (span.color != color) {
+            val role = refineReadableTextRoleForClickableSpan(textView, span.role)
+            val color = readableTextColorForClickableSpan(textView, palette, role)
+            return if (span.role != role || span.color != color) {
+                span.role = role
                 span.color = color
                 true
             } else {
@@ -1303,7 +1589,7 @@ object HomeNativeGlassHook {
         val replacement = ReadableTextClickableSpan(
             delegate = span,
             role = role,
-            color = palette.colorFor(role),
+            color = readableTextColorForClickableSpan(textView, palette, role),
         )
         val editable = editableText()
         editable.removeSpan(span)
@@ -1318,18 +1604,22 @@ object HomeNativeGlassHook {
         span: ForegroundColorSpan,
         palette: HomeNativeGlassReadableTextPalette,
     ): Boolean {
+        val start = text.getSpanStart(span)
+        val end = text.getSpanEnd(span)
+        if (start < 0 || end < 0 || start >= end) return false
         val role = readableTextSpanRoles[span]
             ?: readableTextRoleForRawColor(textView, span.foregroundColor, linkText = false)
-            ?: return false
-        val refinedRole = refineReadableTextRoleForTextView(textView, role) ?: role
-        val color = palette.colorFor(refinedRole)
+            ?: if (isSubPbReplyClickableTextSpan(textView, text, start, end)) {
+                HomeNativeGlassTextRole.LINK
+            } else {
+                return false
+            }
+        val refinedRole = refineReadableTextRoleForTextSpan(textView, text, start, end, role)
+        val color = readableTextColorForTextSpan(textView, text, start, end, palette, refinedRole)
         if (span.foregroundColor == color) {
             readableTextSpanRoles[span] = refinedRole
             return false
         }
-        val start = text.getSpanStart(span)
-        val end = text.getSpanEnd(span)
-        if (start < 0 || end < 0 || start >= end) return false
         val flags = text.getSpanFlags(span)
         val replacement = ForegroundColorSpan(color)
         val editable = editableText()
@@ -1351,13 +1641,12 @@ object HomeNativeGlassHook {
         runCatching { span.updateDrawState(paint) }
         val role = readableTextRoleForRawColor(textView, paint.color, linkText = true)
             ?: readableTextRoleForPaletteColor(readableTextPaletteFor(textView), paint.color)
-        return if (role == HomeNativeGlassTextRole.PRIMARY) HomeNativeGlassTextRole.LINK else role
-            ?: HomeNativeGlassTextRole.LINK
+        return refineReadableTextRoleForClickableSpan(textView, role)
     }
 
     private class ReadableTextClickableSpan(
         val delegate: ClickableSpan,
-        val role: HomeNativeGlassTextRole,
+        var role: HomeNativeGlassTextRole,
         var color: Int,
     ) : ClickableSpan() {
         override fun onClick(widget: View) {
@@ -1368,6 +1657,123 @@ object HomeNativeGlassHook {
             delegate.updateDrawState(ds)
             ds.color = color
         }
+    }
+
+    private fun refineReadableTextRoleForClickableSpan(
+        textView: TextView,
+        role: HomeNativeGlassTextRole?,
+    ): HomeNativeGlassTextRole {
+        val resolved = if (role == HomeNativeGlassTextRole.PRIMARY) {
+            HomeNativeGlassTextRole.LINK
+        } else {
+            role ?: HomeNativeGlassTextRole.LINK
+        }
+        return if (isSubPbReplyRichTextTextView(textView) && shouldPromoteReadableTextRoleToLink(resolved)) {
+            HomeNativeGlassTextRole.LINK
+        } else {
+            resolved
+        }
+    }
+
+    private fun refineReadableTextRoleForTextSpan(
+        textView: TextView,
+        text: Spanned,
+        start: Int,
+        end: Int,
+        role: HomeNativeGlassTextRole,
+    ): HomeNativeGlassTextRole {
+        if (isSubPbReplyClickableTextSpan(textView, text, start, end) &&
+            shouldPromoteReadableTextRoleToLink(role)
+        ) {
+            return HomeNativeGlassTextRole.LINK
+        }
+        return refineReadableTextRoleForTextView(textView, role) ?: role
+    }
+
+    private fun readableTextColorForClickableSpan(
+        textView: TextView,
+        palette: HomeNativeGlassReadableTextPalette,
+        role: HomeNativeGlassTextRole,
+    ): Int {
+        return if (isSubPbReplyRichTextTextView(textView) && isSubPbClickableRole(role)) {
+            subPbClickableTextColor(textView)
+        } else {
+            palette.colorFor(role)
+        }
+    }
+
+    private fun readableTextColorForTextSpan(
+        textView: TextView,
+        text: Spanned,
+        start: Int,
+        end: Int,
+        palette: HomeNativeGlassReadableTextPalette,
+        role: HomeNativeGlassTextRole,
+    ): Int {
+        return if (isSubPbReplyClickableTextSpan(textView, text, start, end) && isSubPbClickableRole(role)) {
+            subPbClickableTextColor(textView)
+        } else {
+            palette.colorFor(role)
+        }
+    }
+
+    private fun shouldPromoteReadableTextRoleToLink(role: HomeNativeGlassTextRole): Boolean {
+        return role == HomeNativeGlassTextRole.PRIMARY ||
+            role == HomeNativeGlassTextRole.SECONDARY ||
+            role == HomeNativeGlassTextRole.TERTIARY
+    }
+
+    private fun isSubPbClickableRole(role: HomeNativeGlassTextRole): Boolean {
+        return role == HomeNativeGlassTextRole.LINK ||
+            role == HomeNativeGlassTextRole.ACCENT_BLUE
+    }
+
+    private fun subPbClickableTextColor(view: View): Int {
+        return if (usesDarkMaterial(view)) {
+            SUB_PB_CLICKABLE_DARK_MODE_TEXT_COLOR
+        } else {
+            SUB_PB_CLICKABLE_LIGHT_MODE_TEXT_COLOR
+        }
+    }
+
+    private fun isSubPbReplyClickableTextSpan(
+        textView: TextView,
+        text: Spanned,
+        start: Int,
+        end: Int,
+    ): Boolean {
+        if (!isSubPbReplyRichTextTextView(textView)) return false
+        val clickableSpans = text.getSpans(start, end, ClickableSpan::class.java)
+        for (clickableSpan in clickableSpans) {
+            val clickableStart = text.getSpanStart(clickableSpan)
+            val clickableEnd = text.getSpanEnd(clickableSpan)
+            if (clickableStart < end && clickableEnd > start) return true
+        }
+        return false
+    }
+
+    private fun isSubPbReplyRichTextTextView(textView: TextView): Boolean {
+        var current: View? = textView
+        var depth = 0
+        while (current != null && depth < READABLE_TEXT_TARGET_PARENT_DEPTH) {
+            val className = current.javaClass.name
+            if (
+                className == StableTiebaHookPoints.PB_SUB_PB_LAYOUT_CLASS ||
+                className == StableTiebaHookPoints.PB_COMMENT_FLOOR_SUB_VIEW_CLASS ||
+                className == StableTiebaHookPoints.SUB_PB_VIEW_CLASS
+            ) {
+                return true
+            }
+            if (
+                className == StableTiebaHookPoints.TB_RICH_TEXT_VIEW_CLASS &&
+                subPbRichTextViews[current] == true
+            ) {
+                return true
+            }
+            current = current.parent as? View
+            depth++
+        }
+        return false
     }
 
     private fun refineReadableTextRoleForView(
@@ -1539,6 +1945,51 @@ object HomeNativeGlassHook {
         return false
     }
 
+    private fun readableTextFallbackRoleForComponent(
+        view: View,
+        linkText: Boolean,
+    ): HomeNativeGlassTextRole? {
+        if (linkText) return null
+        findAutoDegradeTagAncestor(view)?.let { tagView ->
+            return readableTextRoleForView(tagView, linkText = false)
+                ?: HomeNativeGlassTextRole.SECONDARY
+        }
+        if (findSocialBarReadableTextRoot(view) != null) {
+            return HomeNativeGlassTextRole.SECONDARY
+        }
+        return null
+    }
+
+    private fun findAutoDegradeTagAncestor(anchor: View): View? {
+        var current: View? = anchor
+        var depth = 0
+        while (current != null && depth < READABLE_TEXT_TARGET_PARENT_DEPTH) {
+            if (current.javaClass.name == StableTiebaHookPoints.AUTO_DEGRADE_TAG_VIEW_CLASS) {
+                return current
+            }
+            current = current.parent as? View
+            depth++
+        }
+        return null
+    }
+
+    private fun findSocialBarReadableTextRoot(anchor: View): View? {
+        var current: View? = anchor
+        var depth = 0
+        while (current != null && depth < READABLE_TEXT_TARGET_PARENT_DEPTH) {
+            val className = current.javaClass.name
+            if (
+                className == StableTiebaHookPoints.CARD_SOCIAL_BAR_VIEW_CLASS ||
+                className == StableTiebaHookPoints.SOCIAL_BAR_WRAPPER_CLASS
+            ) {
+                return current
+            }
+            current = current.parent as? View
+            depth++
+        }
+        return null
+    }
+
     private fun readableTextRoleForResourceId(
         view: View,
         colorResId: Int,
@@ -1662,8 +2113,11 @@ object HomeNativeGlassHook {
     }
 
     private fun resolveTargetColorResIdByName(context: Context, name: String): Int? {
-        val resId = context.resources.getIdentifier(name, "color", context.packageName)
-        return resId.takeIf { it != 0 }
+        for (type in READABLE_TEXT_RESOURCE_ID_TYPES) {
+            val resId = context.resources.getIdentifier(name, type, context.packageName)
+            if (resId != 0) return resId
+        }
+        return null
     }
 
     private fun isReadableTextWriteInProgress(): Boolean {
@@ -7076,6 +7530,7 @@ object HomeNativeGlassHook {
         "color_text_secondary",
         "color_text_slim",
         "color_text_tiny",
+        "selector_comment_and_prise_item_text_color",
     )
     private val READABLE_TEXT_TERTIARY_RESOURCE_NAMES = setOf(
         "CAM_X0108",
@@ -7118,6 +7573,7 @@ object HomeNativeGlassHook {
     private const val HOME_BOTTOM_TAB_BOUNDARY_PARENT_DEPTH = 4
     private const val READABLE_TEXT_TARGET_PARENT_DEPTH = 16
     private const val READABLE_TEXT_DIRECT_GROUP_DEPTH = 3
+    private const val READABLE_TEXT_SOCIAL_BAR_DEPTH = 10
     private const val READABLE_TEXT_HOME_CARD_DEPTH = 12
     private const val READABLE_TEXT_PB_ITEM_DEPTH = 10
     private const val READABLE_TEXT_SECONDARY_MAX_SP = 14.5f
@@ -7136,6 +7592,8 @@ object HomeNativeGlassHook {
     private const val SUB_PB_REPLY_ITEM_CONTENT_CLEAR_DEPTH = 2
     private const val SUB_PB_NAVIGATION_BAR_BACKGROUND_CLEAR_DEPTH = 3
     private const val SUB_PB_NAVIGATION_BAR_REAPPLY_DELAY_MS = 160L
+    private val SUB_PB_CLICKABLE_LIGHT_MODE_TEXT_COLOR = Color.rgb(23, 87, 202)
+    private val SUB_PB_CLICKABLE_DARK_MODE_TEXT_COLOR = Color.rgb(143, 186, 255)
     private const val APPLE_NOISE_ALPHA = 52
     private const val APPLE_STROKE_ALPHA = 56
     private const val APPLE_EDGE_HIGHLIGHT_ALPHA = 86
@@ -7147,6 +7605,7 @@ object HomeNativeGlassHook {
     private const val HOME_TOP_BACKGROUND_CLEAR_DEPTH = 2
     private const val HOME_TOP_RECYCLER_CHILD_CLEAR_DEPTH = 1
     private const val HOME_FEED_CARD_BACKGROUND_PARENT_SCAN_DEPTH = 4
+    private val READABLE_TEXT_RESOURCE_ID_TYPES = arrayOf("color", "drawable")
     private const val HOME_IMAGE_CONTAINER_RADIUS_SCAN_DEPTH = 8
     private const val PB_COMMENT_TOP_CONTAINER_CLEAR_DEPTH = 2
     private const val PB_COMMENT_HOST_CLEAR_DEPTH = 5
