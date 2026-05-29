@@ -31,12 +31,13 @@ object UpgradePopWindowBlockHook {
             onCreateMethod.isAccessible = true
 
             mod.hook(onCreateMethod).intercept { chain ->
+                val result = chain.proceed()
                 val activity = chain.thisObject as? Activity
                 if (activity != null) {
                     activity.finish()
                     XposedCompat.logD("[UpgradePopWindowBlockHook] UpdateDialog.onCreate -> finish()")
                 }
-                null
+                result
             }
 
             XposedCompat.log("[UpgradePopWindowBlockHook] hook INSTALLED: $UPDATE_DIALOG_CLASS.onCreate -> finish()")

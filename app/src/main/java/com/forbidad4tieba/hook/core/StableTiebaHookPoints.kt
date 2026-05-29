@@ -15,6 +15,7 @@ object StableTiebaHookPoints {
     const val FEED_CARD_PIC_VIEW_CLASS = "com.baidu.tieba.feed.component.CardPicView"
     const val FEED_CARD_ORIGIN_MOUNT_VIEW_CLASS =
         "com.baidu.tieba.feed.component.mount.CardOriginMountView"
+    const val FORUM_ACTIVITY_CLASS = "com.baidu.tieba.forum.ForumActivity"
     const val TYPE_ADAPTER_CLASS = "com.baidu.adp.widget.ListView.TypeAdapter"
     const val TYPE_ADAPTER_VIEW_HOLDER_CLASS = "$TYPE_ADAPTER_CLASS\$ViewHolder"
     const val BD_LIST_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdListView"
