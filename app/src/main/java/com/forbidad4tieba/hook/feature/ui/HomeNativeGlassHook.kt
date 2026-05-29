@@ -23,6 +23,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextPaint
@@ -148,6 +149,7 @@ object HomeNativeGlassHook {
 
     @Volatile private var recyclerViewClass: Class<*>? = null
     @Volatile private var cachedBackgroundBitmap: CachedBackgroundBitmap? = null
+    @Volatile private var cachedBackgroundMetadataCheckedAt: Long = 0L
     private val backgroundDecodeKeys = Collections.synchronizedSet(mutableSetOf<String>())
     @Volatile private var runtimeTargets: RuntimeTargets? = null
     @Volatile private var pbCommentDynamicTintColor: PbCommentDynamicTintColorState? = null
@@ -169,6 +171,11 @@ object HomeNativeGlassHook {
         val targetHeight: Int,
         val bitmap: Bitmap?,
         val blurredBitmap: Bitmap?,
+    )
+
+    private data class BackgroundFileMetadata(
+        val lastModified: Long,
+        val length: Long,
     )
 
     private data class RuntimeTargets(
@@ -336,21 +343,31 @@ object HomeNativeGlassHook {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         val mod = XposedCompat.module ?: return
         val bindMethodName = symbols.feedCardBindMethod?.takeIf { it.isNotBlank() }
+        val hasHomeFeedTargets = hasHomeNativeGlassFeedTargets(symbols, bindMethodName)
         if (!installed.compareAndSet(false, true)) return
 
         try {
             recyclerViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
             runtimeTargets = resolveRuntimeTargets(symbols)
             prewarmBackgroundCacheIfNeeded()
-            val pageConstructors = installPageConstructors(cl)
-            val bindHooks = if (bindMethodName != null) {
+            if (!hasHomeFeedTargets) {
+                XposedCompat.logD {
+                    "$TAG home feed glass SKIP: pageClass=" +
+                        "${symbols.homePersonalizeAnchorClasses?.contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS) == true}, " +
+                        "feedCardBind=${bindMethodName != null}"
+                }
+            }
+            val pageConstructors = if (hasHomeFeedTargets) installPageConstructors(cl) else 0
+            val bindHooks = if (hasHomeFeedTargets && bindMethodName != null) {
                 installFeedCardBind(cl, bindMethodName)
             } else {
-                XposedCompat.log("$TAG recommend card SKIP: feedCardBindMethod not resolved")
+                if (hasHomeFeedTargets) {
+                    XposedCompat.log("$TAG recommend card SKIP: feedCardBindMethod not resolved")
+                }
                 0
             }
-            val touchHooks = installFeedCardTouchHooks(cl)
-            val componentHooks = installCardComponentHooks(cl)
+            val touchHooks = if (bindHooks > 0) installFeedCardTouchHooks(cl) else 0
+            val componentHooks = if (bindHooks > 0) installCardComponentHooks(cl) else 0
             val pbCommentHooks = installPbCommentActivityHooks(cl) +
                 installPbCommentSurfaceHooks(cl) +
                 installPbCommentListItemGetViewHook(cl) +
@@ -370,7 +387,7 @@ object HomeNativeGlassHook {
             } else {
                 0
             }
-            val tabDynamicTintEnabled = ConfigManager.isHomeTabDynamicTintEnabled
+            val tabDynamicTintEnabled = hasHomeFeedTargets && ConfigManager.isHomeTabDynamicTintEnabled
             val topTabObservers = if (tabDynamicTintEnabled) installHomeTopTabObservers(cl) else 0
             val bottomTabDynamicTintHooks = if (tabDynamicTintEnabled) {
                 installHomeBottomTabDynamicTintHooks(cl)
@@ -382,7 +399,7 @@ object HomeNativeGlassHook {
             } else {
                 0
             }
-            val searchBoxHooks = installHomeSearchBoxHooks(cl)
+            val searchBoxHooks = if (tabDynamicTintEnabled) installHomeSearchBoxHooks(cl) else 0
             if ((pageConstructors == 0 || bindHooks == 0) && pbCommentHooks == 0) {
                 installed.set(false)
                 XposedCompat.log(
@@ -411,6 +428,13 @@ object HomeNativeGlassHook {
             XposedCompat.log("$TAG install FAILED: ${t.message}")
             XposedCompat.log(t)
         }
+    }
+
+    private fun hasHomeNativeGlassFeedTargets(symbols: HookSymbols, bindMethodName: String?): Boolean {
+        return bindMethodName != null &&
+            symbols.homePersonalizeAnchorClasses
+                .orEmpty()
+                .contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS)
     }
 
     private fun resolveRuntimeTargets(symbols: HookSymbols): RuntimeTargets {
@@ -7108,12 +7132,46 @@ object HomeNativeGlassHook {
         if (trimmedPath.isEmpty()) return null
         val blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
         val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        cachedBackgroundBitmap?.let { cached ->
-            if (cached.matchesBackground(trimmedPath, blurCachePath, blurPercent, targetWidth, targetHeight)) {
-                return cached
-            }
+        val cached = cachedBackgroundBitmap ?: return null
+        if (!cached.matchesBackground(trimmedPath, blurCachePath, blurPercent, targetWidth, targetHeight)) {
+            return null
         }
-        return null
+        return cached.takeIf { isCachedBackgroundMetadataCurrent(it) }
+    }
+
+    private fun isCachedBackgroundMetadataCurrent(cached: CachedBackgroundBitmap): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (now - cachedBackgroundMetadataCheckedAt < BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS) {
+            return true
+        }
+        return synchronized(this) {
+            if (cachedBackgroundBitmap !== cached) return@synchronized false
+            val source = readBackgroundFileMetadata(cached.path)
+            val blurCache = readBackgroundFileMetadata(cached.blurCachePath)
+            cachedBackgroundMetadataCheckedAt = now
+            val fresh = cached.lastModified == source.lastModified &&
+                cached.length == source.length &&
+                cached.blurCacheLastModified == blurCache.lastModified &&
+                cached.blurCacheLength == blurCache.length
+            if (!fresh) {
+                cachedBackgroundBitmap = null
+                pbCommentDynamicTintColor = null
+            }
+            fresh
+        }
+    }
+
+    private fun readBackgroundFileMetadata(path: String): BackgroundFileMetadata {
+        val trimmed = path.trim()
+        if (trimmed.isEmpty()) return BackgroundFileMetadata(0L, 0L)
+        return runCatching {
+            val file = java.io.File(trimmed)
+            if (file.isFile) {
+                BackgroundFileMetadata(file.lastModified(), file.length())
+            } else {
+                BackgroundFileMetadata(0L, 0L)
+            }
+        }.getOrDefault(BackgroundFileMetadata(0L, 0L))
     }
 
     private fun scheduleBackgroundDecode(
@@ -7230,6 +7288,7 @@ object HomeNativeGlassHook {
             }
         }
         cachedBackgroundBitmap = entry
+        cachedBackgroundMetadataCheckedAt = SystemClock.uptimeMillis()
         if (bitmap == null && firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
             XposedCompat.logD { "$TAG background image unavailable: $path" }
         }
@@ -7613,6 +7672,7 @@ object HomeNativeGlassHook {
     private const val PB_COMMENT_BACKGROUND_WRITE_PARENT_SCAN_DEPTH = 8
     private const val PB_COMMENT_LIST_ITEM_CLEAR_DEPTH = 4
     private const val BACKGROUND_CACHE_SAMPLE_EDGE = 48
+    private const val BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS = 1500L
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE = BACKGROUND_CACHE_SAMPLE_EDGE
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_PIXEL_ALPHA = 32
     private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_LUMA = 24

@@ -184,7 +184,6 @@ object SettingsMenuHook {
 
     internal fun hook(cl: ClassLoader, symbols: HookSymbols) {
         val mod = XposedCompat.module ?: return
-        installHomeNativeGlassImagePickerResultHook()
         val className = symbols.settingsClass
         val methodName = symbols.settingsInitMethod
         val containerField = symbols.settingsContainerField
@@ -333,6 +332,7 @@ object SettingsMenuHook {
             Toast.makeText(context, UiText.Settings.CONTEXT_UNAVAILABLE, Toast.LENGTH_SHORT).show()
             return
         }
+        installHomeNativeGlassImagePickerResultHook()
         installHomeNativeGlassImagePickerResultHook(activity)
         val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Intent(MediaStore.ACTION_PICK_IMAGES)
