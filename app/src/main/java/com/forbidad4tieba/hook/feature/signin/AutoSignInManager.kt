@@ -165,6 +165,7 @@ object AutoSignInManager {
                 clearStaleSuccessDay(statePrefs, successDayKey, todayDay, lastSuccessDay)
 
                 var hasStartedSigning = false
+                var batchRound = 0
 
                 while (snapshot.pendingForums.isNotEmpty()) {
                     if (!snapshot.valid) {
@@ -193,14 +194,16 @@ object AutoSignInManager {
                             "$TAG: start batch sign pending=${snapshot.pendingForums.size} " +
                                 "signable=${signableForums.size} total=${snapshot.totalForums}"
                         )
-                        toast(context, UiText.AutoSignIn.toastStart(signableForums.size))
+                        toast(context, UiText.AutoSignIn.toastStart(snapshot.pendingForums.size))
                         hasStartedSigning = true
                     }
                     val pendingBeforeBatch = snapshot.pendingForums.size
+                    batchRound++
                     val result = signBatch(signableForums, nativeBridge)
 
                     XposedCompat.log(
-                        "$TAG: batch sign finished, signable=${signableForums.size}, " +
+                        "$TAG: batch sign finished, round=$batchRound signable=${signableForums.size}, " +
+                            "pendingBefore=$pendingBeforeBatch, " +
                             "apiSuccess=${result.apiSuccess}, " +
                             "responseSigned=${result.signedCount}"
                     )
@@ -220,9 +223,16 @@ object AutoSignInManager {
                     remainPending = snapshot.pendingForums.size
                     if (snapshot.pendingForums.isEmpty()) break
                     val batchSignedCount = (pendingBeforeBatch - snapshot.pendingForums.size).coerceAtLeast(0)
+                    if (batchSignedCount <= 0) {
+                        XposedCompat.log(
+                            "$TAG: batch sign made no progress, pending=${snapshot.pendingForums.size}, " +
+                                "responseSigned=${result.signedCount}"
+                        )
+                        outcome = "batch_no_progress"
+                        break
+                    }
                     toast(context, UiText.AutoSignIn.toastBatchDone(batchSignedCount, snapshot.pendingForums.size))
                     outcome = "batch_partial_signed"
-                    break
                 }
 
                 val legacyFallbackReason = legacyFallbackReason(outcome)
@@ -351,8 +361,12 @@ object AutoSignInManager {
             val batchMinLevel = body.optInt("level", ORDINARY_USER_MIN_BATCH_LEVEL)
                 .takeIf { it > 0 }
                 ?: ORDINARY_USER_MIN_BATCH_LEVEL
-            val canUseAllLevels = userStatus != ORDINARY_USER_STATUS
             val serverCanUse = body.optString("can_use")
+            val canUseAllLevels = when (serverCanUse) {
+                "1" -> true
+                "0" -> false
+                else -> userStatus != ORDINARY_USER_STATUS
+            }
             val pendingList = mutableListOf<ForumInfo>()
             for (i in 0 until forumInfo.length()) {
                 val forum = forumInfo.optJSONObject(i) ?: continue
@@ -455,7 +469,7 @@ object AutoSignInManager {
             "skip_no_signable_forum" -> "no_batch_signable"
             "batch_failed" -> "batch_failed"
             "batch_refresh_failed" -> "batch_refresh_failed"
-            "batch_partial_signed" -> "batch_partial_signed"
+            "batch_no_progress" -> "batch_no_progress"
             else -> null
         }
     }
