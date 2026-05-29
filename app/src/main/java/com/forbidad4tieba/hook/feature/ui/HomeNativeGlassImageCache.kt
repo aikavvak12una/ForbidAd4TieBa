@@ -61,24 +61,33 @@ object HomeNativeGlassImageCache {
         }
 
         val bitmap = decodeSampledBitmapForMaxEdge(path, BLUR_CACHE_MAX_EDGE) ?: return ""
-        val cacheBitmap = createBlurredBitmap(bitmap, normalizedBlur, appleMaterial) ?: return ""
-        val tempFile = File(cacheDir, "${cacheFile.name}.tmp")
-        val written = runCatching {
-            tempFile.outputStream().use { output ->
-                cacheBitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+        var cacheBitmap: Bitmap? = null
+        try {
+            val outputBitmap = createBlurredBitmap(bitmap, normalizedBlur, appleMaterial) ?: return ""
+            cacheBitmap = outputBitmap
+            val tempFile = File(cacheDir, "${cacheFile.name}.tmp")
+            val written = runCatching {
+                tempFile.outputStream().use { output ->
+                    outputBitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                }
+            }.getOrDefault(false)
+            if (!written || tempFile.length() <= 0L) {
+                runCatching { tempFile.delete() }
+                return ""
             }
-        }.getOrDefault(false)
-        if (!written || tempFile.length() <= 0L) {
-            runCatching { tempFile.delete() }
-            return ""
+            runCatching {
+                if (cacheFile.exists()) cacheFile.delete()
+                tempFile.renameTo(cacheFile)
+            }.getOrDefault(false)
+            if (!cacheFile.isFile || cacheFile.length() <= 0L) return ""
+            cleanupOldCaches(cacheDir, cacheFile.name)
+            return cacheFile.absolutePath
+        } finally {
+            if (cacheBitmap !== bitmap) {
+                runCatching { cacheBitmap?.recycle() }
+            }
+            runCatching { bitmap.recycle() }
         }
-        runCatching {
-            if (cacheFile.exists()) cacheFile.delete()
-            tempFile.renameTo(cacheFile)
-        }.getOrDefault(false)
-        if (!cacheFile.isFile || cacheFile.length() <= 0L) return ""
-        cleanupOldCaches(cacheDir, cacheFile.name)
-        return cacheFile.absolutePath
     }
 
     fun decodeSampledBitmap(path: String, targetWidth: Int, targetHeight: Int): Bitmap? {
@@ -146,7 +155,10 @@ object HomeNativeGlassImageCache {
                     radius = cardBlurRadius(blurPercent),
                     iterations = cardBlurIterations(blurPercent),
                 )
-            }.getOrNull() ?: return null
+            }.getOrElse {
+                runCatching { mutable.recycle() }
+                return null
+            }
         }
         if (!appleMaterial) return blurred
         return runCatching { applyMaterialColorTreatment(blurred) }.getOrDefault(blurred)

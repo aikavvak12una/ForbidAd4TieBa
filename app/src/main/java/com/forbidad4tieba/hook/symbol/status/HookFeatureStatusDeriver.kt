@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.symbol.status
 
 import com.forbidad4tieba.hook.symbol.model.*
+import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 
 internal object HookFeatureStatusDeriver {
     private const val PB_EARLY_AD_INSERT_MIN_METHOD_COUNT = 2
@@ -175,6 +176,9 @@ internal object HookFeatureStatusDeriver {
         val homeNativeGlassCritical = ArrayList<String>(1)
         val homeNativeGlassOptional = ArrayList<String>(12)
         if (symbols.feedCardBindMethod.isNullOrBlank()) homeNativeGlassCritical.add("feedCardBindMethod")
+        if (!symbols.homePersonalizeAnchorClasses.orEmpty().contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS)) {
+            homeNativeGlassOptional.add("homeNativeGlassPageClass")
+        }
         if (symbols.homeNativeGlassSubPbNextPageMoreViewId == null || symbols.homeNativeGlassSubPbNextPageMoreViewId == 0) {
             homeNativeGlassOptional.add("homeNativeGlassSubPbNextPageMoreViewId")
         }

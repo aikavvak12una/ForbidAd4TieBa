@@ -34,6 +34,11 @@ internal object HookSymbolStatusFormatter {
         fun has(value: Int?): Boolean = value != null && value != 0
         fun hasList(values: List<String>?): Boolean = values.orEmpty().any { it.isNotBlank() }
         fun hasIntList(values: List<Int>?): Boolean = values.orEmpty().any { it != 0 }
+        fun hasHomeNativeGlassPageClass(): Boolean {
+            return symbols.homePersonalizeAnchorClasses
+                .orEmpty()
+                .contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS)
+        }
         fun listTarget(values: List<String>?): String {
             return values.orEmpty().filter { it.isNotBlank() }.joinToString(",").ifBlank { "-" }
         }
@@ -137,7 +142,10 @@ internal object HookSymbolStatusFormatter {
             "HomeNativeGlassHook",
             "${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.<init> / " +
                 "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.${symbols.feedCardBindMethod}",
-            listOf("feedCardBindMethod" to has(symbols.feedCardBindMethod)),
+            listOf(
+                "homeNativeGlassPageClass" to hasHomeNativeGlassPageClass(),
+                "feedCardBindMethod" to has(symbols.feedCardBindMethod),
+            ),
         )
         add(
             "HomeNativeGlassHook.Resources",
