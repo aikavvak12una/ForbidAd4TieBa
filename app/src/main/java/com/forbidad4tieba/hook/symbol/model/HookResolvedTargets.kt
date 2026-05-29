@@ -208,7 +208,7 @@ internal data class StrategyAdSymbols(
 )
 
 internal data class PbGestureScaleSymbols(
-    val onScaleMethod: Method,
+    val dispatchMethod: Method,
 )
 
 internal data class PbScrollCoalesceSymbols(

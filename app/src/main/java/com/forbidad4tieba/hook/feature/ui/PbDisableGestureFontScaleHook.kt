@@ -11,19 +11,19 @@ object PbDisableGestureFontScaleHook {
 
     internal fun hook(targets: PbGestureScaleSymbols) {
         val mod = XposedCompat.module ?: return
-        val onScaleMethod = targets.onScaleMethod
+        val dispatchMethod = targets.dispatchMethod
 
         try {
-            if (!installOnScaleHook(mod, onScaleMethod)) {
+            if (!installDispatchHook(mod, dispatchMethod)) {
                 XposedCompat.logD(
                     "[PbDisableGestureFontScaleHook] already installed: " +
-                        ReflectionUtils.methodSignature(onScaleMethod),
+                        ReflectionUtils.methodSignature(dispatchMethod),
                 )
                 return
             }
             XposedCompat.log(
                 "[PbDisableGestureFontScaleHook] hook INSTALLED: " +
-                    "${onScaleMethod.declaringClass.name}.${onScaleMethod.name}(ScaleGestureDetector)",
+                    "${dispatchMethod.declaringClass.name}.${dispatchMethod.name}(MotionEvent)",
             )
         } catch (t: Throwable) {
             XposedCompat.log("[PbDisableGestureFontScaleHook] FAILED: ${t.message}")
@@ -31,14 +31,14 @@ object PbDisableGestureFontScaleHook {
         }
     }
 
-    private fun installOnScaleHook(
+    private fun installDispatchHook(
         mod: io.github.libxposed.api.XposedModule,
         method: Method,
     ): Boolean {
         val methodKey = ReflectionUtils.methodSignature(method)
         if (!installedMethodKeys.add(methodKey)) return false
 
-        mod.hook(method).intercept { true }
+        mod.hook(method).intercept { false }
         return true
     }
 }

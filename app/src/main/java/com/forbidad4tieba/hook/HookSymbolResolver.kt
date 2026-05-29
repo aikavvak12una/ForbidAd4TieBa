@@ -13,7 +13,7 @@ import com.forbidad4tieba.hook.symbol.cache.*
 import android.content.Context
 import android.os.Bundle
 import android.text.style.ClickableSpan
-import android.view.ScaleGestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -2393,32 +2393,33 @@ internal object HookSymbolResolver {
                 XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: scan symbols unavailable")
                 return null
             }
-            val listenerClassName = resolvedSymbols.pbGestureScaleListenerClass?.takeIf { it.isNotBlank() } ?: run {
-                XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: missing pbGestureScaleListenerClass")
+            val managerClassName = resolvedSymbols.pbGestureScaleManagerClass?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: missing pbGestureScaleManagerClass")
                 return null
             }
-            val methodName = resolvedSymbols.pbGestureScaleListenerOnScaleMethod?.takeIf { it.isNotBlank() } ?: run {
-                XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: missing pbGestureScaleListenerOnScaleMethod")
+            val dispatchMethodName = resolvedSymbols.pbGestureScaleDispatchMethod?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: missing pbGestureScaleDispatchMethod")
                 return null
             }
-            val listenerClass = safeFindClass(listenerClassName, cl) ?: run {
-                XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: class not found: $listenerClassName")
+            val managerClass = safeFindClass(managerClassName, cl) ?: run {
+                XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: class not found: $managerClassName")
                 return null
             }
-            val method = collectInstanceMethods(listenerClass).singleOrNull { candidate ->
-                candidate.name == methodName &&
+            val dispatchMethod = managerClass.declaredMethods.singleOrNull { candidate ->
+                !Modifier.isStatic(candidate.modifiers) &&
+                    candidate.name == dispatchMethodName &&
                     candidate.returnType == Boolean::class.javaPrimitiveType &&
                     candidate.parameterTypes.size == 1 &&
-                    candidate.parameterTypes[0] == ScaleGestureDetector::class.java
+                    candidate.parameterTypes[0] == MotionEvent::class.java
             } ?: run {
                 XposedCompat.log(
                     "[PbDisableGestureFontScaleHook] skipped: method mismatch: " +
-                        "$listenerClassName.$methodName(ScaleGestureDetector)",
+                        "$managerClassName.$dispatchMethodName(MotionEvent)",
                 )
                 return null
             }
-            method.isAccessible = true
-            PbGestureScaleSymbols(onScaleMethod = method)
+            dispatchMethod.isAccessible = true
+            PbGestureScaleSymbols(dispatchMethod = dispatchMethod)
         } catch (t: Throwable) {
             XposedCompat.log("[PbDisableGestureFontScaleHook] symbol resolve FAILED: ${t.message}")
             XposedCompat.log(t)
