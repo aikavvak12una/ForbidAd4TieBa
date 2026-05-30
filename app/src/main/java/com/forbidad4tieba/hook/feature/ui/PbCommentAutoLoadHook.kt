@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import android.os.SystemClock
+import android.view.View
 import com.forbidad4tieba.hook.symbol.model.PbCommentAutoLoadSymbols
 import com.forbidad4tieba.hook.symbol.model.PbCommentBottomListSymbols
 import com.forbidad4tieba.hook.symbol.model.PbCommentBottomRecyclerSymbols
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 object PbCommentAutoLoadHook {
     private const val PRELOAD_NOT_SEE_COMMENT_NUM = 20
+    private const val SCROLL_CHECK_INTERVAL_MS = 120L
     private const val MIN_TRIGGER_INTERVAL_MS = 1000L
     private const val GET_ITEM_COUNT = "getItemCount"
     private const val TAG = "[PbCommentAutoLoadHook]"
@@ -23,6 +25,7 @@ object PbCommentAutoLoadHook {
     @Volatile private var hooked = false
     @Volatile private var runtimeDisabled = false
     private val triggerStates = Collections.synchronizedMap(WeakHashMap<Any, TriggerState>())
+    private val recyclerCheckStates = Collections.synchronizedMap(WeakHashMap<Any, RecyclerCheckState>())
     private val adapterItemCountMethods = ConcurrentHashMap<Class<*>, Method>()
 
     internal fun hook(targets: PbCommentAutoLoadSymbols) {
@@ -101,18 +104,12 @@ object PbCommentAutoLoadHook {
                 } else {
                     targets.ownerField.get(chain.thisObject)
                 } ?: return@intercept result
-                val firstVisible = targets.firstVisibleMethod.invoke(recycler) as? Int ?: return@intercept result
-                val lastVisible = targets.lastVisibleMethod.invoke(recycler) as? Int ?: return@intercept result
-                val totalCount = getRecyclerAdapterItemCount(recycler, targets.getAdapterMethod) ?: return@intercept result
-                val visibleCount = lastVisible - firstVisible + 1
-                maybeTriggerLoadMore(
-                    list = recycler,
-                    firstVisible = firstVisible,
-                    visibleCount = visibleCount,
-                    totalCount = totalCount,
-                    bottomListenerField = targets.bottomListenerField,
-                    bottomMethod = targets.bottomMethod,
-                )
+                val now = SystemClock.uptimeMillis()
+                if (shouldDeferRecyclerCheck(recycler, now)) {
+                    scheduleDeferredRecyclerCheck(recycler, targets, now)
+                    return@intercept result
+                }
+                performRecyclerAutoLoadCheck(recycler, targets)
                 result
             }
             XposedCompat.logD { "$TAG BdRecyclerView hook INSTALLED: ${targets.scrollMethod.declaringClass.name}.${targets.scrollMethod.name}" }
@@ -121,6 +118,73 @@ object PbCommentAutoLoadHook {
             XposedCompat.log("$TAG BdRecyclerView install FAILED: ${t.message}")
             XposedCompat.log(t)
             0
+        }
+    }
+
+    private fun shouldDeferRecyclerCheck(recycler: Any, now: Long): Boolean {
+        var shouldDefer = false
+        synchronized(recyclerCheckStates) {
+            val state = recyclerCheckStates.getOrPut(recycler) { RecyclerCheckState() }
+            val elapsed = now - state.lastCheckedAt
+            if (state.lastCheckedAt > 0L && elapsed in 0 until SCROLL_CHECK_INTERVAL_MS) {
+                shouldDefer = true
+            } else {
+                state.lastCheckedAt = now
+            }
+        }
+        return shouldDefer
+    }
+
+    private fun scheduleDeferredRecyclerCheck(
+        recycler: Any,
+        targets: PbCommentBottomRecyclerSymbols,
+        now: Long,
+    ) {
+        val view = recycler as? View ?: return
+        var shouldPost = false
+        var delayMs = SCROLL_CHECK_INTERVAL_MS
+        synchronized(recyclerCheckStates) {
+            val state = recyclerCheckStates.getOrPut(recycler) { RecyclerCheckState() }
+            if (!state.delayedCheckScheduled) {
+                state.delayedCheckScheduled = true
+                delayMs = (SCROLL_CHECK_INTERVAL_MS - (now - state.lastCheckedAt)).coerceAtLeast(0L)
+                shouldPost = true
+            }
+        }
+        if (!shouldPost) return
+        view.postDelayed({
+            synchronized(recyclerCheckStates) {
+                recyclerCheckStates[recycler]?.let { state ->
+                    state.delayedCheckScheduled = false
+                    state.lastCheckedAt = SystemClock.uptimeMillis()
+                }
+            }
+            if (!ConfigManager.isAutoLoadMoreEnabled || runtimeDisabled) return@postDelayed
+            performRecyclerAutoLoadCheck(recycler, targets)
+        }, delayMs)
+    }
+
+    private fun performRecyclerAutoLoadCheck(
+        recycler: Any,
+        targets: PbCommentBottomRecyclerSymbols,
+    ) {
+        try {
+            val firstVisible = targets.firstVisibleMethod.invoke(recycler) as? Int ?: return
+            val lastVisible = targets.lastVisibleMethod.invoke(recycler) as? Int ?: return
+            val totalCount = getRecyclerAdapterItemCount(recycler, targets.getAdapterMethod) ?: return
+            val visibleCount = lastVisible - firstVisible + 1
+            maybeTriggerLoadMore(
+                list = recycler,
+                firstVisible = firstVisible,
+                visibleCount = visibleCount,
+                totalCount = totalCount,
+                bottomListenerField = targets.bottomListenerField,
+                bottomMethod = targets.bottomMethod,
+            )
+        } catch (t: Throwable) {
+            runtimeDisabled = true
+            XposedCompat.log("$TAG recycler check FAILED, disabled for this process: ${t.message}")
+            XposedCompat.log(t)
         }
     }
 
@@ -221,5 +285,10 @@ object PbCommentAutoLoadHook {
     private class TriggerState(
         var lastTriggeredTotalCount: Int = -1,
         var lastTriggeredAt: Long = 0L,
+    )
+
+    private class RecyclerCheckState(
+        var lastCheckedAt: Long = 0L,
+        var delayedCheckScheduled: Boolean = false,
     )
 }

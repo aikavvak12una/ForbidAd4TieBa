@@ -9,6 +9,7 @@ internal object CustomPostFilterMatcher {
     private const val THREAD_TYPE_NORMAL = "0"
     private const val THREAD_TYPE_SCORE = "75"
     private const val CARD_TYPE_NORMAL = "normal"
+    private const val CARD_TYPE_QUESTION = "question"
     private const val CARD_TYPE_NORMAL_SCORE = "normalScore"
     private const val SPECIAL_THREAD_TRUE = "1"
     private const val FORUM_LIKED_FALSE = "0"
@@ -25,21 +26,75 @@ internal object CustomPostFilterMatcher {
         val reason: String? = null,
     )
 
-    fun decideByTemplateKey(templateKey: String?): Decision {
-        if (!isEnabled() || templateKey.isNullOrBlank()) {
+    internal data class RuntimeRules(
+        val vote: Boolean,
+        val video: Boolean,
+        val reply: Boolean,
+        val hot: Boolean,
+        val goods: Boolean,
+        val gameBooking: Boolean,
+        val help: Boolean,
+        val score: Boolean,
+        val live: Boolean,
+        val recommendForum: Boolean,
+        val unfollowedForum: Boolean,
+        val forumKeyword: Boolean,
+        val forumKeywords: List<String>,
+        val modelScore: Boolean,
+        val modelScoreThresholds: List<ConfigManager.ModelScoreThreshold>,
+        val modelScoreAutoPercentiles: Map<String, Int>,
+    ) {
+        val needsFeedHeadParamsCheck: Boolean =
+            gameBooking ||
+                help ||
+                score ||
+                live ||
+                unfollowedForum ||
+                forumKeyword ||
+                modelScore
+    }
+
+    fun runtimeRules(): RuntimeRules? {
+        val settings = ConfigManager.snapshot()
+        if (!settings.isCustomPostFilterEnabled) return null
+        val forumKeyword =
+            settings.isPostForumKeywordFilterEnabled && settings.postForumKeywordList.isNotEmpty()
+        val rules = RuntimeRules(
+            vote = settings.isPostVoteFilterEnabled,
+            video = settings.isPostVideoFilterEnabled,
+            reply = settings.isPostReplyFilterEnabled,
+            hot = settings.isPostHotFilterEnabled,
+            goods = settings.isPostGoodsFilterEnabled,
+            gameBooking = settings.isPostGameBookingFilterEnabled,
+            help = settings.isPostHelpFilterEnabled,
+            score = settings.isPostScoreFilterEnabled,
+            live = settings.isPostLiveFilterEnabled,
+            recommendForum = settings.isPostRecommendForumFilterEnabled,
+            unfollowedForum = settings.isPostUnfollowedForumFilterEnabled,
+            forumKeyword = forumKeyword,
+            forumKeywords = settings.postForumKeywordList,
+            modelScore = settings.isPostModelScoreFilterEnabled,
+            modelScoreThresholds = settings.postModelScoreThresholds,
+            modelScoreAutoPercentiles = settings.postModelScoreAutoPercentiles,
+        )
+        return if (rules.hasAnyRule()) rules else null
+    }
+
+    fun decideByTemplateKey(templateKey: String?, rules: RuntimeRules): Decision {
+        if (templateKey.isNullOrBlank()) {
             return Decision(blocked = false)
         }
         val type = classifyByTemplateKey(templateKey) ?: return Decision(blocked = false)
         val enabled = when (type) {
-            PostType.VOTE -> ConfigManager.isPostVoteFilterEnabled
-            PostType.VIDEO -> ConfigManager.isPostVideoFilterEnabled
-            PostType.REPLY -> ConfigManager.isPostReplyFilterEnabled
-            PostType.HOT -> ConfigManager.isPostHotFilterEnabled
-            PostType.GOODS -> ConfigManager.isPostGoodsFilterEnabled
-            PostType.GAME_BOOKING -> ConfigManager.isPostGameBookingFilterEnabled
-            PostType.HELP -> ConfigManager.isPostHelpFilterEnabled
-            PostType.SCORE -> ConfigManager.isPostScoreFilterEnabled
-            PostType.RECOMMEND_FORUM -> ConfigManager.isPostRecommendForumFilterEnabled
+            PostType.VOTE -> rules.vote
+            PostType.VIDEO -> rules.video
+            PostType.REPLY -> rules.reply
+            PostType.HOT -> rules.hot
+            PostType.GOODS -> rules.goods
+            PostType.GAME_BOOKING -> rules.gameBooking
+            PostType.HELP -> rules.help
+            PostType.SCORE -> rules.score
+            PostType.RECOMMEND_FORUM -> rules.recommendForum
         }
         return if (enabled) {
             Decision(
@@ -52,29 +107,11 @@ internal object CustomPostFilterMatcher {
     }
 
     fun isEnabled(): Boolean {
-        if (!ConfigManager.isCustomPostFilterEnabled) return false
-        return ConfigManager.isPostVoteFilterEnabled ||
-            ConfigManager.isPostVideoFilterEnabled ||
-            ConfigManager.isPostReplyFilterEnabled ||
-            ConfigManager.isPostHotFilterEnabled ||
-            ConfigManager.isPostGoodsFilterEnabled ||
-            ConfigManager.isPostGameBookingFilterEnabled ||
-            ConfigManager.isPostHelpFilterEnabled ||
-            ConfigManager.isPostScoreFilterEnabled ||
-            ConfigManager.isPostRecommendForumFilterEnabled ||
-            ConfigManager.isPostLiveFilterEnabled ||
-            ConfigManager.isPostUnfollowedForumFilterEnabled ||
-            (ConfigManager.isPostForumKeywordFilterEnabled && ConfigManager.postForumKeywordList.isNotEmpty()) ||
-            ConfigManager.isPostModelScoreFilterEnabled
+        return runtimeRules() != null
     }
 
-    fun needsRecommendCardNestedDataCheck(): Boolean {
-        return ConfigManager.isCustomPostFilterEnabled &&
-            ConfigManager.isPostRecommendForumFilterEnabled
-    }
-
-    fun decideByRecommendCardTemplateKey(templateKey: String?): Decision {
-        if (!needsRecommendCardNestedDataCheck() || templateKey.isNullOrBlank()) {
+    fun decideByRecommendCardTemplateKey(templateKey: String?, rules: RuntimeRules): Decision {
+        if (!rules.recommendForum || templateKey.isNullOrBlank()) {
             return Decision(blocked = false)
         }
         if (templateKey !in RECOMMEND_FORUM_TEMPLATE_KEYS) {
@@ -86,22 +123,11 @@ internal object CustomPostFilterMatcher {
         )
     }
 
-    fun needsFeedHeadParamsCheck(): Boolean {
-        if (!ConfigManager.isCustomPostFilterEnabled) return false
-        return ConfigManager.isPostGameBookingFilterEnabled ||
-            ConfigManager.isPostHelpFilterEnabled ||
-            ConfigManager.isPostScoreFilterEnabled ||
-            ConfigManager.isPostLiveFilterEnabled ||
-            ConfigManager.isPostUnfollowedForumFilterEnabled ||
-            (ConfigManager.isPostForumKeywordFilterEnabled && ConfigManager.postForumKeywordList.isNotEmpty()) ||
-            ConfigManager.isPostModelScoreFilterEnabled
-    }
-
-    fun decideByFeedHeadParams(params: Map<*, *>?): Decision {
-        if (!needsFeedHeadParamsCheck() || params == null) {
+    fun decideByFeedHeadParams(params: Map<*, *>?, rules: RuntimeRules): Decision {
+        if (!rules.needsFeedHeadParamsCheck || params == null) {
             return Decision(blocked = false)
         }
-        if (ConfigManager.isPostGameBookingFilterEnabled) {
+        if (rules.gameBooking) {
             val buttonName = findPromotionButtonName(params)
             if (buttonName != null) {
                 return Decision(
@@ -117,7 +143,7 @@ internal object CustomPostFilterMatcher {
         val forumLiked = params.stringValue("forum_is_liked")
         val forumName = params.stringValue("forum_name")
         val pageFrom = params.stringValue("page_from")
-        if (ConfigManager.isPostLiveFilterEnabled &&
+        if (rules.live &&
             recomType == RECOM_TYPE_LIVE
         ) {
             return Decision(
@@ -125,9 +151,9 @@ internal object CustomPostFilterMatcher {
                 reason = "custom_post_type:live:recom_type=$recomType",
             )
         }
-        if (ConfigManager.isPostHelpFilterEnabled &&
+        if (rules.help &&
             threadType == THREAD_TYPE_NORMAL &&
-            cardType == CARD_TYPE_NORMAL &&
+            isHelpCardType(cardType) &&
             specialThread == SPECIAL_THREAD_TRUE
         ) {
             return Decision(
@@ -135,7 +161,7 @@ internal object CustomPostFilterMatcher {
                 reason = "custom_post_type:help:thread_type=$threadType,card_type=$cardType,is_special_thread=$specialThread",
             )
         }
-        if (ConfigManager.isPostScoreFilterEnabled &&
+        if (rules.score &&
             threadType == THREAD_TYPE_SCORE &&
             cardType == CARD_TYPE_NORMAL_SCORE
         ) {
@@ -144,7 +170,7 @@ internal object CustomPostFilterMatcher {
                 reason = "custom_post_type:score:thread_type=$threadType,card_type=$cardType",
             )
         }
-        if (ConfigManager.isPostUnfollowedForumFilterEnabled &&
+        if (rules.unfollowedForum &&
             forumLiked == FORUM_LIKED_FALSE &&
             pageFrom == PAGE_FROM_RECOMMEND
         ) {
@@ -153,12 +179,11 @@ internal object CustomPostFilterMatcher {
                 reason = "custom_post_type:unfollowed_forum:forum_is_liked=$forumLiked,page_from=$pageFrom",
             )
         }
-        if (ConfigManager.isPostForumKeywordFilterEnabled &&
-            ConfigManager.postForumKeywordList.isNotEmpty() &&
+        if (rules.forumKeyword &&
             !forumName.isNullOrBlank()
         ) {
             val forumLower = forumName.lowercase()
-            val hit = ConfigManager.postForumKeywordList.firstOrNull { keyword ->
+            val hit = rules.forumKeywords.firstOrNull { keyword ->
                 forumLower.contains(keyword)
             }
             if (hit != null) {
@@ -168,9 +193,13 @@ internal object CustomPostFilterMatcher {
                 )
             }
         }
-        val modelScoreDecision = decideByModelScoreThreshold(params)
+        val modelScoreDecision = decideByModelScoreThreshold(params, rules)
         if (modelScoreDecision.blocked) return modelScoreDecision
         return Decision(blocked = false)
+    }
+
+    private fun isHelpCardType(cardType: String?): Boolean {
+        return cardType == CARD_TYPE_NORMAL || cardType == CARD_TYPE_QUESTION
     }
 
     private fun findPromotionButtonName(params: Map<*, *>): String? {
@@ -181,18 +210,17 @@ internal object CustomPostFilterMatcher {
         }.getOrNull()
     }
 
-    private fun decideByModelScoreThreshold(params: Map<*, *>): Decision {
-        if (!ConfigManager.isPostModelScoreFilterEnabled) return Decision(blocked = false)
+    private fun decideByModelScoreThreshold(params: Map<*, *>, rules: RuntimeRules): Decision {
+        if (!rules.modelScore) return Decision(blocked = false)
         val rawExtra = params.stringValue("extra") ?: return Decision(blocked = false)
         val scores = CustomPostModelScoreCatalog.extractScores(rawExtra)
         if (scores.isEmpty()) return Decision(blocked = false)
         CustomPostModelScoreStats.record(scores)
-        val thresholds = ConfigManager.postModelScoreThresholds
+        val thresholds = rules.modelScoreThresholds
         if (thresholds.isEmpty()) return Decision(blocked = false)
-        val autoPercentiles = ConfigManager.postModelScoreAutoPercentiles
         for (threshold in thresholds) {
             if (
-                autoPercentiles.containsKey(threshold.key) &&
+                rules.modelScoreAutoPercentiles.containsKey(threshold.key) &&
                 !CustomPostModelScoreStats.isAutoPercentileThresholdReady(threshold.key)
             ) {
                 continue
@@ -206,6 +234,22 @@ internal object CustomPostFilterMatcher {
             }
         }
         return Decision(blocked = false)
+    }
+
+    private fun RuntimeRules.hasAnyRule(): Boolean {
+        return vote ||
+            video ||
+            reply ||
+            hot ||
+            goods ||
+            gameBooking ||
+            help ||
+            score ||
+            live ||
+            recommendForum ||
+            unfollowedForum ||
+            forumKeyword ||
+            modelScore
     }
 
     private fun classifyByTemplateKey(templateKey: String): PostType? {

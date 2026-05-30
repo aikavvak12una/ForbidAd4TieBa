@@ -26,6 +26,7 @@ data class SettingsSnapshot(
     val homeNativeGlassTextPaletteLight: String = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
     val homeNativeGlassTextPaletteDark: String = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
     val homeNativeGlassTintColor: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
+    val homeNativeGlassAutoTintColor: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
     val homeNativeGlassTintAlphaPercent: Int =
         ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
     val homeNativeGlassCardBlurPercent: Int =

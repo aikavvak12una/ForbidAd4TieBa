@@ -10,12 +10,17 @@ object StrategyAdHook {
     @Volatile private var staticHooked = false
     @Volatile private var symbolHooked = false
 
-    fun hookStatic(cl: ClassLoader) {
+    fun hookStatic(
+        cl: ClassLoader,
+        enableAccountData: Boolean,
+        enableSwitchManager: Boolean,
+    ) {
+        if (!enableAccountData && !enableSwitchManager) return
         if (!tryMarkStaticHooked()) return
 
         try {
-            hookAccountData(cl)
-            hookSwitchManager(cl)
+            if (enableAccountData) hookAccountData(cl)
+            if (enableSwitchManager) hookSwitchManager(cl)
             XposedCompat.log("[StrategyAdHook] static hooks dispatched")
         } catch (t: Throwable) {
             resetStaticHooked()

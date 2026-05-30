@@ -41,6 +41,7 @@ internal object CustomPostModelScoreStats {
 
     fun record(scores: Map<String, Double>) {
         if (scores.isEmpty()) return
+        if (isPersistenceDisabled()) return
         var added = false
         val postId = postIdGenerator.incrementAndGet()
         synchronized(lock) {
@@ -213,19 +214,20 @@ internal object CustomPostModelScoreStats {
     private fun scheduleFlush() {
         if (!flushScheduled.compareAndSet(false, true)) return
         executor.schedule({
+            var retryPending = true
             try {
-                flushPending()
+                retryPending = flushPending()
             } finally {
                 flushScheduled.set(false)
                 val hasMore = synchronized(lock) { pendingRecords.isNotEmpty() }
-                if (hasMore) scheduleFlush()
+                if (retryPending && hasMore) scheduleFlush()
             }
         }, FLUSH_DELAY_MS, TimeUnit.MILLISECONDS)
     }
 
-    private fun flushPending() {
+    private fun flushPending(): Boolean {
         val records = synchronized(lock) {
-            if (pendingRecords.isEmpty()) return
+            if (pendingRecords.isEmpty()) return true
             ArrayList(pendingRecords).also { pendingRecords.clear() }
         }
         val context = ConfigManager.getAppContext()
@@ -233,18 +235,19 @@ internal object CustomPostModelScoreStats {
             synchronized(lock) {
                 pendingRecords.addAll(0, records)
             }
-            return
+            return false
         }
         val file = File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME)
         synchronized(fileLock) {
             if (persistenceDisabled) {
                 // Drop buffered records after persistence is disabled.
-                return
+                synchronized(lock) { pendingRecords.clear() }
+                return false
             }
             val activeRecords = synchronized(lock) {
                 records.filter { it.generation == statsGeneration }
             }
-            if (activeRecords.isEmpty()) return
+            if (activeRecords.isEmpty()) return true
             val appended = runCatching {
                 file.parentFile?.mkdirs()
                 file.appendText(
@@ -262,8 +265,9 @@ internal object CustomPostModelScoreStats {
                                 "$persistenceFailureCount consecutive failures: ${t.message}"
                         )
                     }
-                // Drop buffered records after persistence is disabled.
-                return
+                    // Drop buffered records after persistence is disabled.
+                    synchronized(lock) { pendingRecords.clear() }
+                    return false
                 }
                 synchronized(lock) {
                     pendingRecords.addAll(0, activeRecords)
@@ -272,7 +276,7 @@ internal object CustomPostModelScoreStats {
                     "[CustomPostModelScoreStats] flush failed " +
                         "($persistenceFailureCount/$PERSISTENCE_FAILURE_LIMIT): ${t.message}"
                 )
-                return
+                return true
             }
             // Reset failure count after a successful write.
             persistenceFailureCount = 0
@@ -289,6 +293,11 @@ internal object CustomPostModelScoreStats {
                 }
             }
         }
+        return true
+    }
+
+    private fun isPersistenceDisabled(): Boolean {
+        return synchronized(fileLock) { persistenceDisabled }
     }
 
     /**

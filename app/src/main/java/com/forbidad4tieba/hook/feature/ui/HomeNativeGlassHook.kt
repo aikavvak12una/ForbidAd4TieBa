@@ -51,8 +51,8 @@ import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.concurrent.thread
 import kotlin.math.max
 
 object HomeNativeGlassHook {
@@ -98,6 +98,7 @@ object HomeNativeGlassHook {
     private val subPbNavigationBarApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbReplyBarInputApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbReplyTitleDynamicTintScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val pbDialogRoundLayoutDynamicTintScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbSortSwitchOriginalBackgroundColors = Collections.synchronizedMap(WeakHashMap<View, Int>())
     private val pbSortSwitchTintStates = Collections.synchronizedMap(WeakHashMap<View, PbSortSwitchTintState>())
     private val pbSortSwitchSelectedSlidePaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -137,6 +138,7 @@ object HomeNativeGlassHook {
         ConcurrentHashMap<String, Map<Int, Set<HomeNativeGlassTextRole>>>()
     private val readableTextSpanRoles = Collections.synchronizedMap(WeakHashMap<Any, HomeNativeGlassTextRole>())
     private val readableTextViewRoles = Collections.synchronizedMap(WeakHashMap<View, ReadableTextViewRoleState>())
+    private val readableTextApplyStates = Collections.synchronizedMap(WeakHashMap<View, ReadableTextApplyState>())
     private val emManagerFromViewFields = ConcurrentHashMap<Class<*>, Field>()
     private val emManagerFromViewMissingClasses =
         Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
@@ -151,8 +153,14 @@ object HomeNativeGlassHook {
     @Volatile private var cachedBackgroundBitmap: CachedBackgroundBitmap? = null
     @Volatile private var cachedBackgroundMetadataCheckedAt: Long = 0L
     private val backgroundDecodeKeys = Collections.synchronizedSet(mutableSetOf<String>())
+    private val backgroundDecodeExecutor by lazy {
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "tbhook-glass-bg-decode").apply {
+                isDaemon = true
+            }
+        }
+    }
     @Volatile private var runtimeTargets: RuntimeTargets? = null
-    @Volatile private var pbCommentDynamicTintColor: PbCommentDynamicTintColorState? = null
     @Volatile private var readableTextPaletteState: ReadableTextPaletteState? = null
     @Volatile private var pbSortSwitchBackgroundPaintField: Field? = null
     @Volatile private var pbSortSwitchSlidePathField: Field? = null
@@ -249,24 +257,14 @@ object HomeNativeGlassHook {
         KEEP,
     }
 
-    private data class PbCommentDynamicTintColorState(
-        val path: String,
-        val lastModified: Long,
-        val length: Long,
-        val color: Int?,
-    )
-
     private data class PbSortSwitchTintState(
         val sourcePath: String,
         val blurCachePath: String,
         val blurPercent: Int,
         val tintColor: Int,
+        val autoTintColor: Int,
         val tintAlphaPercent: Int,
         val darkMode: Boolean,
-        val sampledTintPath: String?,
-        val sampledTintLastModified: Long,
-        val sampledTintLength: Long,
-        val sampledTintColor: Int?,
         val backgroundColor: Int?,
         val selectedColor: Int?,
     )
@@ -281,6 +279,10 @@ object HomeNativeGlassHook {
     private data class ReadableTextViewRoleState(
         var normal: HomeNativeGlassTextRole? = null,
         var link: HomeNativeGlassTextRole? = null,
+    )
+
+    private data class ReadableTextApplyState(
+        val signature: Long,
     )
 
     private data class PbSubPbLayoutCardState(
@@ -1511,30 +1513,7 @@ object HomeNativeGlassHook {
     ) {
         if (depth > maxDepth) return
         if (view is TextView) {
-            val textRole = refineReadableTextRoleForTextView(
-                view,
-                readableTextRoleForView(view, linkText = false)
-                ?: readableTextRoleForPaletteColor(palette, view.currentTextColor)
-                ?: readableTextRoleForRawColor(view, view.currentTextColor, linkText = false),
-            )
-            if (textRole != null) {
-                val color = palette.colorFor(textRole)
-                if (view.currentTextColor != color) {
-                    view.setTextColor(color)
-                }
-            }
-            val linkDefaultColor = runCatching { view.linkTextColors.defaultColor }.getOrNull()
-            val linkRole = (readableTextRoleForView(view, linkText = true)
-                ?: linkDefaultColor?.let { readableTextRoleForPaletteColor(palette, it) }
-                ?: linkDefaultColor?.let { readableTextRoleForRawColor(view, it, linkText = true) })
-                ?.let { refineReadableTextRoleForView(view, it, linkText = true) }
-            if (linkRole != null) {
-                val color = palette.colorFor(linkRole)
-                if (linkDefaultColor != color) {
-                    view.setLinkTextColor(color)
-                }
-            }
-            applyReadableTextPaletteToTextSpans(view, palette)
+            applyReadableTextPaletteToTextViewIfNeeded(view, palette)
         }
         val group = view as? ViewGroup ?: return
         for (index in 0 until group.childCount) {
@@ -1545,6 +1524,102 @@ object HomeNativeGlassHook {
                 maxDepth,
             )
         }
+    }
+
+    private fun applyReadableTextPaletteToTextViewIfNeeded(
+        textView: TextView,
+        palette: HomeNativeGlassReadableTextPalette,
+    ) {
+        val beforeSignature = readableTextApplySignature(textView, palette)
+        if (readableTextApplyStates[textView]?.signature == beforeSignature) return
+        val textRole = refineReadableTextRoleForTextView(
+            textView,
+            readableTextRoleForView(textView, linkText = false)
+                ?: readableTextRoleForPaletteColor(palette, textView.currentTextColor)
+                ?: readableTextRoleForRawColor(textView, textView.currentTextColor, linkText = false),
+        )
+        if (textRole != null) {
+            val color = palette.colorFor(textRole)
+            if (textView.currentTextColor != color) {
+                textView.setTextColor(color)
+            }
+        }
+        val linkDefaultColor = runCatching { textView.linkTextColors.defaultColor }.getOrNull()
+        val linkRole = (readableTextRoleForView(textView, linkText = true)
+            ?: linkDefaultColor?.let { readableTextRoleForPaletteColor(palette, it) }
+            ?: linkDefaultColor?.let { readableTextRoleForRawColor(textView, it, linkText = true) })
+            ?.let { refineReadableTextRoleForView(textView, it, linkText = true) }
+        if (linkRole != null) {
+            val color = palette.colorFor(linkRole)
+            if (linkDefaultColor != color) {
+                textView.setLinkTextColor(color)
+            }
+        }
+        applyReadableTextPaletteToTextSpans(textView, palette)
+        readableTextApplyStates[textView] = ReadableTextApplyState(
+            signature = readableTextApplySignature(textView, palette),
+        )
+    }
+
+    private fun readableTextApplySignature(
+        textView: TextView,
+        palette: HomeNativeGlassReadableTextPalette,
+    ): Long {
+        var result = 17L
+        fun mix(value: Int) {
+            result = result * 31L + value.toLong()
+        }
+        mix(palette.hashCode())
+        mix(textView.currentTextColor)
+        mix(runCatching { textView.linkTextColors.defaultColor }.getOrDefault(0))
+        val roleState = readableTextViewRoles[textView]
+        mix(roleState?.normal?.ordinal ?: -1)
+        mix(roleState?.link?.ordinal ?: -1)
+        val text = textView.text
+        mix(System.identityHashCode(text))
+        mix(text.length)
+        mix(sampleReadableTextHash(text))
+        if (text is Spanned) {
+            val clickableSpans = text.getSpans(0, text.length, ClickableSpan::class.java)
+            mix(clickableSpans.size)
+            for (span in clickableSpans) {
+                mix(System.identityHashCode(span))
+                mix(text.getSpanStart(span))
+                mix(text.getSpanEnd(span))
+                mix(text.getSpanFlags(span))
+                if (span is ReadableTextClickableSpan) {
+                    mix(span.role.ordinal)
+                    mix(span.color)
+                }
+            }
+            val colorSpans = text.getSpans(0, text.length, ForegroundColorSpan::class.java)
+            mix(colorSpans.size)
+            for (span in colorSpans) {
+                mix(System.identityHashCode(span))
+                mix(text.getSpanStart(span))
+                mix(text.getSpanEnd(span))
+                mix(text.getSpanFlags(span))
+                mix(span.foregroundColor)
+                mix(readableTextSpanRoles[span]?.ordinal ?: -1)
+            }
+        }
+        mix(java.lang.Float.floatToIntBits(textView.textSize))
+        return result
+    }
+
+    private fun sampleReadableTextHash(text: CharSequence): Int {
+        val length = text.length
+        if (length <= 0) return 0
+        var result = length
+        val headCount = length.coerceAtMost(8)
+        for (index in 0 until headCount) {
+            result = result * 31 + text[index].code
+        }
+        val tailStart = (length - 8).coerceAtLeast(headCount)
+        for (index in tailStart until length) {
+            result = result * 31 + text[index].code
+        }
+        return result
     }
 
     private fun applyReadableTextPaletteToTextSpans(
@@ -2387,13 +2462,13 @@ object HomeNativeGlassHook {
         applySubPbNextPageMoreViewTransparencyIfNeeded(view)
         schedulePbReplyBarInputCapsuleDynamicTint(view)
         applySubPbInputBarFrameDynamicTintIfNeeded(view)
-        scheduleSubPbInputBarDynamicTint(view)
+        scheduleSubPbInputBarDynamicTint(view, reapplyAfterDelay = false)
     }
 
     private fun afterEmManagerPbBackgroundWrite(view: View) {
         schedulePbDialogRoundLayoutDynamicTint(view)
         schedulePbReplyBarInputCapsuleDynamicTint(view)
-        scheduleSubPbInputBarDynamicTint(view)
+        scheduleSubPbInputBarDynamicTint(view, reapplyAfterDelay = false)
     }
 
     private fun installPbSortSwitchButtonDynamicTintHooks(cl: ClassLoader): Int {
@@ -3834,8 +3909,6 @@ object HomeNativeGlassHook {
 
     private fun invalidatePbSubPbLayoutGlassFrame(subPbLayout: View) {
         subPbLayout.invalidate()
-        (subPbLayout.background as? CardGlassDrawable)?.invalidateSelf()
-        (subPbLayout.parent as? View)?.invalidate()
     }
 
     private fun schedulePbSubPbLayoutRefresh(subPbLayout: View) {
@@ -4219,14 +4292,14 @@ object HomeNativeGlassHook {
         if (shouldUpdateBackground) {
             setGlassBackground(subPbLayout, host, radius, PB_SUB_PB_TINT_ALPHA_EXTRA)
             pbSubPbLayoutCardStates[subPbLayout] = state
+            disablePbSubPbLayoutScrollCaches(subPbLayout)
+            applyPbSubPbLayoutShadow(subPbLayout, radius)
+            subPbLayout.invalidate()
         }
         clearForeground(subPbLayout)
         applyPbSubPbLayoutExtraHeight(subPbLayout)
-        disablePbSubPbLayoutScrollCaches(subPbLayout)
         clearPbSubPbLayoutContentBackgrounds(subPbLayout)
         applyKnownPbReadableTextPaletteToTree(subPbLayout, READABLE_TEXT_PB_ITEM_DEPTH)
-        applyPbSubPbLayoutShadow(subPbLayout, radius)
-        subPbLayout.invalidate()
     }
 
     private fun applyPbSubPbLayoutExtraHeight(subPbLayout: View) {
@@ -4778,7 +4851,7 @@ object HomeNativeGlassHook {
     }
 
     private fun setTransparentBackgroundIfNeeded(view: View) {
-        val background = view.background
+        val background = view.background ?: return
         if ((background as? ColorDrawable)?.color == Color.TRANSPARENT) return
         view.setBackgroundColor(Color.TRANSPARENT)
     }
@@ -4815,6 +4888,7 @@ object HomeNativeGlassHook {
     }
 
     private fun setBackgroundColorPreservingPadding(view: View, color: Int) {
+        if ((view.background as? ColorDrawable)?.color == color) return
         val left = view.paddingLeft
         val top = view.paddingTop
         val right = view.paddingRight
@@ -4922,32 +4996,41 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun scheduleSubPbInputBarDynamicTint(anchor: View) {
+    private fun scheduleSubPbInputBarDynamicTint(
+        anchor: View,
+        reapplyAfterDelay: Boolean = true,
+    ) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         val activity = findCachedActivityFromContext(anchor.context) ?: return
         if (!isSubPbReplyHostActivity(activity)) return
-        if (findSubPbViewRoot(anchor) == null) return
+        val root = findSubPbViewRoot(anchor) ?: return
 
         var shouldPost = false
         synchronized(subPbInputBarApplyScheduled) {
-            if (!subPbInputBarApplyScheduled.containsKey(anchor)) {
-                subPbInputBarApplyScheduled[anchor] = true
+            if (!subPbInputBarApplyScheduled.containsKey(root)) {
+                subPbInputBarApplyScheduled[root] = true
                 shouldPost = true
             }
         }
         if (!shouldPost) return
 
-        anchor.post {
-            synchronized(subPbInputBarApplyScheduled) {
-                subPbInputBarApplyScheduled.remove(anchor)
+        root.post {
+            applySubPbInputBarDynamicTintSafely(root)
+        }
+        root.postOnAnimation {
+            try {
+                applySubPbInputBarDynamicTintSafely(root)
+            } finally {
+                synchronized(subPbInputBarApplyScheduled) {
+                    subPbInputBarApplyScheduled.remove(root)
+                }
             }
-            applySubPbInputBarDynamicTintSafely(anchor)
         }
-        anchor.postOnAnimation {
-            applySubPbInputBarDynamicTintSafely(anchor)
+        if (!reapplyAfterDelay) {
+            return
         }
-        anchor.postDelayed({
-            applySubPbInputBarDynamicTintSafely(anchor)
+        root.postDelayed({
+            applySubPbInputBarDynamicTintSafely(root)
         }, SUB_PB_INPUT_BAR_REAPPLY_DELAY_MS)
     }
 
@@ -5291,16 +5374,16 @@ object HomeNativeGlassHook {
     }
 
     private fun resolvePbSortSwitchTintState(view: View): PbSortSwitchTintState? {
-        val sampledTint = pbCommentDynamicTintColor
         synchronized(pbSortSwitchTintStates) {
             pbSortSwitchTintStates[view]?.let { cached ->
-                if (cached.matchesPbSortSwitchTintState(sampledTint, view)) return cached
+                if (cached.matchesPbSortSwitchTintState(view)) return cached
             }
         }
         val sourcePath = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
         val blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
         val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
         val tintColor = ConfigManager.homeNativeGlassTintColor
+        val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
         val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
         val darkMode = usesDarkMaterial(view)
         val inCommentList = isPbSortSwitchInCommentList(view)
@@ -5324,12 +5407,9 @@ object HomeNativeGlassHook {
             blurCachePath = blurCachePath,
             blurPercent = blurPercent,
             tintColor = tintColor,
+            autoTintColor = autoTintColor,
             tintAlphaPercent = tintAlphaPercent,
             darkMode = darkMode,
-            sampledTintPath = sampledTint?.path,
-            sampledTintLastModified = sampledTint?.lastModified ?: 0L,
-            sampledTintLength = sampledTint?.length ?: 0L,
-            sampledTintColor = sampledTint?.color,
             backgroundColor = backgroundColor,
             selectedColor = selectedColor,
         )
@@ -5347,20 +5427,14 @@ object HomeNativeGlassHook {
         )
     }
 
-    private fun PbSortSwitchTintState.matchesPbSortSwitchTintState(
-        sampledTint: PbCommentDynamicTintColorState?,
-        view: View,
-    ): Boolean {
+    private fun PbSortSwitchTintState.matchesPbSortSwitchTintState(view: View): Boolean {
         return sourcePath == ConfigManager.homeNativeGlassBackgroundImagePath.trim() &&
             blurCachePath == ConfigManager.homeNativeGlassBlurCacheImagePath.trim() &&
             blurPercent == ConfigManager.homeNativeGlassCardBlurPercent &&
             tintColor == ConfigManager.homeNativeGlassTintColor &&
+            autoTintColor == ConfigManager.homeNativeGlassAutoTintColor &&
             tintAlphaPercent == ConfigManager.homeNativeGlassTintAlphaPercent &&
-            darkMode == usesDarkMaterial(view) &&
-            sampledTintPath == sampledTint?.path &&
-            sampledTintLastModified == (sampledTint?.lastModified ?: 0L) &&
-            sampledTintLength == (sampledTint?.length ?: 0L) &&
-            sampledTintColor == sampledTint?.color
+            darkMode == usesDarkMaterial(view)
     }
 
     private fun isPbSortSwitchDynamicTintHost(view: View): Boolean {
@@ -5399,24 +5473,28 @@ object HomeNativeGlassHook {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         val activity = findCachedActivityFromContext(anchor.context) ?: return
         if (!isPbActivity(activity)) return
+        val scheduleAnchor = findPbActivityContentHost(activity) ?: anchor
 
         var shouldPost = false
         synchronized(pbReplyBarInputApplyScheduled) {
-            if (!pbReplyBarInputApplyScheduled.containsKey(anchor)) {
-                pbReplyBarInputApplyScheduled[anchor] = true
+            if (!pbReplyBarInputApplyScheduled.containsKey(scheduleAnchor)) {
+                pbReplyBarInputApplyScheduled[scheduleAnchor] = true
                 shouldPost = true
             }
         }
         if (!shouldPost) return
 
-        anchor.post {
-            synchronized(pbReplyBarInputApplyScheduled) {
-                pbReplyBarInputApplyScheduled.remove(anchor)
-            }
-            applyPbReplyBarInputCapsuleDynamicTintSafely(anchor)
+        scheduleAnchor.post {
+            applyPbReplyBarInputCapsuleDynamicTintSafely(scheduleAnchor)
         }
-        anchor.postOnAnimation {
-            applyPbReplyBarInputCapsuleDynamicTintSafely(anchor)
+        scheduleAnchor.postOnAnimation {
+            try {
+                applyPbReplyBarInputCapsuleDynamicTintSafely(scheduleAnchor)
+            } finally {
+                synchronized(pbReplyBarInputApplyScheduled) {
+                    pbReplyBarInputApplyScheduled.remove(scheduleAnchor)
+                }
+            }
         }
     }
 
@@ -5590,8 +5668,20 @@ object HomeNativeGlassHook {
 
     private fun schedulePbDialogRoundLayoutDynamicTint(view: View) {
         if (view.javaClass.name != StableTiebaHookPoints.CORE_DIALOG_ROUND_LINEAR_LAYOUT_CLASS) return
-        view.post { applyPbDialogRoundLayoutDynamicTintSafely(view) }
-        view.postOnAnimation { applyPbDialogRoundLayoutDynamicTintSafely(view) }
+        var shouldPost = false
+        synchronized(pbDialogRoundLayoutDynamicTintScheduled) {
+            if (!pbDialogRoundLayoutDynamicTintScheduled.containsKey(view)) {
+                pbDialogRoundLayoutDynamicTintScheduled[view] = true
+                shouldPost = true
+            }
+        }
+        if (!shouldPost) return
+        view.postOnAnimation {
+            synchronized(pbDialogRoundLayoutDynamicTintScheduled) {
+                pbDialogRoundLayoutDynamicTintScheduled.remove(view)
+            }
+            applyPbDialogRoundLayoutDynamicTintSafely(view)
+        }
     }
 
     private fun applyPbDialogRoundLayoutDynamicTintSafely(view: View) {
@@ -5894,19 +5984,11 @@ object HomeNativeGlassHook {
 
     private fun resolvePbCommentDynamicTintColor(view: View): Int {
         val darkMode = usesDarkMaterial(view)
-        val dynamicColor = resolvePbCommentSampledTintColor(view)
-        val baseColor = if (dynamicColor != null) {
-            Color.rgb(
-                Color.red(dynamicColor),
-                Color.green(dynamicColor),
-                Color.blue(dynamicColor),
+        return resolveCachedPbCommentDynamicTintColorOrNull(darkMode)
+            ?: applyPbCommentReplyBoxOverlay(
+                if (darkMode) Color.rgb(0, 0, 0) else Color.rgb(255, 255, 255),
+                darkMode,
             )
-        } else if (darkMode) {
-            Color.rgb(0, 0, 0)
-        } else {
-            Color.rgb(255, 255, 255)
-        }
-        return applyPbCommentReplyBoxOverlay(baseColor, darkMode)
     }
 
     private fun resolveCachedPbCommentDynamicTintColor(view: View): Int {
@@ -5919,57 +6001,11 @@ object HomeNativeGlassHook {
     }
 
     private fun resolveCachedHomeTabDynamicTintColor(view: View): Int? {
-        val darkMode = usesDarkMaterial(view)
-        resolveCachedPbCommentDynamicTintColorOrNull(darkMode)?.let { return it }
-        val path = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
-        if (path.isEmpty()) return null
-        val entry = findCachedBackgroundEntry(
-            path,
-            PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE,
-            PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE,
-        ) ?: return null
-        val bitmap = entry.bitmap ?: return null
-        pbCommentDynamicTintColor?.let { cached ->
-            if (
-                cached.path == entry.path &&
-                cached.lastModified == entry.lastModified &&
-                cached.length == entry.length
-            ) {
-                return null
-            }
-        }
-        val color = extractPbCommentDynamicTintColor(bitmap)
-        pbCommentDynamicTintColor = PbCommentDynamicTintColorState(
-            path = entry.path,
-            lastModified = entry.lastModified,
-            length = entry.length,
-            color = color,
-        )
-        return color?.let {
-            applyPbCommentReplyBoxOverlay(
-                Color.rgb(Color.red(it), Color.green(it), Color.blue(it)),
-                darkMode,
-            )
-        }
+        return resolveCachedPbCommentDynamicTintColorOrNull(usesDarkMaterial(view))
     }
 
     private fun resolveCachedPbCommentDynamicTintColorOrNull(darkMode: Boolean): Int? {
-        val path = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
-        val entry = cachedBackgroundBitmap
-        val cached = pbCommentDynamicTintColor
-        val dynamicColor = configuredPbCommentTintColor() ?: if (path.isNotEmpty() && cached != null) {
-            when {
-                entry != null &&
-                    entry.path == path &&
-                    cached.path == entry.path &&
-                    cached.lastModified == entry.lastModified &&
-                    cached.length == entry.length -> cached.color
-                entry == null && cached.path == path -> cached.color
-                else -> null
-            }
-        } else {
-            null
-        }
+        val dynamicColor = configuredPbCommentTintColor()
         val baseColor = dynamicColor?.let {
             Color.rgb(Color.red(it), Color.green(it), Color.blue(it))
         } ?: return null
@@ -5995,122 +6031,15 @@ object HomeNativeGlassHook {
     }
 
     private fun configuredPbCommentTintColor(): Int? {
-        val color = ConfigManager.homeNativeGlassTintColor
+        normalizedPbCommentTintColor(ConfigManager.homeNativeGlassTintColor)?.let { return it }
+        return normalizedPbCommentTintColor(ConfigManager.homeNativeGlassAutoTintColor)
+    }
+
+    private fun normalizedPbCommentTintColor(color: Int): Int? {
         if (color == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR || Color.alpha(color) == 0) {
             return null
         }
         return Color.rgb(Color.red(color), Color.green(color), Color.blue(color))
-    }
-
-    private fun resolvePbCommentSampledTintColor(view: View? = null): Int? {
-        configuredPbCommentTintColor()?.let { return it }
-        val path = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
-        if (path.isEmpty()) return null
-        cachedBackgroundBitmap?.let { entry ->
-            pbCommentDynamicTintColor?.let { cached ->
-                if (
-                    entry.path == path &&
-                    cached.path == entry.path &&
-                    cached.lastModified == entry.lastModified &&
-                    cached.length == entry.length
-                ) {
-                    return cached.color
-                }
-            }
-        }
-        val entry = findCachedBackgroundEntry(
-            path,
-            PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE,
-            PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE,
-        )
-        if (entry == null) {
-            if (view != null) {
-                scheduleBackgroundDecode(
-                    path,
-                    PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE,
-                    PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE,
-                    view,
-                ) { target ->
-                    applyPbCommentDynamicTintColor(target, resolvePbCommentDynamicTintColor(target))
-                }
-            }
-            return null
-        }
-        pbCommentDynamicTintColor?.let { cached ->
-            if (
-                cached.path == entry.path &&
-                cached.lastModified == entry.lastModified &&
-                cached.length == entry.length
-            ) {
-                return cached.color
-            }
-        }
-        val color = entry.bitmap?.let(::extractPbCommentDynamicTintColor)
-        pbCommentDynamicTintColor = PbCommentDynamicTintColorState(
-            path = entry.path,
-            lastModified = entry.lastModified,
-            length = entry.length,
-            color = color,
-        )
-        return color
-    }
-
-    private fun extractPbCommentDynamicTintColor(bitmap: Bitmap): Int? {
-        val width = bitmap.width
-        val height = bitmap.height
-        if (width <= 0 || height <= 0) return null
-        val step = (max(width, height) / PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE).coerceAtLeast(1)
-        var weightedRed = 0L
-        var weightedGreen = 0L
-        var weightedBlue = 0L
-        var weightSum = 0L
-        var fallbackRed = 0L
-        var fallbackGreen = 0L
-        var fallbackBlue = 0L
-        var fallbackCount = 0L
-        var y = 0
-        while (y < height) {
-            var x = 0
-            while (x < width) {
-                val color = bitmap.getPixel(x, y)
-                val alpha = color ushr 24
-                if (alpha >= PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_PIXEL_ALPHA) {
-                    val red = color shr 16 and 0xFF
-                    val green = color shr 8 and 0xFF
-                    val blue = color and 0xFF
-                    fallbackRed += red.toLong()
-                    fallbackGreen += green.toLong()
-                    fallbackBlue += blue.toLong()
-                    fallbackCount++
-                    val maxChannel = max(red, max(green, blue))
-                    val minChannel = red.coerceAtMost(green).coerceAtMost(blue)
-                    val chroma = maxChannel - minChannel
-                    val luma = (red * 299 + green * 587 + blue * 114) / 1000
-                    if (luma in PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_LUMA..PB_COMMENT_DYNAMIC_TINT_COLOR_MAX_LUMA) {
-                        val weight = (alpha * (chroma + PB_COMMENT_DYNAMIC_TINT_COLOR_CHROMA_BIAS)).toLong()
-                        weightedRed += red.toLong() * weight
-                        weightedGreen += green.toLong() * weight
-                        weightedBlue += blue.toLong() * weight
-                        weightSum += weight
-                    }
-                }
-                x += step
-            }
-            y += step
-        }
-        if (weightSum > 0L) {
-            return Color.rgb(
-                (weightedRed / weightSum).toInt().coerceIn(0, 255),
-                (weightedGreen / weightSum).toInt().coerceIn(0, 255),
-                (weightedBlue / weightSum).toInt().coerceIn(0, 255),
-            )
-        }
-        if (fallbackCount <= 0L) return null
-        return Color.rgb(
-            (fallbackRed / fallbackCount).toInt().coerceIn(0, 255),
-            (fallbackGreen / fallbackCount).toInt().coerceIn(0, 255),
-            (fallbackBlue / fallbackCount).toInt().coerceIn(0, 255),
-        )
     }
 
     private fun isPbCommentItemFrame(view: View): Boolean {
@@ -6949,7 +6878,7 @@ object HomeNativeGlassHook {
 
     private fun clearNestedRecyclerBackgrounds(view: View) {
         if (isRecyclerView(view)) {
-            view.setBackgroundColor(Color.TRANSPARENT)
+            setTransparentBackgroundIfNeeded(view)
             clearElevation(view)
             return
         }
@@ -7057,16 +6986,27 @@ object HomeNativeGlassHook {
     }
 
     private fun clearNativePressVisual(view: View) {
-        view.isPressed = false
-        view.isDuplicateParentStateEnabled = false
-        view.jumpDrawablesToCurrentState()
+        var stateChanged = false
+        if (view.isPressed) {
+            view.isPressed = false
+            stateChanged = true
+        }
+        if (view.isDuplicateParentStateEnabled) {
+            view.isDuplicateParentStateEnabled = false
+            stateChanged = true
+        }
+        if (stateChanged) {
+            view.jumpDrawablesToCurrentState()
+        }
         clearForeground(view)
         clearElevation(view)
     }
 
     private fun clearForeground(view: View) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            view.foreground = null
+            if (view.foreground != null) {
+                view.foreground = null
+            }
         }
     }
 
@@ -7080,7 +7020,7 @@ object HomeNativeGlassHook {
     }
 
     private fun resolveCardMaterialTintColor(view: View): Int? {
-        return resolvePbCommentSampledTintColor(view)
+        return configuredPbCommentTintColor()
     }
 
     private fun createBackgroundDrawable(view: View, imagePath: String): Drawable? {
@@ -7118,11 +7058,17 @@ object HomeNativeGlassHook {
         val targetWidth = metrics.widthPixels.coerceAtLeast(1)
         val targetHeight = metrics.heightPixels.coerceAtLeast(1)
         if (findCachedBackgroundEntry(path, targetWidth, targetHeight) != null) return
+        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
         val key = "prewarm|" + backgroundDecodeKey(path, targetWidth, targetHeight)
         if (!backgroundDecodeKeys.add(key)) return
-        thread(name = "tbhook-glass-bg-prewarm", isDaemon = true) {
+        backgroundDecodeExecutor.execute {
             try {
-                decodeBackgroundEntry(path, targetWidth, targetHeight)
+                if (
+                    isBackgroundDecodeRequestCurrent(path, blurPercent) &&
+                    findCachedBackgroundEntry(path, targetWidth, targetHeight) == null
+                ) {
+                    decodeBackgroundEntry(path, targetWidth, targetHeight)
+                }
             } catch (t: Throwable) {
                 if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
                     XposedCompat.logD { "$TAG background image prewarm failed: ${t.message}" }
@@ -7161,7 +7107,6 @@ object HomeNativeGlassHook {
                 cached.blurCacheLength == blurCache.length
             if (!fresh) {
                 cachedBackgroundBitmap = null
-                pbCommentDynamicTintColor = null
             }
             fresh
         }
@@ -7189,12 +7134,18 @@ object HomeNativeGlassHook {
     ) {
         val trimmedPath = path.trim()
         if (trimmedPath.isEmpty()) return
+        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
         val key = backgroundDecodeKey(trimmedPath, targetWidth, targetHeight)
         if (!backgroundDecodeKeys.add(key)) return
         val anchorRef = WeakReference(anchor)
-        thread(name = "tbhook-glass-bg-decode", isDaemon = true) {
+        backgroundDecodeExecutor.execute {
             try {
-                decodeBackgroundEntry(trimmedPath, targetWidth, targetHeight)
+                if (
+                    isBackgroundDecodeRequestCurrent(trimmedPath, blurPercent) &&
+                    findCachedBackgroundEntry(trimmedPath, targetWidth, targetHeight) == null
+                ) {
+                    decodeBackgroundEntry(trimmedPath, targetWidth, targetHeight)
+                }
             } catch (t: Throwable) {
                 if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
                     XposedCompat.logD { "$TAG background image decode failed: ${t.message}" }
@@ -7202,12 +7153,22 @@ object HomeNativeGlassHook {
             } finally {
                 backgroundDecodeKeys.remove(key)
             }
-            val target = anchorRef.get() ?: return@thread
-            target.post {
-                onReady(target)
-                invalidateGlassBackgroundViews()
+            val target = anchorRef.get()
+            if (target != null) {
+                target.post {
+                    if (!target.isAttachedToWindow) return@post
+                    if (!isBackgroundDecodeRequestCurrent(trimmedPath, blurPercent)) return@post
+                    onReady(target)
+                    invalidateGlassBackgroundViews()
+                }
             }
         }
+    }
+
+    private fun isBackgroundDecodeRequestCurrent(path: String, blurPercent: Int): Boolean {
+        return ConfigManager.isHomeNativeGlassEnabled &&
+            ConfigManager.homeNativeGlassBackgroundImagePath.trim() == path &&
+            ConfigManager.homeNativeGlassCardBlurPercent == blurPercent
     }
 
     private fun backgroundDecodeKey(path: String, targetWidth: Int, targetHeight: Int): String {
@@ -7228,7 +7189,7 @@ object HomeNativeGlassHook {
         val lastModified = runCatching { file.lastModified() }.getOrDefault(0L)
         val length = runCatching { file.length() }.getOrDefault(0L)
         val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        val blurCachePath = resolveUsableBlurCachePath(trimmedPath, blurPercent)
+        val blurCachePath = resolveUsableBlurCachePath()
         val blurCacheFile = java.io.File(blurCachePath)
         val blurCacheLastModified = runCatching { blurCacheFile.lastModified() }.getOrDefault(0L)
         val blurCacheLength = runCatching { blurCacheFile.length() }.getOrDefault(0L)
@@ -7322,39 +7283,8 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun resolveUsableBlurCachePath(sourcePath: String, blurPercent: Int): String {
-        val configuredPath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
-        if (configuredPath.isNotBlank()) {
-            val configuredFile = java.io.File(configuredPath)
-            if (runCatching { configuredFile.isFile && configuredFile.length() > 0L }.getOrDefault(false)) {
-                return configuredPath
-            }
-        }
-
-        val context = ConfigManager.getAppContext() ?: return configuredPath
-        val rebuiltPath = runCatching {
-            HomeNativeGlassImageCache.ensureBlurCache(
-                context = context,
-                sourcePath = sourcePath,
-                blurPercent = blurPercent,
-                appleMaterial = true,
-            )
-        }.onFailure {
-            if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
-                XposedCompat.logD { "$TAG blur cache rebuild failed: ${it.message}" }
-            }
-        }.getOrDefault("")
-        if (rebuiltPath.isBlank()) return configuredPath
-        if (rebuiltPath != configuredPath) {
-            ConfigManager.homeNativeGlassBlurCacheImagePath = rebuiltPath
-            runCatching {
-                ConfigManager.getPrefs(context)
-                    .edit()
-                    .putString(ConfigManager.KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH, rebuiltPath)
-                    .apply()
-            }
-        }
-        return rebuiltPath
+    private fun resolveUsableBlurCachePath(): String {
+        return ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
     }
 
     private fun installScrollInvalidation(recycler: View) {
@@ -7505,9 +7435,15 @@ object HomeNativeGlassHook {
 
     private fun clearElevation(view: View) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            view.stateListAnimator = null
-            view.elevation = 0f
-            view.translationZ = 0f
+            if (view.stateListAnimator != null) {
+                view.stateListAnimator = null
+            }
+            if (view.elevation != 0f) {
+                view.elevation = 0f
+            }
+            if (view.translationZ != 0f) {
+                view.translationZ = 0f
+            }
         }
     }
 
@@ -7679,11 +7615,6 @@ object HomeNativeGlassHook {
     private const val PB_COMMENT_LIST_ITEM_CLEAR_DEPTH = 4
     private const val BACKGROUND_CACHE_SAMPLE_EDGE = 48
     private const val BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS = 1500L
-    private const val PB_COMMENT_DYNAMIC_TINT_COLOR_SAMPLE_EDGE = BACKGROUND_CACHE_SAMPLE_EDGE
-    private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_PIXEL_ALPHA = 32
-    private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MIN_LUMA = 24
-    private const val PB_COMMENT_DYNAMIC_TINT_COLOR_MAX_LUMA = 232
-    private const val PB_COMMENT_DYNAMIC_TINT_COLOR_CHROMA_BIAS = 32
     private const val GLASS_INVALIDATE_PARENT_SCAN_DEPTH = 24
     private const val PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA = 28
     private const val IMAGE_CONTAINER_RADIUS_CHILD_DEPTH = 3
@@ -7886,6 +7817,9 @@ object HomeNativeGlassHook {
             ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
         )
         private val materialIntensity = cardBlurPercent / 100f
+        private val materialOverlayRgb = materialOverlayColor(darkMaterial)
+        private val strokeWidthPx = (1.0f + materialIntensity * 0.8f).coerceIn(1f, 1.8f)
+        private val ambientShadowStrokeWidthPx = (2.2f + materialIntensity * 2.4f).coerceIn(2f, 4.6f)
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
             this.shader = this@CardGlassDrawable.shader
         }
@@ -8035,12 +7969,11 @@ object HomeNativeGlassHook {
         private fun drawMaterialOverlay(canvas: Canvas, darkMode: Boolean) {
             val overlayAlpha = overlayAlpha(darkMode)
             if (overlayAlpha <= 0) return
-            val overlayColor = materialOverlayColor(darkMode)
             overlayPaint.color = Color.argb(
                 overlayAlpha,
-                Color.red(overlayColor),
-                Color.green(overlayColor),
-                Color.blue(overlayColor),
+                Color.red(materialOverlayRgb),
+                Color.green(materialOverlayRgb),
+                Color.blue(materialOverlayRgb),
             )
             canvas.drawRoundRect(rect, radius, radius, overlayPaint)
         }
@@ -8055,7 +7988,7 @@ object HomeNativeGlassHook {
         private fun drawAmbientShadow(canvas: Canvas) {
             val alpha = materialAlpha(APPLE_AMBIENT_SHADOW_ALPHA)
             if (alpha <= 0) return
-            val strokeWidth = (2.2f + materialIntensity * 2.4f).coerceIn(2f, 4.6f)
+            val strokeWidth = ambientShadowStrokeWidthPx
             insetRect.set(rect)
             val inset = strokeWidth * 0.5f
             insetRect.inset(inset, inset)
@@ -8156,7 +8089,7 @@ object HomeNativeGlassHook {
         }
 
         private fun strokeWidth(): Float {
-            return (1.0f + materialIntensity * 0.8f).coerceIn(1f, 1.8f)
+            return strokeWidthPx
         }
 
         private fun softShadowShader(alpha: Int): LinearGradient {

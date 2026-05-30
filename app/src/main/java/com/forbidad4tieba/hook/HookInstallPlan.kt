@@ -80,6 +80,123 @@ internal object HookInstaller {
 }
 
 internal object HookInstallPlanner {
+    private class PlanContext(
+        val processName: String,
+        val symbols: HookSymbols,
+    ) {
+        val isMain: Boolean = processName == Constants.TARGET_PACKAGE
+        val isImageViewerRemote: Boolean = processName == "${Constants.TARGET_PACKAGE}:remote"
+        val isImageViewerProcess: Boolean = isMain || isImageViewerRemote
+        private val featureSymbols: HookFeatureSymbols = symbols.toFeatureSymbols()
+        private val statusMap: Map<String, HookFeatureStatus> = HookSymbolResolver.featureStatusMap(symbols)
+
+        private fun available(featureKey: String): Boolean {
+            return statusMap[featureKey]?.isSupported() == true
+        }
+
+        fun canInstallFreeCopy(): Boolean {
+            return isMain &&
+                available(HookFeatureKey.FREE_COPY) &&
+                featureSymbols.freeCopy.isComplete()
+        }
+
+        fun canInstallImageViewerNativeShare(): Boolean {
+            return isImageViewerProcess && featureSymbols.share.isNativeShareComplete()
+        }
+
+        fun canInstallDefaultOriginalImage(settings: SettingsSnapshot): Boolean {
+            return isImageViewerProcess &&
+                settings.isDefaultOriginalImageEnabled &&
+                available(HookFeatureKey.DEFAULT_ORIGINAL_IMAGE) &&
+                featureSymbols.originalImage.isComplete()
+        }
+
+        fun canInstallImageViewerAiJumpButton(settings: SettingsSnapshot): Boolean {
+            return isImageViewerRemote &&
+                settings.isAiComponentsDisabled &&
+                available(HookFeatureKey.DISABLE_AI_COMPONENTS) &&
+                featureSymbols.performance.isImageViewerJumpButtonComplete()
+        }
+
+        fun canInstallAdBlockHooks(settings: SettingsSnapshot): Boolean {
+            return settings.isAdBlockEnabled && available(HookFeatureKey.BLOCK_AD)
+        }
+
+        fun canInstallCustomPostFilter(settings: SettingsSnapshot): Boolean {
+            return settings.isCustomPostFilterEnabled && available(HookFeatureKey.ENABLE_CUSTOM_POST_FILTER)
+        }
+
+        fun canInstallHomeNativeGlass(settings: SettingsSnapshot): Boolean {
+            return settings.isHomeNativeGlassEnabled &&
+                settings.homeNativeGlassBackgroundImagePath.isNotBlank() &&
+                available(HookFeatureKey.HOME_NATIVE_GLASS)
+        }
+
+        fun canInstallHomeTopTabs(settings: SettingsSnapshot): Boolean {
+            return settings.isHomeTopTabsCustomEnabled &&
+                available(HookFeatureKey.SIMPLIFY_HOME_TOP_TABS) &&
+                featureSymbols.homeTab.isComplete()
+        }
+
+        fun canInstallBottomTabs(settings: SettingsSnapshot): Boolean {
+            return settings.isBottomTabsCustomEnabled &&
+                available(HookFeatureKey.SIMPLIFY_BOTTOM_TABS) &&
+                featureSymbols.mainTab.isComplete()
+        }
+
+        fun canInstallEnterForumWeb(settings: SettingsSnapshot): Boolean {
+            return settings.isEnterForumWebFilterEnabled && available(HookFeatureKey.FILTER_ENTER_FORUM_WEB)
+        }
+
+        fun canInstallSystemBrowser(settings: SettingsSnapshot): Boolean {
+            return settings.isOpenWebLinkInSystemBrowserEnabled &&
+                available(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
+        }
+
+        fun canInstallForumNativeTopShift(): Boolean = available(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
+
+        fun canInstallAutoRefresh(settings: SettingsSnapshot): Boolean {
+            return settings.isAutoRefreshDisabled && available(HookFeatureKey.DISABLE_AUTO_REFRESH)
+        }
+
+        fun canInstallAutoLoadMore(settings: SettingsSnapshot): Boolean {
+            return settings.isAutoLoadMoreEnabled && available(HookFeatureKey.AUTO_LOAD_MORE)
+        }
+
+        fun canInstallPbScrollCoalesce(settings: SettingsSnapshot): Boolean {
+            return settings.isPbScrollCoalesceEnabled && available(HookFeatureKey.ENABLE_PB_SCROLL_COALESCE)
+        }
+
+        fun canInstallPbGestureFontScale(): Boolean = available(HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE)
+
+        fun canInstallPbLikeAutoReply(settings: SettingsSnapshot): Boolean {
+            return settings.isPbLikeAutoReplyEnabled &&
+                settings.pbLikeAutoReplyText.isNotBlank() &&
+                available(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
+        }
+
+        fun canInstallMainAiComponents(settings: SettingsSnapshot): Boolean {
+            return isMain &&
+                settings.isAiComponentsDisabled &&
+                available(HookFeatureKey.DISABLE_AI_COMPONENTS) &&
+                featureSymbols.performance.isComplete()
+        }
+
+        fun canInstallDefaultNotifyTab(settings: SettingsSnapshot): Boolean {
+            return settings.isDefaultNotifyTabEnabled && available(HookFeatureKey.DEFAULT_NOTIFY_TAB)
+        }
+
+        fun canInstallPrivateReadReceipt(settings: SettingsSnapshot): Boolean {
+            return settings.isPrivateReadReceiptInvisibleEnabled &&
+                available(HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE)
+        }
+
+        fun canInstallShareTrackingCleaner(settings: SettingsSnapshot): Boolean {
+            return settings.isCleanShareTrackingParamsEnabled &&
+                available(HookFeatureKey.CLEAN_SHARE_TRACKING_PARAMS)
+        }
+    }
+
     fun shouldHandleProcess(processName: String): Boolean {
         return shouldInstallAttachHook(processName) || !staticPlan(processName).isEmpty()
     }
@@ -92,7 +209,6 @@ internal object HookInstallPlanner {
         val entries = ArrayList<HookInstallEntry>()
         val isMain = isMainProcess(processName)
         if (isMain) {
-            entries += HookInstallEntry("StrategyAdHook.static") { cl -> StrategyAdHook.hookStatic(cl) }
             entries += HookInstallEntry("PbBottomEnterBarHook") { cl -> PbBottomEnterBarHook.hook(cl) }
             entries += HookInstallEntry("FollowedTabWebHook") { cl -> FollowedTabWebHook.hook(cl) }
             entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl) }
@@ -107,45 +223,52 @@ internal object HookInstallPlanner {
         settings: SettingsSnapshot,
     ): HookInstallPlan {
         val entries = ArrayList<HookInstallEntry>()
-        val isMain = isMainProcess(processName)
-        val isImageViewerProcess = isMain || isImageViewerRemoteProcess(processName)
-        val statusMap = HookSymbolResolver.featureStatusMap(symbols)
-        val featureSymbols = symbols.toFeatureSymbols()
+        val context = PlanContext(processName, symbols)
 
-        if (isMain && available(statusMap, HookFeatureKey.FREE_COPY) && featureSymbols.freeCopy.isComplete()) {
+        if (context.canInstallFreeCopy()) {
             entries += HookInstallEntry("FreeCopyHook") { cl ->
                 HookSymbolResolver.resolveFreeCopyPopupSymbols(cl, symbols)?.let { targets ->
                     FreeCopyHook.hook(targets)
                 }
             }
         }
-        if (isMain && settings.isHomeTabAutoHideEnabled) {
+        if (context.isMain) {
+            val enableSwitchManager =
+                settings.isAdBlockEnabled ||
+                    settings.isAdSdkComponentsDisabled ||
+                    settings.isApsarasScheduleDisabled
+            if (enableSwitchManager) {
+                entries += HookInstallEntry("StrategyAdHook.static") { cl ->
+                    StrategyAdHook.hookStatic(
+                        cl = cl,
+                        enableAccountData = settings.isAdBlockEnabled,
+                        enableSwitchManager = enableSwitchManager,
+                    )
+                }
+            }
+        }
+        if (context.isMain && settings.isHomeTabAutoHideEnabled) {
             entries += HookInstallEntry("HomeTopTabAutoHideHook") { cl -> HomeTopTabAutoHideHook.hook(cl) }
             entries += HookInstallEntry("HomeBottomTabAutoHideHook") { cl -> HomeBottomTabAutoHideHook.hook(cl) }
         }
-        if (isMain) {
+        if (context.isMain) {
             entries += performanceEntries(settings)
         }
-        if (isImageViewerProcess && featureSymbols.share.isNativeShareComplete()) {
+        if (context.canInstallImageViewerNativeShare()) {
             entries += HookInstallEntry("ImageViewerNativeShareHook") { cl ->
                 HookSymbolResolver.resolveImageViewerNativeShareSymbols(cl, symbols)?.let { targets ->
                     ImageViewerNativeShareHook.hook(targets)
                 }
             }
         }
-        if (
-            isImageViewerProcess &&
-            settings.isDefaultOriginalImageEnabled &&
-            available(statusMap, HookFeatureKey.DEFAULT_ORIGINAL_IMAGE) &&
-            featureSymbols.originalImage.isComplete()
-        ) {
+        if (context.canInstallDefaultOriginalImage(settings)) {
             entries += HookInstallEntry("DefaultOriginalImageHook") { cl ->
                 HookSymbolResolver.resolveDefaultOriginalImageSymbols(cl, symbols)?.let { targets ->
                     DefaultOriginalImageHook.hook(targets)
                 }
             }
         }
-        if (isImageViewerProcess) {
+        if (context.isImageViewerProcess) {
             entries += HookInstallEntry("ImageViewerSwipeEnterForumBlockHook") { cl ->
                 ImageViewerSwipeEnterForumBlockHook.hook(cl)
             }
@@ -158,15 +281,10 @@ internal object HookInstallPlanner {
         symbols: HookSymbols,
         settings: SettingsSnapshot,
     ): HookInstallPlan {
-        val statusMap = HookSymbolResolver.featureStatusMap(symbols)
-        val featureSymbols = symbols.toFeatureSymbols()
+        val context = PlanContext(processName, symbols)
         val entries = ArrayList<HookInstallEntry>()
-        if (isImageViewerRemoteProcess(processName)) {
-            if (
-                settings.isAiComponentsDisabled &&
-                available(statusMap, HookFeatureKey.DISABLE_AI_COMPONENTS) &&
-                featureSymbols.performance.isImageViewerJumpButtonComplete()
-            ) {
+        if (context.isImageViewerRemote) {
+            if (context.canInstallImageViewerAiJumpButton(settings)) {
                 entries += HookInstallEntry("AiComponentDisableHook.imageViewerJumpButton") { cl ->
                     HookSymbolResolver.resolveAiImageViewerJumpButtonSymbols(cl, symbols)?.let { targets ->
                         AiComponentDisableHook.hookImageViewerJumpButton(targets)
@@ -175,17 +293,13 @@ internal object HookInstallPlanner {
             }
             return HookInstallPlan(processName, "symbol", entries)
         }
-        if (!isMainProcess(processName)) {
+        if (!context.isMain) {
             return HookInstallPlan(processName, "symbol", emptyList())
         }
 
-        val adBlockHooks = settings.isAdBlockEnabled && available(statusMap, HookFeatureKey.BLOCK_AD)
-        val customPostFilterHook =
-            settings.isCustomPostFilterEnabled && available(statusMap, HookFeatureKey.ENABLE_CUSTOM_POST_FILTER)
-        val homeNativeGlassHook =
-            settings.isHomeNativeGlassEnabled &&
-                settings.homeNativeGlassBackgroundImagePath.isNotBlank() &&
-                available(statusMap, HookFeatureKey.HOME_NATIVE_GLASS)
+        val adBlockHooks = context.canInstallAdBlockHooks(settings)
+        val customPostFilterHook = context.canInstallCustomPostFilter(settings)
+        val homeNativeGlassHook = context.canInstallHomeNativeGlass(settings)
         val feedListHook = adBlockHooks || customPostFilterHook
 
         entries += HookInstallEntry("SettingsMenuHook") { cl -> SettingsMenuHook.hook(cl, symbols) }
@@ -229,11 +343,7 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (
-            settings.isHomeTopTabsCustomEnabled &&
-            available(statusMap, HookFeatureKey.SIMPLIFY_HOME_TOP_TABS) &&
-            featureSymbols.homeTab.isComplete()
-        ) {
+        if (context.canInstallHomeTopTabs(settings)) {
             val selection = ConfigManager.normalizeHomeTopTabSelection(
                 ConfigManager.HomeTopTabSelection(
                     materialEnabled = settings.isHomeTopTabMaterialEnabled,
@@ -248,11 +358,7 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (
-            settings.isBottomTabsCustomEnabled &&
-            available(statusMap, HookFeatureKey.SIMPLIFY_BOTTOM_TABS) &&
-            featureSymbols.mainTab.isComplete()
-        ) {
+        if (context.canInstallBottomTabs(settings)) {
             val selection = ConfigManager.normalizeBottomTabSelection(
                 ConfigManager.BottomTabSelection(
                     homeEnabled = settings.isBottomTabHomeEnabled,
@@ -280,17 +386,14 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (settings.isEnterForumWebFilterEnabled && available(statusMap, HookFeatureKey.FILTER_ENTER_FORUM_WEB)) {
+        if (context.canInstallEnterForumWeb(settings)) {
             entries += HookInstallEntry("EnterForumWebHook") { cl ->
                 HookSymbolResolver.resolveEnterForumWebSymbols(cl, symbols)?.let { targets ->
                     EnterForumWebHook.hook(targets)
                 }
             }
         }
-        if (
-            settings.isOpenWebLinkInSystemBrowserEnabled &&
-            available(statusMap, HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
-        ) {
+        if (context.canInstallSystemBrowser(settings)) {
             entries += HookInstallEntry("PlainUrlDirectBrowserHook") { cl ->
                 val targets = PlainUrlDirectBrowserHook.RuntimeTargets(
                     spanTargets = HookSymbolResolver.resolvePlainUrlClickableSpanSymbols(cl, symbols),
@@ -303,7 +406,7 @@ internal object HookInstallPlanner {
                 PlainUrlDirectBrowserHook.hook(targets)
             }
         }
-        if (available(statusMap, HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)) {
+        if (context.canInstallForumNativeTopShift()) {
             entries += HookInstallEntry("ForumNativeTopShiftBlockHook") { cl ->
                 HookSymbolResolver.resolveForumNativeTopShiftSymbols(cl, symbols)?.let { targets ->
                     ForumNativeTopShiftBlockHook.hook(targets)
@@ -313,14 +416,14 @@ internal object HookInstallPlanner {
         if (homeNativeGlassHook) {
             entries += HookInstallEntry("HomeNativeGlassHook") { cl -> HomeNativeGlassHook.hook(cl, symbols) }
         }
-        if (settings.isAutoRefreshDisabled && available(statusMap, HookFeatureKey.DISABLE_AUTO_REFRESH)) {
+        if (context.canInstallAutoRefresh(settings)) {
             entries += HookInstallEntry("AutoRefreshHook") { cl ->
                 HookSymbolResolver.resolveAutoRefreshSymbols(cl, symbols)?.let { targets ->
                     AutoRefreshHook.hook(targets)
                 }
             }
         }
-        if (settings.isAutoLoadMoreEnabled && available(statusMap, HookFeatureKey.AUTO_LOAD_MORE)) {
+        if (context.canInstallAutoLoadMore(settings)) {
             entries += HookInstallEntry("AutoLoadMoreHook") { cl ->
                 HookSymbolResolver.resolveAutoLoadMoreSymbols(cl, symbols)?.let { targets ->
                     AutoLoadMoreHook.hook(targets)
@@ -332,56 +435,42 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (
-            settings.isPbScrollCoalesceEnabled &&
-            available(statusMap, HookFeatureKey.ENABLE_PB_SCROLL_COALESCE)
-        ) {
+        if (context.canInstallPbScrollCoalesce(settings)) {
             entries += HookInstallEntry("PbScrollCoalesceHook") { cl ->
                 HookSymbolResolver.resolvePbScrollCoalesceSymbols(cl, symbols)?.let { targets ->
                     PbScrollCoalesceHook.hook(targets)
                 }
             }
         }
-        if (available(statusMap, HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE)) {
+        if (context.canInstallPbGestureFontScale()) {
             entries += HookInstallEntry("PbDisableGestureFontScaleHook") { cl ->
                 HookSymbolResolver.resolvePbGestureScaleSymbols(cl, symbols)?.let { targets ->
                     PbDisableGestureFontScaleHook.hook(targets)
                 }
             }
         }
-        if (
-            settings.isPbLikeAutoReplyEnabled &&
-            settings.pbLikeAutoReplyText.isNotBlank() &&
-            available(statusMap, HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
-        ) {
+        if (context.canInstallPbLikeAutoReply(settings)) {
             entries += HookInstallEntry("PbLikeAutoReplyHook") { cl ->
                 HookSymbolResolver.resolvePbLikeAutoReplySymbols(cl, symbols)?.let { targets ->
                     PbLikeAutoReplyHook.hook(targets, settings.pbLikeAutoReplyText)
                 }
             }
         }
-        if (
-            settings.isAiComponentsDisabled &&
-            available(statusMap, HookFeatureKey.DISABLE_AI_COMPONENTS) &&
-            featureSymbols.performance.isComplete()
-        ) {
+        if (context.canInstallMainAiComponents(settings)) {
             entries += HookInstallEntry("AiComponentDisableHook") { cl ->
                 HookSymbolResolver.resolveAiComponentSymbols(cl, symbols)?.let { targets ->
                     AiComponentDisableHook.hook(targets)
                 }
             }
         }
-        if (settings.isDefaultNotifyTabEnabled && available(statusMap, HookFeatureKey.DEFAULT_NOTIFY_TAB)) {
+        if (context.canInstallDefaultNotifyTab(settings)) {
             entries += HookInstallEntry("MsgTabDefaultNotifyHook") { cl ->
                 HookSymbolResolver.resolveMsgTabDefaultNotifySymbols(cl, symbols)?.let { targets ->
                     MsgTabDefaultNotifyHook.hook(targets)
                 }
             }
         }
-        if (
-            settings.isPrivateReadReceiptInvisibleEnabled &&
-            available(statusMap, HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE)
-        ) {
+        if (context.canInstallPrivateReadReceipt(settings)) {
             entries += HookInstallEntry("PrivateReadReceiptBlockHook") { cl ->
                 HookSymbolResolver.resolvePrivateReadReceiptSymbols(cl, symbols)?.let { targets ->
                     PrivateReadReceiptBlockHook.hook(targets)
@@ -400,10 +489,7 @@ internal object HookInstallPlanner {
             }
         }
 
-        if (
-            settings.isCleanShareTrackingParamsEnabled &&
-            available(statusMap, HookFeatureKey.CLEAN_SHARE_TRACKING_PARAMS)
-        ) {
+        if (context.canInstallShareTrackingCleaner(settings)) {
             entries += HookInstallEntry("ShareTrackingParamCleanerHook") { cl ->
                 HookSymbolResolver.resolveShareTrackingParamCleanerSymbols(cl, symbols)?.let { targets ->
                     ShareTrackingParamCleanerHook.hook(targets)
@@ -456,10 +542,6 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("HostPerformanceConfigHook") { cl -> HostPerformanceConfigHook.hook(cl) }
         }
         return entries
-    }
-
-    private fun available(statusMap: Map<String, HookFeatureStatus>, featureKey: String): Boolean {
-        return statusMap[featureKey]?.isSupported() == true
     }
 
     private fun isMainProcess(processName: String): Boolean {

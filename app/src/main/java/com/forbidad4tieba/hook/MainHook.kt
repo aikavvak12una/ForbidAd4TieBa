@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook
 
 import android.content.Context
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.TitanRuntimeState
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -120,14 +121,19 @@ class MainHook : XposedModule() {
                         XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
                         val isMainProcess = processName == Constants.TARGET_PACKAGE
                         if (isMainProcess) {
+                            val startupSettings = ConfigManager.snapshot()
                             runStartupTask("apply cached runtime controls") {
                                 AboutInfoManager.applyCachedRuntimeControlsIfNeeded(app)
                             }
-                            runStartupTask("trim model score stats") {
-                                CustomPostModelScoreStats.trimToPostLimitAsync()
-                            }
-                            runStartupTask("apply auto percentile thresholds") {
-                                CustomPostModelScoreStats.applyAutoPercentileThresholdsAsync()
+                            if (shouldMaintainCustomPostModelScoreStats(startupSettings)) {
+                                runStartupTask("trim model score stats") {
+                                    CustomPostModelScoreStats.trimToPostLimitAsync(
+                                        startupSettings.postModelScoreStatsPostLimit,
+                                    )
+                                }
+                                runStartupTask("apply auto percentile thresholds") {
+                                    CustomPostModelScoreStats.applyAutoPercentileThresholdsAsync()
+                                }
                             }
                             runStartupTask("apply component disable") {
                                 ComponentDisableHook.apply(app)
@@ -308,6 +314,10 @@ class MainHook : XposedModule() {
             sTitanStartupLogged = true
         }
         TitanRuntimeState.logStartup(context, cl)
+    }
+
+    private fun shouldMaintainCustomPostModelScoreStats(settings: SettingsSnapshot): Boolean {
+        return settings.isCustomPostFilterEnabled && settings.isPostModelScoreFilterEnabled
     }
 
     private fun runStartupTask(name: String, block: () -> Unit) {

@@ -80,7 +80,7 @@ object CustomPostCardBlockHook {
         runtimeFilter: RuntimeFilter,
         methodName: String,
     ): List<*> {
-        if (!CustomPostFilterMatcher.isEnabled()) return list
+        val rules = CustomPostFilterMatcher.runtimeRules() ?: return list
         val filtered = filterItems(
             list = list,
             dataListFieldName = runtimeFilter.dataListFieldName,
@@ -89,6 +89,7 @@ object CustomPostCardBlockHook {
             headParamsFieldName = runtimeFilter.headParamsFieldName,
             recommendNestedDataMethodName = runtimeFilter.recommendNestedDataMethodName,
             recommendNestedDataListFieldName = runtimeFilter.recommendNestedDataListFieldName,
+            rules = rules,
         )
         if (filtered !== list) {
             XposedCompat.logD {
@@ -106,6 +107,7 @@ object CustomPostCardBlockHook {
         headParamsFieldName: String?,
         recommendNestedDataMethodName: String?,
         recommendNestedDataListFieldName: String?,
+        rules: CustomPostFilterMatcher.RuntimeRules,
     ): List<*> {
         val size = list.size
         var out: ArrayList<Any?>? = null
@@ -113,7 +115,6 @@ object CustomPostCardBlockHook {
         val noKey = Any()
         val payloadCache = IdentityHashMap<Any, Any?>(size.coerceAtLeast(8))
         val keyCache = IdentityHashMap<Any, Any?>(size.coerceAtLeast(8))
-        val recommendKeyRuleEnabled = CustomPostFilterMatcher.needsRecommendCardNestedDataCheck()
 
         fun getPayloadCached(target: Any?): Any? {
             if (target == null) return null
@@ -140,9 +141,9 @@ object CustomPostCardBlockHook {
         for (i in 0 until size) {
             val item = list[i]
             val key = getKeyCached(item)
-            val templateKeyDecision = CustomPostFilterMatcher.decideByTemplateKey(key)
-            val recommendKeyDecision = if (!templateKeyDecision.blocked && recommendKeyRuleEnabled) {
-                CustomPostFilterMatcher.decideByRecommendCardTemplateKey(key)
+            val templateKeyDecision = CustomPostFilterMatcher.decideByTemplateKey(key, rules)
+            val recommendKeyDecision = if (!templateKeyDecision.blocked && rules.recommendForum) {
+                CustomPostFilterMatcher.decideByRecommendCardTemplateKey(key, rules)
             } else {
                 CustomPostFilterMatcher.Decision(false)
             }
@@ -160,6 +161,7 @@ object CustomPostCardBlockHook {
                         headParamsFieldName = headParamsFieldName,
                         recommendNestedDataMethodName = recommendNestedDataMethodName,
                         recommendNestedDataListFieldName = recommendNestedDataListFieldName,
+                        rules = rules,
                     )
                 } else {
                     CustomPostFilterMatcher.Decision(false)
@@ -188,17 +190,19 @@ object CustomPostCardBlockHook {
         headParamsFieldName: String?,
         recommendNestedDataMethodName: String?,
         recommendNestedDataListFieldName: String?,
+        rules: CustomPostFilterMatcher.RuntimeRules,
     ): CustomPostFilterMatcher.Decision {
         val list = extractCardDataList(cardData, dataListFieldName)
             ?: extractRecommendNestedDataList(
                 cardData = cardData,
                 methodName = recommendNestedDataMethodName,
                 fieldName = recommendNestedDataListFieldName,
+                enabled = rules.recommendForum,
             )
             ?: return CustomPostFilterMatcher.Decision(false)
         if (list.isEmpty()) return CustomPostFilterMatcher.Decision(false)
 
-        val headRuleEnabled = CustomPostFilterMatcher.needsFeedHeadParamsCheck()
+        val headRuleEnabled = rules.needsFeedHeadParamsCheck
         var headParams: Map<*, *>? = null
         val keyCache = IdentityHashMap<Any, Any?>(list.size.coerceAtLeast(8))
         val noKey = Any()
@@ -220,11 +224,11 @@ object CustomPostCardBlockHook {
             ) {
                 headParams = extractFeedHeadParams(item, headParamsFieldName)
             }
-            val decision = CustomPostFilterMatcher.decideByTemplateKey(key)
+            val decision = CustomPostFilterMatcher.decideByTemplateKey(key, rules)
             if (decision.blocked) return decision
         }
         if (headRuleEnabled) {
-            val headDecision = CustomPostFilterMatcher.decideByFeedHeadParams(headParams)
+            val headDecision = CustomPostFilterMatcher.decideByFeedHeadParams(headParams, rules)
             if (headDecision.blocked) return headDecision
         }
         return CustomPostFilterMatcher.Decision(false)
@@ -263,8 +267,9 @@ object CustomPostCardBlockHook {
         cardData: Any,
         methodName: String?,
         fieldName: String?,
+        enabled: Boolean,
     ): List<Any?>? {
-        if (!CustomPostFilterMatcher.needsRecommendCardNestedDataCheck()) return null
+        if (!enabled) return null
         if (methodName.isNullOrBlank() || fieldName.isNullOrBlank()) return null
         val method = resolveRecommendNestedDataMethod(cardData.javaClass, methodName) ?: return null
         val nestedData = runCatching { method.invoke(cardData) }.getOrNull() ?: return null

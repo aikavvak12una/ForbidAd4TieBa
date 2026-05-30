@@ -4,7 +4,6 @@ import com.forbidad4tieba.hook.symbol.model.FeedAdSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Method
-import java.util.IdentityHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 object FeedAdHook {
@@ -88,27 +87,13 @@ object FeedAdHook {
         val size = list.size
         var out: ArrayList<Any?>? = null
 
-        val noKey = Any()
-        val templateKeyCache = IdentityHashMap<Any, Any?>(size.coerceAtLeast(8))
-
-        fun getTemplateKeyCached(target: Any?): String? {
-            if (target == null) return null
-            val cached = templateKeyCache[target]
-            if (cached != null || templateKeyCache.containsKey(target)) {
-                return if (cached === noKey) null else cached as String
-            }
-            val resolved = getTemplateKey(target, templateKeyMethodName)
-            templateKeyCache[target] = resolved ?: noKey
-            return resolved
-        }
-
         for (i in 0 until size) {
             val item = list[i]
             var block = false
             var blockReason: String? = null
 
             if (item != null) {
-                val key = getTemplateKeyCached(item)
+                val key = getTemplateKey(item, templateKeyMethodName)
                 if (key != null && shouldBlock(key)) {
                     block = true
                     blockReason = "template_key:$key"

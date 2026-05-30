@@ -25,6 +25,8 @@ object ConfigManager {
     const val DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH = ""
     const val DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE = ""
     const val DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR = 0
+    const val DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR = 0
+    const val DEFAULT_HOME_NATIVE_GLASS_TINT_PALETTE = ""
     const val DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 54
     const val DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 72
     const val DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP = 24
@@ -74,6 +76,8 @@ object ConfigManager {
     const val KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_LIGHT = "home_native_glass_text_palette_light"
     const val KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_DARK = "home_native_glass_text_palette_dark"
     const val KEY_HOME_NATIVE_GLASS_TINT_COLOR = "home_native_glass_tint_color"
+    const val KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR = "home_native_glass_auto_tint_color"
+    const val KEY_HOME_NATIVE_GLASS_TINT_PALETTE = "home_native_glass_tint_palette"
     const val KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = "home_native_glass_tint_alpha_percent"
     const val KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = "home_native_glass_card_blur_percent"
     const val KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP = "home_native_glass_card_radius_dp"
@@ -162,6 +166,7 @@ object ConfigManager {
     val homeNativeGlassTextPaletteLight: String get() = settingsSnapshot.homeNativeGlassTextPaletteLight
     val homeNativeGlassTextPaletteDark: String get() = settingsSnapshot.homeNativeGlassTextPaletteDark
     val homeNativeGlassTintColor: Int get() = settingsSnapshot.homeNativeGlassTintColor
+    val homeNativeGlassAutoTintColor: Int get() = settingsSnapshot.homeNativeGlassAutoTintColor
     val homeNativeGlassTintAlphaPercent: Int get() = settingsSnapshot.homeNativeGlassTintAlphaPercent
     val homeNativeGlassCardBlurPercent: Int get() = settingsSnapshot.homeNativeGlassCardBlurPercent
     val homeNativeGlassCardRadiusDp: Int get() = settingsSnapshot.homeNativeGlassCardRadiusDp
@@ -462,6 +467,7 @@ object ConfigManager {
             homeNativeGlassTextPaletteLight = homeNativeGlassStyle.textPaletteLight,
             homeNativeGlassTextPaletteDark = homeNativeGlassStyle.textPaletteDark,
             homeNativeGlassTintColor = homeNativeGlassStyle.tintColor,
+            homeNativeGlassAutoTintColor = homeNativeGlassStyle.autoTintColor,
             homeNativeGlassTintAlphaPercent = homeNativeGlassStyle.tintAlphaPercent,
             homeNativeGlassCardBlurPercent = homeNativeGlassStyle.cardBlurPercent,
             homeNativeGlassCardRadiusDp = homeNativeGlassStyle.cardRadiusDp,
@@ -579,6 +585,7 @@ object ConfigManager {
         val textPaletteLight: String,
         val textPaletteDark: String,
         val tintColor: Int,
+        val autoTintColor: Int,
         val tintAlphaPercent: Int,
         val cardBlurPercent: Int,
         val cardRadiusDp: Int,
@@ -608,6 +615,12 @@ object ConfigManager {
                 p.getInt(
                     KEY_HOME_NATIVE_GLASS_TINT_COLOR,
                     DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
+                )
+            ),
+            autoTintColor = normalizeHomeNativeGlassTintColor(
+                p.getInt(
+                    KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
+                    DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
                 )
             ),
             tintAlphaPercent = p.getInt(

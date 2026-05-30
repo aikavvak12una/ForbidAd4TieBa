@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -199,17 +200,27 @@ object PbBottomEnterBarHook {
     }
 
     private fun squashBannerView(view: View) {
+        val wasSquashed = isSquashedZeroLayout(view)
         ViewExt.squashViewRemembering(view)
-        installPersistentSquash(view)
-        view.post { ViewExt.squashViewRemembering(view) }
-        view.postOnAnimation { ViewExt.squashViewRemembering(view) }
+        val listenerInstalled = installPersistentSquash(view)
+        if (!listenerInstalled && wasSquashed) return
+        view.post {
+            if (!isSquashedZeroLayout(view)) {
+                ViewExt.squashViewRemembering(view)
+            }
+        }
+        view.postOnAnimation {
+            if (!isSquashedZeroLayout(view)) {
+                ViewExt.squashViewRemembering(view)
+            }
+        }
     }
 
-    private fun installPersistentSquash(view: View) {
-        if (view.getTag(ViewExt.TAG_EMPTY_VIEW) == true) return
+    private fun installPersistentSquash(view: View): Boolean {
+        if (view.getTag(ViewExt.TAG_EMPTY_VIEW) == true) return false
         view.setTag(ViewExt.TAG_EMPTY_VIEW, true)
         val preDrawListener = ViewTreeObserver.OnPreDrawListener {
-            if (view.visibility != View.GONE || view.width > 0 || view.height > 0) {
+            if (!isSquashedZeroLayout(view)) {
                 ViewExt.squashViewRemembering(view)
             }
             true
@@ -231,7 +242,7 @@ object PbBottomEnterBarHook {
             }
         })
         view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-            if (v.visibility != View.GONE || v.width > 0 || v.height > 0) {
+            if (!isSquashedZeroLayout(v)) {
                 ViewExt.squashViewRemembering(v)
             }
         }
@@ -240,5 +251,17 @@ object PbBottomEnterBarHook {
                 view.viewTreeObserver.addOnPreDrawListener(preDrawListener)
             }
         }
+        return true
+    }
+
+    private fun isSquashedZeroLayout(view: View): Boolean {
+        if (view.visibility != View.GONE || view.minimumHeight != 0 || view.minimumWidth != 0) return false
+        if (view.paddingLeft != 0 || view.paddingTop != 0 || view.paddingRight != 0 || view.paddingBottom != 0) {
+            return false
+        }
+        val lp = view.layoutParams ?: return true
+        if (lp.width != 0 || lp.height != 0) return false
+        return lp !is ViewGroup.MarginLayoutParams ||
+            (lp.leftMargin == 0 && lp.topMargin == 0 && lp.rightMargin == 0 && lp.bottomMargin == 0)
     }
 }
