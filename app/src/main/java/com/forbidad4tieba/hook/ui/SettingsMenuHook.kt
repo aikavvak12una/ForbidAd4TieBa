@@ -1461,6 +1461,7 @@ object SettingsMenuHook {
         val ui = Handler(Looper.getMainLooper())
         var finished = false
         var progressSteps = 0
+        var displayedProgress = 0f
         val scanLogLines = Collections.synchronizedList(mutableListOf<String>())
         var scanExceptionLine: String? = null
         var scanPulseRunnable: Runnable? = null
@@ -1517,6 +1518,15 @@ object SettingsMenuHook {
         }
         root.addView(progressBar)
 
+        fun setScanProgress(target: Float, animated: Boolean = true) {
+            val clamped = target.coerceIn(0f, 1f)
+            ui.post {
+                if (clamped <= displayedProgress + 0.0005f) return@post
+                displayedProgress = clamped
+                progressBar.setProgress(clamped, animated)
+            }
+        }
+
         fun stopScanPulse() {
             scanPulseRunnable?.let { ui.removeCallbacks(it) }
             scanPulseRunnable = null
@@ -1529,6 +1539,16 @@ object SettingsMenuHook {
             scanPulseRunnable = object : Runnable {
                 override fun run() {
                     if (finished) return
+                    val drift = when {
+                        displayedProgress < 0.18f -> 0.025f
+                        displayedProgress < 0.60f -> 0.015f
+                        else -> 0.006f
+                    }
+                    val nextProgress = (displayedProgress + drift).coerceAtMost(0.88f)
+                    if (nextProgress > displayedProgress + 0.0005f) {
+                        displayedProgress = nextProgress
+                        progressBar.setProgress(nextProgress)
+                    }
                     UiStyle.animateProgressRunningPulse(progressBar)
                     ui.postDelayed(this, SCAN_RUNNING_PULSE_INTERVAL_MS)
                 }
@@ -1660,7 +1680,7 @@ object SettingsMenuHook {
                 hint.contains("durationMs") -> 1.0f
                 else -> (0.15f + progressSteps * 0.008f).coerceAtMost(0.92f)
             }
-            ui.post { progressBar.setProgress(ratio) }
+            setScanProgress(ratio)
         }
 
         fun updateStatus(text: String) {
@@ -1668,6 +1688,7 @@ object SettingsMenuHook {
         }
 
         updateStatus(UiText.Settings.SCAN_PREPARING)
+        displayedProgress = 0.02f
         progressBar.setProgress(0.02f, animated = false)
         startScanPulse()
 
@@ -1729,6 +1750,7 @@ object SettingsMenuHook {
                 ui.post {
                     finished = true
                     stopScanPulse()
+                    displayedProgress = 1f
                     progressBar.setProgress(1f)
                     UiStyle.animateProgressComplete(progressBar)
                     dialog.setCancelable(true)
@@ -2162,8 +2184,18 @@ object SettingsMenuHook {
                 ),
             ).apply {
                 path = path.trim()
-                paletteColors = extractHomeNativeGlassTintPalette(path)
-                defaultTintColor = extractHomeNativeGlassDefaultTintColor(path)
+                paletteColors = parseHomeNativeGlassTintPalette(
+                    prefs.getString(
+                        ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_PALETTE,
+                        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_PALETTE,
+                    )
+                )
+                defaultTintColor = homeNativeGlassCachedAutoTintColorOrNull(
+                    prefs.getInt(
+                        ConfigManager.KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
+                        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
+                    )
+                )
                 if (path.isBlank()) {
                     tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
                 } else if (
@@ -2298,6 +2330,19 @@ object SettingsMenuHook {
                     } else {
                         ConfigManager.normalizeHomeNativeGlassTintColor(backgroundImageState.tintColor)
                     }
+                    val autoTintColor = if (backgroundImagePath.isBlank()) {
+                        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR
+                    } else {
+                        ConfigManager.normalizeHomeNativeGlassTintColor(
+                            backgroundImageState.defaultTintColor
+                                ?: ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR
+                        )
+                    }
+                    val tintPalette = if (backgroundImagePath.isBlank()) {
+                        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_PALETTE
+                    } else {
+                        serializeHomeNativeGlassTintPalette(backgroundImageState.paletteColors)
+                    }
                     val blurPercent = blurSeekBar.progress + ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
                     val tintAlphaPercent = tintAlphaSeekBar.progress +
                         ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
@@ -2350,6 +2395,14 @@ object SettingsMenuHook {
                                 .putInt(
                                     ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_COLOR,
                                     tintColor,
+                                )
+                                .putInt(
+                                    ConfigManager.KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
+                                    autoTintColor,
+                                )
+                                .putString(
+                                    ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_PALETTE,
+                                    tintPalette,
                                 )
                                 .putInt(
                                     ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
@@ -2487,6 +2540,30 @@ object SettingsMenuHook {
         )
         root.addView(controlRow)
         return root to display
+    }
+
+    private fun parseHomeNativeGlassTintPalette(raw: String?): List<Int> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split(',', ';', '\n')
+            .asSequence()
+            .mapNotNull { it.trim().toIntOrNull() }
+            .map { ConfigManager.normalizeHomeNativeGlassTintColor(it) }
+            .filter { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR }
+            .distinct()
+            .toList()
+    }
+
+    private fun serializeHomeNativeGlassTintPalette(colors: List<Int>): String {
+        return colors.asSequence()
+            .map { ConfigManager.normalizeHomeNativeGlassTintColor(it) }
+            .filter { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR }
+            .distinct()
+            .joinToString(",") { it.toString() }
+    }
+
+    private fun homeNativeGlassCachedAutoTintColorOrNull(color: Int): Int? {
+        val normalized = ConfigManager.normalizeHomeNativeGlassTintColor(color)
+        return normalized.takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
     }
 
     private fun createHomeNativeGlassTintColorRow(

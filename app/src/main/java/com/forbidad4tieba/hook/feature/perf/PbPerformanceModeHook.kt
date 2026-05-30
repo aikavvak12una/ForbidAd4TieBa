@@ -3,24 +3,16 @@ package com.forbidad4tieba.hook.feature.perf
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
-import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 
 object PbPerformanceModeHook {
-    private data class BooleanOverride(
-        val methodName: String,
-        val value: Boolean,
-        val enabled: () -> Boolean,
-    )
-
     private val booleanOverrides = arrayOf(
-        BooleanOverride("hybridPbOpt", true) { ConfigManager.isPbPerformanceModeEnabled },
-        BooleanOverride("imagePerfLog", false) { ConfigManager.isPbPerformanceModeEnabled },
-        BooleanOverride("isEnableHybridScrollLog", false) { ConfigManager.isPbPerformanceModeEnabled },
-        BooleanOverride("isPbCommentFunAdABTest", false) {
+        UbsAbTestBooleanOverride("hybridPbOpt", true) { ConfigManager.isPbPerformanceModeEnabled },
+        UbsAbTestBooleanOverride("imagePerfLog", false) { ConfigManager.isPbPerformanceModeEnabled },
+        UbsAbTestBooleanOverride("isEnableHybridScrollLog", false) { ConfigManager.isPbPerformanceModeEnabled },
+        UbsAbTestBooleanOverride("isPbCommentFunAdABTest", false) {
             ConfigManager.isPbPerformanceModeEnabled || ConfigManager.isAdBlockEnabled
         },
-        BooleanOverride("isPbPageBannerFunAdSdkTest", false) {
+        UbsAbTestBooleanOverride("isPbPageBannerFunAdSdkTest", false) {
             ConfigManager.isPbPerformanceModeEnabled || ConfigManager.isAdBlockEnabled
         },
     )
@@ -28,7 +20,7 @@ object PbPerformanceModeHook {
     @Volatile private var hooked = false
 
     fun hook(cl: ClassLoader) {
-        if (!hasEnabledOverride()) {
+        if (!UbsAbTestBooleanOverrideInstaller.hasEnabledOverride(booleanOverrides)) {
             XposedCompat.log("[PbPerformanceModeHook] skipped: config disabled")
             return
         }
@@ -36,7 +28,7 @@ object PbPerformanceModeHook {
         if (!tryMarkHooked()) return
 
         try {
-            val helperClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.UBS_AB_TEST_HELPER_CLASS, cl)
+            val helperClass = UbsAbTestBooleanOverrideInstaller.findHelperClass(cl)
             if (helperClass == null) {
                 resetHooked()
                 XposedCompat.log("[PbPerformanceModeHook] class NOT FOUND: ${StableTiebaHookPoints.UBS_AB_TEST_HELPER_CLASS}")
@@ -46,21 +38,15 @@ object PbPerformanceModeHook {
             var installed = 0
             for (entry in booleanOverrides) {
                 val methodName = entry.methodName
-                val method = XposedCompat.findMethodOrNull(helperClass, methodName)
-                if (method == null || !isStaticNoArgBoolean(method)) {
+                val method = UbsAbTestBooleanOverrideInstaller.findMethod(helperClass, methodName)
+                if (method == null) {
                     XposedCompat.log(
                         "[PbPerformanceModeHook] method NOT FOUND or invalid: " +
-                            "${StableTiebaHookPoints.UBS_AB_TEST_HELPER_CLASS}.$methodName()",
+                            UbsAbTestBooleanOverrideInstaller.methodSignature(methodName),
                     )
                     continue
                 }
-                method.isAccessible = true
-                mod.hook(method).intercept { chain ->
-                    if (entry.enabled()) {
-                        return@intercept entry.value
-                    }
-                    chain.proceed()
-                }
+                UbsAbTestBooleanOverrideInstaller.install(mod, method, entry)
                 installed++
             }
 
@@ -75,16 +61,6 @@ object PbPerformanceModeHook {
             XposedCompat.log("[PbPerformanceModeHook] install FAILED: ${t.message}")
             XposedCompat.log(t)
         }
-    }
-
-    private fun hasEnabledOverride(): Boolean {
-        return booleanOverrides.any { it.enabled() }
-    }
-
-    private fun isStaticNoArgBoolean(method: Method): Boolean {
-        return Modifier.isStatic(method.modifiers) &&
-            method.parameterTypes.isEmpty() &&
-            (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == Boolean::class.javaObjectType)
     }
 
     private fun tryMarkHooked(): Boolean {

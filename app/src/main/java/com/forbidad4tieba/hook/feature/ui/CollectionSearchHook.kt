@@ -56,7 +56,7 @@ object CollectionSearchHook {
         var fetchToken: Int = 0,
         var fullDataReady: Boolean = false,
         var diskRestoreTried: Boolean = false,
-        var fullLoadAutoTriggered: Boolean = false,
+        var fullLoadRequested: Boolean = false,
         var syncFooterVisible: Boolean = false,
     )
 
@@ -215,7 +215,7 @@ object CollectionSearchHook {
                 val state = ensureFragmentState(fragment)
                 dbg(
                     "onResume fullReady=${state.fullDataReady} fetchingAll=${state.fetchingAll} " +
-                        "auto=${state.fullLoadAutoTriggered} active=${state.active} query='${state.query}'"
+                        "requested=${state.fullLoadRequested} active=${state.active} query='${state.query}'"
                 )
                 if (!state.fullDataReady) {
                     val hitMemory = restoreFullDataFromCache(fragment, state)
@@ -223,12 +223,6 @@ object CollectionSearchHook {
                         state.diskRestoreTried = true
                         restoreFullDataFromDisk(fragment, state)
                     }
-                }
-                syncFirstPageEveryEntry(fragment)
-                if (!state.fullDataReady && !state.fullLoadAutoTriggered && !state.fetchingAll && !hasFullCache(fragment)) {
-                    state.fullLoadAutoTriggered = true
-                    dbg("onResume trigger full sync (no trusted full cache)")
-                    startFetchAllCollections(fragment, userVisible = false)
                 }
                 result
             }
@@ -594,7 +588,7 @@ object CollectionSearchHook {
             dbg("triggerManualFullSync ignored: fetchingAll=true")
             return
         }
-        state.fullLoadAutoTriggered = true
+        state.fullLoadRequested = true
         dbg("triggerManualFullSync start userVisible=$userVisible")
         startFetchAllCollections(fragment, userVisible = userVisible)
     }
@@ -647,6 +641,7 @@ object CollectionSearchHook {
                         }
                     }
                 } else {
+                    current.fullLoadRequested = false
                     if (userVisible) showToast(host, UiText.CollectionSearch.TOAST_SYNC_FAILED)
                 }
             }
@@ -1336,7 +1331,7 @@ object CollectionSearchHook {
         val state = ensureFragmentState(fragment)
         dbg(
             "applyFilter query='${query.trim()}' fromUser=$fromUser " +
-                "fullReady=${state.fullDataReady} fetchingAll=${state.fetchingAll} auto=${state.fullLoadAutoTriggered}"
+                "fullReady=${state.fullDataReady} fetchingAll=${state.fetchingAll} requested=${state.fullLoadRequested}"
         )
         if (!state.fullDataReady) {
             val hitMemory = restoreFullDataFromCache(fragment, state)
@@ -1345,8 +1340,8 @@ object CollectionSearchHook {
                 restoreFullDataFromDisk(fragment, state)
             }
         }
-        if (!state.fullDataReady && !state.fetchingAll && !state.fullLoadAutoTriggered && !hasFullCache(fragment)) {
-            state.fullLoadAutoTriggered = true
+        if (!state.fullDataReady && !state.fetchingAll && !state.fullLoadRequested && !hasFullCache(fragment)) {
+            state.fullLoadRequested = true
             startFetchAllCollections(fragment, userVisible = fromUser)
             if (fromUser) {
                 showToast(findHostActivity(fragment), UiText.CollectionSearch.TOAST_NO_CACHE)
