@@ -1,7 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import android.view.View
-import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -15,7 +14,6 @@ object PbBottomEnterBarHook {
         val mod = XposedCompat.module ?: return
         val installed = installBottomEnterBarHook(mod, cl) +
             installHotTopicGuideHook(mod, cl) +
-            installCardForumHeadLayoutHook(mod, cl) +
             installPbEnterFrsAnimationTipHook(mod, cl)
         if (installed == 0) {
             XposedCompat.log("[PbBottomEnterBarHook] hook target NOT FOUND")
@@ -116,38 +114,6 @@ object PbBottomEnterBarHook {
         }
     }
 
-    private fun installCardForumHeadLayoutHook(mod: XposedModule, cl: ClassLoader): Int {
-        try {
-            val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.CARD_FORUM_HEAD_LAYOUT_CLASS, cl)
-            if (clazz == null) {
-                XposedCompat.logD("[PbBottomEnterBarHook] class NOT FOUND: ${StableTiebaHookPoints.CARD_FORUM_HEAD_LAYOUT_CLASS}")
-                return 0
-            }
-
-            var installed = 0
-            for (method in clazz.declaredMethods) {
-                if (!isCardForumHeadRefreshMethod(method)) continue
-                method.isAccessible = true
-                mod.hook(method).intercept { chain ->
-                    val result = chain.proceed()
-                    (chain.thisObject as? View)?.let { view ->
-                        if (shouldSquashCardForumHeadLayout(view)) {
-                            squashCardForumHeadLayout(view)
-                        }
-                    }
-                    result
-                }
-                installed++
-            }
-
-            return installed
-        } catch (t: Throwable) {
-            XposedCompat.log("[PbBottomEnterBarHook] card forum head hook FAILED: ${t.message}")
-            XposedCompat.log(t)
-            return 0
-        }
-    }
-
     private fun installPbEnterFrsAnimationTipHook(mod: XposedModule, cl: ClassLoader): Int {
         try {
             val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.TB_ANIMATION_TIP_VIEW_CLASS, cl)
@@ -175,21 +141,6 @@ object PbBottomEnterBarHook {
             XposedCompat.log(t)
             return 0
         }
-    }
-
-    private fun isCardForumHeadRefreshMethod(method: Method): Boolean {
-        if (Modifier.isStatic(method.modifiers)) return false
-        if (method.returnType != Void.TYPE) return false
-        val params = method.parameterTypes
-        return method.name == "setData" && params.size == 1
-    }
-
-    private fun shouldSquashCardForumHeadLayout(view: View): Boolean {
-        if (view.javaClass.name != StableTiebaHookPoints.CARD_FORUM_HEAD_LAYOUT_CLASS) return false
-        val lp = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return false
-        return lp.width == ViewGroup.LayoutParams.MATCH_PARENT &&
-            lp.topMargin >= 0 &&
-            lp.bottomMargin > 0
     }
 
     private fun resolveHotTopicTotalViewMethod(clazz: Class<*>): Method? {
@@ -227,10 +178,6 @@ object PbBottomEnterBarHook {
     }
 
     private fun squashBottomEnterBar(view: View) {
-        squashBannerView(view)
-    }
-
-    private fun squashCardForumHeadLayout(view: View) {
         squashBannerView(view)
     }
 
