@@ -12,6 +12,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.symbol.model.HistorySearchSymbols
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -58,8 +59,16 @@ object HistorySearchHook {
     @Volatile
     private var sRuntimeTargets: HistorySearchSymbols? = null
 
-    private fun dbg(msg: String) {
-        XposedCompat.logD("[HistorySearchHook][dbg] $msg")
+    private inline fun dbg(message: () -> String) {
+        if (ConfigManager.shouldOutputDetailedLogs()) {
+            XposedCompat.logD("[HistorySearchHook][dbg] ${message()}")
+        }
+    }
+
+    private fun dbg(message: String) {
+        if (ConfigManager.shouldOutputDetailedLogs()) {
+            XposedCompat.logD("[HistorySearchHook][dbg] $message")
+        }
     }
 
     internal fun hook(symbols: HistorySearchSymbols) {
@@ -148,7 +157,7 @@ object HistorySearchHook {
     private fun updateAllItems(activity: Activity, incoming: List<Any>) {
         val state = ensureState(activity)
         state.allItems = ArrayList(incoming)
-        dbg("updateAllItems size=${state.allItems.size} active=${state.active} query='${state.query}'")
+        dbg { "updateAllItems size=${state.allItems.size} active=${state.active} query='${state.query}'" }
         if (state.active && state.query.isNotBlank()) {
             applyFilter(activity, state.query, fromUser = false)
         } else if (!state.active) {
@@ -213,7 +222,7 @@ object HistorySearchHook {
         parent.removeViewAt(buttonIndex)
         val safeIndex = desired.coerceIn(0, parent.childCount)
         parent.addView(button, safeIndex, lp)
-        dbg("reposition search button parent=${parent.javaClass.simpleName} button=$buttonIndex->$safeIndex clear=$targetIndex")
+        dbg { "reposition search button parent=${parent.javaClass.simpleName} button=$buttonIndex->$safeIndex clear=$targetIndex" }
     }
 
     private fun findClearTextButtonContainer(root: View, searchButton: View): View? {
@@ -365,7 +374,7 @@ object HistorySearchHook {
         state.active = true
         applyAdapterList(activity, filtered)
         updateSearchButtonVisual(activity)
-        dbg("applyFilter query='${state.query}' matched=${filtered.size} full=${fullList.size} tokens=${tokens.size}")
+        dbg { "applyFilter query='${state.query}' matched=${filtered.size} full=${fullList.size} tokens=${tokens.size}" }
         if (fromUser) {
             showToast(activity, UiText.HistorySearch.toastMatched(filtered.size, fullList.size))
         }

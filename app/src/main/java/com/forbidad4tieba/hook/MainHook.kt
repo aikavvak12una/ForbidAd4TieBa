@@ -117,11 +117,13 @@ class MainHook : XposedModule() {
                     if (app != null) {
                         sAppContext = app
                         ConfigManager.init(app)
-                        MineTabWebBlockHook.onAppContextReady(app)
                         XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
                         val isMainProcess = processName == Constants.TARGET_PACKAGE
                         if (isMainProcess) {
                             val startupSettings = ConfigManager.snapshot()
+                            if (startupSettings.isAdBlockEnabled) {
+                                MineTabWebBlockHook.onAppContextReady(app)
+                            }
                             runStartupTask("apply cached runtime controls") {
                                 AboutInfoManager.applyCachedRuntimeControlsIfNeeded(app)
                             }
@@ -141,16 +143,20 @@ class MainHook : XposedModule() {
                             runStartupTask("delete Titan patch files") {
                                 TitanPatchBlockHook.deletePatchFiles(app)
                             }
-                            runStartupTask("log Titan startup") {
-                                logTitanStartupIfNeeded(app, cl)
+                            if (startupSettings.isTitanPatchBlockEnabled || startupSettings.isDetailedLoggingEnabled) {
+                                runStartupTask("log Titan startup") {
+                                    logTitanStartupIfNeeded(app, cl)
+                                }
                             }
-                            runStartupTask("schedule auto sign in") {
-                                // Delay auto sign-in to keep startup hooks light.
-                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                    runStartupTask("auto sign in") {
-                                        com.forbidad4tieba.hook.feature.signin.AutoSignInManager.tryAutoSignIn(app)
-                                    }
-                                }, 5000)
+                            if (startupSettings.isAutoSignInEnabled) {
+                                runStartupTask("schedule auto sign in") {
+                                    // Delay auto sign-in to keep startup hooks light.
+                                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                        runStartupTask("auto sign in") {
+                                            com.forbidad4tieba.hook.feature.signin.AutoSignInManager.tryAutoSignIn(app)
+                                        }
+                                    }, 5000)
+                                }
                             }
                         } else {
                             XposedCompat.log("[MainHook] > Skip auto sign in non-main process: $processName")

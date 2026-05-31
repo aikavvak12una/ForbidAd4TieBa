@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ad
 
+import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.symbol.model.FeedInfoLogSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Method
@@ -10,6 +11,10 @@ import org.json.JSONObject
 
 object FeedInfoLogHook {
     private const val TAG = "[FeedInfoLogHook]"
+    private const val MAX_LIST_ITEMS = 20
+    private const val MAX_MAP_ITEMS = 40
+    private const val MAX_LOG_CONTENT_CHARS = 8192
+    private const val MAX_LOG_CHUNKS = 3
     private val NO_METHOD = Any()
     private val sTemplateKeyMethodCache = ConcurrentHashMap<Class<*>, Any>(32)
     private val sInstanceFieldsCache = ConcurrentHashMap<Class<*>, Array<java.lang.reflect.Field>>(32)
@@ -25,6 +30,7 @@ object FeedInfoLogHook {
         val mod = XposedCompat.module ?: return
         mod.hook(symbols.bindMethod).intercept { chain ->
             val result = chain.proceed()
+            if (!ConfigManager.shouldOutputDetailedLogs()) return@intercept result
             try {
                 val cardData = chain.args[0] ?: return@intercept result
                 val json = buildCardJson(cardData)
@@ -111,7 +117,7 @@ object FeedInfoLogHook {
 
     private fun buildTemplateListJson(list: List<*>): JSONArray {
         val arr = JSONArray()
-        for (item in list) {
+        for (item in list.take(MAX_LIST_ITEMS)) {
             if (item == null) {
                 arr.put(JSONObject.NULL)
                 continue
@@ -128,6 +134,9 @@ object FeedInfoLogHook {
                 itemJson.put(field.name, toSimpleValue(value))
             }
             arr.put(itemJson)
+        }
+        if (list.size > MAX_LIST_ITEMS) {
+            arr.put("... ${list.size - MAX_LIST_ITEMS} more items")
         }
         return arr
     }
@@ -156,8 +165,14 @@ object FeedInfoLogHook {
 
     private fun mapToJson(map: Map<*, *>): JSONObject {
         val obj = JSONObject()
+        var count = 0
         for ((key, value) in map) {
+            if (count >= MAX_MAP_ITEMS) {
+                obj.put("_truncated", "${map.size - MAX_MAP_ITEMS} more entries")
+                break
+            }
             obj.put(key?.toString() ?: "null", toSimpleValue(value))
+            count++
         }
         return obj
     }
@@ -211,7 +226,12 @@ object FeedInfoLogHook {
     }
 
     private fun logLong(msg: String) {
-        val content = if (msg.startsWith(TAG)) msg.substring(TAG.length).trimStart() else msg
+        val rawContent = if (msg.startsWith(TAG)) msg.substring(TAG.length).trimStart() else msg
+        val content = if (rawContent.length > MAX_LOG_CONTENT_CHARS) {
+            rawContent.take(MAX_LOG_CONTENT_CHARS) + "...[truncated ${rawContent.length - MAX_LOG_CONTENT_CHARS} chars]"
+        } else {
+            rawContent
+        }
         val chunkPrefix = "$TAG "
         val maxContent = 3900 - chunkPrefix.length - 12
         if (content.length <= maxContent) {
@@ -219,10 +239,10 @@ object FeedInfoLogHook {
             return
         }
 
-        val totalParts = (content.length + maxContent - 1) / maxContent
+        val totalParts = ((content.length + maxContent - 1) / maxContent).coerceAtMost(MAX_LOG_CHUNKS)
         var offset = 0
         var part = 1
-        while (offset < content.length) {
+        while (offset < content.length && part <= MAX_LOG_CHUNKS) {
             val end = (offset + maxContent).coerceAtMost(content.length)
             XposedCompat.logD("$chunkPrefix[$part/$totalParts] ${content.substring(offset, end)}")
             offset = end

@@ -166,13 +166,14 @@ object FollowedTabWebHook {
                     val webView = chain.thisObject as? WebView
                     val url = chain.args.firstOrNull() as? String
                     val normalizedUrl = normalizeUrl(url)
+                    val enabled = webView != null && isFeatureEnabled()
 
                     if (webView != null) {
-                        onBeforeProceed(webView, normalizedUrl)
+                        onBeforeProceed(webView, normalizedUrl, enabled)
                     }
                     val result = chain.proceed()
                     if (webView != null) {
-                        onAfterProceed(webView, normalizedUrl)
+                        onAfterProceed(webView, normalizedUrl, enabled)
                     }
                     result
                 }
@@ -190,8 +191,8 @@ object FollowedTabWebHook {
         }
     }
 
-    private fun onBeforeProceed(webView: WebView, normalizedUrl: String?) {
-        if (!isFeatureEnabled()) {
+    private fun onBeforeProceed(webView: WebView, normalizedUrl: String?, enabled: Boolean) {
+        if (!enabled) {
             clearState(webView)
             return
         }
@@ -200,8 +201,8 @@ object FollowedTabWebHook {
         }
     }
 
-    private fun onAfterProceed(webView: WebView, normalizedUrl: String?) {
-        if (!isFeatureEnabled()) {
+    private fun onAfterProceed(webView: WebView, normalizedUrl: String?, enabled: Boolean) {
+        if (!enabled) {
             clearState(webView)
             return
         }

@@ -43,7 +43,22 @@ object FeedAdHook {
                 if (list != null) {
                     var current = list
                     var changed = false
-                    if (ConfigManager.isAdBlockEnabled) {
+                    if (customPostFilter != null) {
+                        val filtered = CustomPostCardBlockHook.filterList(
+                            list = current,
+                            runtimeFilter = customPostFilter,
+                            methodName = methodName,
+                            templateKeyBlockReason = if (ConfigManager.isAdBlockEnabled) {
+                                ::adBlockReason
+                            } else {
+                                null
+                            },
+                        )
+                        if (filtered !== current) {
+                            current = filtered
+                            changed = true
+                        }
+                    } else if (ConfigManager.isAdBlockEnabled) {
                         val filtered = filterItems(
                             list = current,
                             templateKeyMethodName = templateKeyMethodName,
@@ -52,17 +67,6 @@ object FeedAdHook {
                             XposedCompat.logD {
                                 "[FeedAdHook] > $methodName filtered: ${current.size} -> ${filtered.size}"
                             }
-                            current = filtered
-                            changed = true
-                        }
-                    }
-                    if (customPostFilter != null) {
-                        val filtered = CustomPostCardBlockHook.filterList(
-                            list = current,
-                            runtimeFilter = customPostFilter,
-                            methodName = methodName,
-                        )
-                        if (filtered !== current) {
                             current = filtered
                             changed = true
                         }
@@ -116,6 +120,10 @@ object FeedAdHook {
     }
 
     private fun shouldBlock(key: String): Boolean = isAdKey(key) || isAdContainerKey(key)
+
+    private fun adBlockReason(key: String?): String? {
+        return key?.takeIf(::shouldBlock)?.let { "ad:template_key:$it" }
+    }
 
     private fun isAdKey(key: String): Boolean {
         return key.startsWith("ad_card_") ||

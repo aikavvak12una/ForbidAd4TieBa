@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.feature.perf
 
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.core.XposedCompat
 import org.json.JSONArray
 import java.util.concurrent.atomic.AtomicBoolean
@@ -42,7 +43,8 @@ object HostPerformanceConfigHook {
     private val installed = AtomicBoolean(false)
 
     fun hook(cl: ClassLoader) {
-        if (!isAnyConfigOverrideEnabled()) {
+        val settings = ConfigManager.snapshot()
+        if (!isAnyConfigOverrideEnabled(settings)) {
             XposedCompat.logD("$TAG skipped: config disabled")
             return
         }
@@ -54,10 +56,16 @@ object HostPerformanceConfigHook {
         }
 
         var totalInstalled = 0
-        totalInstalled += hookSharedPrefHelper(mod, cl)
-        totalInstalled += hookMultiSharedPrefHelper(mod, cl)
-        totalInstalled += hookScheduleStrategy(mod, cl)
-        totalInstalled += hookFlutterPreinitTask(mod, cl)
+        if (settings.isAdSdkComponentsDisabled) {
+            totalInstalled += hookSharedPrefHelper(mod, cl)
+        }
+        if (settings.isLowEndDeviceConfigForced) {
+            totalInstalled += hookMultiSharedPrefHelper(mod, cl)
+            totalInstalled += hookScheduleStrategy(mod, cl)
+        }
+        if (settings.isFlutterPreinitDisabled) {
+            totalInstalled += hookFlutterPreinitTask(mod, cl)
+        }
 
         if (totalInstalled > 0) {
             XposedCompat.log("$TAG hooks INSTALLED: count=$totalInstalled")
@@ -85,7 +93,7 @@ object HostPerformanceConfigHook {
                 mod.hook(method).intercept { chain ->
                     val key = chain.args.firstOrNull() as? String
                     when {
-                        ConfigManager.isAdSdkComponentsDisabled && key == PREF_FUN_AD_SDK_ENABLE -> 0
+                        key == PREF_FUN_AD_SDK_ENABLE && ConfigManager.isAdSdkComponentsDisabled -> 0
                         else -> chain.proceed()
                     }
                 }
@@ -104,10 +112,10 @@ object HostPerformanceConfigHook {
                 mod.hook(method).intercept { chain ->
                     val key = chain.args.firstOrNull() as? String
                     if (
-                        ConfigManager.isAdSdkComponentsDisabled &&
                         (key == PREF_SPLASH_PLG_ENABLE ||
                             key == PREF_SPLASH_PLG_CPC_ENABLE ||
-                            key == PREF_SPLASH_SHAKE_AD_OPEN)
+                            key == PREF_SPLASH_SHAKE_AD_OPEN) &&
+                        ConfigManager.isAdSdkComponentsDisabled
                     ) {
                         return@intercept false
                     }
@@ -137,7 +145,7 @@ object HostPerformanceConfigHook {
                 method.isAccessible = true
                 mod.hook(method).intercept { chain ->
                     val key = chain.args.firstOrNull() as? String
-                    if (ConfigManager.isLowEndDeviceConfigForced && key == PREF_LOW_SCORE_THRESHOLD) {
+                    if (key == PREF_LOW_SCORE_THRESHOLD && ConfigManager.isLowEndDeviceConfigForced) {
                         return@intercept FORCED_LOW_SCORE_THRESHOLD
                     }
                     chain.proceed()
@@ -156,7 +164,7 @@ object HostPerformanceConfigHook {
                 method.isAccessible = true
                 mod.hook(method).intercept { chain ->
                     val key = chain.args.firstOrNull() as? String
-                    if (ConfigManager.isLowEndDeviceConfigForced && key == PREF_LOW_DEV_FORBID_LIST) {
+                    if (key == PREF_LOW_DEV_FORBID_LIST && ConfigManager.isLowEndDeviceConfigForced) {
                         return@intercept resolveLowDevForbidListJson()
                     }
                     chain.proceed()
@@ -205,10 +213,10 @@ object HostPerformanceConfigHook {
         return installedCount
     }
 
-    private fun isAnyConfigOverrideEnabled(): Boolean {
-        return ConfigManager.isAdSdkComponentsDisabled ||
-            ConfigManager.isFlutterPreinitDisabled ||
-            ConfigManager.isLowEndDeviceConfigForced
+    private fun isAnyConfigOverrideEnabled(settings: SettingsSnapshot): Boolean {
+        return settings.isAdSdkComponentsDisabled ||
+            settings.isFlutterPreinitDisabled ||
+            settings.isLowEndDeviceConfigForced
     }
 
     private fun resolveLowDevForbidListJson(): String {

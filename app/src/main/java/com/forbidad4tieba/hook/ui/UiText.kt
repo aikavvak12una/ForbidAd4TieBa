@@ -218,8 +218,10 @@ object UiText {
         const val MODULE_SETTINGS = "设置"
         const val BRAND_TAG = "ForbidAd4TieBa"
         const val SAVE = "保存"
+        const val SAVE_AND_RESTART = "保存并重启"
 
         const val SETTINGS_SAVED = "设置已保存，重启贴吧生效。"
+        const val SETTINGS_SAVED_RESTARTING = "设置已保存，正在重启贴吧"
         const val CONTEXT_UNAVAILABLE = "无法获取界面上下文，改为后台扫描"
         const val CLASSLOADER_UNAVAILABLE = "无法获取类加载器"
 

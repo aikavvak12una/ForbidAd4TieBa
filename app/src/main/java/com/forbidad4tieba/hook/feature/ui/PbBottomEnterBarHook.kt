@@ -11,6 +11,8 @@ import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 object PbBottomEnterBarHook {
+    private const val MAX_PREDRAW_SQUASH_CHECKS = 3
+
     fun hook(cl: ClassLoader) {
         val mod = XposedCompat.module ?: return
         val installed = installBottomEnterBarHook(mod, cl) +
@@ -219,11 +221,19 @@ object PbBottomEnterBarHook {
     private fun installPersistentSquash(view: View): Boolean {
         if (view.getTag(ViewExt.TAG_EMPTY_VIEW) == true) return false
         view.setTag(ViewExt.TAG_EMPTY_VIEW, true)
-        val preDrawListener = ViewTreeObserver.OnPreDrawListener {
-            if (!isSquashedZeroLayout(view)) {
-                ViewExt.squashViewRemembering(view)
+        val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
+            private var checks = 0
+
+            override fun onPreDraw(): Boolean {
+                if (!isSquashedZeroLayout(view)) {
+                    ViewExt.squashViewRemembering(view)
+                }
+                checks++
+                if (isSquashedZeroLayout(view) || checks >= MAX_PREDRAW_SQUASH_CHECKS) {
+                    removePreDrawListener(view, this)
+                }
+                return true
             }
-            true
         }
         view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -234,11 +244,7 @@ object PbBottomEnterBarHook {
             }
 
             override fun onViewDetachedFromWindow(v: View) {
-                runCatching {
-                    if (v.viewTreeObserver.isAlive) {
-                        v.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-                    }
-                }
+                removePreDrawListener(v, preDrawListener)
             }
         })
         view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
@@ -252,6 +258,14 @@ object PbBottomEnterBarHook {
             }
         }
         return true
+    }
+
+    private fun removePreDrawListener(view: View, listener: ViewTreeObserver.OnPreDrawListener) {
+        runCatching {
+            if (view.viewTreeObserver.isAlive) {
+                view.viewTreeObserver.removeOnPreDrawListener(listener)
+            }
+        }
     }
 
     private fun isSquashedZeroLayout(view: View): Boolean {

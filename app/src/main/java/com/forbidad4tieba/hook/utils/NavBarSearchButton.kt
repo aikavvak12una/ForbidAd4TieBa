@@ -13,6 +13,8 @@ import android.widget.ImageView
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.util.Collections
+import java.util.WeakHashMap
 
 /**
  * 缁欑洰鏍囧簲鐢?NavigationBar 娉ㄥ叆鎼滅储鎸夐挳鐨勫叡鐢ㄥ伐鍏枫€? * 绫诲悕鏄?com.baidu.tbadk.core.view.NavigationBar銆? *
@@ -23,6 +25,9 @@ internal object NavBarSearchButton {
 
     private const val NAV_ADD_CUSTOM_VIEW_METHOD = "addCustomView"
     private const val NAV_ALIGN_RIGHT_FIELD = "HORIZONTAL_RIGHT"
+    private val NO_VALUE = Any()
+    private val sAlignRightCache = Collections.synchronizedMap(WeakHashMap<ClassLoader, Any>())
+    private val sAddCustomViewMethodCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Any>())
 
     /**
      * 缂撳瓨浠?HomeTabBarRightSlot 鎷垮埌鐨勬悳绱㈠浘鏍?ConstantState銆?     * 鐢?[cacheSearchIconDrawable] 鍐欏叆涓€娆★紝鍐嶇敱 [resolveSearchIconDrawable] 浣跨敤銆?     */
@@ -41,10 +46,23 @@ internal object NavBarSearchButton {
      * 浠庣洰鏍囧簲鐢ㄨ鍙栭潤鎬佸父閲?`ControlAlign.HORIZONTAL_RIGHT`銆?     */
     fun resolveNavigationRightAlign(cl: ClassLoader?): Any? {
         val targetCl = cl ?: return null
+        synchronized(sAlignRightCache) {
+            if (sAlignRightCache.containsKey(targetCl)) {
+                val cached = sAlignRightCache[targetCl]
+                return if (cached === NO_VALUE) null else cached
+            }
+        }
         return try {
             val cls = Class.forName(StableTiebaHookPoints.NAV_CONTROL_ALIGN_CLASS, false, targetCl)
-            cls.getDeclaredField(NAV_ALIGN_RIGHT_FIELD).apply { isAccessible = true }.get(null)
+            val align = cls.getDeclaredField(NAV_ALIGN_RIGHT_FIELD).apply { isAccessible = true }.get(null)
+            synchronized(sAlignRightCache) {
+                sAlignRightCache[targetCl] = align ?: NO_VALUE
+            }
+            align
         } catch (_: Throwable) {
+            synchronized(sAlignRightCache) {
+                sAlignRightCache[targetCl] = NO_VALUE
+            }
             null
         }
     }
@@ -52,11 +70,21 @@ internal object NavBarSearchButton {
     /**
      * 鎸夌鍚嶅舰鐘惰В鏋?`NavigationBar.addCustomView(Align, View, ...)`銆?     */
     fun resolveAddCustomViewMethod(navClass: Class<*>): Method? {
-        return navClass.declaredMethods.firstOrNull { method ->
+        synchronized(sAddCustomViewMethodCache) {
+            if (sAddCustomViewMethodCache.containsKey(navClass)) {
+                val cached = sAddCustomViewMethodCache[navClass]
+                return if (cached === NO_VALUE) null else cached as? Method
+            }
+        }
+        val resolved = navClass.declaredMethods.firstOrNull { method ->
             method.name == NAV_ADD_CUSTOM_VIEW_METHOD &&
                 method.parameterTypes.size == 3 &&
                 View::class.java.isAssignableFrom(method.parameterTypes[1])
         }?.apply { isAccessible = true }
+        synchronized(sAddCustomViewMethodCache) {
+            sAddCustomViewMethodCache[navClass] = resolved ?: NO_VALUE
+        }
+        return resolved
     }
 
     /**
