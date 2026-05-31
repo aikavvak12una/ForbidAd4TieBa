@@ -14,6 +14,8 @@ import com.forbidad4tieba.hook.ui.AboutInfoManager
 import com.forbidad4tieba.hook.ui.SettingsMenuHook
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface.HotReloadedParam
+import io.github.libxposed.api.XposedModuleInterface.HotReloadingParam
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
@@ -37,6 +39,16 @@ class MainHook : XposedModule() {
         XposedCompat.module = this
         processName = param.processName
         XposedCompat.log("[MainHook] onModuleLoaded: process=${param.processName}")
+    }
+
+    override fun onHotReloading(param: HotReloadingParam): Boolean {
+        XposedCompat.log("[MainHook] onHotReloading: blocked - hot reload reinstall path is not implemented")
+        return false
+    }
+
+    override fun onHotReloaded(param: HotReloadedParam) {
+        XposedCompat.log("[MainHook] onHotReloaded: cleanup only - hook replacement path is not implemented")
+        super.onHotReloaded(param)
     }
 
     override fun onPackageLoaded(param: PackageLoadedParam) {
