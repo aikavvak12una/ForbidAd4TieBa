@@ -49,6 +49,7 @@ import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.config.ModuleUserDataCleaner
+import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreCatalog
@@ -73,8 +74,8 @@ object SettingsMenuHook {
     private const val RESTRICTED_FEATURE_UNLOCK_TAP_COUNT = 7
     private const val RESTRICTED_FEATURE_CONFIRM_DELAY_SECONDS = 5
     private const val INITIAL_SCAN_ENVIRONMENT_WARNING_DELAY_SECONDS = 10
-    private const val SCAN_RUNNING_PULSE_INITIAL_DELAY_MS = 900L
-    private const val SCAN_RUNNING_PULSE_INTERVAL_MS = 1800L
+    private const val SCAN_RUNNING_PULSE_INITIAL_DELAY_MS = 1000L
+    private const val SCAN_RUNNING_PULSE_INTERVAL_MS = 1500L
     private const val REQUEST_HOME_NATIVE_GLASS_IMAGE = 0x4E47
     private const val HOME_NATIVE_GLASS_SOURCE_DIR_NAME = "home_native_glass"
     private const val HOME_NATIVE_GLASS_SOURCE_FILE_PREFIX = "source_"
@@ -1294,8 +1295,9 @@ object SettingsMenuHook {
             val builder = AlertDialog.Builder(context, dialogTheme)
             builder.setCustomTitle(titleView)
             builder.setView(scrollContainer)
-            builder.setPositiveButton(UiText.Settings.SAVE) { _, _ ->
-                Toast.makeText(context, UiText.Settings.SETTINGS_SAVED, Toast.LENGTH_SHORT).show()
+            builder.setPositiveButton(UiText.Settings.SAVE_AND_RESTART) { _, _ ->
+                Toast.makeText(context, UiText.Settings.SETTINGS_SAVED_RESTARTING, Toast.LENGTH_SHORT).show()
+                restartHostApp(context)
             }
 
             val dialog = builder.create()
@@ -1540,14 +1542,14 @@ object SettingsMenuHook {
                 override fun run() {
                     if (finished) return
                     val drift = when {
-                        displayedProgress < 0.18f -> 0.025f
-                        displayedProgress < 0.60f -> 0.015f
-                        else -> 0.006f
+                        displayedProgress < 0.18f -> 0.018f
+                        displayedProgress < 0.60f -> 0.010f
+                        else -> 0.004f
                     }
                     val nextProgress = (displayedProgress + drift).coerceAtMost(0.88f)
                     if (nextProgress > displayedProgress + 0.0005f) {
                         displayedProgress = nextProgress
-                        progressBar.setProgress(nextProgress)
+                        progressBar.setProgress(nextProgress, animated = true)
                     }
                     UiStyle.animateProgressRunningPulse(progressBar)
                     ui.postDelayed(this, SCAN_RUNNING_PULSE_INTERVAL_MS)
@@ -4107,30 +4109,21 @@ object SettingsMenuHook {
 
 
 
-    private fun restartHostApp(activity: Activity) {
+    private fun restartHostApp(context: Context) {
         try {
-            val launchIntent = activity.packageManager.getLaunchIntentForPackage(activity.packageName)
-            if (launchIntent != null) {
-                launchIntent.addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_CLEAR_TASK
-                )
-                activity.startActivity(launchIntent)
+            val restartIntent = Intent().apply {
+                setClassName(Constants.TARGET_PACKAGE, StableTiebaHookPoints.MAIN_TAB_ACTIVITY_CLASS)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             }
+            context.startActivity(restartIntent)
         } catch (t: Throwable) {
             XposedCompat.log("[SettingsMenuHook] restart launch failed: ${t.message}")
             XposedCompat.log(t)
+            return
         }
 
-        try { activity.finishAffinity() } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
-
-        try {
-            Handler(Looper.getMainLooper()).postDelayed({
-                try { android.os.Process.killProcess(android.os.Process.myPid()) } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
-                try { exitProcess(0) } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
-            }, 200)
-        } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
+        try { android.os.Process.killProcess(android.os.Process.myPid()) } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
+        try { exitProcess(0) } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
     }
 
     private class ModelScoreDistributionView(

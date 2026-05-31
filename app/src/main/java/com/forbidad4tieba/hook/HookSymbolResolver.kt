@@ -6510,8 +6510,9 @@ internal object HookSymbolResolver {
             }
             val titanFingerprint = TitanRuntimeState.buildFingerprint(context)
             "$vCode:${pkgInfo.lastUpdateTime}:$size:$modified:${runtimeModuleVersionCodeLabel()}:$titanFingerprint"
-        } catch (_: Throwable) {
-            "unknown"
+        } catch (t: Throwable) {
+            XposedCompat.logD("$TAG fingerprint build failed: ${t.javaClass.simpleName}: ${t.message}")
+            "unknown:${runtimeModuleVersionCodeLabel()}:${System.currentTimeMillis()}"
         }
     }
 

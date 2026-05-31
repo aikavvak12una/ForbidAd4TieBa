@@ -90,7 +90,6 @@ object XposedCompat {
 
     private fun isReleaseKeyInfo(msg: String): Boolean {
         return msg.contains("[CustomPostModelScoreStats] auto percentile effective", ignoreCase = true) ||
-            msg.contains("[PrivateReadReceiptBlockHook]", ignoreCase = true) ||
             msg.contains("failed", ignoreCase = true) ||
             msg.contains("error", ignoreCase = true) ||
             msg.contains("exception", ignoreCase = true) ||

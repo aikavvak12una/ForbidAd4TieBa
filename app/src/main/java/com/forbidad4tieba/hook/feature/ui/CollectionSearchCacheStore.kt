@@ -15,6 +15,7 @@ internal object CollectionSearchCacheStore {
     private const val CACHE_FILE_SUFFIX = ".json"
     private const val MAX_CACHE_FILES = 8
     private const val MAX_DISK_AGE_MS = 7L * 24 * 60 * 60 * 1000
+    private const val FAILURE_BACKOFF_MS = 60_000L
 
     private const val KEY_VERSION = "version"
     private const val KEY_ACCOUNT = "account"
@@ -22,6 +23,9 @@ internal object CollectionSearchCacheStore {
     private const val KEY_DIRTY = "dirty"
     private const val KEY_FULL_READY = "full_ready"
     private const val KEY_PAGES = "raw_pages"
+
+    @Volatile private var readBackoffUntilMs = 0L
+    @Volatile private var writeBackoffUntilMs = 0L
 
     data class Snapshot(
         val accountKey: String,
@@ -32,6 +36,7 @@ internal object CollectionSearchCacheStore {
     )
 
     fun read(context: Context, accountKey: String): Snapshot? {
+        if (System.currentTimeMillis() < readBackoffUntilMs) return null
         val file = cacheFile(context, accountKey)
         if (!file.exists()) return null
         val snapshot = readSnapshot(file) ?: return null
@@ -51,6 +56,7 @@ internal object CollectionSearchCacheStore {
         dirty: Boolean,
         fullReady: Boolean,
     ): Boolean {
+        if (System.currentTimeMillis() < writeBackoffUntilMs) return false
         if (rawPages.isEmpty()) return false
         val file = cacheFile(context, accountKey)
         val payload = JSONObject().apply {
@@ -120,6 +126,7 @@ internal object CollectionSearchCacheStore {
                 val raw = pagesArray.optString(i)
                 if (raw.isNotBlank()) pages.add(raw)
             }
+            readBackoffUntilMs = 0L
             Snapshot(
                 accountKey = account,
                 updatedAtMs = updatedAt,
@@ -128,6 +135,7 @@ internal object CollectionSearchCacheStore {
                 rawPages = pages,
             )
         } catch (t: Throwable) {
+            readBackoffUntilMs = System.currentTimeMillis() + FAILURE_BACKOFF_MS
             XposedCompat.logW("[CollectionSearchCacheStore] read failed: ${t.message}")
             null
         }
@@ -153,8 +161,10 @@ internal object CollectionSearchCacheStore {
                 file.writeText(text)
                 tmp.delete()
             }
+            writeBackoffUntilMs = 0L
             true
         } catch (t: Throwable) {
+            writeBackoffUntilMs = System.currentTimeMillis() + FAILURE_BACKOFF_MS
             XposedCompat.logW("[CollectionSearchCacheStore] write failed: ${t.message}")
             false
         }

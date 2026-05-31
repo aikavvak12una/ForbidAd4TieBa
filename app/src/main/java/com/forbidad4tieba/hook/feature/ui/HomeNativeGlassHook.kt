@@ -162,6 +162,7 @@ object HomeNativeGlassHook {
     }
     @Volatile private var runtimeTargets: RuntimeTargets? = null
     @Volatile private var readableTextPaletteState: ReadableTextPaletteState? = null
+    @Volatile private var pbCommentDynamicTintState: PbCommentDynamicTintState? = null
     @Volatile private var pbSortSwitchBackgroundPaintField: Field? = null
     @Volatile private var pbSortSwitchSlidePathField: Field? = null
     @Volatile private var pbEnterForumCapsuleViewField: Field? = null
@@ -251,7 +252,7 @@ object HomeNativeGlassHook {
     private enum class PbCommentBackgroundWriteRole {
         IGNORE,
         CLEAR,
-        DYNAMIC_TINT,
+        SORT_SWITCH,
         SUB_PB_LAYOUT,
         HOST,
         KEEP,
@@ -265,6 +266,7 @@ object HomeNativeGlassHook {
         val autoTintColor: Int,
         val tintAlphaPercent: Int,
         val darkMode: Boolean,
+        val pinnedReplyTitle: Boolean,
         val backgroundColor: Int?,
         val selectedColor: Int?,
     )
@@ -274,6 +276,14 @@ object HomeNativeGlassHook {
         val darkRaw: String,
         val light: HomeNativeGlassReadableTextPalette?,
         val dark: HomeNativeGlassReadableTextPalette?,
+    )
+
+    private data class PbCommentDynamicTintState(
+        val tintColor: Int,
+        val autoTintColor: Int,
+        val tintAlphaPercent: Int,
+        val lightColor: Int,
+        val darkColor: Int,
     )
 
     private data class ReadableTextViewRoleState(
@@ -3818,6 +3828,7 @@ object HomeNativeGlassHook {
                 applyKnownPbReadableTextPaletteToTree(view, READABLE_TEXT_PB_ITEM_DEPTH)
                 return
             }
+            if (keepPbSortSwitchComponentTransparent(view)) return
             applyPbCommentDynamicTintColor(view, resolveCachedPbCommentDynamicTintColor(view))
             applyKnownPbReadableTextPaletteToTree(view, READABLE_TEXT_PB_ITEM_DEPTH)
         } catch (t: Throwable) {
@@ -4439,8 +4450,8 @@ object HomeNativeGlassHook {
                 clearPbCommentNativeBackgroundWriteTarget(view)
                 true
             }
-            PbCommentBackgroundWriteRole.DYNAMIC_TINT -> {
-                applyPbCommentDynamicTint(view)
+            PbCommentBackgroundWriteRole.SORT_SWITCH -> {
+                keepPbSortSwitchComponentTransparent(view)
                 true
             }
             PbCommentBackgroundWriteRole.SUB_PB_LAYOUT -> {
@@ -4501,7 +4512,7 @@ object HomeNativeGlassHook {
     private fun resolvePbCommentBackgroundWriteRole(view: View): PbCommentBackgroundWriteRole {
         if (shouldKeepPbCommentBackground(view)) return PbCommentBackgroundWriteRole.KEEP
         if (isPbSubPbLayout(view)) return PbCommentBackgroundWriteRole.SUB_PB_LAYOUT
-        if (isPbSortSwitchComponent(view)) return PbCommentBackgroundWriteRole.DYNAMIC_TINT
+        if (isPbSortSwitchComponent(view)) return PbCommentBackgroundWriteRole.SORT_SWITCH
         if (
             isPbCommentItemFrame(view) ||
             isPbItemRelativeView(view) ||
@@ -4562,7 +4573,7 @@ object HomeNativeGlassHook {
         return when (role) {
             PbCommentBackgroundWriteRole.IGNORE -> 0
             PbCommentBackgroundWriteRole.CLEAR -> 1
-            PbCommentBackgroundWriteRole.DYNAMIC_TINT -> 2
+            PbCommentBackgroundWriteRole.SORT_SWITCH -> 2
             PbCommentBackgroundWriteRole.SUB_PB_LAYOUT -> 3
             PbCommentBackgroundWriteRole.HOST -> 4
             PbCommentBackgroundWriteRole.KEEP -> 5
@@ -4577,7 +4588,7 @@ object HomeNativeGlassHook {
         var current: View? = source
         var depth = 0
         while (current != null && current !== host && depth < PB_COMMENT_BACKGROUND_PATH_CLEAR_DEPTH) {
-            if (applyPbCommentDynamicTintContainerIfNeeded(current, keepSortSwitchComponent)) break
+            if (keepPbSortSwitchComponentTransparent(current, keepSortSwitchComponent)) break
             clearPbCommentSurfaceBackground(current, keepSortSwitchComponent)
             current = current.parent as? View
             depth++
@@ -4596,7 +4607,7 @@ object HomeNativeGlassHook {
             applyPbSubPbLayoutGlassSafely(view)
             return false
         }
-        if (applyPbCommentDynamicTintContainerIfNeeded(view)) return false
+        if (keepPbSortSwitchComponentTransparent(view)) return false
         if (shouldKeepPbCommentBackground(view)) return false
         val isSurface = isPbCommentBackgroundContainer(view) || view is AbsListView || isRecyclerView(view)
         if (isSurface || depth <= PB_COMMENT_TOP_CONTAINER_CLEAR_DEPTH) {
@@ -4621,7 +4632,7 @@ object HomeNativeGlassHook {
             applyPbSubPbLayoutGlassSafely(view)
             return
         }
-        if (applyPbCommentDynamicTintContainerIfNeeded(view, keepSortSwitchComponent)) return
+        if (keepPbSortSwitchComponentTransparent(view, keepSortSwitchComponent)) return
         if (shouldKeepPbCommentBackground(view)) return
         if (
             isPbCommentBackgroundContainer(view) ||
@@ -4862,21 +4873,30 @@ object HomeNativeGlassHook {
         setBackgroundColorPreservingPadding(view, Color.TRANSPARENT)
     }
 
-    private fun applyPbCommentDynamicTintContainerIfNeeded(
+    private fun keepPbSortSwitchComponentTransparent(
         view: View,
         keepSortSwitchComponent: Boolean = true,
     ): Boolean {
         if (!keepSortSwitchComponent) return false
-        if (isPbSortSwitchButton(view)) return true
+        if (isPbSortSwitchButton(view)) {
+            applyPbSortSwitchBackgroundDynamicTint(view, invalidateOnChange = false)
+            return true
+        }
         if (!isPbSortSwitchComponent(view)) return false
-        applyPbCommentDynamicTint(view)
+        val sortButton = findAnyPbSortSwitchButton(view, depth = 0)
+        val pinnedReplyTitle = sortButton?.let { isPbSortSwitchPinnedReplyTitle(it) }
+            ?: isPbSortSwitchPinnedReplyTitle(view)
+        if (pinnedReplyTitle) {
+            applyPbCommentDynamicTintColor(view, resolveCachedPbCommentDynamicTintColor(view))
+        } else {
+            setTransparentBackgroundPreservingPaddingIfNeeded(view)
+            clearForeground(view)
+            clearElevation(view)
+        }
+        sortButton?.let { sortButton ->
+            applyPbSortSwitchBackgroundDynamicTint(sortButton, invalidateOnChange = true)
+        }
         return true
-    }
-
-    private fun applyPbCommentDynamicTint(view: View): Int {
-        val color = resolvePbCommentDynamicTintColor(view)
-        applyPbCommentDynamicTintColor(view, color)
-        return color
     }
 
     private fun applyPbCommentDynamicTintColor(view: View, color: Int) {
@@ -5386,7 +5406,7 @@ object HomeNativeGlassHook {
         val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
         val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
         val darkMode = usesDarkMaterial(view)
-        val inCommentList = isPbSortSwitchInCommentList(view)
+        val pinnedReplyTitle = isPbSortSwitchPinnedReplyTitle(view)
         val canApply = isPbSortSwitchDynamicTintHost(view)
         if (!canApply) {
             pbSortSwitchTintStates.remove(view)
@@ -5394,11 +5414,11 @@ object HomeNativeGlassHook {
         }
         val baseColor = resolveCachedPbCommentDynamicTintColorOrNull(darkMode)
         val backgroundColor = when {
-            inCommentList -> Color.TRANSPARENT
-            else -> baseColor
+            pinnedReplyTitle -> baseColor
+            else -> Color.TRANSPARENT
         }
         val selectedColor = if (baseColor != null) {
-            if (inCommentList) baseColor else applyPbSortSwitchSelectedTintOverlay(baseColor, darkMode)
+            if (pinnedReplyTitle) applyPbSortSwitchSelectedTintOverlay(baseColor, darkMode) else baseColor
         } else {
             null
         }
@@ -5410,6 +5430,7 @@ object HomeNativeGlassHook {
             autoTintColor = autoTintColor,
             tintAlphaPercent = tintAlphaPercent,
             darkMode = darkMode,
+            pinnedReplyTitle = pinnedReplyTitle,
             backgroundColor = backgroundColor,
             selectedColor = selectedColor,
         )
@@ -5434,7 +5455,8 @@ object HomeNativeGlassHook {
             tintColor == ConfigManager.homeNativeGlassTintColor &&
             autoTintColor == ConfigManager.homeNativeGlassAutoTintColor &&
             tintAlphaPercent == ConfigManager.homeNativeGlassTintAlphaPercent &&
-            darkMode == usesDarkMaterial(view)
+            darkMode == usesDarkMaterial(view) &&
+            pinnedReplyTitle == isPbSortSwitchPinnedReplyTitle(view)
     }
 
     private fun isPbSortSwitchDynamicTintHost(view: View): Boolean {
@@ -5983,12 +6005,7 @@ object HomeNativeGlassHook {
     }
 
     private fun resolvePbCommentDynamicTintColor(view: View): Int {
-        val darkMode = usesDarkMaterial(view)
-        return resolveCachedPbCommentDynamicTintColorOrNull(darkMode)
-            ?: applyPbCommentReplyBoxOverlay(
-                if (darkMode) Color.rgb(0, 0, 0) else Color.rgb(255, 255, 255),
-                darkMode,
-            )
+        return resolveCachedPbCommentDynamicTintColor(view)
     }
 
     private fun resolveCachedPbCommentDynamicTintColor(view: View): Int {
@@ -6005,11 +6022,28 @@ object HomeNativeGlassHook {
     }
 
     private fun resolveCachedPbCommentDynamicTintColorOrNull(darkMode: Boolean): Int? {
-        val dynamicColor = configuredPbCommentTintColor()
-        val baseColor = dynamicColor?.let {
-            Color.rgb(Color.red(it), Color.green(it), Color.blue(it))
-        } ?: return null
-        return applyPbCommentReplyBoxOverlay(baseColor, darkMode)
+        val tintColor = ConfigManager.homeNativeGlassTintColor
+        val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
+        val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
+        val cached = pbCommentDynamicTintState
+        if (
+            cached != null &&
+            cached.tintColor == tintColor &&
+            cached.autoTintColor == autoTintColor &&
+            cached.tintAlphaPercent == tintAlphaPercent
+        ) {
+            return if (darkMode) cached.darkColor else cached.lightColor
+        }
+        val baseColor = configuredPbCommentTintColor() ?: return null
+        val state = PbCommentDynamicTintState(
+            tintColor = tintColor,
+            autoTintColor = autoTintColor,
+            tintAlphaPercent = tintAlphaPercent,
+            lightColor = applyPbCommentReplyBoxOverlay(baseColor, darkMode = false),
+            darkColor = applyPbCommentReplyBoxOverlay(baseColor, darkMode = true),
+        )
+        pbCommentDynamicTintState = state
+        return if (darkMode) state.darkColor else state.lightColor
     }
 
     private fun applyPbCommentReplyBoxOverlay(baseColor: Int, darkMode: Boolean): Int {
@@ -6031,15 +6065,10 @@ object HomeNativeGlassHook {
     }
 
     private fun configuredPbCommentTintColor(): Int? {
-        normalizedPbCommentTintColor(ConfigManager.homeNativeGlassTintColor)?.let { return it }
-        return normalizedPbCommentTintColor(ConfigManager.homeNativeGlassAutoTintColor)
-    }
-
-    private fun normalizedPbCommentTintColor(color: Int): Int? {
-        if (color == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR || Color.alpha(color) == 0) {
-            return null
-        }
-        return Color.rgb(Color.red(color), Color.green(color), Color.blue(color))
+        val tintColor = ConfigManager.homeNativeGlassTintColor
+        if (tintColor != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR) return tintColor
+        val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
+        return autoTintColor.takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
     }
 
     private fun isPbCommentItemFrame(view: View): Boolean {
@@ -6075,6 +6104,17 @@ object HomeNativeGlassHook {
         return null
     }
 
+    private fun findAnyPbSortSwitchButton(view: View, depth: Int): View? {
+        if (isPbSortSwitchButton(view)) return view
+        if (depth >= PB_REPLY_TITLE_SORT_SEARCH_DEPTH) return null
+        val group = view as? ViewGroup ?: return null
+        for (index in 0 until group.childCount) {
+            val button = findAnyPbSortSwitchButton(group.getChildAt(index) ?: continue, depth + 1)
+            if (button != null) return button
+        }
+        return null
+    }
+
     private fun isPbSortSwitchComponent(view: View): Boolean {
         val name = view.javaClass.name
         if (
@@ -6099,8 +6139,23 @@ object HomeNativeGlassHook {
         return false
     }
 
-    private fun isPbSortSwitchInCommentList(view: View): Boolean {
-        return isPbSortSwitchExcludedFromTopDynamicTint(view)
+    private fun isPbSortSwitchPinnedReplyTitle(view: View): Boolean {
+        val dividerId = resolvePbReplyTitleDividerViewId()
+        if (dividerId <= 0) return false
+        var current: View? = view
+        var depth = 0
+        while (current != null && depth < PB_SORT_SWITCH_PARENT_SCAN_DEPTH) {
+            val group = current as? ViewGroup
+            if (group != null && containsPbSortSwitchButton(group, depth = 0)) {
+                findViewByResolvedId(group, dividerId)?.let { divider ->
+                    return divider.visibility == View.VISIBLE &&
+                        max(max(divider.height, divider.measuredHeight), divider.layoutParams?.height ?: 0) > 0
+                }
+            }
+            current = current.parent as? View
+            depth++
+        }
+        return false
     }
 
     private fun isPbSortSwitchExcludedFromTopDynamicTint(view: View): Boolean {

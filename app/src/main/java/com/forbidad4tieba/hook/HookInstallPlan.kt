@@ -73,8 +73,15 @@ internal object HookInstaller {
             return
         }
         for (entry in plan.entries) {
-            XposedCompat.log("[HookInstallPlan] Installing ${entry.id} (${plan.phase})...")
-            entry.install(cl)
+            try {
+                XposedCompat.logD("[HookInstallPlan] Installing ${entry.id} (${plan.phase})...")
+                entry.install(cl)
+            } catch (t: Throwable) {
+                XposedCompat.log(
+                    "[HookInstallPlan] ${entry.id} install FAILED (${plan.phase}): ${t.message}",
+                )
+                XposedCompat.log(t)
+            }
         }
     }
 }
@@ -138,6 +145,10 @@ internal object HookInstallPlanner {
                 featureSymbols.homeTab.isComplete()
         }
 
+        fun canInstallFollowedTabWeb(settings: SettingsSnapshot): Boolean {
+            return canInstallHomeTopTabs(settings) && settings.isHomeTopTabFollowedEnabled
+        }
+
         fun canInstallBottomTabs(settings: SettingsSnapshot): Boolean {
             return settings.isBottomTabsCustomEnabled &&
                 available(HookFeatureKey.SIMPLIFY_BOTTOM_TABS) &&
@@ -151,6 +162,10 @@ internal object HookInstallPlanner {
         fun canInstallSystemBrowser(settings: SettingsSnapshot): Boolean {
             return settings.isOpenWebLinkInSystemBrowserEnabled &&
                 available(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
+        }
+
+        fun canInstallMineTabWebBlock(settings: SettingsSnapshot): Boolean {
+            return settings.isAdBlockEnabled && available(HookFeatureKey.BLOCK_AD)
         }
 
         fun canInstallForumNativeTopShift(): Boolean = available(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
@@ -210,8 +225,6 @@ internal object HookInstallPlanner {
         val isMain = isMainProcess(processName)
         if (isMain) {
             entries += HookInstallEntry("PbBottomEnterBarHook") { cl -> PbBottomEnterBarHook.hook(cl) }
-            entries += HookInstallEntry("FollowedTabWebHook") { cl -> FollowedTabWebHook.hook(cl) }
-            entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl) }
             entries += HookInstallEntry("UpgradePopWindowBlockHook") { cl -> UpgradePopWindowBlockHook.hook(cl) }
         }
         return HookInstallPlan(processName, "static", entries)
@@ -253,6 +266,12 @@ internal object HookInstallPlanner {
         }
         if (context.isMain) {
             entries += performanceEntries(settings)
+            if (context.canInstallMineTabWebBlock(settings)) {
+                entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl) }
+            }
+            if (context.canInstallFollowedTabWeb(settings)) {
+                entries += HookInstallEntry("FollowedTabWebHook") { cl -> FollowedTabWebHook.hook(cl) }
+            }
         }
         if (context.canInstallImageViewerNativeShare()) {
             entries += HookInstallEntry("ImageViewerNativeShareHook") { cl ->

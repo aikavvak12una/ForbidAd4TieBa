@@ -17,6 +17,7 @@ object CustomPostCardBlockHook {
     private val sTemplatePayloadMethodCache = ConcurrentHashMap<Class<*>, Any>(64)
     private val sDataListFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
     private val sHeadParamsFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
+    private val sHeadParamsMapFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, List<Field>>())
     private val sRecommendNestedDataMethodCache = ConcurrentHashMap<Class<*>, Any>(16)
     private val sRecommendNestedDataListFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
 
@@ -60,6 +61,7 @@ object CustomPostCardBlockHook {
             sTemplatePayloadMethodCache.clear()
             sDataListFieldCache.clear()
             sHeadParamsFieldCache.clear()
+            sHeadParamsMapFieldCache.clear()
             sRecommendNestedDataMethodCache.clear()
             sRecommendNestedDataListFieldCache.clear()
             sFilterSignature = signature
@@ -79,8 +81,10 @@ object CustomPostCardBlockHook {
         list: List<*>,
         runtimeFilter: RuntimeFilter,
         methodName: String,
+        templateKeyBlockReason: ((String?) -> String?)? = null,
     ): List<*> {
-        val rules = CustomPostFilterMatcher.runtimeRules() ?: return list
+        val rules = CustomPostFilterMatcher.runtimeRules()
+        if (rules == null && templateKeyBlockReason == null) return list
         val filtered = filterItems(
             list = list,
             dataListFieldName = runtimeFilter.dataListFieldName,
@@ -90,6 +94,7 @@ object CustomPostCardBlockHook {
             recommendNestedDataMethodName = runtimeFilter.recommendNestedDataMethodName,
             recommendNestedDataListFieldName = runtimeFilter.recommendNestedDataListFieldName,
             rules = rules,
+            templateKeyBlockReason = templateKeyBlockReason,
         )
         if (filtered !== list) {
             XposedCompat.logD {
@@ -107,7 +112,8 @@ object CustomPostCardBlockHook {
         headParamsFieldName: String?,
         recommendNestedDataMethodName: String?,
         recommendNestedDataListFieldName: String?,
-        rules: CustomPostFilterMatcher.RuntimeRules,
+        rules: CustomPostFilterMatcher.RuntimeRules?,
+        templateKeyBlockReason: ((String?) -> String?)?,
     ): List<*> {
         val size = list.size
         var out: ArrayList<Any?>? = null
@@ -141,8 +147,21 @@ object CustomPostCardBlockHook {
         for (i in 0 until size) {
             val item = list[i]
             val key = getKeyCached(item)
-            val templateKeyDecision = CustomPostFilterMatcher.decideByTemplateKey(key, rules)
-            val recommendKeyDecision = if (!templateKeyDecision.blocked && rules.recommendForum) {
+            val directBlockReason = templateKeyBlockReason?.invoke(key)
+            val templateKeyDecision = if (directBlockReason != null) {
+                CustomPostFilterMatcher.Decision(
+                    blocked = true,
+                    reason = directBlockReason,
+                )
+            } else if (rules != null) {
+                CustomPostFilterMatcher.decideByTemplateKey(key, rules)
+            } else {
+                CustomPostFilterMatcher.Decision(false)
+            }
+            val recommendKeyDecision = if (
+                !templateKeyDecision.blocked &&
+                rules?.recommendForum == true
+            ) {
                 CustomPostFilterMatcher.decideByRecommendCardTemplateKey(key, rules)
             } else {
                 CustomPostFilterMatcher.Decision(false)
@@ -151,7 +170,7 @@ object CustomPostCardBlockHook {
                 templateKeyDecision
             } else if (recommendKeyDecision.blocked) {
                 recommendKeyDecision
-            } else {
+            } else if (rules != null) {
                 val cardData = getPayloadCached(item)
                 if (cardData != null) {
                     decideBlock(
@@ -166,6 +185,8 @@ object CustomPostCardBlockHook {
                 } else {
                     CustomPostFilterMatcher.Decision(false)
                 }
+            } else {
+                CustomPostFilterMatcher.Decision(false)
             }
 
             if (decision.blocked) {
@@ -222,7 +243,7 @@ object CustomPostCardBlockHook {
                 headParamsFieldName != null &&
                 key == FEED_HEAD_TEMPLATE_KEY
             ) {
-                headParams = extractFeedHeadParams(item, headParamsFieldName)
+                headParams = extractFeedHeadParams(item, headParamsFieldName, rules)
             }
             val decision = CustomPostFilterMatcher.decideByTemplateKey(key, rules)
             if (decision.blocked) return decision
@@ -377,40 +398,108 @@ object CustomPostCardBlockHook {
         }
     }
 
-    private fun extractFeedHeadParams(item: Any, fieldName: String): Map<*, *>? {
-        val field = resolveFeedHeadParamsField(item.javaClass, fieldName) ?: return null
-        val value = runCatching { field.get(item) as? Map<*, *> }.getOrNull() ?: return null
-        return if (looksLikeFeedHeadParams(value)) value else null
+    private fun extractFeedHeadParams(
+        item: Any,
+        fieldName: String,
+        rules: CustomPostFilterMatcher.RuntimeRules,
+    ): Map<*, *>? {
+        val clazz = item.javaClass
+        sHeadParamsFieldCache[clazz]?.let { field ->
+            val cached = runCatching { field.get(item) as? Map<*, *> }.getOrNull()
+            if (cached != null && looksLikeFeedHeadParams(cached, rules)) return cached
+        }
+
+        var bestField: Field? = null
+        var bestMap: Map<*, *>? = null
+        var bestScore = 0
+        for (field in resolveFeedHeadParamMapFields(clazz, fieldName)) {
+            val value = runCatching { field.get(item) as? Map<*, *> }.getOrNull() ?: continue
+            val score = feedHeadParamsScore(value, rules)
+            if (score > bestScore) {
+                bestScore = score
+                bestField = field
+                bestMap = value
+            }
+        }
+        sHeadParamsFieldCache[clazz] = bestField
+        return bestMap?.takeIf { bestScore > 0 }
     }
 
-    private fun resolveFeedHeadParamsField(clazz: Class<*>, fieldName: String): Field? {
-        val cached = sHeadParamsFieldCache[clazz]
-        if (cached != null || sHeadParamsFieldCache.containsKey(clazz)) {
-            return cached
+    private fun resolveFeedHeadParamMapFields(clazz: Class<*>, preferredFieldName: String): List<Field> {
+        sHeadParamsMapFieldCache[clazz]?.let { return it }
+        val fields = ArrayList<Field>(4)
+        val seen = HashSet<String>()
+
+        fun addField(field: Field) {
+            if (
+                Modifier.isStatic(field.modifiers) ||
+                !Map::class.java.isAssignableFrom(field.type) ||
+                !seen.add(field.declaringClass.name + "#" + field.name)
+            ) {
+                return
+            }
+            field.isAccessible = true
+            fields.add(field)
         }
 
         var current: Class<*>? = clazz
-        var field: Field? = null
-        while (current != null && current != Any::class.java && field == null) {
-            field = runCatching { current.getDeclaredField(fieldName) }.getOrNull()
+        while (current != null && current != Any::class.java) {
+            runCatching { current.getDeclaredField(preferredFieldName) }
+                .getOrNull()
+                ?.let(::addField)
             current = current.superclass
         }
-        if (field != null) {
-            if (Modifier.isStatic(field.modifiers) || !Map::class.java.isAssignableFrom(field.type)) {
-                field = null
-            } else {
-                field.isAccessible = true
+        current = clazz
+        while (current != null && current != Any::class.java) {
+            for (field in current.declaredFields) {
+                addField(field)
             }
+            current = current.superclass
         }
-        sHeadParamsFieldCache[clazz] = field
-        return field
+        return fields.also { sHeadParamsMapFieldCache[clazz] = it }
     }
 
-    private fun looksLikeFeedHeadParams(map: Map<*, *>): Boolean {
-        return map.containsKey("button_name") ||
-            map.containsKey("game_ext") ||
-            map.containsKey("thread_id") ||
-            map.containsKey("card_type")
+    private fun looksLikeFeedHeadParams(
+        map: Map<*, *>,
+        rules: CustomPostFilterMatcher.RuntimeRules,
+    ): Boolean {
+        return feedHeadParamsScore(map, rules) > 0
+    }
+
+    private fun feedHeadParamsScore(
+        map: Map<*, *>,
+        rules: CustomPostFilterMatcher.RuntimeRules,
+    ): Int {
+        var score = 0
+        if (rules.help) {
+            val threadType = map.stringValue("thread_type")
+            val cardType = map.stringValue("card_type")
+            val specialThread = map.stringValue("is_special_thread")
+            if (threadType == "0") score += 8 else if (threadType != null) score += 2
+            if (cardType == "question" || cardType == "normal") score += 10 else if (cardType != null) score += 2
+            if (specialThread == "1") score += 10 else if (specialThread != null) score += 2
+        }
+        if (rules.gameBooking) {
+            if (map.containsKey("button_name")) score += 6
+            if (map.containsKey("game_ext")) score += 3
+        }
+        if (rules.score) {
+            if (map.containsKey("thread_type")) score += 3
+            if (map.containsKey("card_type")) score += 4
+        }
+        if (rules.live && map.containsKey("recom_type")) score += 4
+        if (rules.unfollowedForum) {
+            if (map.containsKey("forum_is_liked")) score += 4
+            if (map.containsKey("page_from")) score += 3
+        }
+        if (rules.forumKeyword && map.containsKey("forum_name")) score += 4
+        if (rules.modelScore && map.containsKey("extra")) score += 2
+        return score
+    }
+
+    private fun Map<*, *>.stringValue(key: String): String? {
+        val value = this[key] ?: return null
+        return value.toString().trim().takeIf { it.isNotEmpty() }
     }
 
 }

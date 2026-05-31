@@ -20,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.symbol.model.CollectionSearchSymbols
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -58,7 +59,11 @@ object CollectionSearchHook {
         var diskRestoreTried: Boolean = false,
         var fullLoadRequested: Boolean = false,
         var syncFooterVisible: Boolean = false,
-    )
+    ) {
+        fun shouldRestoreFullDataOnResume(): Boolean {
+            return active || query.isNotBlank() || fullLoadRequested || syncFooterVisible
+        }
+    }
 
     private data class ActivityState(
         var buttonView: View? = null,
@@ -135,8 +140,16 @@ object CollectionSearchHook {
         Thread(runnable, "tbhook-collect-search-net").apply { isDaemon = true }
     }
 
-    private fun dbg(msg: String) {
-        XposedCompat.logD("[CollectionSearchHook][dbg] $msg")
+    private inline fun dbg(message: () -> String) {
+        if (ConfigManager.shouldOutputDetailedLogs()) {
+            XposedCompat.logD("[CollectionSearchHook][dbg] ${message()}")
+        }
+    }
+
+    private fun dbg(message: String) {
+        if (ConfigManager.shouldOutputDetailedLogs()) {
+            XposedCompat.logD("[CollectionSearchHook][dbg] $message")
+        }
     }
 
     private fun methodName(method: Method?): String {
@@ -213,11 +226,11 @@ object CollectionSearchHook {
                 val result = chain.proceed()
                 val fragment = chain.thisObject ?: return@intercept result
                 val state = ensureFragmentState(fragment)
-                dbg(
+                dbg {
                     "onResume fullReady=${state.fullDataReady} fetchingAll=${state.fetchingAll} " +
                         "requested=${state.fullLoadRequested} active=${state.active} query='${state.query}'"
-                )
-                if (!state.fullDataReady) {
+                }
+                if (!state.fullDataReady && state.shouldRestoreFullDataOnResume()) {
                     val hitMemory = restoreFullDataFromCache(fragment, state)
                     if (!hitMemory && !state.diskRestoreTried) {
                         state.diskRestoreTried = true
@@ -268,7 +281,7 @@ object CollectionSearchHook {
                 val fragment = chain.thisObject
                 val index = (chain.args.getOrNull(2) as? Int) ?: return@intercept chain.proceed()
                 if (fragment != null && isSyncFooterClick(fragment, index)) {
-                    dbg("onItemClick sync footer clicked index=$index")
+                    dbg { "onItemClick sync footer clicked index=$index" }
                     triggerManualFullSync(fragment, userVisible = true)
                     return@intercept null
                 }
@@ -370,20 +383,20 @@ object CollectionSearchHook {
     private fun hasFullCache(fragment: Any): Boolean {
         getFullDataCache(fragment)?.let { cache ->
             val trusted = isMemoryCacheTrustedFull(fragment, cache)
-            dbg(
+            dbg {
                 "hasFullCache memory fullReady=${cache.fullReady} size=${cache.items.size} " +
                     "trusted=$trusted"
-            )
+            }
             if (trusted) return true
         }
         val context = resolveAppContext(fragment) ?: return false
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return false
         val snapshot = CollectionSearchCacheStore.read(context, accountKey) ?: return false
         val trusted = isTrustedFullSnapshot(snapshot)
-        dbg(
+        dbg {
             "hasFullCache disk fullReady=${snapshot.fullReady} pages=${snapshot.rawPages.size} " +
                 "trusted=$trusted"
-        )
+        }
         return trusted
     }
 
@@ -456,7 +469,7 @@ object CollectionSearchHook {
         if (!state.active || !state.syncFooterVisible || index < 0) return false
         val isFooter = index >= state.indexMap.size
         if (isFooter) {
-            dbg("isSyncFooterClick=true index=$index filteredSize=${state.indexMap.size}")
+            dbg { "isSyncFooterClick=true index=$index filteredSize=${state.indexMap.size}" }
         }
         return isFooter
     }
@@ -466,7 +479,7 @@ object CollectionSearchHook {
         if (state.syncingFirstPage && !force) return
         if (!force && state.fetchingAll) return
         state.syncingFirstPage = true
-        dbg("syncFirstPageEveryEntry start force=$force fetchingAll=${state.fetchingAll}")
+        dbg { "syncFirstPageEveryEntry start force=$force fetchingAll=${state.fetchingAll}" }
         sNetExecutor.execute {
             val result = fetchFirstPage(fragment)
             val host = findHostActivity(fragment)
@@ -474,7 +487,7 @@ object CollectionSearchHook {
                 val current = sFragmentStates[fragment] ?: return@runOnUiThread
                 current.syncingFirstPage = false
                 val firstPage = result?.items.orEmpty()
-                dbg("syncFirstPageEveryEntry done size=${firstPage.size} rawLen=${result?.rawPage?.length ?: 0}")
+                dbg { "syncFirstPageEveryEntry done size=${firstPage.size} rawLen=${result?.rawPage?.length ?: 0}" }
                 if (result != null && result.rawPage.isNotBlank()) {
                     mergeFirstPageIntoCache(fragment, firstPage)
                     persistFirstPageSnapshot(fragment, result.rawPage)
@@ -535,7 +548,7 @@ object CollectionSearchHook {
         }
 
         if (firstPage.isEmpty()) {
-            dbg("mergeFirstPageIntoCache clear all by empty first page")
+            dbg { "mergeFirstPageIntoCache clear all by empty first page" }
             replaceModelDataset(fragment, emptyList())
             putFullDataCache(fragment, emptyList(), fullReady = true)
             state.fullDataReady = true
@@ -548,10 +561,10 @@ object CollectionSearchHook {
         } else {
             getFullModelList(fragment)
         }
-        dbg(
+        dbg {
             "mergeFirstPageIntoCache first=${firstPage.size} base=${fullList.size} " +
                 "trustedCache=${trustedCache?.size ?: 0} fullReady=${state.fullDataReady}"
-        )
+        }
         if (fullList.isEmpty()) {
             replaceModelDataset(fragment, firstPage)
             putFullDataCache(fragment, firstPage, fullReady = state.fullDataReady)
@@ -585,11 +598,11 @@ object CollectionSearchHook {
         val state = ensureFragmentState(fragment)
         if (state.fetchingAll) {
             if (userVisible) showToast(findHostActivity(fragment), UiText.CollectionSearch.TOAST_SYNC_IN_PROGRESS)
-            dbg("triggerManualFullSync ignored: fetchingAll=true")
+            dbg { "triggerManualFullSync ignored: fetchingAll=true" }
             return
         }
         state.fullLoadRequested = true
-        dbg("triggerManualFullSync start userVisible=$userVisible")
+        dbg { "triggerManualFullSync start userVisible=$userVisible" }
         startFetchAllCollections(fragment, userVisible = userVisible)
     }
 
@@ -599,7 +612,7 @@ object CollectionSearchHook {
         state.fetchingAll = true
         val token = state.fetchToken + 1
         state.fetchToken = token
-        dbg("startFetchAllCollections token=$token userVisible=$userVisible")
+        dbg { "startFetchAllCollections token=$token userVisible=$userVisible" }
 
         sNetExecutor.execute {
             val allResult = loadAllCollections(fragment, token)
@@ -616,10 +629,10 @@ object CollectionSearchHook {
                 if (current.fetchToken != token) return@runOnUiThread
                 current.fetchingAll = false
                 val allItems = allResult?.items.orEmpty()
-                dbg(
+                dbg {
                     "startFetchAllCollections finish token=$token items=${allItems.size} " +
                         "complete=${allResult?.complete} pages=${allResult?.rawPages?.size ?: 0}"
-                )
+                }
                 if (allResult != null) {
                     val complete = allResult.complete
                     current.fullDataReady = complete
@@ -657,7 +670,7 @@ object CollectionSearchHook {
         val path = runCatching { bridge.markGetStoreField.get(null)?.toString().orEmpty() }.getOrDefault("")
         val userId = runCatching { bridge.getCurrentAccountMethod.invoke(null)?.toString().orEmpty() }.getOrDefault("")
         if (server.isBlank() || path.isBlank() || userId.isBlank()) {
-            dbg("loadAllCollections abort invalid params server/path/userId")
+            dbg { "loadAllCollections abort invalid params server/path/userId" }
             return null
         }
 
@@ -667,20 +680,20 @@ object CollectionSearchHook {
         var offset = 0
         val dedupe = LinkedHashMap<String, Any>(1024)
         val rawPages = ArrayList<String>(64)
-        dbg("loadAllCollections begin rn=$rn maxPages=$maxPages")
+        dbg { "loadAllCollections begin rn=$rn maxPages=$maxPages" }
 
         repeat(maxPages) { pageIndex ->
             if (!isFetchTokenValid(fragment, token)) return null
             val raw = postCollectionPage(bridge, url, userId, offset, rn)
                 ?: run {
-                    dbg("loadAllCollections stop: network null at page=$pageIndex offset=$offset")
+                    dbg { "loadAllCollections stop: network null at page=$pageIndex offset=$offset" }
                     return dedupe.values.takeIf { it.isNotEmpty() }?.let { LoadAllResult(ArrayList(it), rawPages, false) }
                 }
             if (raw.isNotBlank()) rawPages.add(raw)
             val page = parseCollectionPage(model, parseMethod, raw)
             if (page.isEmpty()) {
                 val storeSize = extractStoreThreadSize(raw)
-                dbg("loadAllCollections stop: empty page at page=$pageIndex offset=$offset storeSize=$storeSize")
+                dbg { "loadAllCollections stop: empty page at page=$pageIndex offset=$offset storeSize=$storeSize" }
                 if (storeSize == 0) {
                     return LoadAllResult(ArrayList(dedupe.values), rawPages, true)
                 }
@@ -691,21 +704,21 @@ object CollectionSearchHook {
                 dedupe[resolveMarkStableKey(item)] = item
             }
             val appended = dedupe.size - beforeSize
-            dbg(
+            dbg {
                 "loadAllCollections page=$pageIndex offset=$offset size=${page.size} " +
                     "appended=$appended total=${dedupe.size}"
-            )
+            }
             if (offset > 0 && page.size >= rn && appended <= 0) {
-                dbg("loadAllCollections stop: repeated page detected at page=$pageIndex")
+                dbg { "loadAllCollections stop: repeated page detected at page=$pageIndex" }
                 return dedupe.values.takeIf { it.isNotEmpty() }?.let { LoadAllResult(ArrayList(it), rawPages, false) }
             }
             offset += page.size
             if (page.size < rn) {
-                dbg("loadAllCollections stop: last page size=${page.size} < rn=$rn")
+                dbg { "loadAllCollections stop: last page size=${page.size} < rn=$rn" }
                 return LoadAllResult(ArrayList(dedupe.values), rawPages, true)
             }
         }
-        dbg("loadAllCollections stop: reached maxPages with total=${dedupe.size}")
+        dbg { "loadAllCollections stop: reached maxPages with total=${dedupe.size}" }
         return dedupe.values.takeIf { it.isNotEmpty() }?.let { LoadAllResult(ArrayList(it), rawPages, false) }
     }
 
@@ -727,7 +740,7 @@ object CollectionSearchHook {
             bridge.addPostDataMethod.invoke(net, "rn", rn.toString())
             bridge.postNetDataMethod.invoke(net) as? String
         } catch (t: Throwable) {
-            dbg("postCollectionPage failed offset=$offset rn=$rn err=${t.message}")
+            dbg { "postCollectionPage failed offset=$offset rn=$rn err=${t.message}" }
             null
         }
     }
@@ -748,10 +761,10 @@ object CollectionSearchHook {
     private fun restoreFullDataFromCache(fragment: Any, state: FilterState): Boolean {
         val cached = getFullDataCache(fragment) ?: return false
         val trustedFull = isMemoryCacheTrustedFull(fragment, cached)
-        dbg(
+        dbg {
             "restoreFullDataFromCache size=${cached.items.size} fullReady=${cached.fullReady} " +
                 "trusted=$trustedFull"
-        )
+        }
         replaceModelDataset(fragment, cached.items)
         state.fullDataReady = trustedFull
         if (state.fullDataReady) {
@@ -765,10 +778,10 @@ object CollectionSearchHook {
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return false
         val snapshot = CollectionSearchCacheStore.read(context, accountKey) ?: return false
         if (!snapshot.fullReady || snapshot.rawPages.isEmpty()) {
-            dbg(
+            dbg {
                 "restoreFullDataFromDisk skip fullReady=${snapshot.fullReady} " +
                     "pages=${snapshot.rawPages.size}"
-            )
+            }
             return false
         }
 
@@ -784,10 +797,10 @@ object CollectionSearchHook {
         val trustedFull = isTrustedFullSnapshot(snapshot)
         val restored = dedupe.values.toList()
         if (restored.isEmpty() && !trustedFull) return false
-        dbg(
+        dbg {
             "restoreFullDataFromDisk restored=${restored.size} pages=${snapshot.rawPages.size} " +
                 "trustedFull=$trustedFull"
-        )
+        }
         replaceModelDataset(fragment, restored)
         putFullDataCache(fragment, restored, fullReady = trustedFull)
         state.fullDataReady = trustedFull
@@ -838,16 +851,16 @@ object CollectionSearchHook {
     private fun persistFullSnapshot(fragment: Any, result: LoadAllResult?) {
         val data = result ?: return
         if (!data.complete || data.rawPages.isEmpty()) {
-            dbg(
+            dbg {
                 "persistFullSnapshot skip complete=${data.complete} " +
                     "items=${data.items.size} pages=${data.rawPages.size}"
-            )
+            }
             return
         }
         val context = resolveAppContext(fragment) ?: return
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
         sDiskIoExecutor.execute {
-            dbg("persistFullSnapshot write pages=${data.rawPages.size} account=$accountKey")
+            dbg { "persistFullSnapshot write pages=${data.rawPages.size} account=$accountKey" }
             CollectionSearchCacheStore.write(
                 context = context,
                 accountKey = accountKey,
@@ -863,7 +876,7 @@ object CollectionSearchHook {
         val context = resolveAppContext(fragment) ?: return
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
         sDiskIoExecutor.execute {
-            dbg("persistFirstPageSnapshot write rawLen=${rawPage.length} account=$accountKey")
+            dbg { "persistFirstPageSnapshot write rawLen=${rawPage.length} account=$accountKey" }
             CollectionSearchCacheStore.updateFirstPage(
                 context = context,
                 accountKey = accountKey,
@@ -895,7 +908,7 @@ object CollectionSearchHook {
     private fun installAdapterFooterHook(adapterClass: Class<*>) {
         if (!sHookedAdapterClasses.add(adapterClass)) return
         val mod = XposedCompat.module ?: return
-        dbg("installAdapterFooterHook class=${adapterClass.name}")
+        dbg { "installAdapterFooterHook class=${adapterClass.name}" }
 
         val getCount = findMethodInHierarchy(adapterClass, "getCount") { method ->
             method.parameterTypes.isEmpty() &&
@@ -911,7 +924,7 @@ object CollectionSearchHook {
                 val state = sFragmentStates[fragment] ?: return@intercept rawCount
                 if (!state.active || !state.syncFooterVisible) return@intercept rawCount
                 if (rawCount > 0) return@intercept rawCount
-                dbg("force getCount=1 for empty filtered result")
+                dbg { "force getCount=1 for empty filtered result" }
                 1
             }
         }
@@ -933,7 +946,7 @@ object CollectionSearchHook {
                 val index = (chain.args.getOrNull(0) as? Int) ?: return@intercept enabled
                 if (index < 0) return@intercept enabled
                 if (index >= state.indexMap.size) {
-                    dbg("force isEnabled=true for sync footer index=$index filteredSize=${state.indexMap.size}")
+                    dbg { "force isEnabled=true for sync footer index=$index filteredSize=${state.indexMap.size}" }
                     return@intercept true
                 }
                 enabled
@@ -966,7 +979,7 @@ object CollectionSearchHook {
                 tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             }
             hideFooterProgress(root)
-            dbg("footer getView patched index=$index filteredSize=${state.indexMap.size}")
+            dbg { "footer getView patched index=$index filteredSize=${state.indexMap.size}" }
             result
         }
     }
@@ -1020,11 +1033,11 @@ object CollectionSearchHook {
         sAdapterOwners[adapter] = fragment
         installAdapterFooterHook(adapter.javaClass)
         val footerAccess = resolveAdapterFooterAccess(adapter)
-        dbg(
+        dbg {
             "updateSyncActionFooter show=$show showFooter=${methodName(footerAccess.showFooterMethod)} " +
                 "showArg=${footerAccess.showFooterShowArg}/${footerAccess.showFooterHideArg} " +
                 "loading=${methodName(footerAccess.loadingMethod)} hasMore=${methodName(footerAccess.hasMoreMethod)}"
-        )
+        }
         if (show) {
             runCatching { footerAccess.loadingMethod?.invoke(adapter, false) }
             runCatching { footerAccess.hasMoreMethod?.invoke(adapter, true) }
@@ -1044,7 +1057,7 @@ object CollectionSearchHook {
         installAdapterFooterHook(adapter.javaClass)
         ensureFragmentState(fragment).syncFooterVisible = false
         val footerAccess = resolveAdapterFooterAccess(adapter)
-        dbg("suppressLoadingFooter showFooter=${methodName(footerAccess.showFooterMethod)}")
+        dbg { "suppressLoadingFooter showFooter=${methodName(footerAccess.showFooterMethod)}" }
         runCatching { footerAccess.loadingMethod?.invoke(adapter, false) }
         runCatching { footerAccess.hasMoreMethod?.invoke(adapter, false) }
         runCatching { footerAccess.showFooterMethod?.invoke(adapter, footerAccess.showFooterHideArg) }
@@ -1063,10 +1076,10 @@ object CollectionSearchHook {
         val showFooter = targets?.adapterShowFooterMethod?.let { findBooleanVoidMethod(clazz, it) }
         val loading = targets?.adapterLoadingMethod?.let { findBooleanVoidMethod(clazz, it) }
         val hasMore = targets?.adapterHasMoreMethod?.let { findBooleanVoidMethod(clazz, it) }
-        dbg(
+        dbg {
             "resolveAdapterFooterAccess class=${clazz.name} showFooter=${methodName(showFooter)} " +
                 "showArg=true/false loading=${methodName(loading)} hasMore=${methodName(hasMore)}"
-        )
+        }
         val access = AdapterFooterAccess(showFooter, showFooterShowArg = true, showFooterHideArg = false, loadingMethod = loading, hasMoreMethod = hasMore)
         sAdapterFooterAccessCache[clazz] = access
         return access
@@ -1195,7 +1208,7 @@ object CollectionSearchHook {
         parent.removeViewAt(buttonIndex)
         val safeIndex = desired.coerceIn(0, parent.childCount)
         parent.addView(button, safeIndex, lp)
-        dbg("reposition search button parent=${parent.javaClass.simpleName} button=$buttonIndex->$safeIndex target=$targetIndex")
+        dbg { "reposition search button parent=${parent.javaClass.simpleName} button=$buttonIndex->$safeIndex target=$targetIndex" }
     }
 
     private fun hasImageDescendant(root: View): Boolean {
@@ -1329,10 +1342,10 @@ object CollectionSearchHook {
 
     private fun applyFilter(fragment: Any, query: String, fromUser: Boolean) {
         val state = ensureFragmentState(fragment)
-        dbg(
+        dbg {
             "applyFilter query='${query.trim()}' fromUser=$fromUser " +
                 "fullReady=${state.fullDataReady} fetchingAll=${state.fetchingAll} requested=${state.fullLoadRequested}"
-        )
+        }
         if (!state.fullDataReady) {
             val hitMemory = restoreFullDataFromCache(fragment, state)
             if (!hitMemory && !state.diskRestoreTried) {
@@ -1352,14 +1365,14 @@ object CollectionSearchHook {
         if (trustedCacheItems != null) {
             val modelNow = getFullModelList(fragment)
             if (modelNow.size < trustedCacheItems.size) {
-                dbg("applyFilter rehydrate model from cache model=${modelNow.size} cache=${trustedCacheItems.size}")
+                dbg { "applyFilter rehydrate model from cache model=${modelNow.size} cache=${trustedCacheItems.size}" }
                 replaceModelDataset(fragment, trustedCacheItems)
             }
         }
 
         val fullList = trustedCacheItems ?: getFullModelList(fragment)
         if (!state.fullDataReady) {
-            dbg("applyFilter fallback partialListSize=${fullList.size}")
+            dbg { "applyFilter fallback partialListSize=${fullList.size}" }
             val identityMap = IntArray(fullList.size) { it }
             state.query = query.trim()
             state.active = true
@@ -1406,7 +1419,7 @@ object CollectionSearchHook {
         state.indexMap = indexMap.toIntArray()
         applyAdapterList(fragment, filtered)
         updateSyncActionFooter(fragment, true)
-        dbg("applyFilter matched=${filtered.size} fullSize=${fullList.size} tokens=${tokens.size}")
+        dbg { "applyFilter matched=${filtered.size} fullSize=${fullList.size} tokens=${tokens.size}" }
 
         if (fromUser) {
             showToast(findHostActivity(fragment), UiText.CollectionSearch.toastMatched(filtered.size, fullList.size))

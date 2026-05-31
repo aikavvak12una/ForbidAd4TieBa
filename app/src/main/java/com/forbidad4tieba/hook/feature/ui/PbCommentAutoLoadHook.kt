@@ -240,20 +240,6 @@ object PbCommentAutoLoadHook {
         return itemCountMethod.invoke(adapter) as? Int
     }
 
-    private fun resolveNoArgMethod(clazz: Class<*>, methodName: String): Method? {
-        var current: Class<*>? = clazz
-        while (current != null) {
-            val method = current.declaredMethods.firstOrNull {
-                !Modifier.isStatic(it.modifiers) &&
-                    it.name == methodName &&
-                    it.parameterTypes.isEmpty()
-            }
-            if (method != null) return method.apply { isAccessible = true }
-            current = current.superclass
-        }
-        return null
-    }
-
     private fun resolveNoArgIntMethod(clazz: Class<*>, methodName: String): Method? {
         var current: Class<*>? = clazz
         while (current != null) {
