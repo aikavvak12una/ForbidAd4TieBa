@@ -39,21 +39,17 @@ android {
         )
     }
 
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 37
 
     val moduleVersionCode = 25
     val minSupportedUserSettingsVersionCode = 20
 
     defaultConfig {
         applicationId = "com.forbidad4tieba.hook"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = moduleVersionCode
-        versionName = "26053101"
+        versionName = "26053102"
         buildConfigField(
             "int",
             "MIN_SUPPORTED_USER_SETTINGS_VERSION_CODE",
@@ -105,4 +101,5 @@ android {
 
 dependencies {
     compileOnly(libs.xposed.api)
+    implementation(libs.xposed.service)
 }

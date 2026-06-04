@@ -882,7 +882,7 @@ object AboutInfoManager {
 
     private fun formatFrameworkCapabilities(properties: Long?): List<String> {
         if (properties == null) return emptyList()
-        val out = ArrayList<String>(3)
+        val out = ArrayList<String>(4)
         if ((properties and XposedInterface.PROP_CAP_SYSTEM) != 0L) {
             out.add("PROP_CAP_SYSTEM")
         }
@@ -891,6 +891,9 @@ object AboutInfoManager {
         }
         if ((properties and XposedInterface.PROP_RT_API_PROTECTION) != 0L) {
             out.add("PROP_RT_API_PROTECTION")
+        }
+        if ((properties and XposedInterface.PROP_RT_HOT_RELOAD) != 0L) {
+            out.add("PROP_RT_HOT_RELOAD")
         }
         return out
     }
