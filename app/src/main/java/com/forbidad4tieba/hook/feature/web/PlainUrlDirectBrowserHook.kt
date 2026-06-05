@@ -24,6 +24,7 @@ import java.util.regex.Pattern
 
 object PlainUrlDirectBrowserHook {
     private const val ORDINARY_URL_TYPE = 2
+    private const val TIEBA_WEB_HOST = "tieba.baidu.com"
     private val installed = AtomicBoolean(false)
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
     private val webUrlPattern = Pattern.compile(
@@ -190,13 +191,19 @@ object PlainUrlDirectBrowserHook {
             ?: candidates.firstNotNullOfOrNull(::matchSdkWebUrl)
             ?: return null
         val lower = matched.lowercase(Locale.ROOT)
-        return when {
+        val normalized = when {
             lower.startsWith("http://") -> matched
             lower.startsWith("https://") -> matched
             lower.startsWith("ftp://") -> matched
             lower.startsWith("rtsp://") -> matched
             else -> "http://$matched"
         }
+        return normalized.takeUnless(::isTiebaWebUrl)
+    }
+
+    private fun isTiebaWebUrl(url: String): Boolean {
+        val host = runCatching { Uri.parse(url).host?.lowercase(Locale.ROOT) }.getOrNull()
+        return host == TIEBA_WEB_HOST || host?.endsWith(".$TIEBA_WEB_HOST") == true
     }
 
     private fun decodedCandidates(value: String, preferDecoded: Boolean): List<String> {
