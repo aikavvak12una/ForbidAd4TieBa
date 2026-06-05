@@ -94,9 +94,7 @@ object ConfigManager {
     const val KEY_CLEAN_SHARE_TRACKING_PARAMS = "clean_share_tracking_params"
     const val KEY_DISABLE_AI_COMPONENTS = "disable_ai_components"
     const val KEY_ENABLE_CUSTOM_POST_FILTER = "enable_custom_post_filter"
-    const val KEY_DISABLE_LOCATION_COMPONENTS = "disable_location_components"
     const val KEY_DISABLE_AD_SDK_COMPONENTS = "disable_ad_sdk_components"
-    const val KEY_DISABLE_HEAVY_FEATURE_COMPONENTS = "disable_heavy_feature_components"
     const val KEY_DISABLE_VIDEO_COMPONENTS = "disable_video_components"
     const val KEY_DISABLE_MONITOR_SYNC_COMPONENTS = "disable_monitor_sync_components"
     const val KEY_ENABLE_PB_PERFORMANCE_MODE = "enable_pb_performance_mode"
@@ -181,9 +179,7 @@ object ConfigManager {
     val isCleanShareTrackingParamsEnabled: Boolean get() = settingsSnapshot.isCleanShareTrackingParamsEnabled
     val isAiComponentsDisabled: Boolean get() = settingsSnapshot.isAiComponentsDisabled
     val isCustomPostFilterEnabled: Boolean get() = settingsSnapshot.isCustomPostFilterEnabled
-    val isLocationComponentsDisabled: Boolean get() = settingsSnapshot.isLocationComponentsDisabled
     val isAdSdkComponentsDisabled: Boolean get() = settingsSnapshot.isAdSdkComponentsDisabled
-    val isHeavyFeatureComponentsDisabled: Boolean get() = settingsSnapshot.isHeavyFeatureComponentsDisabled
     val isVideoComponentsDisabled: Boolean get() = settingsSnapshot.isVideoComponentsDisabled
     val isMonitorSyncComponentsDisabled: Boolean get() = settingsSnapshot.isMonitorSyncComponentsDisabled
     val isPbPerformanceModeEnabled: Boolean get() = settingsSnapshot.isPbPerformanceModeEnabled
@@ -490,18 +486,8 @@ object ConfigManager {
                 true,
             ),
             isCustomPostFilterEnabled = featureBoolean(KEY_ENABLE_CUSTOM_POST_FILTER),
-            isLocationComponentsDisabled = performanceChildBoolean(
-                KEY_DISABLE_LOCATION_COMPONENTS,
-                performanceOptimizationEnabled,
-                true,
-            ),
             isAdSdkComponentsDisabled = performanceChildBoolean(
                 KEY_DISABLE_AD_SDK_COMPONENTS,
-                performanceOptimizationEnabled,
-                true,
-            ),
-            isHeavyFeatureComponentsDisabled = performanceChildBoolean(
-                KEY_DISABLE_HEAVY_FEATURE_COMPONENTS,
                 performanceOptimizationEnabled,
                 true,
             ),
