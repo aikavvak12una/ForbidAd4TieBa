@@ -99,7 +99,6 @@ object ConfigManager {
     const val KEY_DISABLE_HEAVY_FEATURE_COMPONENTS = "disable_heavy_feature_components"
     const val KEY_DISABLE_VIDEO_COMPONENTS = "disable_video_components"
     const val KEY_DISABLE_MONITOR_SYNC_COMPONENTS = "disable_monitor_sync_components"
-    const val KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS = "disable_update_download_components"
     const val KEY_ENABLE_PB_PERFORMANCE_MODE = "enable_pb_performance_mode"
     const val KEY_ENABLE_PB_SCROLL_COALESCE = "enable_pb_scroll_coalesce"
     const val KEY_FORCE_FEED_UI_OPT = "force_feed_ui_opt"
@@ -187,7 +186,6 @@ object ConfigManager {
     val isHeavyFeatureComponentsDisabled: Boolean get() = settingsSnapshot.isHeavyFeatureComponentsDisabled
     val isVideoComponentsDisabled: Boolean get() = settingsSnapshot.isVideoComponentsDisabled
     val isMonitorSyncComponentsDisabled: Boolean get() = settingsSnapshot.isMonitorSyncComponentsDisabled
-    val isUpdateDownloadComponentsDisabled: Boolean get() = settingsSnapshot.isUpdateDownloadComponentsDisabled
     val isPbPerformanceModeEnabled: Boolean get() = settingsSnapshot.isPbPerformanceModeEnabled
     val isFeedUiOptForced: Boolean get() = settingsSnapshot.isFeedUiOptForced
     val isHostPerformanceFlagsForced: Boolean get() = settingsSnapshot.isHostPerformanceFlagsForced
@@ -513,11 +511,6 @@ object ConfigManager {
                 true,
             ),
             isMonitorSyncComponentsDisabled = homeFeedUiOptEnabled,
-            isUpdateDownloadComponentsDisabled = performanceChildBoolean(
-                KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS,
-                performanceOptimizationEnabled,
-                true,
-            ),
             isPbPerformanceModeEnabled = performanceChildBoolean(
                 KEY_ENABLE_PB_PERFORMANCE_MODE,
                 performanceOptimizationEnabled,
