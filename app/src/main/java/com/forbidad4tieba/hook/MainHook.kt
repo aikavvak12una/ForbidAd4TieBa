@@ -137,7 +137,7 @@ class MainHook : XposedModule() {
                                     CustomPostModelScoreStats.applyAutoPercentileThresholdsAsync()
                                 }
                             }
-                            runStartupTask("apply component disable") {
+                            runStartupTask("restore legacy component state") {
                                 ComponentDisableHook.apply(app)
                             }
                             runStartupTask("delete Titan patch files") {
