@@ -99,6 +99,7 @@ object HomeNativeGlassHook {
     private val pbReplyBarInputApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbReplyTitleDynamicTintScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbDialogRoundLayoutDynamicTintScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val shareDialogDynamicTintTargets = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbSortSwitchOriginalBackgroundColors = Collections.synchronizedMap(WeakHashMap<View, Int>())
     private val pbSortSwitchTintStates = Collections.synchronizedMap(WeakHashMap<View, PbSortSwitchTintState>())
     private val pbSortSwitchSelectedSlidePaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -2375,6 +2376,14 @@ object HomeNativeGlassHook {
                         afterEmManagerPbBackgroundWrite(view)
                         return@intercept null
                     }
+                    val shareDialogColor = resolveShareDialogDynamicTintColor(view, colorResId)
+                    if (shareDialogColor != null) {
+                        if (!applyEmManagerRealBackgroundColor(manager, shareDialogColor)) {
+                            setBackgroundColorPreservingPadding(view, shareDialogColor)
+                        }
+                        afterEmManagerPbBackgroundWrite(view)
+                        return@intercept null
+                    }
                     val color = resolvePbDynamicBackgroundReplacement(view, colorResId, null)
                         ?: run {
                             val result = chain.proceed()
@@ -2396,6 +2405,37 @@ object HomeNativeGlassHook {
         }
 
         return installedCount
+    }
+
+    private fun resolveShareDialogDynamicTintColor(view: View, colorResId: Int): Int? {
+        val targets = runtimeTargets ?: return null
+        if (colorResId == 0 || colorResId !in targets.dynamicBackgroundColorIds) return null
+        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
+        if (!isShareDialogDynamicTintTarget(view)) return null
+        return resolveCachedPbCommentDynamicTintColorOrNull(usesDarkMaterial(view))
+    }
+
+    private fun isShareDialogDynamicTintTarget(view: View): Boolean {
+        synchronized(shareDialogDynamicTintTargets) {
+            if (shareDialogDynamicTintTargets.containsKey(view)) return true
+        }
+        val group = view as? ViewGroup ?: return false
+        if (!hasShareDialogMarker(group, SHARE_DIALOG_MARKER_SCAN_DEPTH)) return false
+        synchronized(shareDialogDynamicTintTargets) {
+            shareDialogDynamicTintTargets[view] = true
+        }
+        return true
+    }
+
+    private fun hasShareDialogMarker(view: View, depth: Int): Boolean {
+        if (depth < 0) return false
+        if (view.javaClass.name in SHARE_DIALOG_MARKER_CLASSES) return true
+        val group = view as? ViewGroup ?: return false
+        for (index in 0 until group.childCount) {
+            val child = group.getChildAt(index) ?: continue
+            if (hasShareDialogMarker(child, depth - 1)) return true
+        }
+        return false
     }
 
     private fun installHomeFeedCardEmManagerBackgroundBlock(emManagerClass: Class<*>): Int {
@@ -7566,6 +7606,11 @@ object HomeNativeGlassHook {
         StableTiebaHookPoints.PB_COMMENT_FLOOR_VIEW_CLASS,
         StableTiebaHookPoints.PB_COMMENT_FLOOR_SUB_VIEW_CLASS,
     )
+    private val SHARE_DIALOG_MARKER_CLASSES = arrayOf(
+        "com.baidu.tieba.transmitShare.ShareScrollableLayout",
+        "com.baidu.tieba.transmitShare.ShareGridLayout",
+        "com.baidu.tieba.sharesdk.view.ShareDialogItemView",
+    )
     private const val HOME_SEARCH_BOX_HEADER_CONTAINER_CLASS =
         "androidx.coordinatorlayout.widget.CoordinatorLayout"
     private const val TB_RICH_TEXT_MODEL_CLASS = "com.baidu.tbadk.widget.richText.TbRichText"
@@ -7668,6 +7713,7 @@ object HomeNativeGlassHook {
     private const val PB_COMMENT_BACKGROUND_PATH_CLEAR_DEPTH = 18
     private const val PB_COMMENT_BACKGROUND_WRITE_PARENT_SCAN_DEPTH = 8
     private const val PB_COMMENT_LIST_ITEM_CLEAR_DEPTH = 4
+    private const val SHARE_DIALOG_MARKER_SCAN_DEPTH = 8
     private const val BACKGROUND_CACHE_SAMPLE_EDGE = 48
     private const val BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS = 1500L
     private const val GLASS_INVALIDATE_PARENT_SCAN_DEPTH = 24

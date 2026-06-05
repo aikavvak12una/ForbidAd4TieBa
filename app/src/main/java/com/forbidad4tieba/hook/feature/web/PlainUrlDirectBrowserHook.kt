@@ -187,6 +187,7 @@ object PlainUrlDirectBrowserHook {
     private fun normalizeWebUrl(rawUrl: String?): String? {
         val trimmed = rawUrl?.let(::trimTrailingUrlPunctuation)?.takeIf { it.isNotEmpty() } ?: return null
         val candidates = decodedCandidates(trimmed, preferDecoded = !containsExplicitWebUrl(trimmed))
+        if (candidates.any(::containsTiebaWebHost)) return null
         val matched = candidates.firstNotNullOfOrNull(::matchExplicitWebUrl)
             ?: candidates.firstNotNullOfOrNull(::matchSdkWebUrl)
             ?: return null
@@ -198,12 +199,11 @@ object PlainUrlDirectBrowserHook {
             lower.startsWith("rtsp://") -> matched
             else -> "http://$matched"
         }
-        return normalized.takeUnless(::isTiebaWebUrl)
+        return normalized.takeUnless(::containsTiebaWebHost)
     }
 
-    private fun isTiebaWebUrl(url: String): Boolean {
-        val host = runCatching { Uri.parse(url).host?.lowercase(Locale.ROOT) }.getOrNull()
-        return host == TIEBA_WEB_HOST || host?.endsWith(".$TIEBA_WEB_HOST") == true
+    private fun containsTiebaWebHost(url: String): Boolean {
+        return url.lowercase(Locale.ROOT).contains(TIEBA_WEB_HOST)
     }
 
     private fun decodedCandidates(value: String, preferDecoded: Boolean): List<String> {
