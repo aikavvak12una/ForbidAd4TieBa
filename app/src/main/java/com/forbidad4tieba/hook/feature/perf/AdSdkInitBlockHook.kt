@@ -7,16 +7,21 @@ import java.lang.reflect.Modifier
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 在代码层阻断广告 SDK 初始化，减少启动耗时、网络连接、线程池和内存占用�? *
- * 这和 ComponentDisableHook 互补，后者负责禁�?Manifest 声明的组件�? * 广告 SDK 初始化经常在 Application.onCreate �?ContentProvider.onCreate 中执行，
- * 比组件启动更早�? *
- * 由现有性能优化开�?isAdSdkComponentsDisabled 控制�? */
+ * 在代码层阻断广告 SDK 初始化，减少启动耗时、网络连接、线程池和内存占用。
+ *
+ * 这是运行期阻断逻辑，不再修改宿主 Manifest 组件状态。
+ * 广告 SDK 初始化经常在 Application.onCreate / ContentProvider.onCreate 中执行，比组件启动更早。
+ *
+ * 由现有性能优化开关 isAdSdkComponentsDisabled 控制。
+ */
 object AdSdkInitBlockHook {
     private const val TAG = "[AdSdkInitBlockHook]"
     private val installed = AtomicBoolean(false)
 
     /**
-     * 已知广告 SDK 初始化入口�?     * 每一项表�?className 对应需要提前返回的 methodName 列表�?     */
+     * 已知广告 SDK 初始化入口。
+     * 每一项表示 className 对应需要提前返回的 methodName 列表。
+     */
     private val AD_SDK_INIT_TARGETS = arrayOf(
         // 百度 Mobads SDK
         "com.baidu.mobads.sdk.api.BaiduAdManager" to arrayOf("init"),
@@ -25,7 +30,8 @@ object AdSdkInitBlockHook {
         "com.bytedance.sdk.openadsdk.TTAdSdk" to arrayOf("init", "start"),
         // 快手广告 SDK
         "com.kwad.sdk.api.KsAdSDK" to arrayOf("init", "start"),
-        // QQ 广告 SDK，腾讯广点通�?        "com.qq.e.comm.managers.GDTAdSdk" to arrayOf("init", "initWith"),
+        // QQ 广告 SDK，腾讯广点通
+        "com.qq.e.comm.managers.GDTAdSdk" to arrayOf("init", "initWith"),
         // 广告聚合平台 Ubix SSP
         "com.ubix.ssp.UbixSdk" to arrayOf("init"),
     )

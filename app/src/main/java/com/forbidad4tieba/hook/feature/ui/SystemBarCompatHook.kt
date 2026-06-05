@@ -36,9 +36,11 @@ object SystemBarCompatHook {
         val top: Int,
         val right: Int,
         val bottom: Int,
-        val height: Int,
+        var height: Int,
         val background: Drawable?,
         var gestureBridgeColor: Int? = null,
+        var insetBottom: Int = 0,
+        var layoutGuardInstalled: Boolean = false,
     )
 
     fun register(app: Application) {
@@ -257,6 +259,13 @@ object SystemBarCompatHook {
                 background = view.background,
             ).also { bottomTabInsetStates[view] = it }
         }
+        state.insetBottom = insetBottom
+        installBottomInsetLayoutGuard(view, state)
+        val lp = view.layoutParams
+        val currentHeight = lp?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT
+        if (state.height <= 0 && currentHeight > 0) {
+            state.height = currentHeight
+        }
         val targetBottom = state.bottom + insetBottom
         if (
             view.paddingLeft != state.left ||
@@ -266,7 +275,7 @@ object SystemBarCompatHook {
         ) {
             view.setPadding(state.left, state.top, state.right, targetBottom)
         }
-        val lp = view.layoutParams ?: return
+        if (lp == null) return
         if (state.height > 0) {
             val targetHeight = state.height + insetBottom
             if (lp.height != targetHeight) {
@@ -275,6 +284,47 @@ object SystemBarCompatHook {
             }
         } else {
             view.requestLayout()
+        }
+    }
+
+    private fun installBottomInsetLayoutGuard(view: View, state: BottomTabInsetState) {
+        if (state.layoutGuardInstalled) return
+        state.layoutGuardInstalled = true
+        view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            val currentState = synchronized(bottomTabInsetStates) {
+                bottomTabInsetStates[v]
+            } ?: return@addOnLayoutChangeListener
+            val insetBottom = currentState.insetBottom
+            if (insetBottom <= 0) return@addOnLayoutChangeListener
+
+            val targetBottom = currentState.bottom + insetBottom
+            val targetHeight = currentState.height
+                .takeIf { it > 0 }
+                ?.let { it + insetBottom }
+            val currentHeight = v.layoutParams?.height
+            val needsHeightInference = currentState.height <= 0 &&
+                currentHeight != null &&
+                currentHeight > 0
+            if (
+                !needsHeightInference &&
+                v.paddingLeft == currentState.left &&
+                v.paddingTop == currentState.top &&
+                v.paddingRight == currentState.right &&
+                v.paddingBottom == targetBottom &&
+                (targetHeight == null || currentHeight == targetHeight)
+            ) {
+                return@addOnLayoutChangeListener
+            }
+
+            v.post {
+                val latestState = synchronized(bottomTabInsetStates) {
+                    bottomTabInsetStates[v]
+                } ?: return@post
+                val latestInsetBottom = latestState.insetBottom
+                if (latestInsetBottom > 0) {
+                    applyBottomInset(v, latestInsetBottom)
+                }
+            }
         }
     }
 
