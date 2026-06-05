@@ -53,7 +53,6 @@ data class SettingsSnapshot(
     val isHeavyFeatureComponentsDisabled: Boolean = false,
     val isVideoComponentsDisabled: Boolean = false,
     val isMonitorSyncComponentsDisabled: Boolean = false,
-    val isUpdateDownloadComponentsDisabled: Boolean = false,
     val isPbPerformanceModeEnabled: Boolean = false,
     val isFeedUiOptForced: Boolean = false,
     val isForceFeedUiOptRuntimeEnabled: Boolean = false,

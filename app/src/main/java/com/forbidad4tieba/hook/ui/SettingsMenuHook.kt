@@ -947,7 +947,6 @@ object SettingsMenuHook {
                             SwitchItem(UiText.Settings.DISABLE_AI_COMPONENTS_LABEL, UiText.Settings.DISABLE_AI_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_AI_COMPONENTS, true, true),
                             SwitchItem(UiText.Settings.DISABLE_HEAVY_FEATURE_COMPONENTS_LABEL, UiText.Settings.DISABLE_HEAVY_FEATURE_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_HEAVY_FEATURE_COMPONENTS, true, true),
                             SwitchItem(UiText.Settings.DISABLE_VIDEO_COMPONENTS_LABEL, UiText.Settings.DISABLE_VIDEO_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_VIDEO_COMPONENTS, true, true),
-                            SwitchItem(UiText.Settings.DISABLE_UPDATE_DOWNLOAD_COMPONENTS_LABEL, UiText.Settings.DISABLE_UPDATE_DOWNLOAD_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS, true, true),
                         ),
                     ),
                 )

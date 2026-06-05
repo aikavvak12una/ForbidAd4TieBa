@@ -10,6 +10,10 @@ import com.forbidad4tieba.hook.core.XposedCompat
 object ComponentDisableHook {
     private const val TAG = "[ComponentDisableHook]"
     private const val PREF_DISABLED_PREFIX = "component_disable_applied_"
+    private const val PREF_LEGACY_UPDATE_DOWNLOAD_RESTORE_APPLIED =
+        "component_disable_legacy_update_download_restore_applied"
+    private const val LEGACY_KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS =
+        "disable_update_download_components"
 
     private data class ComponentGroup(
         val key: String,
@@ -61,13 +65,6 @@ object ComponentDisableHook {
                 enabled = ConfigManager.isMonitorSyncComponentsDisabled,
                 exactNames = MONITOR_SYNC_COMPONENTS,
             ),
-            ComponentGroup(
-                key = ConfigManager.KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS,
-                logName = "update-download",
-                enabled = ConfigManager.isUpdateDownloadComponentsDisabled,
-                exactNames = UPDATE_DOWNLOAD_COMPONENTS,
-                namePrefixes = UPDATE_DOWNLOAD_COMPONENT_PREFIXES,
-            ),
         )
 
         val prefs = ConfigManager.getModuleStatePrefs(appContext)
@@ -75,7 +72,13 @@ object ComponentDisableHook {
         val hasTrackedDisabledComponents = groups.any { group ->
             prefs.getStringSet(PREF_DISABLED_PREFIX + group.key, null).orEmpty().isNotEmpty()
         }
-        if (!hasEnabledGroup && !hasTrackedDisabledComponents) {
+        val needsLegacyUpdateDownloadRestore =
+            !prefs.getBoolean(PREF_LEGACY_UPDATE_DOWNLOAD_RESTORE_APPLIED, false) ||
+                prefs.getStringSet(
+                    PREF_DISABLED_PREFIX + LEGACY_KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS,
+                    null,
+                ).orEmpty().isNotEmpty()
+        if (!hasEnabledGroup && !hasTrackedDisabledComponents && !needsLegacyUpdateDownloadRestore) {
             XposedCompat.logD("$TAG skipped: config disabled")
             return
         }
@@ -93,7 +96,51 @@ object ComponentDisableHook {
         for (group in groups) {
             applyGroup(appContext, packageComponents, group)
         }
+        restoreLegacyUpdateDownloadComponentsIfNeeded(appContext, packageComponents)
         XposedCompat.log("$TAG apply completed: groups=${groups.size}, enabled=$enabledCount")
+    }
+
+    private fun restoreLegacyUpdateDownloadComponentsIfNeeded(
+        context: Context,
+        packageComponents: Set<String>,
+    ) {
+        val prefs = ConfigManager.getModuleStatePrefs(context)
+        val legacyStoreKey = PREF_DISABLED_PREFIX + LEGACY_KEY_DISABLE_UPDATE_DOWNLOAD_COMPONENTS
+        val tracked = prefs.getStringSet(legacyStoreKey, null).orEmpty()
+        val restoreApplied = prefs.getBoolean(PREF_LEGACY_UPDATE_DOWNLOAD_RESTORE_APPLIED, false)
+        if (restoreApplied && tracked.isEmpty()) return
+
+        val matched = packageComponents
+            .asSequence()
+            .filter { componentName ->
+                componentName in LEGACY_UPDATE_DOWNLOAD_COMPONENTS ||
+                    LEGACY_UPDATE_DOWNLOAD_COMPONENT_PREFIXES.any { prefix ->
+                        componentName.startsWith(prefix)
+                    }
+            }
+            .toSortedSet()
+
+        val restoreTargets = (tracked + matched).toSortedSet()
+        val stats = ApplyStats(matched = restoreTargets.size)
+        val stillDisabled = LinkedHashSet<String>()
+        for (className in restoreTargets) {
+            if (!setComponentState(context, className, disable = false, stats = stats)) {
+                stillDisabled.add(className)
+            }
+        }
+
+        val editor = prefs.edit()
+            .putBoolean(PREF_LEGACY_UPDATE_DOWNLOAD_RESTORE_APPLIED, true)
+        if (stillDisabled.isEmpty()) {
+            editor.remove(legacyStoreKey)
+        } else {
+            editor.putStringSet(legacyStoreKey, stillDisabled)
+        }
+        editor.apply()
+        XposedCompat.log(
+            "$TAG restored legacy update-download: tracked=${tracked.size}, matched=${matched.size}, " +
+                "restored=${stats.restored}, unchanged=${stats.unchanged}, failed=${stats.failed}",
+        )
     }
 
     private fun applyGroup(
@@ -269,7 +316,7 @@ object ComponentDisableHook {
         "com.bytedance.embedapplog.collector.Collector",
     )
 
-    private val UPDATE_DOWNLOAD_COMPONENTS = setOf(
+    private val LEGACY_UPDATE_DOWNLOAD_COMPONENTS = setOf(
         "com.baidu.adp.titan.TitanDownloadService",
         "com.baidu.adp.titan.TitanLocalService",
         "com.baidu.searchbox.DownloadInstallReceiver",
@@ -281,7 +328,7 @@ object ComponentDisableHook {
         "com.baidu.titan.sdk.sandbox.WorkerService",
     )
 
-    private val UPDATE_DOWNLOAD_COMPONENT_PREFIXES = listOf(
+    private val LEGACY_UPDATE_DOWNLOAD_COMPONENT_PREFIXES = listOf(
         "com.baidu.searchbox.download.component.",
     )
 }
