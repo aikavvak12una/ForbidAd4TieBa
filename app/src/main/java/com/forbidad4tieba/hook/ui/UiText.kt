@@ -186,8 +186,6 @@ object UiText {
         const val DISABLE_VIDEO_COMPONENTS_DESC = "禁用视频编辑、视频转换、远程播放和录制相关组件"
         const val DISABLE_MONITOR_SYNC_COMPONENTS_LABEL = "禁用监控同步组件"
         const val DISABLE_MONITOR_SYNC_COMPONENTS_DESC = "已合并到首页新版布局稳定开关"
-        const val DISABLE_UPDATE_DOWNLOAD_COMPONENTS_LABEL = "禁用更新下载组件"
-        const val DISABLE_UPDATE_DOWNLOAD_COMPONENTS_DESC = "禁用应用更新、热修下载和非广告下载管理组件"
         const val PB_PERFORMANCE_MODE_LABEL = "帖子页性能优化"
         const val PB_PERFORMANCE_MODE_DESC = "启用帖子页轻量分支，关闭滚动日志、图片性能日志和 PB 广告实验"
         const val PB_SCROLL_COALESCE_LABEL = "合并帖子页滚动回调"
