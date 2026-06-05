@@ -159,6 +159,8 @@ internal object PlainUrlClickableSpanSymbolScanner {
 
         var score = 110
         if (cls.name == PLAIN_URL_CLICKABLE_SPAN_CLASS) score += 45
+        if (cls.superclass == ClickableSpan::class.java) score += 14
+        if (hasDeclaredCallbackField(cls)) score += 14
         if (cls.name.startsWith("com.baidu.tieba.")) score += 12
         if (cls.simpleName.length <= 4) score += 8
         if (intFieldCount >= 4) score += 16 else score += intFieldCount * 3
@@ -184,6 +186,18 @@ internal object PlainUrlClickableSpanSymbolScanner {
         score -= cls.declaredMethods.size / 10
         score -= fields.size / 8
         return score
+    }
+
+    private fun hasDeclaredCallbackField(cls: Class<*>): Boolean {
+        return cls.declaredFields.any { field ->
+            !Modifier.isStatic(field.modifiers) &&
+                field.type.isInterface &&
+                field.type.declaredMethods.any { method ->
+                    method.returnType == Void.TYPE &&
+                        method.parameterTypes.size == 1 &&
+                        method.parameterTypes[0] == cls
+                }
+        }
     }
 
     private fun collectOnClickOwners(
