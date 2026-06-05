@@ -101,6 +101,7 @@ object StableTiebaHookPoints {
     const val MESSAGE_CLASS = "com.baidu.adp.framework.message.Message"
     const val CUSTOM_MESSAGE_CLASS = "com.baidu.adp.framework.message.CustomMessage"
     const val TB_WEB_VIEW_CLASS = "com.baidu.tieba.browser.TbWebView"
+    const val HOME_SIDE_BAR_WEB_VIEW_CLASS = "com.baidu.tieba.sidebar.SideBarWebView"
     const val SIDEBAR_PERSON_INFO_BINDING_CLASS =
         "com.baidu.tieba.recommendfrs.databinding.SidePersonInfoViewBinding"
     const val TB_STACK_IMAGE_VIEW_CLASS = "com.baidu.tieba.feed.widget.TbStackImageView"

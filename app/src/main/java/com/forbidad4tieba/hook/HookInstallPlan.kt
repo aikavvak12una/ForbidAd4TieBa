@@ -49,6 +49,7 @@ import com.forbidad4tieba.hook.feature.ui.PbScrollCoalesceHook
 import com.forbidad4tieba.hook.feature.ui.UpgradePopWindowBlockHook
 import com.forbidad4tieba.hook.feature.web.EnterForumWebHook
 import com.forbidad4tieba.hook.feature.web.FollowedTabWebHook
+import com.forbidad4tieba.hook.feature.web.HomeSideBarWebBlockHook
 import com.forbidad4tieba.hook.feature.web.MineTabWebBlockHook
 import com.forbidad4tieba.hook.feature.web.PlainUrlDirectBrowserHook
 import com.forbidad4tieba.hook.ui.SettingsMenuHook
@@ -168,6 +169,10 @@ internal object HookInstallPlanner {
             return settings.isAdBlockEnabled && available(HookFeatureKey.BLOCK_AD)
         }
 
+        fun canInstallHomeSideBarWebBlock(settings: SettingsSnapshot): Boolean {
+            return settings.isAdBlockEnabled && available(HookFeatureKey.BLOCK_AD)
+        }
+
         fun canInstallForumNativeTopShift(): Boolean = available(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
 
         fun canInstallAutoRefresh(settings: SettingsSnapshot): Boolean {
@@ -268,6 +273,9 @@ internal object HookInstallPlanner {
             entries += performanceEntries(settings)
             if (context.canInstallMineTabWebBlock(settings)) {
                 entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl) }
+            }
+            if (context.canInstallHomeSideBarWebBlock(settings)) {
+                entries += HookInstallEntry("HomeSideBarWebBlockHook") { cl -> HomeSideBarWebBlockHook.hook(cl) }
             }
             if (context.canInstallFollowedTabWeb(settings)) {
                 entries += HookInstallEntry("FollowedTabWebHook") { cl -> FollowedTabWebHook.hook(cl) }
