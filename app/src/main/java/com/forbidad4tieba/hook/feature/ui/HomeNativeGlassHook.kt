@@ -168,6 +168,9 @@ object HomeNativeGlassHook {
     @Volatile private var pbSortSwitchSlidePathField: Field? = null
     @Volatile private var pbEnterForumCapsuleViewField: Field? = null
     @Volatile private var pbEnterForumCapsuleTitleField: Field? = null
+    @Volatile private var skinManagerGetCurrentSkinTypeMethod: Method? = null
+    @Volatile private var cachedHostSkinType: Int? = null
+    @Volatile private var cachedHostSkinTypeCheckedAt: Long = 0L
 
     private data class CachedBackgroundBitmap(
         val path: String,
@@ -361,6 +364,8 @@ object HomeNativeGlassHook {
 
         try {
             recyclerViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
+            skinManagerGetCurrentSkinTypeMethod =
+                XposedCompat.findMethodOrNull(StableTiebaHookPoints.SKIN_MANAGER_CLASS, cl, "getCurrentSkinType")
             runtimeTargets = resolveRuntimeTargets(symbols)
             prewarmBackgroundCacheIfNeeded()
             if (!hasHomeFeedTargets) {
@@ -3568,13 +3573,15 @@ object HomeNativeGlassHook {
     }
 
     private fun resolveHomeNativePageFallbackColor(view: View): Int {
-        val base = if (usesDarkMaterial(view)) {
+        val darkMode = usesDarkMaterial(view)
+        val base = if (darkMode) {
             Color.rgb(18, 20, 24)
         } else {
             Color.rgb(246, 248, 250)
         }
         val tint = ConfigManager.homeNativeGlassTintColor
         if (tint == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR) return base
+        if (!darkMode) return base
         val alpha = (
             255f * ConfigManager.homeNativeGlassTintAlphaPercent.coerceIn(
                 ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
@@ -5380,8 +5387,8 @@ object HomeNativeGlassHook {
         val activity = findCachedActivityFromContext(view.context) ?: return null
         if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return null
         val darkMode = when (skinType) {
-            1, 4 -> true
-            0, 3 -> false
+            4 -> true
+            0, 1, 2, 3 -> false
             else -> usesDarkMaterial(view)
         }
         return resolveCachedPbCommentDynamicTintColorOrNull(darkMode)
@@ -6051,10 +6058,8 @@ object HomeNativeGlassHook {
     private fun resolveCachedPbCommentDynamicTintColor(view: View): Int {
         val darkMode = usesDarkMaterial(view)
         resolveCachedPbCommentDynamicTintColorOrNull(darkMode)?.let { return it }
-        return applyPbCommentReplyBoxOverlay(
-            if (darkMode) Color.rgb(0, 0, 0) else Color.rgb(255, 255, 255),
-            darkMode,
-        )
+        val fallback = if (darkMode) Color.rgb(0, 0, 0) else Color.rgb(255, 255, 255)
+        return if (darkMode) applyPbCommentDarkOverlay(fallback) else fallback
     }
 
     private fun resolveCachedHomeTabDynamicTintColor(view: View): Int? {
@@ -6079,25 +6084,28 @@ object HomeNativeGlassHook {
             tintColor = tintColor,
             autoTintColor = autoTintColor,
             tintAlphaPercent = tintAlphaPercent,
-            lightColor = applyPbCommentReplyBoxOverlay(baseColor, darkMode = false),
-            darkColor = applyPbCommentReplyBoxOverlay(baseColor, darkMode = true),
+            lightColor = pbCommentBaseRgb(baseColor),
+            darkColor = applyPbCommentDarkOverlay(baseColor),
         )
         pbCommentDynamicTintState = state
         return if (darkMode) state.darkColor else state.lightColor
     }
 
-    private fun applyPbCommentReplyBoxOverlay(baseColor: Int, darkMode: Boolean): Int {
+    private fun applyPbCommentDarkOverlay(baseColor: Int): Int {
         val alpha = ConfigManager.homeNativeGlassTintAlphaPercent.coerceIn(
             ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         )
         if (alpha <= 0) return Color.rgb(Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))
-        val overlay = if (darkMode) 0 else 255
         return Color.rgb(
-            blendPbCommentReplyBoxOverlayChannel(Color.red(baseColor), overlay, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.green(baseColor), overlay, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.blue(baseColor), overlay, alpha),
+            blendPbCommentReplyBoxOverlayChannel(Color.red(baseColor), 0, alpha),
+            blendPbCommentReplyBoxOverlayChannel(Color.green(baseColor), 0, alpha),
+            blendPbCommentReplyBoxOverlayChannel(Color.blue(baseColor), 0, alpha),
         )
+    }
+
+    private fun pbCommentBaseRgb(color: Int): Int {
+        return Color.rgb(Color.red(color), Color.green(color), Color.blue(color))
     }
 
     private fun blendPbCommentReplyBoxOverlayChannel(base: Int, overlay: Int, alpha: Int): Int {
@@ -7015,6 +7023,7 @@ object HomeNativeGlassHook {
         val blurredBitmap = cachedEntry?.blurredBitmap
         val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
         val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
+        val darkMode = usesDarkMaterial(view)
         val materialTintColor = resolveCardMaterialTintColor(view)
         val strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled
         val shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled
@@ -7029,6 +7038,7 @@ object HomeNativeGlassHook {
                     tintAlphaPercent = tintAlphaPercent,
                     tintAlphaExtra = tintAlphaExtra,
                     blurPercent = blurPercent,
+                    darkMode = darkMode,
                     materialTintColor = materialTintColor,
                     strokeEnabled = strokeEnabled,
                     shadowEnabled = shadowEnabled,
@@ -7046,6 +7056,7 @@ object HomeNativeGlassHook {
                 tintAlphaPercent = tintAlphaPercent,
                 tintAlphaExtra = tintAlphaExtra,
                 blurPercent = blurPercent,
+                darkMode = darkMode,
                 materialTintColor = materialTintColor,
                 strokeEnabled = strokeEnabled,
                 shadowEnabled = shadowEnabled,
@@ -7110,8 +7121,41 @@ object HomeNativeGlassHook {
     }
 
     private fun usesDarkMaterial(view: View): Boolean {
+        hostSkinTypeDarkMode(cachedHostSkinTypeIfFresh() ?: refreshCachedHostSkinType())?.let { return it }
         val mode = view.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         return mode == Configuration.UI_MODE_NIGHT_YES
+    }
+
+    private fun cachedHostSkinTypeIfFresh(): Int? {
+        val cached = cachedHostSkinType ?: return null
+        val now = SystemClock.uptimeMillis()
+        if (now - cachedHostSkinTypeCheckedAt <= HOST_SKIN_TYPE_CACHE_TTL_MS) return cached
+        return null
+    }
+
+    private fun refreshCachedHostSkinType(): Int? {
+        val skinType = readHostSkinType()
+        if (skinType != null) {
+            cachedHostSkinType = skinType
+            cachedHostSkinTypeCheckedAt = SystemClock.uptimeMillis()
+        }
+        return skinType
+    }
+
+    private fun readHostSkinType(): Int? {
+        val method = skinManagerGetCurrentSkinTypeMethod ?: return null
+        return runCatching { (method.invoke(null) as? Number)?.toInt() }.getOrNull()
+    }
+
+    private fun hostSkinTypeDarkMode(skinType: Int?): Boolean? {
+        return when (skinType) {
+            4 -> true
+            0,
+            1,
+            2,
+            3 -> false
+            else -> null
+        }
     }
 
     private fun resolveCardMaterialTintColor(view: View): Int? {
@@ -7716,6 +7760,7 @@ object HomeNativeGlassHook {
     private const val SHARE_DIALOG_MARKER_SCAN_DEPTH = 8
     private const val BACKGROUND_CACHE_SAMPLE_EDGE = 48
     private const val BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS = 1500L
+    private const val HOST_SKIN_TYPE_CACHE_TTL_MS = 500L
     private const val GLASS_INVALIDATE_PARENT_SCAN_DEPTH = 24
     private const val PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA = 28
     private const val IMAGE_CONTAINER_RADIUS_CHILD_DEPTH = 3
@@ -7882,7 +7927,7 @@ object HomeNativeGlassHook {
                 (baseTintAlpha * ConfigManager.APPLE_HOME_NATIVE_GLASS_DARK_TINT_ALPHA_PERCENT.toFloat() /
                     lightBase.toFloat()).toInt()
             } else {
-                baseTintAlpha
+                0
             }.coerceIn(0, 255)
             return (alpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
         }
@@ -7896,6 +7941,7 @@ object HomeNativeGlassHook {
         tintAlphaPercent: Int,
         private val tintAlphaExtra: Int,
         blurPercent: Int,
+        private val darkMode: Boolean,
         private val materialTintColor: Int?,
         private val strokeEnabled: Boolean,
         private val shadowEnabled: Boolean,
@@ -7906,9 +7952,6 @@ object HomeNativeGlassHook {
         private val noiseShader = BitmapShader(noiseBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
         private val shaderMatrix = Matrix()
         private val noiseMatrix = Matrix()
-        private val darkMaterial =
-            (target.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-                Configuration.UI_MODE_NIGHT_YES
         private val baseTintAlpha = tintAlphaPercent.coerceIn(
             ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
@@ -7918,7 +7961,7 @@ object HomeNativeGlassHook {
             ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
         )
         private val materialIntensity = cardBlurPercent / 100f
-        private val materialOverlayRgb = materialOverlayColor(darkMaterial)
+        private val materialOverlayRgb = materialOverlayColor(darkMode)
         private val strokeWidthPx = (1.0f + materialIntensity * 0.8f).coerceIn(1f, 1.8f)
         private val ambientShadowStrokeWidthPx = (2.2f + materialIntensity * 2.4f).coerceIn(2f, 4.6f)
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
@@ -7974,14 +8017,14 @@ object HomeNativeGlassHook {
             if (target != null && page != null && page.width > 0 && page.height > 0) {
                 updateBitmapShader(target, page)
                 canvas.drawRoundRect(rect, radius, radius, bitmapPaint)
-                drawMaterialOverlay(canvas, darkMaterial)
+                drawMaterialOverlay(canvas, darkMode)
                 drawNoise(canvas)
                 if (shadowEnabled) {
                     drawSoftShadow(canvas)
                     drawAmbientShadow(canvas)
                 }
                 if (strokeEnabled) {
-                    drawStroke(canvas, darkMaterial)
+                    drawStroke(canvas, darkMode)
                     drawEdgeHighlight(canvas)
                 }
             }
@@ -8015,6 +8058,7 @@ object HomeNativeGlassHook {
             tintAlphaPercent: Int,
             tintAlphaExtra: Int,
             blurPercent: Int,
+            darkMode: Boolean,
             materialTintColor: Int?,
             strokeEnabled: Boolean,
             shadowEnabled: Boolean,
@@ -8031,6 +8075,7 @@ object HomeNativeGlassHook {
                     ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                     ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 ) &&
+                this.darkMode == darkMode &&
                 this.materialTintColor == materialTintColor &&
                 this.strokeEnabled == strokeEnabled &&
                 this.shadowEnabled == shadowEnabled
@@ -8159,7 +8204,7 @@ object HomeNativeGlassHook {
                 (baseTintAlpha * ConfigManager.APPLE_HOME_NATIVE_GLASS_DARK_TINT_ALPHA_PERCENT.toFloat() /
                     lightBase.toFloat()).toInt()
             } else {
-                baseTintAlpha
+                0
             }
             return alpha.coerceIn(0, 255)
         }
