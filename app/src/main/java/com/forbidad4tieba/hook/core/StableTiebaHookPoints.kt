@@ -6,6 +6,8 @@ object StableTiebaHookPoints {
     const val MAIN_TAB_ACTIVITY_CLASS = "com.baidu.tieba.tblauncher.MainTabActivity"
     const val FRAGMENT_TAB_HOST_CLASS = "com.baidu.tbadk.core.tabHost.FragmentTabHost"
     const val FRAGMENT_TAB_WIDGET_CLASS = "com.baidu.tbadk.core.tabHost.FragmentTabWidget"
+    const val MAIN_TAB_BOTTOM_INDICATOR_CLASS = "com.baidu.tbadk.mainTab.MaintabBottomIndicator"
+    const val MAIN_TAB_BOTTOM_OPT_INDICATOR_CLASS = "com.baidu.tbadk.mainTab.MainTabBottomOptIndicator"
     const val FEED_TEMPLATE_ADAPTER_CLASS = "com.baidu.tieba.feed.list.FeedTemplateAdapter"
     const val TEMPLATE_ADAPTER_CLASS = "com.baidu.tieba.feed.list.TemplateAdapter"
     const val FEED_CARD_VIEW_CLASS = "com.baidu.tieba.feed.card.FeedCardView"
