@@ -35,6 +35,7 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.widget.AbsListView
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
@@ -97,6 +98,7 @@ object HomeNativeGlassHook {
     private val subPbInputBarApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val subPbNavigationBarApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbReplyBarInputApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val pbReplyBarGestureBridgeViews = Collections.synchronizedMap(WeakHashMap<Activity, WeakReference<View>>())
     private val pbReplyTitleDynamicTintScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbDialogRoundLayoutDynamicTintScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val shareDialogDynamicTintTargets = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
@@ -5585,6 +5587,55 @@ object HomeNativeGlassHook {
         val frameColor = resolvePbCachedDynamicTintColor(capsule) ?: return
         val capsuleColor = offsetPbReplyBarInputCapsuleColor(frameColor, usesDarkMaterial(capsule))
         setPbReplyBarInputCapsuleDynamicBackground(capsule, capsuleColor)
+        applyPbReplyBarGestureNavigationBridge(activity, capsule, frameColor)
+    }
+
+    private fun applyPbReplyBarGestureNavigationBridge(activity: Activity, anchor: View, color: Int) {
+        if (!isNearWindowBottom(anchor)) return
+        val insetBottom = SystemBarCompatHook.gestureNavigationInsetBottom(activity)
+        if (insetBottom <= 0) return
+        val content = findPbActivityContentHost(activity) as? FrameLayout ?: return
+        val bridge = findOrCreatePbReplyBarGestureBridge(activity, content, insetBottom)
+        val params = bridge.layoutParams as? FrameLayout.LayoutParams
+        if (params?.height != insetBottom || params.gravity != android.view.Gravity.BOTTOM) {
+            bridge.layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                insetBottom,
+                android.view.Gravity.BOTTOM,
+            )
+        }
+        if ((bridge.background as? ColorDrawable)?.color != color) {
+            bridge.background = ColorDrawable(color)
+        }
+    }
+
+    private fun findOrCreatePbReplyBarGestureBridge(
+        activity: Activity,
+        content: FrameLayout,
+        insetBottom: Int,
+    ): View {
+        synchronized(pbReplyBarGestureBridgeViews) {
+            val cached = pbReplyBarGestureBridgeViews[activity]?.get()
+            if (cached?.parent === content) return cached
+            pbReplyBarGestureBridgeViews.remove(activity)
+        }
+        val bridge = View(content.context).apply {
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        content.addView(
+            bridge,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                insetBottom,
+                android.view.Gravity.BOTTOM,
+            ),
+        )
+        synchronized(pbReplyBarGestureBridgeViews) {
+            pbReplyBarGestureBridgeViews[activity] = WeakReference(bridge)
+        }
+        return bridge
     }
 
     private fun findPbReplyBarSearchRoot(anchor: View, activity: Activity): View? {

@@ -84,6 +84,13 @@ object SystemBarCompatHook {
         }
     }
 
+    fun gestureNavigationInsetBottom(activity: Activity?): Int {
+        val host = activity ?: return 0
+        if (!isGestureNavigation(host)) return 0
+        val decor = host.window?.decorView ?: return 0
+        return resolveNavigationBarInsetBottom(host, decor)
+    }
+
     private fun installWindowHooks() {
         val mod = XposedCompat.module ?: return
         runCatching {
