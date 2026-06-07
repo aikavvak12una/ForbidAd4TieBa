@@ -27,6 +27,7 @@ import com.forbidad4tieba.hook.feature.share.ImageViewerNativeShareHook
 import com.forbidad4tieba.hook.feature.share.ShareTrackingParamCleanerHook
 import com.forbidad4tieba.hook.feature.ui.AutoLoadMoreHook
 import com.forbidad4tieba.hook.feature.ui.AutoRefreshHook
+import com.forbidad4tieba.hook.feature.ui.BottomTabTopLineHook
 import com.forbidad4tieba.hook.feature.ui.CollectionSearchHook
 import com.forbidad4tieba.hook.feature.ui.DefaultOriginalImageHook
 import com.forbidad4tieba.hook.feature.ui.ForumNativeTopShiftBlockHook
@@ -268,6 +269,9 @@ internal object HookInstallPlanner {
         if (context.isMain && settings.isHomeTabAutoHideEnabled) {
             entries += HookInstallEntry("HomeTopTabAutoHideHook") { cl -> HomeTopTabAutoHideHook.hook(cl) }
             entries += HookInstallEntry("HomeBottomTabAutoHideHook") { cl -> HomeBottomTabAutoHideHook.hook(cl) }
+        }
+        if (context.canInstallHomeNativeGlass(settings)) {
+            entries += HookInstallEntry("BottomTabTopLineHook") { cl -> BottomTabTopLineHook.hook(cl) }
         }
         if (context.isMain) {
             entries += performanceEntries(settings)
