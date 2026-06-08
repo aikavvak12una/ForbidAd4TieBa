@@ -46,6 +46,10 @@ internal object HookSymbolStatusFormatter {
             val ids = values.orEmpty().filter { it != 0 }
             return if (ids.isEmpty()) "-" else "count=${ids.size}"
         }
+        fun resourceMapTarget(values: Map<String, Int>?): String {
+            val ids = values.orEmpty().filterValues { it != 0 }
+            return if (ids.isEmpty()) "-" else "count=${ids.size}"
+        }
         fun add(name: String, target: String, checks: List<Pair<String, Boolean>>) {
             val missing = checks.asSequence()
                 .filter { !it.second }
@@ -139,6 +143,16 @@ internal object HookSymbolStatusFormatter {
             listOf("feedCardBindMethod" to has(symbols.feedCardBindMethod)),
         )
         add(
+            "ReplyServerResponseLogHook",
+            "${symbols.replyServerResponseClass}.${symbols.replyServerResponseDecodeMethod}" +
+                "[${symbols.replyServerResponseResultJsonField}]",
+            listOf(
+                "replyServerResponseClass" to has(symbols.replyServerResponseClass),
+                "replyServerResponseDecodeMethod" to has(symbols.replyServerResponseDecodeMethod),
+                "replyServerResponseResultJsonField" to has(symbols.replyServerResponseResultJsonField),
+            ),
+        )
+        add(
             "HomeNativeGlassHook",
             "${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.<init> / " +
                 "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.${symbols.feedCardBindMethod}",
@@ -162,6 +176,14 @@ internal object HookSymbolStatusFormatter {
             listOf(
                 "homeNativeGlassDynamicBackgroundColorIds" to
                     hasIntList(symbols.homeNativeGlassDynamicBackgroundColorIds),
+            ),
+        )
+        add(
+            "HomeNativeGlassHook.ReadableTextResources",
+            resourceMapTarget(symbols.homeNativeGlassReadableTextResourceIdsByName),
+            listOf(
+                "homeNativeGlassReadableTextResourceIdsByName" to
+                    symbols.homeNativeGlassReadableTextResourceIdsByName.any { it.value != 0 },
             ),
         )
         add(

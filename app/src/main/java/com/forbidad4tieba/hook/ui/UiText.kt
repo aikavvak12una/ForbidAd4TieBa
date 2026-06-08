@@ -140,7 +140,13 @@ object UiText {
         const val DISABLE_AUTO_REFRESH_LABEL = "禁止自动刷新"
         const val DISABLE_AUTO_REFRESH_DESC = "避免首页被强制重置刷新列表"
         const val DISABLE_PB_GESTURE_FONT_SCALE_LABEL = "禁用调整字号手势"
-        const val FREE_COPY_LABEL = "评论自由复制\n吧页面禁止自动展开\n图片添加原生分享功能\n屏蔽更新升级弹窗\n收藏搜索\n浏览历史搜索\n禁用图片左滑进吧入口"
+        const val FREE_COPY_LABEL = "评论自由复制"
+        const val DISABLE_PB_AUTO_EXPAND_LABEL = "吧页面禁止自动展开"
+        const val IMAGE_NATIVE_SHARE_LABEL = "图片添加原生分享功能"
+        const val BLOCK_UPDATE_DIALOG_LABEL = "屏蔽更新升级弹窗"
+        const val COLLECTION_SEARCH_LABEL = "收藏搜索"
+        const val HISTORY_SEARCH_LABEL = "浏览历史搜索"
+        const val DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL = "禁用图片左滑进吧入口"
         const val DEFAULT_NOTIFY_TAB_LABEL = "消息默认通知页"
         const val DEFAULT_NOTIFY_TAB_DESC = "进入消息页时默认显示通知"
         const val CLEAN_SHARE_TRACKING_LABEL = "安全分享"
@@ -149,6 +155,12 @@ object UiText {
             HIDE_PB_BOTTOM_BANNER_LABEL,
             DISABLE_PB_GESTURE_FONT_SCALE_LABEL,
             FREE_COPY_LABEL,
+            DISABLE_PB_AUTO_EXPAND_LABEL,
+            IMAGE_NATIVE_SHARE_LABEL,
+            BLOCK_UPDATE_DIALOG_LABEL,
+            COLLECTION_SEARCH_LABEL,
+            HISTORY_SEARCH_LABEL,
+            DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL,
             DEFAULT_NOTIFY_TAB_LABEL,
             CLEAN_SHARE_TRACKING_LABEL,
         ).joinToString("\n")
