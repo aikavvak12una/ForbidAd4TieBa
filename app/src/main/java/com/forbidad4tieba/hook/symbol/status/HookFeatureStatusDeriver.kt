@@ -191,6 +191,9 @@ internal object HookFeatureStatusDeriver {
         if (symbols.homeNativeGlassDynamicBackgroundColorIds.isEmpty()) {
             homeNativeGlassOptional.add("homeNativeGlassDynamicBackgroundColorIds")
         }
+        if (symbols.homeNativeGlassReadableTextResourceIdsByName.isEmpty()) {
+            homeNativeGlassOptional.add("homeNativeGlassReadableTextResourceIdsByName")
+        }
         if (symbols.homeNativeGlassSortSwitchBackgroundPaintField.isNullOrBlank()) {
             homeNativeGlassOptional.add("homeNativeGlassSortSwitchBackgroundPaintField")
         }

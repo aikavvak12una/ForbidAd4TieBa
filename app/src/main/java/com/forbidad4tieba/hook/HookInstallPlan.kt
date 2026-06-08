@@ -14,6 +14,7 @@ import com.forbidad4tieba.hook.feature.ad.PbFallingAdHook
 import com.forbidad4tieba.hook.feature.ad.PostAdHook
 import com.forbidad4tieba.hook.feature.ad.SearchBoxTextAdHook
 import com.forbidad4tieba.hook.feature.ad.StrategyAdHook
+import com.forbidad4tieba.hook.feature.diagnostic.ReplyServerResponseLogHook
 import com.forbidad4tieba.hook.feature.im.PrivateReadReceiptBlockHook
 import com.forbidad4tieba.hook.feature.perf.AdSdkInitBlockHook
 import com.forbidad4tieba.hook.feature.perf.AiComponentDisableHook
@@ -528,6 +529,11 @@ internal object HookInstallPlanner {
             }
         }
         if (settings.isDetailedLoggingEnabled) {
+            entries += HookInstallEntry("ReplyServerResponseLogHook") { cl ->
+                HookSymbolResolver.resolveReplyServerResponseLogSymbols(cl, symbols)?.let { targets ->
+                    ReplyServerResponseLogHook.hook(targets)
+                }
+            }
             entries += HookInstallEntry("FeedInfoLogHook") { cl ->
                 HookSymbolResolver.resolveFeedInfoLogSymbols(cl, symbols)?.let { targets ->
                     FeedInfoLogHook.hook(targets)
