@@ -1485,6 +1485,12 @@ object SettingsMenuHook {
             orientation = LinearLayout.VERTICAL
             setPadding(padding, padding, padding, padding)
         }
+        val scanContentMaxHeight = (activity.resources.displayMetrics.heightPixels * 0.62f)
+            .toInt()
+            .coerceAtLeast((220 * density).toInt())
+        val scanContent = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+        }
 
         // Title area.
         val titleContainer = LinearLayout(activity).apply {
@@ -1508,6 +1514,26 @@ object SettingsMenuHook {
         }.also { UiStyle.animateBrandTagShimmer(it) })
         root.addView(titleContainer)
 
+        val scanScroll = MaxHeightScrollView(activity, scanContentMaxHeight).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            clipToPadding = false
+            addView(
+                scanContent,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                )
+            )
+        }
+        root.addView(
+            scanScroll,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+        )
+
         // Progress bar.
         val progressBar = UiStyle.ThinProgressBar(activity, tokens).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -1515,7 +1541,7 @@ object SettingsMenuHook {
                 (5 * density).toInt(),
             )
         }
-        root.addView(progressBar)
+        scanContent.addView(progressBar)
 
         fun setScanProgress(target: Float, animated: Boolean = true) {
             val clamped = target.coerceIn(0f, 1f)
@@ -1562,7 +1588,7 @@ object SettingsMenuHook {
             setTextColor(tokens.textSecondary)
             setPadding(0, (12 * density).toInt(), 0, 0)
         }
-        root.addView(statusView)
+        scanContent.addView(statusView)
 
         // Result card is hidden until scanning finishes.
         val resultCard = LinearLayout(activity).apply {
@@ -1586,7 +1612,7 @@ object SettingsMenuHook {
         }
         resultCard.addView(resultStatusView)
         resultCard.addView(resultVersionView)
-        root.addView(resultCard)
+        scanContent.addView(resultCard)
 
         // Restart button.
         val restartBtn = Button(activity).apply {
@@ -4378,6 +4404,23 @@ object SettingsMenuHook {
         override fun getIntrinsicWidth(): Int = -1
 
         override fun getIntrinsicHeight(): Int = -1
+    }
+
+    private class MaxHeightScrollView(
+        context: Context,
+        private val maxHeightPx: Int,
+    ) : ScrollView(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val parentMode = MeasureSpec.getMode(heightMeasureSpec)
+            val parentSize = MeasureSpec.getSize(heightMeasureSpec)
+            val cappedHeight = if (parentMode == MeasureSpec.UNSPECIFIED) {
+                maxHeightPx
+            } else {
+                maxHeightPx.coerceAtMost(parentSize)
+            }.coerceAtLeast(1)
+            val cappedHeightSpec = MeasureSpec.makeMeasureSpec(cappedHeight, MeasureSpec.AT_MOST)
+            super.onMeasure(widthMeasureSpec, cappedHeightSpec)
+        }
     }
 
     private fun tintSettingsDialogActionButtons(window: Window, color: Int) {

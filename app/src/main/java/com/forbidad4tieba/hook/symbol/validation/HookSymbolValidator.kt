@@ -361,16 +361,18 @@ private fun isHomeNativeGlassSortSwitchValid(symbols: HookSymbols, cl: ClassLoad
 }
 
 private fun isHomeValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-    if (symbols.homeTabClass == null || symbols.homeTabRebuildMethod == null || symbols.homeTabListField == null) return false
+    val homeTabClass = symbols.homeTabClass ?: return false
+    val homeTabRebuildMethod = symbols.homeTabRebuildMethod ?: return false
+    val homeTabListField = symbols.homeTabListField ?: return false
     return try {
-        val homeClass = safeFindClass(symbols.homeTabClass, cl) ?: return false
+        val homeClass = safeFindClass(homeTabClass, cl) ?: return false
         val methodOk = homeClass.declaredMethods.any {
-            it.name == symbols.homeTabRebuildMethod &&
+            it.name == homeTabRebuildMethod &&
                 it.parameterTypes.isEmpty() &&
                 it.returnType == Void.TYPE
         }
         if (!methodOk) return false
-        val listFieldOk = homeClass.declaredFields.any { it.name == symbols.homeTabListField }
+        val listFieldOk = homeClass.declaredFields.any { it.name == homeTabListField }
         if (!listFieldOk) return false
 
         val hasHomeItemSymbols =
@@ -383,7 +385,7 @@ private fun isHomeValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
                 !symbols.homeTabItemMainBooleanField.isNullOrBlank()
         if (!hasHomeItemSymbols) return true
 
-        val itemClass = resolveHomeTabItemClass(homeClass, symbols.homeTabListField) ?: return false
+        val itemClass = resolveHomeTabItemClass(homeClass, homeTabListField) ?: return false
         val fields = collectInstanceFields(itemClass)
         val methods = collectInstanceMethods(itemClass)
 
@@ -436,19 +438,21 @@ private fun isHomeValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
 }
 
 private fun isSettingsValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-    if (symbols.settingsClass == null || symbols.settingsInitMethod == null || symbols.settingsContainerField == null) return false
+    val settingsClassName = symbols.settingsClass ?: return false
+    val settingsInitMethod = symbols.settingsInitMethod ?: return false
+    val settingsContainerField = symbols.settingsContainerField ?: return false
     return try {
-        val settingsClass = safeFindClass(symbols.settingsClass, cl) ?: return false
+        val settingsClass = safeFindClass(settingsClassName, cl) ?: return false
         val navClass = safeFindClass(NAV_CLASS, cl) ?: return false
         val methodOk = settingsClass.declaredMethods.any { method ->
-            if (method.name != symbols.settingsInitMethod) return@any false
+            if (method.name != settingsInitMethod) return@any false
             if (method.returnType != Void.TYPE) return@any false
             val p = method.parameterTypes
             (p.size == 2 && Context::class.java.isAssignableFrom(p[0]) && navClass.isAssignableFrom(p[1])) ||
                 (p.size == 1 && View::class.java.isAssignableFrom(p[0]))
         }
         if (!methodOk) return false
-        settingsClass.declaredFields.any { it.name == symbols.settingsContainerField }
+        settingsClass.declaredFields.any { it.name == settingsContainerField }
     } catch (_: Throwable) {
         false
     }
