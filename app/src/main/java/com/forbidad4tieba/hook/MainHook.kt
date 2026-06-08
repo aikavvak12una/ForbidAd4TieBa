@@ -176,8 +176,7 @@ class MainHook : XposedModule() {
                     XposedCompat.log("[MainHook] > Symbol cache load FAILED, pending scan: ${t.message}")
                     XposedCompat.log(t)
                     SymbolLoadResult(
-                        symbols = HookSymbols(
-                            source = "unsupported",
+                        symbols = HookSymbols.unsupported(
                             featureStatusMap = HookSymbolResolver.featureStatusMap(null),
                         ),
                         pendingScan = true,
@@ -274,8 +273,7 @@ class MainHook : XposedModule() {
         if (cached != null) return SymbolLoadResult(cached, pendingScan = false)
 
         return SymbolLoadResult(
-            symbols = HookSymbols(
-                source = "unsupported",
+            symbols = HookSymbols.unsupported(
                 featureStatusMap = HookSymbolResolver.featureStatusMap(null),
             ),
             pendingScan = true,
