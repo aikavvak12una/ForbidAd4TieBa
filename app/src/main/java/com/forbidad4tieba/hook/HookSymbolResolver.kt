@@ -363,7 +363,7 @@ internal object HookSymbolResolver {
     }
 
     fun featureStatusMap(symbols: HookSymbols?): Map<String, HookFeatureStatus> {
-        val source = symbols ?: HookSymbols(source = "unsupported")
+        val source = symbols ?: HookSymbols.unsupported()
         if (source.featureStatusMap.isEmpty()) return HookFeatureStatusDeriver.derive(source)
         return LinkedHashMap<String, HookFeatureStatus>(HookFeatureStatusDeriver.derive(source)).apply {
             putAll(source.featureStatusMap)
@@ -3497,12 +3497,11 @@ internal object HookSymbolResolver {
         } catch (t: Throwable) {
             val scanErrors = ArrayList<String>(1)
             logScanException(logger, "Scan", scanErrors, t)
-            val unsupported = HookSymbols(
-                source = "unsupported",
+            val unsupported = HookSymbols.unsupported(
                 createdAt = System.currentTimeMillis(),
                 scanErrors = scanErrors,
             )
-            unsupported.copy(featureStatusMap = HookFeatureStatusDeriver.derive(unsupported))
+            unsupported.withFeatureStatusMap(HookFeatureStatusDeriver.derive(unsupported))
         }
         log(logger, "scan done: source=${scanned.source}")
         log(
@@ -3721,8 +3720,8 @@ internal object HookSymbolResolver {
                 "obfuscated=${scanCandidates.obfuscated.size}, expanded=${scanCandidates.expanded.size}",
         )
         if (candidatesWithWhitelist.isEmpty()) {
-            val unsupported = HookSymbols(source = "unsupported", createdAt = System.currentTimeMillis())
-            return unsupported.copy(featureStatusMap = HookFeatureStatusDeriver.derive(unsupported))
+            val unsupported = HookSymbols.unsupported(createdAt = System.currentTimeMillis())
+            return unsupported.withFeatureStatusMap(HookFeatureStatusDeriver.derive(unsupported))
         }
 
         val navClass = safeFindClass(NAV_CLASS, cl)
@@ -4662,255 +4661,255 @@ internal object HookSymbolResolver {
         aiPbPageBrowserAiEmojiCreationBindMethod = aiComponentScan.pbPageBrowserAiEmojiCreationBindMethod
         aiImageViewerJumpButtonOwnerClass = aiComponentScan.imageViewerJumpButtonOwnerClass
         aiImageViewerJumpButtonInitMethod = aiComponentScan.imageViewerJumpButtonInitMethod
-        val scanned = HookSymbols(
-            settingsClass = settingsMatch?.className,
-            settingsInitMethod = settingsMatch?.methodName,
-            settingsContainerField = settingsMatch?.fieldName,
-            homeTabClass = homeMatch?.className,
-            homeTabRebuildMethod = homeMatch?.methodName,
-            homeTabListField = homeMatch?.fieldName,
-            homeTabItemTypeField = homeTabItemTypeField,
-            homeTabItemCodeField = homeTabItemCodeField,
-            homeTabItemNameField = homeTabItemNameField,
-            homeTabItemUrlField = homeTabItemUrlField,
-            homeTabItemMainSetterMethod = homeTabItemMainSetterMethod,
-            homeTabItemMainIntField = homeTabItemMainIntField,
-            homeTabItemMainBooleanField = homeTabItemMainBooleanField,
-            feedTemplateKeyMethod = feedKeyMethod,
-            feedTemplatePayloadMethod = feedPayloadMethod,
-            feedTemplateLoadMoreMethod = feedLoadMoreMethod,
-            feedCardBindMethod = feedCardBindMethod,
-            feedCardDataListField = feedCardDataListField,
-            feedHeadParamsField = feedHeadParamsField,
-            feedRecommendCardNestedDataMethod = feedRecommendCardNestedDataMethod,
-            feedRecommendCardNestedDataListField = feedRecommendCardNestedDataListField,
-            replyServerResponseClass = replyServerResponseClass,
-            replyServerResponseDecodeMethod = replyServerResponseDecodeMethod,
-            replyServerResponseResultJsonField = replyServerResponseResultJsonField,
-            splashAdHelperClass = splashAdHelperClass,
-            splashAdHelperMethod = splashAdHelperMethod,
-            closeAdDataClass = closeAdDataClass,
-            closeAdDataMethodG1 = closeAdDataMethodG1,
-            closeAdDataMethodJ1 = closeAdDataMethodJ1,
-            zgaClass = zgaClass,
-            zgaMethods = zgaMethodsList,
-            searchBoxViewClass = searchBoxViewClass,
-            searchBoxSetHintMethod = searchBoxSetHintMethod,
-            homeSearchBoxOwnerClass = homeSearchBoxOwnerClass,
-            homeSearchBoxInitMethod = homeSearchBoxInitMethod,
-            homeSearchBoxGetterMethod = homeSearchBoxGetterMethod,
-            homePersonalizeAnchorClasses = homePersonalizeAnchorClasses,
-            homeRightSlotClass = homeRightSlotClass,
-            homeRightSlotStateMethods = homeRightSlotStateMethods,
-            pbFallingViewClass = pbFallingViewClass,
-            pbFallingInitMethod = pbFallingInitMethod,
-            pbFallingShowMethod = pbFallingShowMethod,
-            pbFallingClearMethod = pbFallingClearMethod,
-            pbEarlyAdInsertClass = pbEarlyAdInsertClass,
-            pbEarlyAdInsertMethodSpecs = pbEarlyAdInsertMethodSpecs,
-            pbAdBidCommonRequestModelClass = pbAdBidCommonRequestModelClass,
-            pbAdBidCommonRequestStartMethods = pbAdBidCommonRequestStartMethods,
-            pbAdBidCommonRequestNotifyMethod = pbAdBidCommonRequestNotifyMethod,
-            pbAdBidPageBrowserRequestModelClass = pbAdBidPageBrowserRequestModelClass,
-            pbAdBidPageBrowserRequestDataMethod = pbAdBidPageBrowserRequestDataMethod,
-            typeAdapterSetDataMethod = typeAdapterSetDataMethod,
-            typeAdapterDataItemClass = typeAdapterDataItemClass,
-            typeAdapterDataGetTypeMethod = typeAdapterDataGetTypeMethod,
-            enterForumWebControllerClass = enterForumWebControllerClass,
-            enterForumWebLoadMethod = enterForumWebLoadMethod,
-            enterForumInitInfoDataClass = enterForumInitInfoDataClass,
-            enterForumInitInfoGetUrlMethod = enterForumInitInfoGetUrlMethod,
-            plainUrlClickableSpanClass = plainUrlClickableSpanClass,
-            plainUrlClickableSpanOnClickMethod = plainUrlClickableSpanOnClickMethod,
-            plainUrlClickableSpanOnClickOwnerClasses = plainUrlClickableSpanOnClickOwnerClasses,
-            plainUrlClickableSpanTypeField = plainUrlClickableSpanTypeField,
-            plainUrlClickableSpanUrlField = plainUrlClickableSpanUrlField,
-            plainUrlClickableSpanTextField = plainUrlClickableSpanTextField,
-            plainUrlMessageManagerClass = plainUrlMessageManagerClass,
-            plainUrlMessageDispatchMethod = plainUrlMessageDispatchMethod,
-            plainUrlResponsedMessageClass = plainUrlResponsedMessageClass,
-            plainUrlResponsedMessageGetCmdMethod = plainUrlResponsedMessageGetCmdMethod,
-            plainUrlCustomResponsedMessageClass = plainUrlCustomResponsedMessageClass,
-            plainUrlCustomResponsedMessageGetDataMethod = plainUrlCustomResponsedMessageGetDataMethod,
-            plainUrlApplicationClass = plainUrlApplicationClass,
-            plainUrlApplicationGetInstMethod = plainUrlApplicationGetInstMethod,
-            privateReadReceiptModelClass = privateReadReceiptModelClass,
-            privateReadReceiptModelReadDispatchMethod = privateReadReceiptModelReadDispatchMethod,
-            privateReadReceiptMessageManagerClass = privateReadReceiptMessageManagerClass,
-            privateReadReceiptMessageManagerGetInstanceMethod = privateReadReceiptMessageManagerGetInstanceMethod,
-            privateReadReceiptMessageSendMethod = privateReadReceiptMessageSendMethod,
-            privateReadReceiptMessageBaseClass = privateReadReceiptMessageBaseClass,
-            privateReadReceiptRequestClass = privateReadReceiptRequestClass,
-            privateReadReceiptModelBaseClass = privateReadReceiptModelBaseClass,
-            privateReadReceiptCommitResponseClass = privateReadReceiptCommitResponseClass,
-            privateReadReceiptProcessAckMethod = privateReadReceiptProcessAckMethod,
-            privateReadReceiptResponseErrorMethod = privateReadReceiptResponseErrorMethod,
-            privateReadReceiptRequestMsgIdField = privateReadReceiptRequestMsgIdField,
-            privateReadReceiptRequestToUidField = privateReadReceiptRequestToUidField,
-            privateReadReceiptModelDataField = privateReadReceiptModelDataField,
-            privateReadReceiptPageDataClass = privateReadReceiptPageDataClass,
-            privateReadReceiptPageDataChatListMethod = privateReadReceiptPageDataChatListMethod,
-            privateReadReceiptChatMessageClass = privateReadReceiptChatMessageClass,
-            privateReadReceiptChatMessageMsgIdMethod = privateReadReceiptChatMessageMsgIdMethod,
-            privateReadReceiptChatMessageUserIdMethod = privateReadReceiptChatMessageUserIdMethod,
-            privateReadReceiptChatMessageLocalDataMethod = privateReadReceiptChatMessageLocalDataMethod,
-            privateReadReceiptLocalDataClass = privateReadReceiptLocalDataClass,
-            privateReadReceiptLocalDataStatusMethod = privateReadReceiptLocalDataStatusMethod,
-            privateReadReceiptAccountClass = privateReadReceiptAccountClass,
-            privateReadReceiptCurrentAccountMethod = privateReadReceiptCurrentAccountMethod,
-            mountCardLinkLayoutClass = mountCardLinkLayoutClass,
-            mountCardLinkLayoutOnClickMethod = mountCardLinkLayoutOnClickMethod,
-            mountCardLinkLayoutDataField = mountCardLinkLayoutDataField,
-            mountCardLinkInfoDataClass = mountCardLinkInfoDataClass,
-            mountCardLinkInfoGetUrlMethod = mountCardLinkInfoGetUrlMethod,
-            forumBottomSheetViewClass = forumBottomSheetViewClass,
-            forumBottomSheetInitScrollMethod = forumBottomSheetInitScrollMethod,
-            autoRefreshTriggerMethod = autoRefreshTriggerMethod,
-            autoLoadMoreConfigClass = autoLoadMoreConfigClass,
-            autoLoadMoreConfigMethod = autoLoadMoreConfigMethod,
-            pbCommentScrollListenerClass = pbCommentScrollListenerClass,
-            pbCommentScrollMethod = pbCommentScrollMethod,
-            pbCommentScrollFragmentField = pbCommentScrollFragmentField,
-            pbCommentScrollBottomListenerField = pbCommentScrollBottomListenerField,
-            pbCommentScrollBottomMethod = pbCommentScrollBottomMethod,
-            pbCommentBottomListScrollClass = pbCommentBottomListScrollClass,
-            pbCommentBottomListScrollMethod = pbCommentBottomListScrollMethod,
-            pbCommentBottomListOwnerField = pbCommentBottomListOwnerField,
-            pbCommentBottomRecyclerScrollClass = pbCommentBottomRecyclerScrollClass,
-            pbCommentBottomRecyclerScrollMethod = pbCommentBottomRecyclerScrollMethod,
-            pbCommentBottomRecyclerOwnerField = pbCommentBottomRecyclerOwnerField,
-            pbGestureScaleManagerClass = pbGestureScaleManagerClass,
-            pbGestureScaleDispatchMethod = pbGestureScaleDispatchMethod,
-            pbGestureScaleListenerSetterMethod = pbGestureScaleListenerSetterMethod,
-            pbGestureScaleListenerClass = pbGestureScaleListenerClass,
-            pbGestureScaleListenerOnScaleMethod = pbGestureScaleListenerOnScaleMethod,
-            pbLikeAutoReplyAgreeViewClass = pbLikeAutoReplyAgreeViewClass,
-            pbLikeAutoReplyAgreeClickMethod = pbLikeAutoReplyAgreeClickMethod,
-            pbLikeAutoReplyAgreeViewGetDataMethod = pbLikeAutoReplyAgreeViewGetDataMethod,
-            pbLikeAutoReplyAgreeDataClass = pbLikeAutoReplyAgreeDataClass,
-            pbLikeAutoReplyAgreeDataHasAgreeField = pbLikeAutoReplyAgreeDataHasAgreeField,
-            pbLikeAutoReplyAgreeDataAgreeTypeField = pbLikeAutoReplyAgreeDataAgreeTypeField,
-            pbLikeAutoReplyAgreeDataIsInThreadField = pbLikeAutoReplyAgreeDataIsInThreadField,
-            pbLikeAutoReplyInputContainerClass = pbLikeAutoReplyInputContainerClass,
-            pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyInputContainerGetInputViewMethod,
-            pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyInputContainerGetSendViewMethod,
+        val scanned = buildHookSymbols {
+            settingsClass = settingsMatch?.className
+            settingsInitMethod = settingsMatch?.methodName
+            settingsContainerField = settingsMatch?.fieldName
+            homeTabClass = homeMatch?.className
+            homeTabRebuildMethod = homeMatch?.methodName
+            homeTabListField = homeMatch?.fieldName
+            this.homeTabItemTypeField = homeTabItemTypeField
+            this.homeTabItemCodeField = homeTabItemCodeField
+            this.homeTabItemNameField = homeTabItemNameField
+            this.homeTabItemUrlField = homeTabItemUrlField
+            this.homeTabItemMainSetterMethod = homeTabItemMainSetterMethod
+            this.homeTabItemMainIntField = homeTabItemMainIntField
+            this.homeTabItemMainBooleanField = homeTabItemMainBooleanField
+            feedTemplateKeyMethod = feedKeyMethod
+            feedTemplatePayloadMethod = feedPayloadMethod
+            feedTemplateLoadMoreMethod = feedLoadMoreMethod
+            this.feedCardBindMethod = feedCardBindMethod
+            this.feedCardDataListField = feedCardDataListField
+            this.feedHeadParamsField = feedHeadParamsField
+            this.feedRecommendCardNestedDataMethod = feedRecommendCardNestedDataMethod
+            this.feedRecommendCardNestedDataListField = feedRecommendCardNestedDataListField
+            this.replyServerResponseClass = replyServerResponseClass
+            this.replyServerResponseDecodeMethod = replyServerResponseDecodeMethod
+            this.replyServerResponseResultJsonField = replyServerResponseResultJsonField
+            this.splashAdHelperClass = splashAdHelperClass
+            this.splashAdHelperMethod = splashAdHelperMethod
+            this.closeAdDataClass = closeAdDataClass
+            this.closeAdDataMethodG1 = closeAdDataMethodG1
+            this.closeAdDataMethodJ1 = closeAdDataMethodJ1
+            this.zgaClass = zgaClass
+            zgaMethods = zgaMethodsList
+            this.searchBoxViewClass = searchBoxViewClass
+            this.searchBoxSetHintMethod = searchBoxSetHintMethod
+            this.homeSearchBoxOwnerClass = homeSearchBoxOwnerClass
+            this.homeSearchBoxInitMethod = homeSearchBoxInitMethod
+            this.homeSearchBoxGetterMethod = homeSearchBoxGetterMethod
+            this.homePersonalizeAnchorClasses = homePersonalizeAnchorClasses
+            this.homeRightSlotClass = homeRightSlotClass
+            this.homeRightSlotStateMethods = homeRightSlotStateMethods
+            this.pbFallingViewClass = pbFallingViewClass
+            this.pbFallingInitMethod = pbFallingInitMethod
+            this.pbFallingShowMethod = pbFallingShowMethod
+            this.pbFallingClearMethod = pbFallingClearMethod
+            this.pbEarlyAdInsertClass = pbEarlyAdInsertClass
+            this.pbEarlyAdInsertMethodSpecs = pbEarlyAdInsertMethodSpecs
+            this.pbAdBidCommonRequestModelClass = pbAdBidCommonRequestModelClass
+            this.pbAdBidCommonRequestStartMethods = pbAdBidCommonRequestStartMethods
+            this.pbAdBidCommonRequestNotifyMethod = pbAdBidCommonRequestNotifyMethod
+            this.pbAdBidPageBrowserRequestModelClass = pbAdBidPageBrowserRequestModelClass
+            this.pbAdBidPageBrowserRequestDataMethod = pbAdBidPageBrowserRequestDataMethod
+            this.typeAdapterSetDataMethod = typeAdapterSetDataMethod
+            this.typeAdapterDataItemClass = typeAdapterDataItemClass
+            this.typeAdapterDataGetTypeMethod = typeAdapterDataGetTypeMethod
+            this.enterForumWebControllerClass = enterForumWebControllerClass
+            this.enterForumWebLoadMethod = enterForumWebLoadMethod
+            this.enterForumInitInfoDataClass = enterForumInitInfoDataClass
+            this.enterForumInitInfoGetUrlMethod = enterForumInitInfoGetUrlMethod
+            this.plainUrlClickableSpanClass = plainUrlClickableSpanClass
+            this.plainUrlClickableSpanOnClickMethod = plainUrlClickableSpanOnClickMethod
+            this.plainUrlClickableSpanOnClickOwnerClasses = plainUrlClickableSpanOnClickOwnerClasses
+            this.plainUrlClickableSpanTypeField = plainUrlClickableSpanTypeField
+            this.plainUrlClickableSpanUrlField = plainUrlClickableSpanUrlField
+            this.plainUrlClickableSpanTextField = plainUrlClickableSpanTextField
+            this.plainUrlMessageManagerClass = plainUrlMessageManagerClass
+            this.plainUrlMessageDispatchMethod = plainUrlMessageDispatchMethod
+            this.plainUrlResponsedMessageClass = plainUrlResponsedMessageClass
+            this.plainUrlResponsedMessageGetCmdMethod = plainUrlResponsedMessageGetCmdMethod
+            this.plainUrlCustomResponsedMessageClass = plainUrlCustomResponsedMessageClass
+            this.plainUrlCustomResponsedMessageGetDataMethod = plainUrlCustomResponsedMessageGetDataMethod
+            this.plainUrlApplicationClass = plainUrlApplicationClass
+            this.plainUrlApplicationGetInstMethod = plainUrlApplicationGetInstMethod
+            this.privateReadReceiptModelClass = privateReadReceiptModelClass
+            this.privateReadReceiptModelReadDispatchMethod = privateReadReceiptModelReadDispatchMethod
+            this.privateReadReceiptMessageManagerClass = privateReadReceiptMessageManagerClass
+            this.privateReadReceiptMessageManagerGetInstanceMethod = privateReadReceiptMessageManagerGetInstanceMethod
+            this.privateReadReceiptMessageSendMethod = privateReadReceiptMessageSendMethod
+            this.privateReadReceiptMessageBaseClass = privateReadReceiptMessageBaseClass
+            this.privateReadReceiptRequestClass = privateReadReceiptRequestClass
+            this.privateReadReceiptModelBaseClass = privateReadReceiptModelBaseClass
+            this.privateReadReceiptCommitResponseClass = privateReadReceiptCommitResponseClass
+            this.privateReadReceiptProcessAckMethod = privateReadReceiptProcessAckMethod
+            this.privateReadReceiptResponseErrorMethod = privateReadReceiptResponseErrorMethod
+            this.privateReadReceiptRequestMsgIdField = privateReadReceiptRequestMsgIdField
+            this.privateReadReceiptRequestToUidField = privateReadReceiptRequestToUidField
+            this.privateReadReceiptModelDataField = privateReadReceiptModelDataField
+            this.privateReadReceiptPageDataClass = privateReadReceiptPageDataClass
+            this.privateReadReceiptPageDataChatListMethod = privateReadReceiptPageDataChatListMethod
+            this.privateReadReceiptChatMessageClass = privateReadReceiptChatMessageClass
+            this.privateReadReceiptChatMessageMsgIdMethod = privateReadReceiptChatMessageMsgIdMethod
+            this.privateReadReceiptChatMessageUserIdMethod = privateReadReceiptChatMessageUserIdMethod
+            this.privateReadReceiptChatMessageLocalDataMethod = privateReadReceiptChatMessageLocalDataMethod
+            this.privateReadReceiptLocalDataClass = privateReadReceiptLocalDataClass
+            this.privateReadReceiptLocalDataStatusMethod = privateReadReceiptLocalDataStatusMethod
+            this.privateReadReceiptAccountClass = privateReadReceiptAccountClass
+            this.privateReadReceiptCurrentAccountMethod = privateReadReceiptCurrentAccountMethod
+            this.mountCardLinkLayoutClass = mountCardLinkLayoutClass
+            this.mountCardLinkLayoutOnClickMethod = mountCardLinkLayoutOnClickMethod
+            this.mountCardLinkLayoutDataField = mountCardLinkLayoutDataField
+            this.mountCardLinkInfoDataClass = mountCardLinkInfoDataClass
+            this.mountCardLinkInfoGetUrlMethod = mountCardLinkInfoGetUrlMethod
+            this.forumBottomSheetViewClass = forumBottomSheetViewClass
+            this.forumBottomSheetInitScrollMethod = forumBottomSheetInitScrollMethod
+            this.autoRefreshTriggerMethod = autoRefreshTriggerMethod
+            this.autoLoadMoreConfigClass = autoLoadMoreConfigClass
+            this.autoLoadMoreConfigMethod = autoLoadMoreConfigMethod
+            this.pbCommentScrollListenerClass = pbCommentScrollListenerClass
+            this.pbCommentScrollMethod = pbCommentScrollMethod
+            this.pbCommentScrollFragmentField = pbCommentScrollFragmentField
+            this.pbCommentScrollBottomListenerField = pbCommentScrollBottomListenerField
+            this.pbCommentScrollBottomMethod = pbCommentScrollBottomMethod
+            this.pbCommentBottomListScrollClass = pbCommentBottomListScrollClass
+            this.pbCommentBottomListScrollMethod = pbCommentBottomListScrollMethod
+            this.pbCommentBottomListOwnerField = pbCommentBottomListOwnerField
+            this.pbCommentBottomRecyclerScrollClass = pbCommentBottomRecyclerScrollClass
+            this.pbCommentBottomRecyclerScrollMethod = pbCommentBottomRecyclerScrollMethod
+            this.pbCommentBottomRecyclerOwnerField = pbCommentBottomRecyclerOwnerField
+            this.pbGestureScaleManagerClass = pbGestureScaleManagerClass
+            this.pbGestureScaleDispatchMethod = pbGestureScaleDispatchMethod
+            this.pbGestureScaleListenerSetterMethod = pbGestureScaleListenerSetterMethod
+            this.pbGestureScaleListenerClass = pbGestureScaleListenerClass
+            this.pbGestureScaleListenerOnScaleMethod = pbGestureScaleListenerOnScaleMethod
+            this.pbLikeAutoReplyAgreeViewClass = pbLikeAutoReplyAgreeViewClass
+            this.pbLikeAutoReplyAgreeClickMethod = pbLikeAutoReplyAgreeClickMethod
+            this.pbLikeAutoReplyAgreeViewGetDataMethod = pbLikeAutoReplyAgreeViewGetDataMethod
+            this.pbLikeAutoReplyAgreeDataClass = pbLikeAutoReplyAgreeDataClass
+            this.pbLikeAutoReplyAgreeDataHasAgreeField = pbLikeAutoReplyAgreeDataHasAgreeField
+            this.pbLikeAutoReplyAgreeDataAgreeTypeField = pbLikeAutoReplyAgreeDataAgreeTypeField
+            this.pbLikeAutoReplyAgreeDataIsInThreadField = pbLikeAutoReplyAgreeDataIsInThreadField
+            this.pbLikeAutoReplyInputContainerClass = pbLikeAutoReplyInputContainerClass
+            this.pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyInputContainerGetInputViewMethod
+            this.pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyInputContainerGetSendViewMethod
 
-            collectionPresenterField = collectionPresenterField,
-            collectionPresenterListSetterMethod = collectionPresenterListSetterMethod,
-            collectionPresenterAdapterField = collectionPresenterAdapterField,
-            collectionModelField = collectionModelField,
-            collectionModelListGetterMethod = collectionModelListGetterMethod,
-            collectionModelParseMethod = collectionModelParseMethod,
-            collectionModelListField = collectionModelListField,
-            collectionFragmentDisplayListField = collectionFragmentDisplayListField,
-            collectionActivityNavControllerField = collectionActivityNavControllerField,
-            collectionNavBarField = collectionNavBarField,
-            collectionAdapterShowFooterMethod = collectionAdapterShowFooterMethod,
-            collectionAdapterLoadingMethod = collectionAdapterLoadingMethod,
-            collectionAdapterHasMoreMethod = collectionAdapterHasMoreMethod,
-            collectionEditModeMethod = collectionEditModeMethod,
+            this.collectionPresenterField = collectionPresenterField
+            this.collectionPresenterListSetterMethod = collectionPresenterListSetterMethod
+            this.collectionPresenterAdapterField = collectionPresenterAdapterField
+            this.collectionModelField = collectionModelField
+            this.collectionModelListGetterMethod = collectionModelListGetterMethod
+            this.collectionModelParseMethod = collectionModelParseMethod
+            this.collectionModelListField = collectionModelListField
+            this.collectionFragmentDisplayListField = collectionFragmentDisplayListField
+            this.collectionActivityNavControllerField = collectionActivityNavControllerField
+            this.collectionNavBarField = collectionNavBarField
+            this.collectionAdapterShowFooterMethod = collectionAdapterShowFooterMethod
+            this.collectionAdapterLoadingMethod = collectionAdapterLoadingMethod
+            this.collectionAdapterHasMoreMethod = collectionAdapterHasMoreMethod
+            this.collectionEditModeMethod = collectionEditModeMethod
 
-            historyAdapterField = historyAdapterField,
-            historyAdapterSetListMethod = historyAdapterSetListMethod,
-            historyListField = historyListField,
-            historyActivityListUpdateMethod = historyActivityListUpdateMethod,
-            historyActivityNavBarField = historyActivityNavBarField,
-            historyThreadNameMethod = historyThreadNameMethod,
-            historyForumNameMethod = historyForumNameMethod,
-            historyUserNameMethod = historyUserNameMethod,
-            historyDescriptionMethod = historyDescriptionMethod,
-            historyThreadIdMethod = historyThreadIdMethod,
-            historyPostIdMethod = historyPostIdMethod,
-            historyLiveIdMethod = historyLiveIdMethod,
+            this.historyAdapterField = historyAdapterField
+            this.historyAdapterSetListMethod = historyAdapterSetListMethod
+            this.historyListField = historyListField
+            this.historyActivityListUpdateMethod = historyActivityListUpdateMethod
+            this.historyActivityNavBarField = historyActivityNavBarField
+            this.historyThreadNameMethod = historyThreadNameMethod
+            this.historyForumNameMethod = historyForumNameMethod
+            this.historyUserNameMethod = historyUserNameMethod
+            this.historyDescriptionMethod = historyDescriptionMethod
+            this.historyThreadIdMethod = historyThreadIdMethod
+            this.historyPostIdMethod = historyPostIdMethod
+            this.historyLiveIdMethod = historyLiveIdMethod
 
-            msgTabLocateToTabMethod = msgTabLocateToTabMethod,
-            msgTabContainerSelectMethod = msgTabContainerSelectMethod,
-            msgTabContainerExtDataField = msgTabContainerExtDataField,
-            freeCopyPopupMenuClass = freeCopyPopupMenuClass,
-            freeCopyPopupContentViewMethod = freeCopyPopupContentViewMethod,
-            freeCopyPopupTextField = freeCopyPopupTextField,
+            this.msgTabLocateToTabMethod = msgTabLocateToTabMethod
+            this.msgTabContainerSelectMethod = msgTabContainerSelectMethod
+            this.msgTabContainerExtDataField = msgTabContainerExtDataField
+            this.freeCopyPopupMenuClass = freeCopyPopupMenuClass
+            this.freeCopyPopupContentViewMethod = freeCopyPopupContentViewMethod
+            this.freeCopyPopupTextField = freeCopyPopupTextField
 
-            mainTabDataClass = mainTabDataClass,
-            mainTabAddMethod = mainTabAddMethod,
-            mainTabGetListMethod = mainTabGetListMethod,
-            mainTabDelegateGetStructureMethod = mainTabDelegateGetStructureMethod,
-            mainTabStructureTypeField = mainTabStructureTypeField,
-            mainTabStructureDynamicIconField = mainTabStructureDynamicIconField,
-            mainTabStructureFragmentField = mainTabStructureFragmentField,
+            this.mainTabDataClass = mainTabDataClass
+            this.mainTabAddMethod = mainTabAddMethod
+            this.mainTabGetListMethod = mainTabGetListMethod
+            this.mainTabDelegateGetStructureMethod = mainTabDelegateGetStructureMethod
+            this.mainTabStructureTypeField = mainTabStructureTypeField
+            this.mainTabStructureDynamicIconField = mainTabStructureDynamicIconField
+            this.mainTabStructureFragmentField = mainTabStructureFragmentField
 
-            origImagePagerAdapterClass = originalImageScan.pagerAdapterClass,
-            origImageUrlDragImageViewClass = originalImageScan.urlDragImageViewClass,
-            origImageDataClass = originalImageScan.dataClass,
-            origImageSetPrimaryItemMethod = originalImageScan.setPrimaryItemMethod,
-            origImageSetAssistUrlMethod = originalImageScan.setAssistUrlMethod,
-            origImageAssistDataMethod = originalImageScan.assistDataMethod,
-            origImageOriginTextMethod = originalImageScan.originTextMethod,
-            origImageShowButtonField = originalImageScan.showButtonField,
-            origImageBlockedField = originalImageScan.blockedField,
-            origImageOriginalProcessField = originalImageScan.originalProcessField,
-            origImageOriginalUrlField = originalImageScan.originalUrlField,
-            origImageSharedPrefHelperClass = originalImageScan.sharedPrefHelperClass,
-            origImageSharedPrefGetInstanceMethod = originalImageScan.sharedPrefGetInstanceMethod,
-            origImageSharedPrefPutBooleanMethod = originalImageScan.sharedPrefPutBooleanMethod,
-            origImageMd5Class = originalImageScan.md5Class,
-            origImageMd5Method = originalImageScan.md5Method,
-            origImagePrimaryReadyMethod = originalImageScan.primaryReadyMethod,
-            origImageTriggerMethod = originalImageScan.triggerMethod,
-            origImageDirectStartMethod = originalImageScan.directStartMethod,
-            shareTrackBuilderClass = shareTrackBuilderClass,
-            shareTrackBuildUrlMethod = shareTrackBuildUrlMethod,
-            shareTrackAppendQueryMethod = shareTrackAppendQueryMethod,
-            imageViewerShareConfigClass = imageViewerShareConfigClass,
-            imageViewerShareIsDialogField = imageViewerShareIsDialogField,
-            imageViewerShareItemField = imageViewerShareItemField,
-            imageViewerShareAddOutsideMethod = imageViewerShareAddOutsideMethod,
-            imageViewerShareGetRequestDataMethod = imageViewerShareGetRequestDataMethod,
-            imageViewerShareSetRequestDataMethod = imageViewerShareSetRequestDataMethod,
-            imageViewerShareGetContextMethod = imageViewerShareGetContextMethod,
-            imageViewerShareItemClass = imageViewerShareItemClass,
-            imageViewerShareItemTitleField = imageViewerShareItemTitleField,
-            imageViewerShareItemContentField = imageViewerShareItemContentField,
-            imageViewerShareItemLinkUrlField = imageViewerShareItemLinkUrlField,
-            imageViewerShareItemImageUriField = imageViewerShareItemImageUriField,
-            imageViewerShareItemImageUrlField = imageViewerShareItemImageUrlField,
-            imageViewerShareItemLocalFileField = imageViewerShareItemLocalFileField,
-            imageViewerShareItemViewClass = imageViewerShareItemViewClass,
-            imageViewerShareItemNameByResMethod = imageViewerShareItemNameByResMethod,
-            imageViewerShareItemNameByTextMethod = imageViewerShareItemNameByTextMethod,
-            imageViewerShareIconResId = imageViewerShareIconResId,
-            homeNativeGlassSubPbNextPageMoreViewId = homeNativeGlassSubPbNextPageMoreViewId,
-            homeNativeGlassPbReplyTitleDividerViewId = homeNativeGlassPbReplyTitleDividerViewId,
-            homeNativeGlassDynamicBackgroundColorIds = homeNativeGlassDynamicBackgroundColorIds,
-            homeNativeGlassReadableTextResourceIdsByName = homeNativeGlassReadableTextResourceIdsByName,
-            homeNativeGlassSortSwitchBackgroundPaintField = homeNativeGlassSortSwitchBackgroundPaintField,
-            homeNativeGlassSortSwitchSlideDrawMethod = homeNativeGlassSortSwitchSlideDrawMethod,
-            homeNativeGlassSortSwitchSlidePathField = homeNativeGlassSortSwitchSlidePathField,
-            homeNativeGlassEnterForumCapsuleControllerClass =
-                homeNativeGlassEnterForumCapsuleControllerClass,
-            homeNativeGlassEnterForumCapsuleInitMethod =
-                homeNativeGlassEnterForumCapsuleInitMethod,
-            homeNativeGlassEnterForumCapsuleRefreshMethod =
-                homeNativeGlassEnterForumCapsuleRefreshMethod,
-            homeNativeGlassEnterForumCapsuleViewField =
-                homeNativeGlassEnterForumCapsuleViewField,
-            homeNativeGlassEnterForumCapsuleTitleField =
-                homeNativeGlassEnterForumCapsuleTitleField,
-            pbCommonLayoutPreloaderGetOrDefaultMethod = pbCommonLayoutPreloaderGetOrDefaultMethod,
-            aiSpriteMemePanControllerClass = aiSpriteMemePanControllerClass,
-            aiSpriteMemeEnableMethod = aiSpriteMemeEnableMethod,
-            aiPbNewInputContainerClass = aiPbNewInputContainerClass,
-            aiPbNewInputContainerInitSpriteMemeMethod = aiPbNewInputContainerInitSpriteMemeMethod,
-            aiPbNewInputContainerInitAiWriteMethod = aiPbNewInputContainerInitAiWriteMethod,
-            aiPbAiEmojiCreationViewBindMethod = aiPbAiEmojiCreationViewBindMethod,
-            aiPbPageBrowserAiEmojiCreationBindMethod = aiPbPageBrowserAiEmojiCreationBindMethod,
-            aiImageViewerJumpButtonOwnerClass = aiImageViewerJumpButtonOwnerClass,
-            aiImageViewerJumpButtonInitMethod = aiImageViewerJumpButtonInitMethod,
+            origImagePagerAdapterClass = originalImageScan.pagerAdapterClass
+            origImageUrlDragImageViewClass = originalImageScan.urlDragImageViewClass
+            origImageDataClass = originalImageScan.dataClass
+            origImageSetPrimaryItemMethod = originalImageScan.setPrimaryItemMethod
+            origImageSetAssistUrlMethod = originalImageScan.setAssistUrlMethod
+            origImageAssistDataMethod = originalImageScan.assistDataMethod
+            origImageOriginTextMethod = originalImageScan.originTextMethod
+            origImageShowButtonField = originalImageScan.showButtonField
+            origImageBlockedField = originalImageScan.blockedField
+            origImageOriginalProcessField = originalImageScan.originalProcessField
+            origImageOriginalUrlField = originalImageScan.originalUrlField
+            origImageSharedPrefHelperClass = originalImageScan.sharedPrefHelperClass
+            origImageSharedPrefGetInstanceMethod = originalImageScan.sharedPrefGetInstanceMethod
+            origImageSharedPrefPutBooleanMethod = originalImageScan.sharedPrefPutBooleanMethod
+            origImageMd5Class = originalImageScan.md5Class
+            origImageMd5Method = originalImageScan.md5Method
+            origImagePrimaryReadyMethod = originalImageScan.primaryReadyMethod
+            origImageTriggerMethod = originalImageScan.triggerMethod
+            origImageDirectStartMethod = originalImageScan.directStartMethod
+            this.shareTrackBuilderClass = shareTrackBuilderClass
+            this.shareTrackBuildUrlMethod = shareTrackBuildUrlMethod
+            this.shareTrackAppendQueryMethod = shareTrackAppendQueryMethod
+            this.imageViewerShareConfigClass = imageViewerShareConfigClass
+            this.imageViewerShareIsDialogField = imageViewerShareIsDialogField
+            this.imageViewerShareItemField = imageViewerShareItemField
+            this.imageViewerShareAddOutsideMethod = imageViewerShareAddOutsideMethod
+            this.imageViewerShareGetRequestDataMethod = imageViewerShareGetRequestDataMethod
+            this.imageViewerShareSetRequestDataMethod = imageViewerShareSetRequestDataMethod
+            this.imageViewerShareGetContextMethod = imageViewerShareGetContextMethod
+            this.imageViewerShareItemClass = imageViewerShareItemClass
+            this.imageViewerShareItemTitleField = imageViewerShareItemTitleField
+            this.imageViewerShareItemContentField = imageViewerShareItemContentField
+            this.imageViewerShareItemLinkUrlField = imageViewerShareItemLinkUrlField
+            this.imageViewerShareItemImageUriField = imageViewerShareItemImageUriField
+            this.imageViewerShareItemImageUrlField = imageViewerShareItemImageUrlField
+            this.imageViewerShareItemLocalFileField = imageViewerShareItemLocalFileField
+            this.imageViewerShareItemViewClass = imageViewerShareItemViewClass
+            this.imageViewerShareItemNameByResMethod = imageViewerShareItemNameByResMethod
+            this.imageViewerShareItemNameByTextMethod = imageViewerShareItemNameByTextMethod
+            this.imageViewerShareIconResId = imageViewerShareIconResId
+            this.homeNativeGlassSubPbNextPageMoreViewId = homeNativeGlassSubPbNextPageMoreViewId
+            this.homeNativeGlassPbReplyTitleDividerViewId = homeNativeGlassPbReplyTitleDividerViewId
+            this.homeNativeGlassDynamicBackgroundColorIds = homeNativeGlassDynamicBackgroundColorIds
+            this.homeNativeGlassReadableTextResourceIdsByName = homeNativeGlassReadableTextResourceIdsByName
+            this.homeNativeGlassSortSwitchBackgroundPaintField = homeNativeGlassSortSwitchBackgroundPaintField
+            this.homeNativeGlassSortSwitchSlideDrawMethod = homeNativeGlassSortSwitchSlideDrawMethod
+            this.homeNativeGlassSortSwitchSlidePathField = homeNativeGlassSortSwitchSlidePathField
+            this.homeNativeGlassEnterForumCapsuleControllerClass =
+                homeNativeGlassEnterForumCapsuleControllerClass
+            this.homeNativeGlassEnterForumCapsuleInitMethod =
+                homeNativeGlassEnterForumCapsuleInitMethod
+            this.homeNativeGlassEnterForumCapsuleRefreshMethod =
+                homeNativeGlassEnterForumCapsuleRefreshMethod
+            this.homeNativeGlassEnterForumCapsuleViewField =
+                homeNativeGlassEnterForumCapsuleViewField
+            this.homeNativeGlassEnterForumCapsuleTitleField =
+                homeNativeGlassEnterForumCapsuleTitleField
+            this.pbCommonLayoutPreloaderGetOrDefaultMethod = pbCommonLayoutPreloaderGetOrDefaultMethod
+            this.aiSpriteMemePanControllerClass = aiSpriteMemePanControllerClass
+            this.aiSpriteMemeEnableMethod = aiSpriteMemeEnableMethod
+            this.aiPbNewInputContainerClass = aiPbNewInputContainerClass
+            this.aiPbNewInputContainerInitSpriteMemeMethod = aiPbNewInputContainerInitSpriteMemeMethod
+            this.aiPbNewInputContainerInitAiWriteMethod = aiPbNewInputContainerInitAiWriteMethod
+            this.aiPbAiEmojiCreationViewBindMethod = aiPbAiEmojiCreationViewBindMethod
+            this.aiPbPageBrowserAiEmojiCreationBindMethod = aiPbPageBrowserAiEmojiCreationBindMethod
+            this.aiImageViewerJumpButtonOwnerClass = aiImageViewerJumpButtonOwnerClass
+            this.aiImageViewerJumpButtonInitMethod = aiImageViewerJumpButtonInitMethod
 
-            scanErrors = scanErrors,
-            source = if (homeMatch != null) "scan" else "partial",
-            createdAt = System.currentTimeMillis(),
-        )
-        return scanned.copy(featureStatusMap = HookFeatureStatusDeriver.derive(scanned))
+            this.scanErrors = scanErrors
+            source = if (homeMatch != null) "scan" else "partial"
+            createdAt = System.currentTimeMillis()
+        }
+        return scanned.withFeatureStatusMap(HookFeatureStatusDeriver.derive(scanned))
     }
 
     private fun scanReplyServerResponseLogSymbols(
@@ -6561,30 +6560,30 @@ internal object HookSymbolResolver {
         logger: ScanLogger?,
     ): HookSymbols {
         val versionInfo = readTargetAppVersionInfo(context, logger)
-            ?: return symbols.copy(scanSupportState = ScanSupportState.UNKNOWN)
+            ?: return symbols.withScanSupport(ScanSupportState.UNKNOWN)
 
         if (
             versionInfo.versionCode > MAX_TIEBA_VERSION_CODE ||
             versionInfo.versionCode < MIN_TIEBA_VERSION_CODE
         ) {
-            return symbols.copy(
-                scanSupportState = ScanSupportState.UNSUPPORTED_VERSION,
-                scanTargetVersionCode = versionInfo.versionCode,
-                scanTargetVersionName = versionInfo.versionName,
-                scanTargetVersionType = null,
+            return symbols.withScanSupport(
+                state = ScanSupportState.UNSUPPORTED_VERSION,
+                targetVersionCode = versionInfo.versionCode,
+                targetVersionName = versionInfo.versionName,
+                targetVersionType = null,
             )
         }
 
         val versionType = readTargetVersionType(context, logger)
-        return symbols.copy(
-            scanSupportState = if (isOfficialTiebaVersionType(versionType)) {
+        return symbols.withScanSupport(
+            state = if (isOfficialTiebaVersionType(versionType)) {
                 ScanSupportState.SUPPORTED
             } else {
                 ScanSupportState.NON_OFFICIAL
             },
-            scanTargetVersionCode = versionInfo.versionCode,
-            scanTargetVersionName = versionInfo.versionName,
-            scanTargetVersionType = versionType,
+            targetVersionCode = versionInfo.versionCode,
+            targetVersionName = versionInfo.versionName,
+            targetVersionType = versionType,
         )
     }
 
@@ -6779,13 +6778,14 @@ internal object HookSymbolResolver {
             null
         }
 
+        val plainUrlClickableSpanOnClickOwnerClasses = symbols.plainUrlClickableSpanOnClickOwnerClasses
         val plainUrlValue = when {
-            !symbols.plainUrlClickableSpanOnClickOwnerClasses.isNullOrEmpty() &&
+            !plainUrlClickableSpanOnClickOwnerClasses.isNullOrEmpty() &&
                 !symbols.plainUrlClickableSpanOnClickMethod.isNullOrBlank() &&
                 !symbols.plainUrlClickableSpanTypeField.isNullOrBlank() &&
                 !symbols.plainUrlClickableSpanUrlField.isNullOrBlank() &&
                 !symbols.plainUrlClickableSpanTextField.isNullOrBlank() -> {
-                "${symbols.plainUrlClickableSpanOnClickOwnerClasses.joinToString(",")}.${symbols.plainUrlClickableSpanOnClickMethod}[${symbols.plainUrlClickableSpanTypeField},${symbols.plainUrlClickableSpanUrlField},${symbols.plainUrlClickableSpanTextField}]"
+                "${plainUrlClickableSpanOnClickOwnerClasses.joinToString(",")}.${symbols.plainUrlClickableSpanOnClickMethod}[${symbols.plainUrlClickableSpanTypeField},${symbols.plainUrlClickableSpanUrlField},${symbols.plainUrlClickableSpanTextField}]"
             }
             !symbols.plainUrlMessageManagerClass.isNullOrBlank() &&
                 !symbols.plainUrlMessageDispatchMethod.isNullOrBlank() &&

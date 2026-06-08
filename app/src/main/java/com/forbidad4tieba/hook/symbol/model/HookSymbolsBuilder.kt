@@ -1,0 +1,680 @@
+package com.forbidad4tieba.hook.symbol.model
+
+internal class HookSymbolsBuilder {
+    var homeTabClass: String? = null
+    var homeTabRebuildMethod: String? = null
+    var homeTabListField: String? = null
+    var homeTabItemTypeField: String? = null
+    var homeTabItemCodeField: String? = null
+    var homeTabItemNameField: String? = null
+    var homeTabItemUrlField: String? = null
+    var homeTabItemMainSetterMethod: String? = null
+    var homeTabItemMainIntField: String? = null
+    var homeTabItemMainBooleanField: String? = null
+    var settingsClass: String? = null
+    var settingsInitMethod: String? = null
+    var settingsContainerField: String? = null
+    var feedTemplateKeyMethod: String? = null
+    var feedTemplatePayloadMethod: String? = null
+    var feedTemplateLoadMoreMethod: String? = null
+    var splashAdHelperClass: String? = null
+    var splashAdHelperMethod: String? = null
+    var closeAdDataClass: String? = null
+    var closeAdDataMethodG1: String? = null
+    var closeAdDataMethodJ1: String? = null
+    var zgaClass: String? = null
+    var zgaMethods: List<String>? = null
+    var searchBoxViewClass: String? = null
+    var searchBoxSetHintMethod: String? = null
+    var homeSearchBoxOwnerClass: String? = null
+    var homeSearchBoxInitMethod: String? = null
+    var homeSearchBoxGetterMethod: String? = null
+    var homePersonalizeAnchorClasses: List<String>? = null
+    var homeRightSlotClass: String? = null
+    var homeRightSlotStateMethods: List<String>? = null
+    var pbFallingViewClass: String? = null
+    var pbFallingInitMethod: String? = null
+    var pbFallingShowMethod: String? = null
+    var pbFallingClearMethod: String? = null
+    var pbEarlyAdInsertClass: String? = null
+    var pbEarlyAdInsertMethodSpecs: List<String>? = null
+    var pbAdBidCommonRequestModelClass: String? = null
+    var pbAdBidCommonRequestStartMethods: List<String>? = null
+    var pbAdBidCommonRequestNotifyMethod: String? = null
+    var pbAdBidPageBrowserRequestModelClass: String? = null
+    var pbAdBidPageBrowserRequestDataMethod: String? = null
+    var typeAdapterSetDataMethod: String? = null
+    var typeAdapterDataItemClass: String? = null
+    var typeAdapterDataGetTypeMethod: String? = null
+    var enterForumWebControllerClass: String? = null
+    var enterForumWebLoadMethod: String? = null
+    var enterForumInitInfoDataClass: String? = null
+    var enterForumInitInfoGetUrlMethod: String? = null
+    var plainUrlClickableSpanClass: String? = null
+    var plainUrlClickableSpanOnClickMethod: String? = null
+    var plainUrlClickableSpanOnClickOwnerClasses: List<String>? = null
+    var plainUrlClickableSpanTypeField: String? = null
+    var plainUrlClickableSpanUrlField: String? = null
+    var plainUrlClickableSpanTextField: String? = null
+    var plainUrlMessageManagerClass: String? = null
+    var plainUrlMessageDispatchMethod: String? = null
+    var plainUrlResponsedMessageClass: String? = null
+    var plainUrlResponsedMessageGetCmdMethod: String? = null
+    var plainUrlCustomResponsedMessageClass: String? = null
+    var plainUrlCustomResponsedMessageGetDataMethod: String? = null
+    var plainUrlApplicationClass: String? = null
+    var plainUrlApplicationGetInstMethod: String? = null
+    var privateReadReceiptModelClass: String? = null
+    var privateReadReceiptModelReadDispatchMethod: String? = null
+    var privateReadReceiptMessageManagerClass: String? = null
+    var privateReadReceiptMessageManagerGetInstanceMethod: String? = null
+    var privateReadReceiptMessageSendMethod: String? = null
+    var privateReadReceiptMessageBaseClass: String? = null
+    var privateReadReceiptRequestClass: String? = null
+    var privateReadReceiptModelBaseClass: String? = null
+    var privateReadReceiptCommitResponseClass: String? = null
+    var privateReadReceiptProcessAckMethod: String? = null
+    var privateReadReceiptResponseErrorMethod: String? = null
+    var privateReadReceiptRequestMsgIdField: String? = null
+    var privateReadReceiptRequestToUidField: String? = null
+    var privateReadReceiptModelDataField: String? = null
+    var privateReadReceiptPageDataClass: String? = null
+    var privateReadReceiptPageDataChatListMethod: String? = null
+    var privateReadReceiptChatMessageClass: String? = null
+    var privateReadReceiptChatMessageMsgIdMethod: String? = null
+    var privateReadReceiptChatMessageUserIdMethod: String? = null
+    var privateReadReceiptChatMessageLocalDataMethod: String? = null
+    var privateReadReceiptLocalDataClass: String? = null
+    var privateReadReceiptLocalDataStatusMethod: String? = null
+    var privateReadReceiptAccountClass: String? = null
+    var privateReadReceiptCurrentAccountMethod: String? = null
+    var mountCardLinkLayoutClass: String? = null
+    var mountCardLinkLayoutOnClickMethod: String? = null
+    var mountCardLinkLayoutDataField: String? = null
+    var mountCardLinkInfoDataClass: String? = null
+    var mountCardLinkInfoGetUrlMethod: String? = null
+    var forumBottomSheetViewClass: String? = null
+    var forumBottomSheetInitScrollMethod: String? = null
+    var autoRefreshTriggerMethod: String? = null
+    var autoLoadMoreConfigClass: String? = null
+    var autoLoadMoreConfigMethod: String? = null
+    var pbCommentScrollListenerClass: String? = null
+    var pbCommentScrollMethod: String? = null
+    var pbCommentScrollFragmentField: String? = null
+    var pbCommentScrollBottomListenerField: String? = null
+    var pbCommentScrollBottomMethod: String? = null
+    var pbCommentBottomListScrollClass: String? = null
+    var pbCommentBottomListScrollMethod: String? = null
+    var pbCommentBottomListOwnerField: String? = null
+    var pbCommentBottomRecyclerScrollClass: String? = null
+    var pbCommentBottomRecyclerScrollMethod: String? = null
+    var pbCommentBottomRecyclerOwnerField: String? = null
+    var pbGestureScaleManagerClass: String? = null
+    var pbGestureScaleDispatchMethod: String? = null
+    var pbGestureScaleListenerSetterMethod: String? = null
+    var pbGestureScaleListenerClass: String? = null
+    var pbGestureScaleListenerOnScaleMethod: String? = null
+    var pbLikeAutoReplyAgreeViewClass: String? = null
+    var pbLikeAutoReplyAgreeClickMethod: String? = null
+    var pbLikeAutoReplyAgreeViewGetDataMethod: String? = null
+    var pbLikeAutoReplyAgreeDataClass: String? = null
+    var pbLikeAutoReplyAgreeDataHasAgreeField: String? = null
+    var pbLikeAutoReplyAgreeDataAgreeTypeField: String? = null
+    var pbLikeAutoReplyAgreeDataIsInThreadField: String? = null
+    var pbLikeAutoReplyInputContainerClass: String? = null
+    var pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null
+    var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
+    var collectionPresenterField: String? = null
+    var collectionPresenterListSetterMethod: String? = null
+    var collectionPresenterAdapterField: String? = null
+    var collectionModelField: String? = null
+    var collectionModelListGetterMethod: String? = null
+    var collectionModelParseMethod: String? = null
+    var collectionModelListField: String? = null
+    var collectionFragmentDisplayListField: String? = null
+    var collectionActivityNavControllerField: String? = null
+    var collectionNavBarField: String? = null
+    var collectionAdapterShowFooterMethod: String? = null
+    var collectionAdapterLoadingMethod: String? = null
+    var collectionAdapterHasMoreMethod: String? = null
+    var collectionEditModeMethod: String? = null
+    var historyAdapterField: String? = null
+    var historyAdapterSetListMethod: String? = null
+    var historyListField: String? = null
+    var historyActivityListUpdateMethod: String? = null
+    var historyActivityNavBarField: String? = null
+    var historyThreadNameMethod: String? = null
+    var historyForumNameMethod: String? = null
+    var historyUserNameMethod: String? = null
+    var historyDescriptionMethod: String? = null
+    var historyThreadIdMethod: String? = null
+    var historyPostIdMethod: String? = null
+    var historyLiveIdMethod: String? = null
+    var msgTabLocateToTabMethod: String? = null
+    var msgTabContainerSelectMethod: String? = null
+    var msgTabContainerExtDataField: String? = null
+    var freeCopyPopupMenuClass: String? = null
+    var freeCopyPopupContentViewMethod: String? = null
+    var freeCopyPopupTextField: String? = null
+    var mainTabDataClass: String? = null
+    var mainTabAddMethod: String? = null
+    var mainTabGetListMethod: String? = null
+    var mainTabDelegateGetStructureMethod: String? = null
+    var mainTabStructureTypeField: String? = null
+    var mainTabStructureDynamicIconField: String? = null
+    var mainTabStructureFragmentField: String? = null
+    var origImagePagerAdapterClass: String? = null
+    var origImageUrlDragImageViewClass: String? = null
+    var origImageDataClass: String? = null
+    var origImageSetPrimaryItemMethod: String? = null
+    var origImageSetAssistUrlMethod: String? = null
+    var origImageAssistDataMethod: String? = null
+    var origImageOriginTextMethod: String? = null
+    var origImageShowButtonField: String? = null
+    var origImageBlockedField: String? = null
+    var origImageOriginalProcessField: String? = null
+    var origImageOriginalUrlField: String? = null
+    var origImageSharedPrefHelperClass: String? = null
+    var origImageSharedPrefGetInstanceMethod: String? = null
+    var origImageSharedPrefPutBooleanMethod: String? = null
+    var origImageMd5Class: String? = null
+    var origImageMd5Method: String? = null
+    var origImagePrimaryReadyMethod: String? = null
+    var origImageTriggerMethod: String? = null
+    var origImageDirectStartMethod: String? = null
+    var shareTrackBuilderClass: String? = null
+    var shareTrackBuildUrlMethod: String? = null
+    var shareTrackAppendQueryMethod: String? = null
+    var imageViewerShareConfigClass: String? = null
+    var imageViewerShareIsDialogField: String? = null
+    var imageViewerShareItemField: String? = null
+    var imageViewerShareAddOutsideMethod: String? = null
+    var imageViewerShareGetRequestDataMethod: String? = null
+    var imageViewerShareSetRequestDataMethod: String? = null
+    var imageViewerShareGetContextMethod: String? = null
+    var imageViewerShareItemClass: String? = null
+    var imageViewerShareItemTitleField: String? = null
+    var imageViewerShareItemContentField: String? = null
+    var imageViewerShareItemLinkUrlField: String? = null
+    var imageViewerShareItemImageUriField: String? = null
+    var imageViewerShareItemImageUrlField: String? = null
+    var imageViewerShareItemLocalFileField: String? = null
+    var imageViewerShareItemViewClass: String? = null
+    var imageViewerShareItemNameByResMethod: String? = null
+    var imageViewerShareItemNameByTextMethod: String? = null
+    var imageViewerShareIconResId: Int? = null
+    var homeNativeGlassSubPbNextPageMoreViewId: Int? = null
+    var homeNativeGlassPbReplyTitleDividerViewId: Int? = null
+    var homeNativeGlassDynamicBackgroundColorIds: List<Int> = emptyList()
+    var homeNativeGlassReadableTextResourceIdsByName: Map<String, Int> = emptyMap()
+    var homeNativeGlassSortSwitchBackgroundPaintField: String? = null
+    var homeNativeGlassSortSwitchSlideDrawMethod: String? = null
+    var homeNativeGlassSortSwitchSlidePathField: String? = null
+    var homeNativeGlassEnterForumCapsuleControllerClass: String? = null
+    var homeNativeGlassEnterForumCapsuleInitMethod: String? = null
+    var homeNativeGlassEnterForumCapsuleRefreshMethod: String? = null
+    var homeNativeGlassEnterForumCapsuleViewField: String? = null
+    var homeNativeGlassEnterForumCapsuleTitleField: String? = null
+    var pbCommonLayoutPreloaderGetOrDefaultMethod: String? = null
+    var feedCardBindMethod: String? = null
+    var feedCardDataListField: String? = null
+    var feedHeadParamsField: String? = null
+    var feedRecommendCardNestedDataMethod: String? = null
+    var feedRecommendCardNestedDataListField: String? = null
+    var replyServerResponseClass: String? = null
+    var replyServerResponseDecodeMethod: String? = null
+    var replyServerResponseResultJsonField: String? = null
+    var aiSpriteMemePanControllerClass: String? = null
+    var aiSpriteMemeEnableMethod: String? = null
+    var aiPbNewInputContainerClass: String? = null
+    var aiPbNewInputContainerInitSpriteMemeMethod: String? = null
+    var aiPbNewInputContainerInitAiWriteMethod: String? = null
+    var aiPbAiEmojiCreationViewBindMethod: String? = null
+    var aiPbPageBrowserAiEmojiCreationBindMethod: String? = null
+    var aiImageViewerJumpButtonOwnerClass: String? = null
+    var aiImageViewerJumpButtonInitMethod: String? = null
+    var featureStatusMap: Map<String, HookFeatureStatus> = emptyMap()
+    var scanSupportState: String = ScanSupportState.UNKNOWN
+    var scanTargetVersionCode: Long? = null
+    var scanTargetVersionName: String? = null
+    var scanTargetVersionType: String? = null
+    var scanErrors: List<String> = emptyList()
+    var source: String = "unsupported"
+    var createdAt: Long = 0L
+    var cacheSchemaVersion: Int = HookSymbols.CACHE_SCHEMA_VERSION
+
+    fun build(): HookSymbols {
+        return HookSymbols(
+            hookPoints = HookPointSymbols(
+                primary = PrimaryHookPointSymbols(
+                    settings = SettingsSymbols(settingsClass, settingsInitMethod, settingsContainerField),
+                    home = buildHomeSymbols(),
+                    ad = buildAdSymbols(),
+                    pb = buildPbSymbols(),
+                ),
+                web = buildWebSymbols(),
+                privateMessage = buildPrivateMessageSymbols(),
+                collectionHistory = buildCollectionHistorySymbols(),
+                media = buildMediaSymbols(),
+            ),
+            resources = buildResourceSymbols(),
+            meta = buildScanMeta(),
+        )
+    }
+
+    private fun buildHomeSymbols(): HomeSymbols {
+        return HomeSymbols(
+            tab = HomeTabSymbolsGroup(
+                homeTabClass,
+                homeTabRebuildMethod,
+                homeTabListField,
+                item = HomeTabItemSymbolsGroup(
+                    homeTabItemTypeField,
+                    homeTabItemCodeField,
+                    homeTabItemNameField,
+                    homeTabItemUrlField,
+                ),
+                itemMain = HomeTabItemMainSymbolsGroup(
+                    homeTabItemMainSetterMethod,
+                    homeTabItemMainIntField,
+                    homeTabItemMainBooleanField,
+                ),
+            ),
+            search = HomeSearchSymbolsGroup(
+                searchBoxViewClass,
+                searchBoxSetHintMethod,
+                homeSearchBoxOwnerClass,
+                homeSearchBoxInitMethod,
+                homeSearchBoxGetterMethod,
+            ),
+            personalization = HomePersonalizationSymbolsGroup(homePersonalizeAnchorClasses),
+            rightSlot = HomeRightSlotSymbolsGroup(homeRightSlotClass, homeRightSlotStateMethods),
+            mainTab = MainTabSymbolsGroup(
+                mainTabDataClass,
+                mainTabAddMethod,
+                mainTabGetListMethod,
+                mainTabDelegateGetStructureMethod,
+                structure = MainTabStructureSymbolsGroup(
+                    mainTabStructureTypeField,
+                    mainTabStructureDynamicIconField,
+                    mainTabStructureFragmentField,
+                ),
+            ),
+            nativeGlass = HomeNativeGlassSymbolsGroup(
+                sortSwitch = HomeNativeGlassSortSwitchSymbolsGroup(
+                    homeNativeGlassSortSwitchBackgroundPaintField,
+                    homeNativeGlassSortSwitchSlideDrawMethod,
+                    homeNativeGlassSortSwitchSlidePathField,
+                ),
+                enterForumCapsule = HomeNativeGlassEnterForumCapsuleSymbolsGroup(
+                    homeNativeGlassEnterForumCapsuleControllerClass,
+                    homeNativeGlassEnterForumCapsuleInitMethod,
+                    homeNativeGlassEnterForumCapsuleRefreshMethod,
+                    homeNativeGlassEnterForumCapsuleViewField,
+                    homeNativeGlassEnterForumCapsuleTitleField,
+                ),
+            ),
+        )
+    }
+
+    private fun buildAdSymbols(): AdSymbols {
+        return AdSymbols(
+            feedTemplate = FeedTemplateSymbolsGroup(
+                feedTemplateKeyMethod,
+                feedTemplatePayloadMethod,
+                feedTemplateLoadMoreMethod,
+            ),
+            splash = SplashAdSymbolsGroup(splashAdHelperClass, splashAdHelperMethod),
+            closeAd = CloseAdSymbolsGroup(closeAdDataClass, closeAdDataMethodG1, closeAdDataMethodJ1),
+            zga = ZgaSymbolsGroup(zgaClass, zgaMethods),
+            typeAdapter = TypeAdapterSymbolsGroup(
+                typeAdapterSetDataMethod,
+                typeAdapterDataItemClass,
+                typeAdapterDataGetTypeMethod,
+            ),
+            feedCard = FeedCardSymbolsGroup(
+                feedCardBindMethod,
+                feedCardDataListField,
+                feedHeadParamsField,
+                feedRecommendCardNestedDataMethod,
+                feedRecommendCardNestedDataListField,
+            ),
+        )
+    }
+
+    private fun buildPbSymbols(): PbSymbols {
+        return PbSymbols(
+            ad = PbAdSymbolsGroup(
+                earlyInsert = PbEarlyAdInsertSymbolsGroup(pbEarlyAdInsertClass, pbEarlyAdInsertMethodSpecs),
+                bid = PbAdBidSymbolsGroup(
+                    pbAdBidCommonRequestModelClass,
+                    pbAdBidCommonRequestStartMethods,
+                    pbAdBidCommonRequestNotifyMethod,
+                    pbAdBidPageBrowserRequestModelClass,
+                    pbAdBidPageBrowserRequestDataMethod,
+                ),
+            ),
+            falling = PbFallingSymbolsGroup(
+                pbFallingViewClass,
+                pbFallingInitMethod,
+                pbFallingShowMethod,
+                pbFallingClearMethod,
+            ),
+            comment = PbCommentSymbolsGroup(
+                bottomSheet = ForumBottomSheetSymbolsGroup(forumBottomSheetViewClass, forumBottomSheetInitScrollMethod),
+                autoLoad = AutoLoadSymbolsGroup(autoRefreshTriggerMethod, autoLoadMoreConfigClass, autoLoadMoreConfigMethod),
+                scroll = PbCommentScrollSymbolsGroup(
+                    pbCommentScrollListenerClass,
+                    pbCommentScrollMethod,
+                    pbCommentScrollFragmentField,
+                    pbCommentScrollBottomListenerField,
+                    pbCommentScrollBottomMethod,
+                ),
+                bottomList = PbCommentBottomListSymbolsGroup(
+                    pbCommentBottomListScrollClass,
+                    pbCommentBottomListScrollMethod,
+                    pbCommentBottomListOwnerField,
+                ),
+                bottomRecycler = PbCommentBottomRecyclerSymbolsGroup(
+                    pbCommentBottomRecyclerScrollClass,
+                    pbCommentBottomRecyclerScrollMethod,
+                    pbCommentBottomRecyclerOwnerField,
+                ),
+            ),
+            gestureScale = PbGestureScaleSymbolsGroup(
+                pbGestureScaleManagerClass,
+                pbGestureScaleDispatchMethod,
+                pbGestureScaleListenerSetterMethod,
+                pbGestureScaleListenerClass,
+                pbGestureScaleListenerOnScaleMethod,
+            ),
+            likeAutoReply = PbLikeAutoReplySymbolsGroup(
+                agreeView = PbLikeAutoReplyAgreeViewSymbolsGroup(
+                    pbLikeAutoReplyAgreeViewClass,
+                    pbLikeAutoReplyAgreeClickMethod,
+                    pbLikeAutoReplyAgreeViewGetDataMethod,
+                ),
+                agreeData = PbLikeAutoReplyAgreeDataSymbolsGroup(
+                    pbLikeAutoReplyAgreeDataClass,
+                    pbLikeAutoReplyAgreeDataHasAgreeField,
+                    pbLikeAutoReplyAgreeDataAgreeTypeField,
+                    pbLikeAutoReplyAgreeDataIsInThreadField,
+                ),
+                inputContainer = PbLikeAutoReplyInputContainerSymbolsGroup(
+                    pbLikeAutoReplyInputContainerClass,
+                    pbLikeAutoReplyInputContainerGetInputViewMethod,
+                    pbLikeAutoReplyInputContainerGetSendViewMethod,
+                ),
+            ),
+            misc = PbMiscSymbolsGroup(
+                commonLayoutPreloader = PbCommonLayoutPreloaderSymbolsGroup(pbCommonLayoutPreloaderGetOrDefaultMethod),
+                replyServerResponse = ReplyServerResponseSymbolsGroup(
+                    replyServerResponseClass,
+                    replyServerResponseDecodeMethod,
+                    replyServerResponseResultJsonField,
+                ),
+            ),
+        )
+    }
+
+    private fun buildWebSymbols(): WebSymbols {
+        return WebSymbols(
+            enterForum = EnterForumWebSymbolsGroup(
+                enterForumWebControllerClass,
+                enterForumWebLoadMethod,
+                enterForumInitInfoDataClass,
+                enterForumInitInfoGetUrlMethod,
+            ),
+            plainUrl = PlainUrlSymbolsGroup(
+                clickableSpan = PlainUrlClickableSpanSymbolsGroup(
+                    plainUrlClickableSpanClass,
+                    plainUrlClickableSpanOnClickMethod,
+                    plainUrlClickableSpanOnClickOwnerClasses,
+                    plainUrlClickableSpanTypeField,
+                    plainUrlClickableSpanUrlField,
+                    plainUrlClickableSpanTextField,
+                ),
+                message = PlainUrlMessageSymbolsGroup(
+                    manager = PlainUrlMessageManagerSymbolsGroup(
+                        plainUrlMessageManagerClass,
+                        plainUrlMessageDispatchMethod,
+                    ),
+                    response = PlainUrlMessageResponseSymbolsGroup(
+                        plainUrlResponsedMessageClass,
+                        plainUrlResponsedMessageGetCmdMethod,
+                        plainUrlCustomResponsedMessageClass,
+                        plainUrlCustomResponsedMessageGetDataMethod,
+                    ),
+                    application = PlainUrlApplicationSymbolsGroup(
+                        plainUrlApplicationClass,
+                        plainUrlApplicationGetInstMethod,
+                    ),
+                ),
+            ),
+            mountCard = MountCardLinkSymbolsGroup(
+                mountCardLinkLayoutClass,
+                mountCardLinkLayoutOnClickMethod,
+                mountCardLinkLayoutDataField,
+                mountCardLinkInfoDataClass,
+                mountCardLinkInfoGetUrlMethod,
+            ),
+        )
+    }
+
+    private fun buildPrivateMessageSymbols(): PrivateMessageSymbols {
+        return PrivateMessageSymbols(
+            readReceipt = PrivateReadReceiptSymbolsGroup(
+                model = PrivateReadReceiptModelSymbolsGroup(
+                    privateReadReceiptModelClass,
+                    privateReadReceiptModelReadDispatchMethod,
+                    privateReadReceiptModelBaseClass,
+                    privateReadReceiptModelDataField,
+                ),
+                message = PrivateReadReceiptMessageSymbolsGroup(
+                    privateReadReceiptMessageManagerClass,
+                    privateReadReceiptMessageManagerGetInstanceMethod,
+                    privateReadReceiptMessageSendMethod,
+                    privateReadReceiptMessageBaseClass,
+                ),
+                request = PrivateReadReceiptRequestSymbolsGroup(
+                    privateReadReceiptRequestClass,
+                    privateReadReceiptRequestMsgIdField,
+                    privateReadReceiptRequestToUidField,
+                ),
+                response = PrivateReadReceiptResponseSymbolsGroup(
+                    privateReadReceiptCommitResponseClass,
+                    privateReadReceiptProcessAckMethod,
+                    privateReadReceiptResponseErrorMethod,
+                ),
+                page = PrivateReadReceiptPageSymbolsGroup(
+                    privateReadReceiptPageDataClass,
+                    privateReadReceiptPageDataChatListMethod,
+                    privateReadReceiptChatMessageClass,
+                    privateReadReceiptChatMessageMsgIdMethod,
+                    privateReadReceiptChatMessageUserIdMethod,
+                    privateReadReceiptChatMessageLocalDataMethod,
+                ),
+                localAccount = PrivateReadReceiptLocalAccountSymbolsGroup(
+                    privateReadReceiptLocalDataClass,
+                    privateReadReceiptLocalDataStatusMethod,
+                    privateReadReceiptAccountClass,
+                    privateReadReceiptCurrentAccountMethod,
+                ),
+            ),
+            tab = MessageTabSymbolsGroup(
+                msgTabLocateToTabMethod,
+                msgTabContainerSelectMethod,
+                msgTabContainerExtDataField,
+            ),
+        )
+    }
+
+    private fun buildCollectionHistorySymbols(): CollectionHistorySymbols {
+        return CollectionHistorySymbols(
+            collection = CollectionSymbolsGroup(
+                presenter = CollectionPresenterSymbolsGroup(
+                    collectionPresenterField,
+                    collectionPresenterListSetterMethod,
+                    collectionPresenterAdapterField,
+                ),
+                model = CollectionModelSymbolsGroup(
+                    collectionModelField,
+                    collectionModelListGetterMethod,
+                    collectionModelParseMethod,
+                    collectionModelListField,
+                ),
+                fragment = CollectionFragmentSymbolsGroup(
+                    collectionFragmentDisplayListField,
+                    collectionActivityNavControllerField,
+                    collectionNavBarField,
+                ),
+                adapter = CollectionAdapterSymbolsGroup(
+                    collectionAdapterShowFooterMethod,
+                    collectionAdapterLoadingMethod,
+                    collectionAdapterHasMoreMethod,
+                    collectionEditModeMethod,
+                ),
+            ),
+            history = HistorySymbolsGroup(
+                activity = HistoryActivitySymbolsGroup(
+                    historyAdapterField,
+                    historyAdapterSetListMethod,
+                    historyListField,
+                    historyActivityListUpdateMethod,
+                    historyActivityNavBarField,
+                ),
+                threadData = HistoryThreadDataSymbolsGroup(
+                    historyThreadNameMethod,
+                    historyForumNameMethod,
+                    historyUserNameMethod,
+                    historyDescriptionMethod,
+                    historyThreadIdMethod,
+                    historyPostIdMethod,
+                    historyLiveIdMethod,
+                ),
+            ),
+            freeCopy = FreeCopySymbolsGroup(
+                freeCopyPopupMenuClass,
+                freeCopyPopupContentViewMethod,
+                freeCopyPopupTextField,
+            ),
+        )
+    }
+
+    private fun buildMediaSymbols(): MediaHookPointSymbols {
+        return MediaHookPointSymbols(
+            image = buildImageSymbols(),
+            ai = AiSymbols(
+                spriteMeme = AiSpriteMemeSymbolsGroup(aiSpriteMemePanControllerClass, aiSpriteMemeEnableMethod),
+                pbInput = AiPbInputSymbolsGroup(
+                    aiPbNewInputContainerClass,
+                    aiPbNewInputContainerInitSpriteMemeMethod,
+                    aiPbNewInputContainerInitAiWriteMethod,
+                ),
+                emojiCreation = AiEmojiCreationSymbolsGroup(
+                    aiPbAiEmojiCreationViewBindMethod,
+                    aiPbPageBrowserAiEmojiCreationBindMethod,
+                ),
+                imageViewerJumpButton = AiImageViewerJumpButtonSymbolsGroup(
+                    aiImageViewerJumpButtonOwnerClass,
+                    aiImageViewerJumpButtonInitMethod,
+                ),
+            ),
+        )
+    }
+
+    private fun buildImageSymbols(): ImageSymbols {
+        return ImageSymbols(
+            original = OriginalImageSymbolsGroup(
+                component = OriginalImageComponentSymbolsGroup(
+                    origImagePagerAdapterClass,
+                    origImageUrlDragImageViewClass,
+                    origImageDataClass,
+                    origImageSetPrimaryItemMethod,
+                    origImageSetAssistUrlMethod,
+                ),
+                data = OriginalImageDataSymbolsGroup(
+                    origImageAssistDataMethod,
+                    origImageOriginTextMethod,
+                    origImageShowButtonField,
+                    origImageBlockedField,
+                    origImageOriginalProcessField,
+                    origImageOriginalUrlField,
+                ),
+                sharedPref = OriginalImageSharedPrefSymbolsGroup(
+                    origImageSharedPrefHelperClass,
+                    origImageSharedPrefGetInstanceMethod,
+                    origImageSharedPrefPutBooleanMethod,
+                ),
+                md5 = OriginalImageMd5SymbolsGroup(origImageMd5Class, origImageMd5Method),
+                trigger = OriginalImageTriggerSymbolsGroup(
+                    origImagePrimaryReadyMethod,
+                    origImageTriggerMethod,
+                    origImageDirectStartMethod,
+                ),
+            ),
+            shareTrack = ShareTrackSymbolsGroup(
+                shareTrackBuilderClass,
+                shareTrackBuildUrlMethod,
+                shareTrackAppendQueryMethod,
+            ),
+            viewerShare = ImageViewerShareSymbolsGroup(
+                config = ImageViewerShareConfigSymbolsGroup(
+                    imageViewerShareConfigClass,
+                    imageViewerShareIsDialogField,
+                    imageViewerShareItemField,
+                    imageViewerShareAddOutsideMethod,
+                ),
+                request = ImageViewerShareRequestSymbolsGroup(
+                    imageViewerShareGetRequestDataMethod,
+                    imageViewerShareSetRequestDataMethod,
+                    imageViewerShareGetContextMethod,
+                ),
+                item = ImageViewerShareItemSymbolsGroup(
+                    imageViewerShareItemClass,
+                    imageViewerShareItemTitleField,
+                    imageViewerShareItemContentField,
+                    imageViewerShareItemLinkUrlField,
+                    imageViewerShareItemImageUriField,
+                    imageViewerShareItemImageUrlField,
+                ),
+                itemView = ImageViewerShareItemViewSymbolsGroup(
+                    imageViewerShareItemLocalFileField,
+                    imageViewerShareItemViewClass,
+                    imageViewerShareItemNameByResMethod,
+                    imageViewerShareItemNameByTextMethod,
+                ),
+            ),
+        )
+    }
+
+    private fun buildResourceSymbols(): ResourceSymbols {
+        return ResourceSymbols(
+            imageViewerShareIconResId,
+            homeNativeGlassSubPbNextPageMoreViewId,
+            homeNativeGlassPbReplyTitleDividerViewId,
+            homeNativeGlassDynamicBackgroundColorIds,
+            homeNativeGlassReadableTextResourceIdsByName,
+        )
+    }
+
+    private fun buildScanMeta(): ScanMeta {
+        return ScanMeta(
+            featureStatusMap = featureStatusMap,
+            availability = ScanAvailabilityMeta(
+                scanSupportState,
+                scanTargetVersionCode,
+                scanTargetVersionName,
+                scanTargetVersionType,
+            ),
+            scanErrors = scanErrors,
+            source = source,
+            createdAt = createdAt,
+            cacheSchemaVersion = cacheSchemaVersion,
+        )
+    }
+}
+
+internal inline fun buildHookSymbols(block: HookSymbolsBuilder.() -> Unit): HookSymbols {
+    return HookSymbolsBuilder().apply(block).build()
+}
