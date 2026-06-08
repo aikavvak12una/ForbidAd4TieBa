@@ -197,6 +197,11 @@ internal data class FeedInfoLogSymbols(
     val templateKeyMethodName: String?,
 )
 
+internal data class ReplyServerResponseLogSymbols(
+    val decodeMethod: Method,
+    val resultJsonField: Field,
+)
+
 internal data class ConstantReturnMethodSymbols(
     val method: Method,
     val value: Any,

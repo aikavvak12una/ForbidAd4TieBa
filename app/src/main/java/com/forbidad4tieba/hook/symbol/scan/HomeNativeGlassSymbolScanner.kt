@@ -48,6 +48,41 @@ internal object HomeNativeGlassSymbolScanner {
         "color_bg_page",
         "color_bg_primary_tiny",
     )
+    private val READABLE_TEXT_RESOURCE_NAMES = arrayOf(
+        "CAM_X0101",
+        "CAM_X0105",
+        "CAM_X0106",
+        "CAM_X0107",
+        "CAM_X0108",
+        "CAM_X0109",
+        "CAM_X0110",
+        "CAM_X0301",
+        "CAM_X0302",
+        "CAM_X0304",
+        "CAM_X0305",
+        "CAM_X0312",
+        "btn_forum_focus_color",
+        "color_text",
+        "color_text_blue",
+        "color_text_disable",
+        "color_text_disabled",
+        "color_text_gray",
+        "color_text_link",
+        "color_text_minor",
+        "color_text_primary",
+        "color_text_regular",
+        "color_text_secondary",
+        "color_text_slim",
+        "color_text_tertiary",
+        "color_text_tiny",
+        "cp_cont_b_alpha50",
+        "cp_link_tip_a",
+        "cp_link_tip_a_alpha50",
+        "link_color",
+        "pb_like_user_select_color",
+        "selector_comment_and_prise_item_text_color",
+    )
+    private val READABLE_TEXT_RESOURCE_ID_TYPES = arrayOf("color", "drawable")
     private val TARGET_APP_R_ID_CLASSES = listOf(
         "com.baidu.tieba.R\$id",
         "com.baidu.searchbox.livenps.R\$id",
@@ -55,6 +90,10 @@ internal object HomeNativeGlassSymbolScanner {
     private val TARGET_APP_R_COLOR_CLASSES = listOf(
         "com.baidu.tieba.R\$color",
         "com.baidu.searchbox.livenps.R\$color",
+    )
+    private val TARGET_APP_R_DRAWABLE_CLASSES = listOf(
+        "com.baidu.tieba.R\$drawable",
+        "com.baidu.searchbox.livenps.R\$drawable",
     )
 
     fun scanResourceIds(context: Context, cl: ClassLoader, logger: ScanLogger?): HomeNativeGlassResourceIds {
@@ -102,19 +141,52 @@ internal object HomeNativeGlassSymbolScanner {
             return null
         }
 
+        fun resolveReadableTextResource(resourceName: String): Int? {
+            val name = resourceName.trim()
+            if (name.isEmpty()) return null
+
+            for (type in READABLE_TEXT_RESOURCE_ID_TYPES) {
+                val resourceId = context.resources.getIdentifier(name, type, context.packageName)
+                if (resourceId > 0 && isResolvedResourceType(context, resourceId, type, logger, "resources.getIdentifier($name)")) {
+                    log(logger, "homeNativeGlassResources: $type/$resourceName resolved by resources name $name")
+                    return resourceId
+                }
+
+                val rClasses = when (type) {
+                    "color" -> TARGET_APP_R_COLOR_CLASSES
+                    "drawable" -> TARGET_APP_R_DRAWABLE_CLASSES
+                    else -> emptyList()
+                }
+                for (className in rClasses) {
+                    val id = resolveRIdField(cl, className, name, logger) ?: continue
+                    if (isResolvedResourceType(context, id, type, logger, "$className.$name")) {
+                        log(logger, "homeNativeGlassResources: $type/$resourceName resolved by $className.$name")
+                        return id
+                    }
+                }
+            }
+
+            log(logger, "homeNativeGlassResources: missing readableText/$resourceName")
+            return null
+        }
+
         val out = HomeNativeGlassResourceIds(
             subPbNextPageMoreViewId = resolveId(SUB_PB_NEXT_PAGE_MORE_VIEW_RES_NAME),
             pbReplyTitleDividerViewId = resolveId(PB_REPLY_TITLE_DIVIDER_VIEW_RES_NAME),
             dynamicBackgroundColorIds = DYNAMIC_BACKGROUND_COLOR_RES_NAMES
                 .mapNotNull(::resolveColor)
                 .distinct(),
+            readableTextResourceIdsByName = READABLE_TEXT_RESOURCE_NAMES
+                .mapNotNull { name -> resolveReadableTextResource(name)?.let { id -> name to id } }
+                .toMap(),
         )
         log(
             logger,
             "homeNativeGlassResources: " +
                 "subPbNext=${formatResourceId(out.subPbNextPageMoreViewId)}, " +
                 "titleDivider=${formatResourceId(out.pbReplyTitleDividerViewId)}, " +
-                "dynamicBackgroundColors=${out.dynamicBackgroundColorIds.size}",
+                "dynamicBackgroundColors=${out.dynamicBackgroundColorIds.size}, " +
+                "readableTextResources=${out.readableTextResourceIdsByName.size}",
         )
         return out
     }
@@ -655,6 +727,28 @@ internal object HomeNativeGlassSymbolScanner {
         return try {
             val typeName = context.resources.getResourceTypeName(id)
             if (typeName == "color") {
+                true
+            } else {
+                log(logger, "homeNativeGlassResources: rejected $source=${formatResourceId(id)} type=$typeName")
+                false
+            }
+        } catch (t: Throwable) {
+            log(logger, "homeNativeGlassResources: rejected $source=${formatResourceId(id)}: ${t.message}")
+            false
+        }
+    }
+
+    private fun isResolvedResourceType(
+        context: Context,
+        id: Int,
+        expectedType: String,
+        logger: ScanLogger?,
+        source: String,
+    ): Boolean {
+        if (id <= 0) return false
+        return try {
+            val typeName = context.resources.getResourceTypeName(id)
+            if (typeName == expectedType) {
                 true
             } else {
                 log(logger, "homeNativeGlassResources: rejected $source=${formatResourceId(id)} type=$typeName")

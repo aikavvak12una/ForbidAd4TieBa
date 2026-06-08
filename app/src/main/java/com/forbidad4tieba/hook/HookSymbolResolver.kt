@@ -97,6 +97,9 @@ internal object HookSymbolResolver {
     private const val AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS =
         "com.baidu.tieba.pb.pagebrowser.comment.floor.meme.CommentFloorAiEmojiCreationView"
     private const val AI_SPRITE_MEME_INFO_CLASS = "tbclient.SpriteMemeInfo"
+    private const val REPLY_SERVER_RESPONSE_CLASS = "com.baidu.tieba.write.message.AddPostHttpResponse"
+    private const val REPLY_SERVER_RESPONSE_DECODE_METHOD = "decodeInBackGround"
+    private const val REPLY_SERVER_RESPONSE_RESULT_JSON_FIELD = "resultJSON"
     private const val HOME_NATIVE_GLASS_SUB_PB_NEXT_PAGE_MORE_VIEW_RES_NAME = "pb_more_view"
     private const val HOME_NATIVE_GLASS_PB_REPLY_TITLE_DIVIDER_VIEW_RES_NAME = "divider_bottom"
     private const val HOME_NATIVE_GLASS_SORT_SWITCH_BACKGROUND_PAINT_FIELD = "o"
@@ -2231,6 +2234,60 @@ internal object HookSymbolResolver {
         }
     }
 
+    fun resolveReplyServerResponseLogSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): ReplyServerResponseLogSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[ReplyServerResponseLogHook] skipped: scan symbols unavailable")
+                return null
+            }
+            val className = resolvedSymbols.replyServerResponseClass?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.log("[ReplyServerResponseLogHook] skipped: response class missing")
+                return null
+            }
+            val decodeMethodName = resolvedSymbols.replyServerResponseDecodeMethod?.takeIf { it.isNotBlank() }
+                ?: run {
+                    XposedCompat.log("[ReplyServerResponseLogHook] skipped: decode method missing")
+                    return null
+                }
+            val resultJsonFieldName =
+                resolvedSymbols.replyServerResponseResultJsonField?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[ReplyServerResponseLogHook] skipped: result JSON field missing")
+                    return null
+                }
+            val responseClass = safeFindClass(className, cl) ?: run {
+                XposedCompat.log("[ReplyServerResponseLogHook] skipped: class not found: $className")
+                return null
+            }
+            val decodeMethod = responseClass.declaredMethods.singleOrNull { method ->
+                isReplyServerResponseDecodeMethod(method, decodeMethodName)
+            } ?: run {
+                XposedCompat.log("[ReplyServerResponseLogHook] skipped: method not found: $className.$decodeMethodName")
+                return null
+            }
+            val resultJsonField = responseClass.declaredFields.singleOrNull { field ->
+                field.name == resultJsonFieldName && JSONObject::class.java.isAssignableFrom(field.type)
+            } ?: run {
+                XposedCompat.log(
+                    "[ReplyServerResponseLogHook] skipped: field not found: $className.$resultJsonFieldName",
+                )
+                return null
+            }
+            decodeMethod.isAccessible = true
+            resultJsonField.isAccessible = true
+            ReplyServerResponseLogSymbols(
+                decodeMethod = decodeMethod,
+                resultJsonField = resultJsonField,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[ReplyServerResponseLogHook] symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
     private fun resolveFeedLoadMoreMethod(cl: ClassLoader, symbols: HookSymbols): Method? {
         val methodName = symbols.feedTemplateLoadMoreMethod?.takeIf { it.isNotBlank() } ?: run {
             XposedCompat.log("[FeedAdHook] FeedTemplateAdapter loadMore skipped: scan symbol missing")
@@ -3408,7 +3465,10 @@ internal object HookSymbolResolver {
         val memorySymbols = memoryCache.getIfFingerprint(fingerprint)
         if (!forceRescan && memorySymbols != null) {
             log(logger, "memory cache hit: source=${memorySymbols.source}")
-            return memorySymbols
+            if (isLightweightUsable(memorySymbols)) {
+                return memorySymbols
+            }
+            log(logger, "memory cache unusable, rescan required")
         }
 
         if (!forceRescan) {
@@ -3614,7 +3674,8 @@ internal object HookSymbolResolver {
     private fun isLightweightUsable(symbols: HookSymbols): Boolean {
         if (symbols.source == "unsupported") return true
         return (symbols.source == "scan" || symbols.source == "partial") &&
-            symbols.createdAt > 0L
+            symbols.createdAt > 0L &&
+            symbols.cacheSchemaVersion == HookSymbols.CACHE_SCHEMA_VERSION
     }
 
     private inline fun <T> withScanContext(cl: ClassLoader, block: () -> T): T {
@@ -3689,6 +3750,9 @@ internal object HookSymbolResolver {
         var feedHeadParamsField: String? = null
         var feedRecommendCardNestedDataMethod: String? = null
         var feedRecommendCardNestedDataListField: String? = null
+        var replyServerResponseClass: String? = null
+        var replyServerResponseDecodeMethod: String? = null
+        var replyServerResponseResultJsonField: String? = null
         var splashAdHelperClass: String? = null
         var splashAdHelperMethod: String? = null
         var closeAdDataClass: String? = null
@@ -3947,6 +4011,13 @@ internal object HookSymbolResolver {
                     ?.let(::collectInstanceFields)
                     ?.firstOrNull { isListType(it.type) }
                     ?.name
+            }
+        }
+        runScanStep("ReplyServerResponseLogHook", logger, scanErrors, Unit) {
+            scanReplyServerResponseLogSymbols(cl, logger)?.let { scan ->
+                replyServerResponseClass = scan.responseClass
+                replyServerResponseDecodeMethod = scan.decodeMethod
+                replyServerResponseResultJsonField = scan.resultJsonField
             }
         }
 
@@ -4435,6 +4506,8 @@ internal object HookSymbolResolver {
         homeNativeGlassSubPbNextPageMoreViewId = homeNativeGlassResourceIds.subPbNextPageMoreViewId
         homeNativeGlassPbReplyTitleDividerViewId = homeNativeGlassResourceIds.pbReplyTitleDividerViewId
         val homeNativeGlassDynamicBackgroundColorIds = homeNativeGlassResourceIds.dynamicBackgroundColorIds
+        val homeNativeGlassReadableTextResourceIdsByName =
+            homeNativeGlassResourceIds.readableTextResourceIdsByName
 
         val homeNativeGlassSortSwitchSymbols = runScanStep(
             "HomeNativeGlassHook.SortSwitch",
@@ -4611,6 +4684,9 @@ internal object HookSymbolResolver {
             feedHeadParamsField = feedHeadParamsField,
             feedRecommendCardNestedDataMethod = feedRecommendCardNestedDataMethod,
             feedRecommendCardNestedDataListField = feedRecommendCardNestedDataListField,
+            replyServerResponseClass = replyServerResponseClass,
+            replyServerResponseDecodeMethod = replyServerResponseDecodeMethod,
+            replyServerResponseResultJsonField = replyServerResponseResultJsonField,
             splashAdHelperClass = splashAdHelperClass,
             splashAdHelperMethod = splashAdHelperMethod,
             closeAdDataClass = closeAdDataClass,
@@ -4805,6 +4881,7 @@ internal object HookSymbolResolver {
             homeNativeGlassSubPbNextPageMoreViewId = homeNativeGlassSubPbNextPageMoreViewId,
             homeNativeGlassPbReplyTitleDividerViewId = homeNativeGlassPbReplyTitleDividerViewId,
             homeNativeGlassDynamicBackgroundColorIds = homeNativeGlassDynamicBackgroundColorIds,
+            homeNativeGlassReadableTextResourceIdsByName = homeNativeGlassReadableTextResourceIdsByName,
             homeNativeGlassSortSwitchBackgroundPaintField = homeNativeGlassSortSwitchBackgroundPaintField,
             homeNativeGlassSortSwitchSlideDrawMethod = homeNativeGlassSortSwitchSlideDrawMethod,
             homeNativeGlassSortSwitchSlidePathField = homeNativeGlassSortSwitchSlidePathField,
@@ -4834,6 +4911,62 @@ internal object HookSymbolResolver {
             createdAt = System.currentTimeMillis(),
         )
         return scanned.copy(featureStatusMap = HookFeatureStatusDeriver.derive(scanned))
+    }
+
+    private fun scanReplyServerResponseLogSymbols(
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): ReplyServerResponseLogScanSymbols? {
+        val responseClass = safeFindClass(REPLY_SERVER_RESPONSE_CLASS, cl) ?: run {
+            log(logger, "replyServerResponseLog: class missing $REPLY_SERVER_RESPONSE_CLASS")
+            return null
+        }
+        val decodeCandidates = try {
+            responseClass.declaredMethods.filter { method ->
+                isReplyServerResponseDecodeMethod(method, REPLY_SERVER_RESPONSE_DECODE_METHOD)
+            }
+        } catch (t: Throwable) {
+            log(logger, "replyServerResponseLog: declaredMethods failed: ${t.message}")
+            return null
+        }
+        val decodeMethod = decodeCandidates.singleOrNull() ?: run {
+            log(
+                logger,
+                "replyServerResponseLog: decode method candidates=" +
+                    decodeCandidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
+            )
+            return null
+        }
+        val resultJsonField = try {
+            responseClass.declaredFields.singleOrNull { field ->
+                field.name == REPLY_SERVER_RESPONSE_RESULT_JSON_FIELD &&
+                    JSONObject::class.java.isAssignableFrom(field.type)
+            }
+        } catch (t: Throwable) {
+            log(logger, "replyServerResponseLog: declaredFields failed: ${t.message}")
+            return null
+        } ?: run {
+            log(logger, "replyServerResponseLog: result JSON field missing")
+            return null
+        }
+        log(
+            logger,
+            "replyServerResponseLog matched: " +
+                "${responseClass.name}.${decodeMethod.name}[${resultJsonField.name}]",
+        )
+        return ReplyServerResponseLogScanSymbols(
+            responseClass = responseClass.name,
+            decodeMethod = decodeMethod.name,
+            resultJsonField = resultJsonField.name,
+        )
+    }
+
+    private fun isReplyServerResponseDecodeMethod(method: Method, methodName: String): Boolean {
+        return method.name == methodName &&
+            method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 2 &&
+            isIntType(method.parameterTypes[0]) &&
+            method.parameterTypes[1] == ByteArray::class.java
     }
 
     private fun scanAiComponentSymbols(

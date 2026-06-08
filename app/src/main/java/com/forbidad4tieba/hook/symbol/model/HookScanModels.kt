@@ -35,6 +35,12 @@ internal data class RecommendCardNestedDataScanSymbols(
     val nestedDataListField: String? = null,
 )
 
+internal data class ReplyServerResponseLogScanSymbols(
+    val responseClass: String? = null,
+    val decodeMethod: String? = null,
+    val resultJsonField: String? = null,
+)
+
 internal data class RecommendCardNestedDataCandidate(
     val bindMethodName: String,
     val stateClassName: String,
@@ -126,6 +132,7 @@ internal data class HomeNativeGlassResourceIds(
     val subPbNextPageMoreViewId: Int? = null,
     val pbReplyTitleDividerViewId: Int? = null,
     val dynamicBackgroundColorIds: List<Int> = emptyList(),
+    val readableTextResourceIdsByName: Map<String, Int> = emptyMap(),
 )
 
 internal data class HomeNativeGlassSortSwitchSymbols(

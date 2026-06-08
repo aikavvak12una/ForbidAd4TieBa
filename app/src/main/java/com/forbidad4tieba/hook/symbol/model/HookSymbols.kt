@@ -214,6 +214,7 @@ data class HookSymbols(
     val homeNativeGlassSubPbNextPageMoreViewId: Int? = null,
     val homeNativeGlassPbReplyTitleDividerViewId: Int? = null,
     val homeNativeGlassDynamicBackgroundColorIds: List<Int> = emptyList(),
+    val homeNativeGlassReadableTextResourceIdsByName: Map<String, Int> = emptyMap(),
     val homeNativeGlassSortSwitchBackgroundPaintField: String? = null,
     val homeNativeGlassSortSwitchSlideDrawMethod: String? = null,
     val homeNativeGlassSortSwitchSlidePathField: String? = null,
@@ -229,6 +230,9 @@ data class HookSymbols(
     val feedHeadParamsField: String? = null,
     val feedRecommendCardNestedDataMethod: String? = null,
     val feedRecommendCardNestedDataListField: String? = null,
+    val replyServerResponseClass: String? = null,
+    val replyServerResponseDecodeMethod: String? = null,
+    val replyServerResponseResultJsonField: String? = null,
     val aiSpriteMemePanControllerClass: String? = null,
     val aiSpriteMemeEnableMethod: String? = null,
     val aiPbNewInputContainerClass: String? = null,
@@ -248,6 +252,7 @@ data class HookSymbols(
 
     val source: String = "unsupported",
     val createdAt: Long = 0L,
+    val cacheSchemaVersion: Int = CACHE_SCHEMA_VERSION,
 ) {
     fun toJson(): String {
         return JSONObject().apply {
@@ -490,6 +495,15 @@ data class HookSymbols(
                 homeNativeGlassDynamicBackgroundColorIds.forEach { array.put(it) }
                 put("homeNativeGlassDynamicBackgroundColorIds", array)
             }
+            if (homeNativeGlassReadableTextResourceIdsByName.isNotEmpty()) {
+                val resourceIds = JSONObject()
+                homeNativeGlassReadableTextResourceIdsByName.forEach { (name, id) ->
+                    if (name.isNotBlank() && id != 0) resourceIds.put(name, id)
+                }
+                if (resourceIds.length() > 0) {
+                    put("homeNativeGlassReadableTextResourceIdsByName", resourceIds)
+                }
+            }
             put(
                 "homeNativeGlassSortSwitchBackgroundPaintField",
                 homeNativeGlassSortSwitchBackgroundPaintField,
@@ -529,6 +543,9 @@ data class HookSymbols(
             put("feedHeadParamsField", feedHeadParamsField)
             put("feedRecommendCardNestedDataMethod", feedRecommendCardNestedDataMethod)
             put("feedRecommendCardNestedDataListField", feedRecommendCardNestedDataListField)
+            put("replyServerResponseClass", replyServerResponseClass)
+            put("replyServerResponseDecodeMethod", replyServerResponseDecodeMethod)
+            put("replyServerResponseResultJsonField", replyServerResponseResultJsonField)
             put("aiSpriteMemePanControllerClass", aiSpriteMemePanControllerClass)
             put("aiSpriteMemeEnableMethod", aiSpriteMemeEnableMethod)
             put("aiPbNewInputContainerClass", aiPbNewInputContainerClass)
@@ -568,10 +585,13 @@ data class HookSymbols(
 
             put("source", source)
             put("createdAt", createdAt)
+            put("cacheSchemaVersion", cacheSchemaVersion)
         }.toString()
     }
 
     companion object {
+        const val CACHE_SCHEMA_VERSION = 2
+
         fun fromJson(json: String?): HookSymbols? {
             if (json.isNullOrBlank()) return null
             return try {
@@ -832,6 +852,8 @@ data class HookSymbols(
                     homeNativeGlassPbReplyTitleDividerViewId = obj.optIntOrNull("homeNativeGlassPbReplyTitleDividerViewId"),
                     homeNativeGlassDynamicBackgroundColorIds =
                         obj.optIntArray("homeNativeGlassDynamicBackgroundColorIds"),
+                    homeNativeGlassReadableTextResourceIdsByName =
+                        obj.optStringIntMap("homeNativeGlassReadableTextResourceIdsByName"),
                     homeNativeGlassSortSwitchBackgroundPaintField =
                         obj.optStringOrNull("homeNativeGlassSortSwitchBackgroundPaintField"),
                     homeNativeGlassSortSwitchSlideDrawMethod =
@@ -856,6 +878,10 @@ data class HookSymbols(
                     feedHeadParamsField = obj.optStringOrNull("feedHeadParamsField"),
                     feedRecommendCardNestedDataMethod = obj.optStringOrNull("feedRecommendCardNestedDataMethod"),
                     feedRecommendCardNestedDataListField = obj.optStringOrNull("feedRecommendCardNestedDataListField"),
+                    replyServerResponseClass = obj.optStringOrNull("replyServerResponseClass"),
+                    replyServerResponseDecodeMethod = obj.optStringOrNull("replyServerResponseDecodeMethod"),
+                    replyServerResponseResultJsonField =
+                        obj.optStringOrNull("replyServerResponseResultJsonField"),
                     aiSpriteMemePanControllerClass = obj.optStringOrNull("aiSpriteMemePanControllerClass"),
                     aiSpriteMemeEnableMethod = obj.optStringOrNull("aiSpriteMemeEnableMethod"),
                     aiPbNewInputContainerClass = obj.optStringOrNull("aiPbNewInputContainerClass"),
@@ -875,6 +901,7 @@ data class HookSymbols(
 
                     source = obj.optString("source", "unsupported"),
                     createdAt = obj.optLong("createdAt", 0L),
+                    cacheSchemaVersion = obj.optInt("cacheSchemaVersion", 0),
                 )
             } catch (_: Throwable) {
                 null
@@ -920,6 +947,17 @@ data class HookSymbols(
             }
             return out
         }
+
+        private fun JSONObject.optStringIntMap(name: String): Map<String, Int> {
+            val obj = optJSONObject(name) ?: return emptyMap()
+            val out = LinkedHashMap<String, Int>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = obj.optInt(key, 0)
+                if (key.isNotBlank() && value != 0) out[key] = value
+            }
+            return out
+        }
     }
 }
-

@@ -203,6 +203,7 @@ object HomeNativeGlassHook {
         val subPbNextPageMoreViewId: Int?,
         val pbReplyTitleDividerViewId: Int?,
         val dynamicBackgroundColorIds: Set<Int>,
+        val readableTextResourceIdsByName: Map<String, Int>,
         val sortSwitchBackgroundPaintField: String?,
         val sortSwitchSlideDrawMethod: String?,
         val sortSwitchSlidePathField: String?,
@@ -470,6 +471,8 @@ object HomeNativeGlassHook {
             dynamicBackgroundColorIds = symbols.homeNativeGlassDynamicBackgroundColorIds
                 .filter { it != 0 }
                 .toSet(),
+            readableTextResourceIdsByName = symbols.homeNativeGlassReadableTextResourceIdsByName
+                .filterValues { it != 0 },
             sortSwitchBackgroundPaintField =
                 symbols.homeNativeGlassSortSwitchBackgroundPaintField?.takeIf { it.isNotBlank() },
             sortSwitchSlideDrawMethod =
@@ -2178,7 +2181,7 @@ object HomeNativeGlassHook {
         val roles = LinkedHashMap<Int, MutableSet<HomeNativeGlassTextRole>>()
         fun add(names: Set<String>, role: HomeNativeGlassTextRole) {
             for (name in names) {
-                val resId = resolveTargetColorResIdByName(context, name)
+                val resId = resolveTargetColorResIdByName(name)
                 if (resId == null || resId == 0) continue
                 roles.getOrPut(resId) { LinkedHashSet() }.add(role)
             }
@@ -2220,7 +2223,7 @@ object HomeNativeGlassHook {
 
     private fun resolveTargetColorByName(context: Context, name: String): Int? {
         val resources = context.resources ?: return null
-        val resId = resolveTargetColorResIdByName(context, name) ?: return null
+        val resId = resolveTargetColorResIdByName(name) ?: return null
         return runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 resources.getColor(resId, context.theme)
@@ -2231,12 +2234,8 @@ object HomeNativeGlassHook {
         }.getOrNull()
     }
 
-    private fun resolveTargetColorResIdByName(context: Context, name: String): Int? {
-        for (type in READABLE_TEXT_RESOURCE_ID_TYPES) {
-            val resId = context.resources.getIdentifier(name, type, context.packageName)
-            if (resId != 0) return resId
-        }
-        return null
+    private fun resolveTargetColorResIdByName(name: String): Int? {
+        return runtimeTargets?.readableTextResourceIdsByName?.get(name)?.takeIf { it != 0 }
     }
 
     private fun isReadableTextWriteInProgress(): Boolean {
@@ -7801,7 +7800,6 @@ object HomeNativeGlassHook {
     private const val HOME_TOP_BACKGROUND_CLEAR_DEPTH = 2
     private const val HOME_TOP_RECYCLER_CHILD_CLEAR_DEPTH = 1
     private const val HOME_FEED_CARD_BACKGROUND_PARENT_SCAN_DEPTH = 4
-    private val READABLE_TEXT_RESOURCE_ID_TYPES = arrayOf("color", "drawable")
     private const val HOME_IMAGE_CONTAINER_RADIUS_SCAN_DEPTH = 8
     private const val PB_COMMENT_TOP_CONTAINER_CLEAR_DEPTH = 2
     private const val PB_COMMENT_HOST_CLEAR_DEPTH = 5
