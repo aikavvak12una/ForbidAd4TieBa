@@ -265,7 +265,7 @@ object UiText {
         const val SCAN_MODULE_LABEL = "模块"
         const val SCAN_LOG_COPIED = "扫描日志已复制"
         const val INITIAL_SCAN_ENVIRONMENT_WARNING_TITLE = "警告"
-        const val INITIAL_SCAN_ENVIRONMENT_WARNING_MESSAGE = "本模块仅供个人学习与技术研究使用，请勿在国内平台二次分发、售卖。\n\n在安装使用本模块前应仔细审查源代码，确保已知模块功能、行为并符合预期，开发者不对使用本模块造成的任何后果承担责任。\n\n点击确认代表您已知悉并承担可能带来的后果"
+        const val INITIAL_SCAN_ENVIRONMENT_WARNING_MESSAGE = "本模块仅供个人学习与技术研究使用，请勿在任何平台二次分发、售卖。\n\n在安装使用本模块前应仔细审查源代码，确保已知模块功能、行为并符合预期，开发者不对使用本模块造成的任何后果承担责任。\n\n点击确认代表您已知悉并承担可能带来的后果"
         const val RESTRICTED_FEATURE_WARNING_TITLE = "注意"
         const val RESTRICTED_FEATURE_WARNING_MESSAGE = "使用隐藏功能可能导致应用出现卡顿、崩溃、账号被封禁等异常，点击确认代表您已知悉并承担可能带来的后果"
         const val RESTRICTED_FEATURE_CONFIRM = "确认"

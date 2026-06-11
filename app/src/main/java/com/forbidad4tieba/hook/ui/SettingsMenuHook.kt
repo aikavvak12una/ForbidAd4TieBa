@@ -198,7 +198,6 @@ object SettingsMenuHook {
     private val sSettingsFieldCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Class<*>, Field>())
     private val homeNativeGlassImagePickerResultHookInstalled = AtomicBoolean(false)
     private val homeNativeGlassHostDarkModeBridgeHookInstalled = AtomicBoolean(false)
-    private val firstSettingsDialogBackgroundErrorLogged = AtomicBoolean(false)
     private val homeNativeGlassImagePickerActivityResultHooks =
         java.util.Collections.synchronizedMap(java.util.WeakHashMap<Class<*>, Boolean>())
     @Volatile private var pendingHomeNativeGlassImagePick: PendingHomeNativeGlassImagePick? = null
@@ -895,12 +894,11 @@ object SettingsMenuHook {
 
             val tokens = UiStyle.tokens(activity)
             val density = activity.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
             val messageView = TextView(activity).apply {
                 text = UiText.Settings.INITIAL_SCAN_ENVIRONMENT_WARNING_MESSAGE
-                textSize = 14f
-                setTextColor(tokens.textPrimary)
-                setPadding(padding, padding, padding, padding)
+                applySettingsMessageStyle(tokens, density)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, padding)
             }
             val scroll = ScrollView(activity).apply {
                 addView(
@@ -915,7 +913,7 @@ object SettingsMenuHook {
             val handler = Handler(Looper.getMainLooper())
             var countdownRunnable: Runnable? = null
             val dialog = AlertDialog.Builder(activity, dialogThemeFor(activity))
-                .setTitle(UiText.Settings.INITIAL_SCAN_ENVIRONMENT_WARNING_TITLE)
+                .setSettingsTitle(activity, UiText.Settings.INITIAL_SCAN_ENVIRONMENT_WARNING_TITLE)
                 .setView(scroll)
                 .setPositiveButton(
                     UiText.Settings.initialScanEnvironmentWarningConfirmWaiting(
@@ -1026,7 +1024,7 @@ object SettingsMenuHook {
         try {
             val prefs = ConfigManager.getPrefs(context)
             val density = context.resources.displayMetrics.density
-            val padding = (20 * density).toInt()
+            val padding = settingsDialogPadding(density)
             val scanSymbols = HookSymbolResolver.loadCachedIfUsable(
                 context = context,
                 cl = classLoader ?: context.classLoader,
@@ -1038,7 +1036,8 @@ object SettingsMenuHook {
 
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding / 2, padding, padding / 2)
+                val verticalPadding = settingsRootContentVerticalPadding(padding)
+                setPadding(padding, verticalPadding, padding, verticalPadding)
             }
 
             val restrictedFeaturesUnlocked = ConfigManager.isRestrictedFeaturesUnlocked(context)
@@ -1253,19 +1252,23 @@ object SettingsMenuHook {
             groups.forEachIndexed { index, group ->
                 if (index > 0) {
                     val gap = View(context)
-                    gap.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (12 * density).toInt())
+                    gap.layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        (SETTINGS_ROOT_GROUP_GAP_DP * density).toInt(),
+                    )
                     root.addView(gap)
                 }
 
                 val tokens = UiStyle.tokens(context)
                 val headerLabel = TextView(context).apply {
                     text = group.name
-                    textSize = 12.5f
-                    letterSpacing = 0.04f
-                    setTextColor(tokens.accent)
-                    typeface = Typeface.DEFAULT_BOLD
-                    includeFontPadding = false
-                    setPadding(0, (padding * 0.7f).toInt(), 0, (padding * 0.35f).toInt())
+                    applySettingsSectionTitleStyle(tokens, density)
+                    setPadding(
+                        0,
+                        (padding * SETTINGS_ROOT_SECTION_TOP_PADDING_RATIO).toInt(),
+                        0,
+                        (padding * SETTINGS_ROOT_SECTION_BOTTOM_PADDING_RATIO).toInt(),
+                    )
                 }
                 root.addView(headerLabel)
 
@@ -1296,7 +1299,10 @@ object SettingsMenuHook {
             }
 
             val defaultEnabledGap = View(context)
-            defaultEnabledGap.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (12 * density).toInt())
+            defaultEnabledGap.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (SETTINGS_ROOT_GROUP_GAP_DP * density).toInt(),
+            )
             root.addView(defaultEnabledGap)
             val tokensForDefault = UiStyle.tokens(context)
 
@@ -1330,11 +1336,7 @@ object SettingsMenuHook {
             }
             val defaultEnabledLabel = TextView(context).apply {
                 text = UiText.Settings.DEFAULT_ENABLED_DESC
-                textSize = 12.5f
-                letterSpacing = 0.04f
-                setTextColor(tokensForDefault.accent)
-                typeface = Typeface.DEFAULT_BOLD
-                includeFontPadding = false
+                applySettingsSectionTitleStyle(tokensForDefault, density)
             }
             defaultEnabledRow.addView(defaultEnabledLabel)
             defaultEnabledRow.addView(defaultEnabledArrow)
@@ -1357,17 +1359,21 @@ object SettingsMenuHook {
                 setPadding(0, 0, 0, padding)
 
                 val gap = View(context)
-                gap.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (12 * density).toInt())
+                gap.layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    (SETTINGS_ROOT_GROUP_GAP_DP * density).toInt(),
+                )
                 addView(gap)
 
                 addView(TextView(context).apply {
                     text = UiText.Settings.ABOUT
-                    textSize = 12.5f
-                    letterSpacing = 0.04f
-                    setTextColor(tokensForDefault.accent)
-                    typeface = Typeface.DEFAULT_BOLD
-                    includeFontPadding = false
-                    setPadding(0, (padding * 0.7f).toInt(), 0, (padding * 0.35f).toInt())
+                    applySettingsSectionTitleStyle(tokensForDefault, density)
+                    setPadding(
+                        0,
+                        (padding * SETTINGS_ROOT_SECTION_TOP_PADDING_RATIO).toInt(),
+                        0,
+                        (padding * SETTINGS_ROOT_SECTION_BOTTOM_PADDING_RATIO).toInt(),
+                    )
                 })
             }
 
@@ -1451,7 +1457,7 @@ object SettingsMenuHook {
             val tokensTitle = UiStyle.tokens(context)
             val titleView = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, padding / 2)
+                setPadding(padding, padding, padding, settingsDialogTitleBottomPadding(padding))
 
                 val titleRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -1483,7 +1489,7 @@ object SettingsMenuHook {
 
                 val brandTag = TextView(context).apply {
                     text = UiText.Settings.BRAND_TAG
-                    textSize = 11.5f
+                    textSize = SETTINGS_BRAND_TAG_SP
                     letterSpacing = 0.06f
                     typeface = Typeface.MONOSPACE
                     setTextColor(tokensTitle.textMuted)
@@ -1526,12 +1532,11 @@ object SettingsMenuHook {
         try {
             val tokens = UiStyle.tokens(context)
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
             val messageView = TextView(context).apply {
                 text = UiText.Settings.RESTRICTED_FEATURE_WARNING_MESSAGE
-                textSize = 14f
-                setTextColor(tokens.textPrimary)
-                setPadding(padding, padding, padding, padding)
+                applySettingsMessageStyle(tokens, density)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, padding)
             }
             val scroll = ScrollView(context).apply {
                 addView(
@@ -1551,7 +1556,7 @@ object SettingsMenuHook {
                 android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
             }
             val dialog = AlertDialog.Builder(context, dialogTheme)
-                .setTitle(UiText.Settings.RESTRICTED_FEATURE_WARNING_TITLE)
+                .setSettingsTitle(context, UiText.Settings.RESTRICTED_FEATURE_WARNING_TITLE)
                 .setView(scroll)
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(
@@ -1607,15 +1612,12 @@ object SettingsMenuHook {
         try {
             val tokens = UiStyle.tokens(context)
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
             val contentView = TextView(context).apply {
                 text = AboutInfoManager.runtimeEnvironmentJsonForSettings(context)
-                textSize = 11f
-                typeface = Typeface.MONOSPACE
-                setTextColor(tokens.textPrimary)
-                includeFontPadding = false
+                applySettingsCodeTextStyle(tokens, density)
                 setTextIsSelectable(true)
-                setPadding(padding, padding, padding, padding)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, padding)
             }
             val scroll = ScrollView(context).apply {
                 addView(
@@ -1632,7 +1634,7 @@ object SettingsMenuHook {
                 android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
             }
             val dialog = AlertDialog.Builder(context, dialogTheme)
-                .setTitle(UiText.Settings.RUNTIME_ENVIRONMENT)
+                .setSettingsTitle(context, UiText.Settings.RUNTIME_ENVIRONMENT)
                 .setView(scroll)
                 .setPositiveButton(UiText.Settings.BUTTON_OK, null)
                 .create()
@@ -1665,7 +1667,7 @@ object SettingsMenuHook {
 
         val tokens = UiStyle.tokens(activity)
         val density = activity.resources.displayMetrics.density
-        val padding = (20 * density).toInt()
+        val padding = settingsDialogPadding(density)
         val ui = Handler(Looper.getMainLooper())
         var finished = false
         var progressSteps = 0
@@ -1692,7 +1694,7 @@ object SettingsMenuHook {
 
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(padding, padding, padding, padding)
+            setPadding(padding, settingsDialogContentTopPadding(padding), padding, padding)
         }
         val scanContentMaxHeight = (activity.resources.displayMetrics.heightPixels * 0.62f)
             .toInt()
@@ -1708,14 +1710,11 @@ object SettingsMenuHook {
         }
         titleContainer.addView(TextView(activity).apply {
             text = UiText.Settings.DIALOG_SCAN_TITLE
-            textSize = 20f
-            letterSpacing = 0.02f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(tokens.textPrimary)
+            applySettingsDialogTitleStyle(tokens, density)
         })
         titleContainer.addView(TextView(activity).apply {
             text = UiText.Settings.BRAND_TAG
-            textSize = 11f
+            textSize = SETTINGS_BRAND_TAG_SP
             letterSpacing = 0.06f
             typeface = Typeface.MONOSPACE
             setTextColor(tokens.textMuted)
@@ -1793,8 +1792,10 @@ object SettingsMenuHook {
         // Status text.
         val statusView = TextView(activity).apply {
             text = UiText.Settings.SCAN_PREPARING
-            textSize = 13f
+            textSize = SETTINGS_VALUE_TEXT_SP
             setTextColor(tokens.textSecondary)
+            includeFontPadding = false
+            setLineSpacing(1f * density, 1f)
             setPadding(0, (12 * density).toInt(), 0, 0)
         }
         scanContent.addView(statusView)
@@ -1810,13 +1811,10 @@ object SettingsMenuHook {
             layoutParams = lp
         }
         val resultStatusView = TextView(activity).apply {
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
+            applySettingsRowTitleStyle(tokens, density)
         }
         val resultVersionView = TextView(activity).apply {
-            textSize = 12f
-            typeface = Typeface.MONOSPACE
-            setTextColor(tokens.textMuted)
+            applySettingsCodeTextStyle(tokens, density, muted = true)
             setPadding(0, (4 * density).toInt(), 0, 0)
         }
         resultCard.addView(resultStatusView)
@@ -2032,9 +2030,7 @@ object SettingsMenuHook {
 
                     val runtimeEnvironmentView = TextView(activity).apply {
                         text = "${UiText.Settings.RUNTIME_ENVIRONMENT}\n$runtimeEnvironmentJson"
-                        textSize = 11f
-                        typeface = Typeface.MONOSPACE
-                        setTextColor(tokens.textMuted)
+                        applySettingsCodeTextStyle(tokens, density, muted = true)
                         setPadding(0, (6 * density).toInt(), 0, 0)
                         setTextIsSelectable(true)
                     }
@@ -2043,8 +2039,10 @@ object SettingsMenuHook {
                     if (resultWarning != null) {
                         val warningView = TextView(activity).apply {
                             text = resultWarning
-                            textSize = 12f
+                            textSize = SETTINGS_ROW_DESC_SP
                             setTextColor(summaryColor)
+                            includeFontPadding = false
+                            setLineSpacing(1f * density, 1f)
                             setPadding(0, (6 * density).toInt(), 0, 0)
                         }
                         resultCard.addView(warningView)
@@ -2054,8 +2052,7 @@ object SettingsMenuHook {
                     if (exceptionLine != null) {
                         val exceptionView = TextView(activity).apply {
                             text = exceptionLine
-                            textSize = 11f
-                            typeface = Typeface.MONOSPACE
+                            applySettingsCodeTextStyle(tokens, density)
                             setTextColor(tokens.danger)
                             setPadding(0, (6 * density).toInt(), 0, 0)
                         }
@@ -2066,8 +2063,7 @@ object SettingsMenuHook {
                     if (failedLines.isNotEmpty()) {
                         val failedView = TextView(activity).apply {
                             text = failedLines.joinToString("\n")
-                            textSize = 11f
-                            typeface = Typeface.MONOSPACE
+                            applySettingsCodeTextStyle(tokens, density)
                             setTextColor(tokens.danger)
                             setPadding(0, (6 * density).toInt(), 0, 0)
                         }
@@ -2095,24 +2091,45 @@ object SettingsMenuHook {
             UiText.Settings.SCAN_ACTION_RESCAN_ONLY,
             UiText.Settings.SCAN_ACTION_CLEAR_DATA_RESTART,
         )
-        val dialogTheme = if (tokens.night) {
-            android.R.style.Theme_DeviceDefault_Dialog_Alert
-        } else {
-            android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
+        val padding = settingsDialogPadding(density)
+        val root = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
         }
-        val dialog = AlertDialog.Builder(activity, dialogTheme)
-            .setTitle(UiText.Settings.DIALOG_SCAN_ACTION_TITLE)
-            .setItems(actions) { _, which ->
-                when (which) {
-                    0 -> startSymbolScanWithDialog(activity, classLoader ?: activity.classLoader, clearUserData = false)
-                    1 -> clearModuleDataAndRestart(activity)
-                }
-            }
+        lateinit var dialog: AlertDialog
+        actions.forEachIndexed { index, action ->
+            root.addView(
+                TextView(activity).apply {
+                    text = action
+                    applySettingsRowTitleStyle(tokens, density)
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    isClickable = true
+                    isFocusable = true
+                    setPadding(0, settingsRowVerticalPadding(density), 0, settingsRowVerticalPadding(density))
+                    setOnClickListener {
+                        UiStyle.animateActionPress(this)
+                        dialog.dismiss()
+                        when (index) {
+                            0 -> startSymbolScanWithDialog(activity, classLoader ?: activity.classLoader, clearUserData = false)
+                            1 -> clearModuleDataAndRestart(activity)
+                        }
+                    }
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+        dialog = AlertDialog.Builder(activity, dialogThemeFor(activity))
+            .setSettingsTitle(activity, UiText.Settings.DIALOG_SCAN_ACTION_TITLE)
+            .setView(createDialogScrollContainer(activity, root))
             .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
             .create()
         dialog.setOnShowListener {
             dialog.window?.let { window ->
                 applyUnifiedDialogCardStyle(window, density)
+                UiStyle.animateDialogEntry(window.decorView, density)
             }
         }
         dialog.show()
@@ -2202,11 +2219,11 @@ object SettingsMenuHook {
     ) {
         try {
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
             val tokens = UiStyle.tokens(context)
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, 0)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
@@ -2220,12 +2237,13 @@ object SettingsMenuHook {
                 }
                 root.addView(TextView(context).apply {
                     text = group.name
-                    textSize = 12.5f
-                    letterSpacing = 0.04f
-                    setTextColor(tokens.accent)
-                    typeface = Typeface.DEFAULT_BOLD
-                    includeFontPadding = false
-                    setPadding(0, (padding * 0.35f).toInt(), 0, (padding * 0.25f).toInt())
+                    applySettingsSectionTitleStyle(tokens, density)
+                    setPadding(
+                        0,
+                        (padding * SETTINGS_SUBMENU_SECTION_TOP_PADDING_RATIO).toInt(),
+                        0,
+                        (padding * SETTINGS_SUBMENU_SECTION_BOTTOM_PADDING_RATIO).toInt(),
+                    )
                 })
                 for (item in group.items) {
                     val supported = ConfigManager.isScanFeatureAvailable(item.prefKey)
@@ -2252,7 +2270,7 @@ object SettingsMenuHook {
             }
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.PERFORMANCE_OPTIMIZATION_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.PERFORMANCE_OPTIMIZATION_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, root))
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -2298,10 +2316,10 @@ object SettingsMenuHook {
     ) {
         try {
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, 0)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
@@ -2353,7 +2371,7 @@ object SettingsMenuHook {
             }
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.CUSTOM_POST_FILTER_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.CUSTOM_POST_FILTER_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, root))
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -2399,13 +2417,13 @@ object SettingsMenuHook {
     ) {
         try {
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
             ReflectionUtils.findActivityFromContext(context)?.let { activity ->
                 HomeNativeGlassHostDarkModeBridge.cacheFromActivity(activity)
             }
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, padding)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, padding)
             }
 
             val backgroundImageState = HomeNativeGlassImageSelectionState(
@@ -2585,7 +2603,7 @@ object SettingsMenuHook {
             ).also { addHomeNativeGlassSettingRow(root, it.first, density) }.second
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.HOME_NATIVE_GLASS_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.HOME_NATIVE_GLASS_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, root))
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setNeutralButton(UiText.Settings.HOME_NATIVE_GLASS_RESTORE_DEFAULTS, null)
@@ -2732,19 +2750,16 @@ object SettingsMenuHook {
         val tokens = UiStyle.tokens(context)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, (10 * density).toInt(), 0, (10 * density).toInt())
+            val verticalPadding = settingsRowVerticalPadding(density)
+            setPadding(0, verticalPadding, 0, verticalPadding)
         }
         root.addView(TextView(context).apply {
             text = UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_LABEL
-            textSize = 15f
-            setTextColor(tokens.textPrimary)
-            typeface = Typeface.DEFAULT_BOLD
+            applySettingsRowTitleStyle(tokens, density)
         })
         root.addView(TextView(context).apply {
             text = UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_DESC
-            textSize = 12f
-            setTextColor(tokens.textSecondary)
-            setPadding(0, (2 * density).toInt(), 0, (8 * density).toInt())
+            applySettingsRowDescriptionStyle(tokens, density, rightPaddingDp = 0f, bottomPaddingDp = 8f)
         })
 
         val controlRow = LinearLayout(context).apply {
@@ -2753,7 +2768,7 @@ object SettingsMenuHook {
         }
         val display = TextView(context).apply {
             text = homeNativeGlassImageDisplayText(state.path)
-            textSize = 13f
+            textSize = SETTINGS_VALUE_TEXT_SP
             gravity = Gravity.CENTER_VERTICAL
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
@@ -2874,19 +2889,16 @@ object SettingsMenuHook {
         val tokens = UiStyle.tokens(context)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, (10 * density).toInt(), 0, (10 * density).toInt())
+            val verticalPadding = settingsRowVerticalPadding(density)
+            setPadding(0, verticalPadding, 0, verticalPadding)
         }
         root.addView(TextView(context).apply {
             text = UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_LABEL
-            textSize = 15f
-            setTextColor(tokens.textPrimary)
-            typeface = Typeface.DEFAULT_BOLD
+            applySettingsRowTitleStyle(tokens, density)
         })
         root.addView(TextView(context).apply {
             text = UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_DESC
-            textSize = 12f
-            setTextColor(tokens.textSecondary)
-            setPadding(0, (2 * density).toInt(), 0, (8 * density).toInt())
+            applySettingsRowDescriptionStyle(tokens, density, rightPaddingDp = 0f, bottomPaddingDp = 8f)
         })
 
         val swatchRow = LinearLayout(context).apply {
@@ -2913,8 +2925,10 @@ object SettingsMenuHook {
         )
 
         val emptyText = TextView(context).apply {
-            textSize = 12f
+            textSize = SETTINGS_ROW_DESC_SP
             setTextColor(tokens.textMuted)
+            includeFontPadding = false
+            setLineSpacing(1f * density, 1f)
             setPadding(0, (6 * density).toInt(), 0, 0)
         }
         root.addView(emptyText)
@@ -3007,7 +3021,7 @@ object SettingsMenuHook {
     ) {
         try {
             val tokens = UiStyle.tokens(context)
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
             val input = android.widget.EditText(context).apply {
                 setSingleLine(true)
                 hint = UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_HINT
@@ -3015,7 +3029,7 @@ object SettingsMenuHook {
                     android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
                 setTextColor(tokens.textPrimary)
                 setHintTextColor(tokens.textMuted)
-                textSize = 15f
+                textSize = SETTINGS_INPUT_TEXT_SP
                 includeFontPadding = false
                 background = UiStyle.createPlainInputUnderlineBackground(tokens, density)
                 setPadding(
@@ -3027,7 +3041,7 @@ object SettingsMenuHook {
             }
             val container = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, 0)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
                 addView(
                     input,
                     LinearLayout.LayoutParams(
@@ -3037,7 +3051,7 @@ object SettingsMenuHook {
                 )
             }
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, container))
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -3198,22 +3212,19 @@ object SettingsMenuHook {
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, (10 * density).toInt(), 0, (10 * density).toInt())
+            val verticalPadding = settingsRowVerticalPadding(density)
+            setPadding(0, verticalPadding, 0, verticalPadding)
         }
         val textContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
         }
         textContainer.addView(TextView(context).apply {
             text = label
-            textSize = 15f
-            setTextColor(tokens.textPrimary)
-            typeface = Typeface.DEFAULT_BOLD
+            applySettingsRowTitleStyle(tokens, density)
         })
         textContainer.addView(TextView(context).apply {
             text = description
-            textSize = 12f
-            setTextColor(tokens.textSecondary)
-            setPadding(0, (2 * density).toInt(), (12 * density).toInt(), 0)
+            applySettingsRowDescriptionStyle(tokens, density)
         })
         root.addView(
             textContainer,
@@ -3252,7 +3263,7 @@ object SettingsMenuHook {
         root: LinearLayout,
         row: View,
         density: Float,
-        topMarginDp: Int = 8,
+        topMarginDp: Int = 0,
     ) {
         applyHomeNativeGlassSettingRowStyle(row, density)
         root.addView(
@@ -3289,7 +3300,8 @@ object SettingsMenuHook {
         val tokens = UiStyle.tokens(context)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, (10 * density).toInt(), 0, (10 * density).toInt())
+            val verticalPadding = settingsRowVerticalPadding(density)
+            setPadding(0, verticalPadding, 0, verticalPadding)
         }
         val header = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -3300,22 +3312,18 @@ object SettingsMenuHook {
         }
         textContainer.addView(TextView(context).apply {
             text = label
-            textSize = 15f
-            setTextColor(tokens.textPrimary)
-            typeface = Typeface.DEFAULT_BOLD
+            applySettingsRowTitleStyle(tokens, density)
         })
         textContainer.addView(TextView(context).apply {
             text = description
-            textSize = 12f
-            setTextColor(tokens.textSecondary)
-            setPadding(0, (2 * density).toInt(), (12 * density).toInt(), 0)
+            applySettingsRowDescriptionStyle(tokens, density)
         })
         header.addView(
             textContainer,
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f),
         )
         val valueText = TextView(context).apply {
-            textSize = 13f
+            textSize = SETTINGS_VALUE_TEXT_SP
             setTextColor(homeNativeGlassSliderAccent(tokens))
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.END
@@ -3383,7 +3391,7 @@ object SettingsMenuHook {
     ) {
         try {
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
             val thresholdByKey = ConfigManager.parseModelScoreThresholds(
                 prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
             ).associate { it.key to it.threshold }.toMutableMap()
@@ -3450,7 +3458,7 @@ object SettingsMenuHook {
             val tokens = UiStyle.tokens(context)
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, 0)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
             }
 
             val statsLimitRow = LinearLayout(context).apply {
@@ -3464,17 +3472,13 @@ object SettingsMenuHook {
             statsLimitTextContainer.addView(
                 TextView(context).apply {
                     text = UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_STATS_LIMIT_LABEL
-                    textSize = 15f
-                    setTextColor(tokens.textPrimary)
-                    typeface = Typeface.DEFAULT_BOLD
+                    applySettingsRowTitleStyle(tokens, density)
                 }
             )
             statsLimitTextContainer.addView(
                 TextView(context).apply {
                     text = UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_STATS_LIMIT_DESC
-                    textSize = 12f
-                    setTextColor(tokens.textSecondary)
-                    setPadding(0, (2 * density).toInt(), (12 * density).toInt(), 0)
+                    applySettingsRowDescriptionStyle(tokens, density)
                 }
             )
             statsLimitRow.addView(
@@ -3510,7 +3514,7 @@ object SettingsMenuHook {
                 imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
                 hint = UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_STATS_LIMIT_HINT
                 setText(initialStatsPostLimit.toString())
-                textSize = 13f
+                textSize = SETTINGS_VALUE_TEXT_SP
                 gravity = Gravity.CENTER
                 typeface = Typeface.DEFAULT_BOLD
                 setTextColor(tokens.textPrimary)
@@ -3535,8 +3539,10 @@ object SettingsMenuHook {
             root.addView(
                 TextView(context).apply {
                     text = UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_GUIDE
-                    textSize = 12.5f
+                    textSize = SETTINGS_ROW_DESC_SP
                     setTextColor(tokens.textSecondary)
+                    includeFontPadding = false
+                    setLineSpacing(1f * density, 1f)
                     setPadding(0, 0, 0, (8 * density).toInt())
                 },
                 LinearLayout.LayoutParams(
@@ -3552,7 +3558,8 @@ object SettingsMenuHook {
                 val row = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding(0, (10 * density).toInt(), 0, (10 * density).toInt())
+                    val verticalPadding = settingsRowVerticalPadding(density)
+                    setPadding(0, verticalPadding, 0, verticalPadding)
                 }
                 val textContainer = LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
@@ -3560,17 +3567,13 @@ object SettingsMenuHook {
                 textContainer.addView(
                     TextView(context).apply {
                         text = item.label
-                        textSize = 15f
-                        setTextColor(tokens.textPrimary)
-                        typeface = Typeface.DEFAULT_BOLD
+                        applySettingsRowTitleStyle(tokens, density)
                     }
                 )
                 textContainer.addView(
                     TextView(context).apply {
                         text = item.description
-                        textSize = 12f
-                        setTextColor(tokens.textSecondary)
-                        setPadding(0, (2 * density).toInt(), (12 * density).toInt(), 0)
+                        applySettingsRowDescriptionStyle(tokens, density)
                     }
                 )
                 row.addView(
@@ -3685,7 +3688,7 @@ object SettingsMenuHook {
                     imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
                     hint = UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_HINT
                     setText(formatModelScoreThreshold(thresholdByKey[item.key]))
-                    textSize = 13f
+                    textSize = SETTINGS_VALUE_TEXT_SP
                     gravity = Gravity.CENTER
                     typeface = Typeface.DEFAULT_BOLD
                     setTextColor(tokens.textPrimary)
@@ -3728,7 +3731,7 @@ object SettingsMenuHook {
                 )
             }
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_DIALOG_TITLE)
                 .setView(scroll)
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -3870,6 +3873,7 @@ object SettingsMenuHook {
     ): View {
         val padding = (12 * density).toInt()
         val summary = CustomPostModelScoreStats.summary(item.key)
+        val tokens = UiStyle.tokens(context)
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = createModelScoreExpandedStatsBackground(context, density)
@@ -3879,8 +3883,7 @@ object SettingsMenuHook {
                 addView(
                     TextView(context).apply {
                         text = UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_STATS_EMPTY
-                        textSize = 14f
-                        setTextColor(UiStyle.tokens(context).textSecondary)
+                        applySettingsMessageStyle(tokens, density, primary = false)
                     },
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -4007,16 +4010,18 @@ object SettingsMenuHook {
             }
             addView(TextView(context).apply {
                 text = label
-                textSize = 12f
+                textSize = SETTINGS_ROW_DESC_SP
                 setTextColor(if (active) tokens.accent else tokens.textSecondary)
                 gravity = Gravity.CENTER
+                includeFontPadding = false
             })
             addView(TextView(context).apply {
                 text = value
-                textSize = 15f
+                textSize = SETTINGS_ROW_TITLE_SP
                 setTextColor(if (active) tokens.accent else tokens.textPrimary)
                 typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
+                includeFontPadding = false
                 setPadding(0, (4 * context.resources.displayMetrics.density).toInt(), 0, 0)
             })
         }
@@ -4043,32 +4048,54 @@ object SettingsMenuHook {
         onSelected: (Int, Double, Int) -> Unit,
     ) {
         val tokens = UiStyle.tokens(context)
+        val density = context.resources.displayMetrics.density
+        val padding = settingsDialogPadding(density)
         val percentiles = ConfigManager.SUPPORTED_MODEL_SCORE_AUTO_PERCENTILES
-        val labels = percentiles.map { UiText.Settings.modelScoreAutoPercentileLabel(it) }.toTypedArray()
         val checkedIndex = percentiles.indexOf(currentPercentile).coerceAtLeast(0)
-        val dialogTheme = if (tokens.night) {
-            android.R.style.Theme_DeviceDefault_Dialog_Alert
-        } else {
-            android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
         }
-        AlertDialog.Builder(context, dialogTheme)
-            .setTitle(UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_AUTO_PERCENTILE_DIALOG_TITLE)
-            .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
-                val percentile = percentiles[which]
-                val value = summary.percentileValue(percentile)
-                if (value != null) {
-                    onSelected(percentile, value, summary.sampleCount)
-                }
-                dialog.dismiss()
-            }
+        lateinit var dialog: AlertDialog
+        percentiles.forEachIndexed { index, percentile ->
+            val active = index == checkedIndex
+            root.addView(
+                TextView(context).apply {
+                    text = UiText.Settings.modelScoreAutoPercentileLabel(percentile)
+                    applySettingsRowTitleStyle(tokens, density)
+                    if (active) {
+                        setTextColor(tokens.accent)
+                    }
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    isClickable = true
+                    isFocusable = true
+                    setPadding(0, settingsRowVerticalPadding(density), 0, settingsRowVerticalPadding(density))
+                    setOnClickListener {
+                        val value = summary.percentileValue(percentile)
+                        if (value != null) {
+                            onSelected(percentile, value, summary.sampleCount)
+                        }
+                        dialog.dismiss()
+                    }
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+        dialog = AlertDialog.Builder(context, dialogThemeFor(context))
+            .setSettingsTitle(context, UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_AUTO_PERCENTILE_DIALOG_TITLE)
+            .setView(createDialogScrollContainer(context, root))
             .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
             .create()
-            .apply {
-                setOnShowListener {
-                    window?.let { applyUnifiedDialogCardStyle(it, context.resources.displayMetrics.density) }
-                }
+        dialog.setOnShowListener {
+            dialog.window?.let { window ->
+                applyUnifiedDialogCardStyle(window, density)
+                UiStyle.animateDialogEntry(window.decorView, density)
             }
-            .show()
+        }
+        dialog.show()
     }
 
     private fun createModelScoreExpandedStatsBackground(context: Context, density: Float): GradientDrawable {
@@ -4105,14 +4132,17 @@ object SettingsMenuHook {
 
             val guideView = TextView(context).apply {
                 text = UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_GUIDE
-                textSize = 12.5f
+                textSize = SETTINGS_ROW_DESC_SP
                 setTextColor(tokens.textSecondary)
+                includeFontPadding = false
+                setLineSpacing(1f * density, 1f)
                 setPadding(0, 0, 0, (8 * density).toInt())
             }
             val counterView = TextView(context).apply {
-                textSize = 12f
+                textSize = SETTINGS_SECTION_TITLE_SP
                 typeface = Typeface.DEFAULT_BOLD
                 setTextColor(tokens.accent)
+                includeFontPadding = false
                 setPadding(0, 0, 0, (8 * density).toInt())
             }
             fun refreshCounter(raw: String) {
@@ -4128,7 +4158,7 @@ object SettingsMenuHook {
                 setText(initialRaw)
                 setTextColor(tokens.textPrimary)
                 setHintTextColor(tokens.textMuted)
-                textSize = 15f
+                textSize = SETTINGS_INPUT_TEXT_SP
                 includeFontPadding = false
                 background = UiStyle.createPlainInputUnderlineBackground(tokens, density)
                 setPadding(
@@ -4149,8 +4179,8 @@ object SettingsMenuHook {
 
             val container = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                val padding = (16 * density).toInt()
-                setPadding(padding, padding, padding, 0)
+                val padding = settingsDialogPadding(density)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
                 addView(
                     guideView,
                     LinearLayout.LayoutParams(
@@ -4174,7 +4204,7 @@ object SettingsMenuHook {
                 )
             }
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, container))
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -4205,11 +4235,11 @@ object SettingsMenuHook {
         try {
             val tokens = UiStyle.tokens(context)
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
 
             val label = TextView(context).apply {
                 text = UiText.Settings.PB_LIKE_AUTO_REPLY_CONTENT_LABEL
-                textSize = 12.5f
+                textSize = SETTINGS_SECTION_TITLE_SP
                 typeface = Typeface.DEFAULT_BOLD
                 setTextColor(tokens.textSecondary)
                 includeFontPadding = false
@@ -4227,14 +4257,14 @@ object SettingsMenuHook {
                 setText(prefs.getString(ConfigManager.KEY_PB_LIKE_AUTO_REPLY_TEXT, "").orEmpty())
                 setTextColor(tokens.textPrimary)
                 setHintTextColor(tokens.textMuted)
-                textSize = 15f
+                textSize = SETTINGS_INPUT_TEXT_SP
                 includeFontPadding = false
                 background = UiStyle.createPlainInputUnderlineBackground(tokens, density)
                 setPadding(0, (2 * density).toInt(), 0, (8 * density).toInt())
             }
             val container = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, 0)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
                 addView(label)
                 addView(
                     input,
@@ -4245,7 +4275,7 @@ object SettingsMenuHook {
                 )
             }
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.PB_LIKE_AUTO_REPLY_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.PB_LIKE_AUTO_REPLY_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, container))
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -4283,7 +4313,7 @@ object SettingsMenuHook {
     private fun showHomeTopTabDialog(context: Context, prefs: android.content.SharedPreferences) {
         try {
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
 
             val persistedSelection = ConfigManager.HomeTopTabSelection(
                 materialEnabled = prefs.getBoolean(ConfigManager.KEY_HOME_TOP_TAB_MATERIAL, true),
@@ -4295,7 +4325,7 @@ object SettingsMenuHook {
 
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, 0)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
@@ -4358,7 +4388,7 @@ object SettingsMenuHook {
             }
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.HOME_TOP_TAB_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.HOME_TOP_TAB_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, root))
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -4401,7 +4431,7 @@ object SettingsMenuHook {
     private fun showBottomTabDialog(context: Context, prefs: android.content.SharedPreferences) {
         try {
             val density = context.resources.displayMetrics.density
-            val padding = (16 * density).toInt()
+            val padding = settingsDialogPadding(density)
 
             val persistedSelection = ConfigManager.BottomTabSelection(
                 homeEnabled = prefs.getBoolean(ConfigManager.KEY_BOTTOM_TAB_HOME, true),
@@ -4414,7 +4444,7 @@ object SettingsMenuHook {
 
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, 0)
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
@@ -4495,7 +4525,7 @@ object SettingsMenuHook {
             }
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setTitle(UiText.Settings.BOTTOM_TAB_DIALOG_TITLE)
+                .setSettingsTitle(context, UiText.Settings.BOTTOM_TAB_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, root))
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -4556,711 +4586,4 @@ object SettingsMenuHook {
         try { exitProcess(0) } catch (t: Throwable) { XposedCompat.logD("SettingsMenuHook: ${t.message}") }
     }
 
-    private class ModelScoreDistributionView(
-        context: Context,
-        private val summary: CustomPostModelScoreStats.Summary,
-    ) : View(context) {
-        private val tokens = UiStyle.tokens(context)
-        private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tokens.chartBg
-            style = Paint.Style.FILL
-        }
-        private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tokens.chartAxis
-            strokeWidth = 1f
-            style = Paint.Style.STROKE
-        }
-        private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tokens.chartGrid
-            strokeWidth = 1f
-            style = Paint.Style.STROKE
-        }
-        private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tokens.chartBar
-            style = Paint.Style.FILL
-        }
-        private val highlightBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tokens.chartBarHighlight
-            style = Paint.Style.FILL
-        }
-        private val cumulativePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tokens.accent
-            strokeWidth = 2.2f
-            style = Paint.Style.STROKE
-        }
-        private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tokens.textSecondary
-            textSize = 10.5f * context.resources.displayMetrics.density * context.resources.configuration.fontScale
-        }
-        private val selectedLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tokens.accent
-            textSize = 11f * context.resources.displayMetrics.density * context.resources.configuration.fontScale
-            typeface = Typeface.DEFAULT_BOLD
-            textAlign = Paint.Align.CENTER
-        }
-        private val cardRect = RectF()
-        private val plotRect = RectF()
-        private val barRect = RectF()
-        private val barRects = ArrayList<RectF>()
-        private val cumulativePath = Path()
-        private var selectedBucketIndex = -1
-
-        init {
-            isClickable = true
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val density = resources.displayMetrics.density
-            cardRect.set(0f, 0f, width.toFloat(), height.toFloat())
-            canvas.drawRoundRect(cardRect, 10f * density, 10f * density, bgPaint)
-
-            val leftInset = 38f * density
-            val rightInset = 10f * density
-            val topInset = 34f * density
-            val bottomInset = 28f * density
-            plotRect.set(leftInset, topInset, width - rightInset, height - bottomInset)
-            if (plotRect.width() <= 0f || plotRect.height() <= 0f) return
-            canvas.drawLine(plotRect.left, plotRect.top, plotRect.left, plotRect.bottom, axisPaint)
-            canvas.drawLine(plotRect.left, plotRect.bottom, plotRect.right, plotRect.bottom, axisPaint)
-
-            val buckets = summary.buckets
-            if (buckets.isEmpty()) return
-            if (selectedBucketIndex >= buckets.size) selectedBucketIndex = -1
-            val maxCount = max(1, buckets.maxOf { it.count })
-            drawSelectedBucketInfo(canvas, density, buckets)
-            drawAxisLabels(canvas, density, maxCount)
-            val gap = (if (buckets.size > 32) 1f else 2f) * density
-            val barWidth = ((plotRect.width() - gap * (buckets.size - 1)) / buckets.size).coerceAtLeast(1f)
-            barRects.clear()
-            buckets.forEachIndexed { index, bucket ->
-                val left = plotRect.left + index * (barWidth + gap)
-                val top = plotRect.bottom - plotRect.height() * (bucket.count.toFloat() / maxCount)
-                barRect.set(left, top, left + barWidth, plotRect.bottom)
-                barRects.add(RectF(barRect))
-                canvas.drawRoundRect(
-                    barRect,
-                    2f * density,
-                    2f * density,
-                    if (index == selectedBucketIndex) highlightBarPaint else barPaint
-                )
-            }
-            drawCumulativeCurve(canvas, buckets)
-        }
-
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN,
-                MotionEvent.ACTION_MOVE,
-                MotionEvent.ACTION_UP -> {
-                    val index = findBucketIndex(event.x, event.y)
-                    if (index >= 0 && selectedBucketIndex != index) {
-                        selectedBucketIndex = index
-                        invalidate()
-                    }
-                    if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
-                    return true
-                }
-                MotionEvent.ACTION_CANCEL -> return true
-            }
-            return true
-        }
-
-        override fun performClick(): Boolean {
-            super.performClick()
-            return true
-        }
-
-        private fun drawAxisLabels(canvas: Canvas, density: Float, maxCount: Int) {
-            val halfY = plotRect.top + plotRect.height() / 2f
-            canvas.drawLine(plotRect.left, halfY, plotRect.right, halfY, gridPaint)
-
-            labelPaint.textAlign = Paint.Align.RIGHT
-            val yLabelX = plotRect.left - 6f * density
-            canvas.drawText(maxCount.toString(), yLabelX, plotRect.top + 4f * density, labelPaint)
-            canvas.drawText((maxCount / 2).toString(), yLabelX, halfY + 4f * density, labelPaint)
-            canvas.drawText("0", yLabelX, plotRect.bottom, labelPaint)
-
-            val min = summary.displayMin ?: return
-            val maxValue = summary.displayMax ?: return
-            val xLabelY = plotRect.bottom + 16f * density
-            labelPaint.textAlign = Paint.Align.LEFT
-            canvas.drawText(formatAxisValue(min), plotRect.left, xLabelY, labelPaint)
-            labelPaint.textAlign = Paint.Align.RIGHT
-            canvas.drawText(formatAxisValue(maxValue), plotRect.right, xLabelY, labelPaint)
-        }
-
-        private fun drawSelectedBucketInfo(
-            canvas: Canvas,
-            density: Float,
-            buckets: List<CustomPostModelScoreStats.Bucket>,
-        ) {
-            val selected = buckets.getOrNull(selectedBucketIndex) ?: return
-            val text = UiText.Settings.modelScoreBucketInfo(
-                formatAxisValue(selected.start),
-                formatAxisValue(selected.end),
-                selected.count,
-                selected.cumulativeCount,
-                formatPercent(selected.cumulativeRatio),
-            )
-            canvas.drawText(text, width / 2f, 20f * density, selectedLabelPaint)
-        }
-
-        private fun drawCumulativeCurve(
-            canvas: Canvas,
-            buckets: List<CustomPostModelScoreStats.Bucket>,
-        ) {
-            if (buckets.isEmpty() || barRects.size != buckets.size) return
-            cumulativePath.reset()
-            buckets.forEachIndexed { index, bucket ->
-                val rect = barRects[index]
-                val x = rect.centerX()
-                val y = plotRect.bottom - plotRect.height() * bucket.cumulativeRatio.coerceIn(0.0, 1.0).toFloat()
-                if (index == 0) {
-                    cumulativePath.moveTo(x, y)
-                } else {
-                    cumulativePath.lineTo(x, y)
-                }
-            }
-            canvas.drawPath(cumulativePath, cumulativePaint)
-        }
-
-        private fun findBucketIndex(x: Float, y: Float): Int {
-            if (y < plotRect.top || y > plotRect.bottom) return -1
-            if (barRects.isEmpty() || x < plotRect.left || x > plotRect.right) return -1
-            val ratio = ((x - plotRect.left) / plotRect.width()).coerceIn(0f, 0.999999f)
-            return (ratio * barRects.size).toInt().coerceIn(0, barRects.lastIndex)
-        }
-
-        private fun formatAxisValue(value: Double): String {
-            val text = String.format(Locale.US, "%.4f", value)
-            return text.trimEnd('0').trimEnd('.').ifEmpty { "0" }
-        }
-
-        private fun formatPercent(value: Double): String {
-            return String.format(Locale.US, "%.1f%%", value.coerceIn(0.0, 1.0) * 100.0)
-        }
-    }
-
-    private fun applyUnifiedDialogCardStyle(
-        window: Window,
-        density: Float,
-        useCustomBackground: Boolean = true,
-    ) {
-        val tokens = UiStyle.tokens(window.context)
-        val homeNativeGlassEnabled = ConfigManager.isHomeNativeGlassEnabled
-        applySettingsDialogShadow(
-            window = window,
-            density = density,
-            enabled = homeNativeGlassEnabled && ConfigManager.isHomeNativeGlassShadowEnabled,
-        )
-        tintSettingsDialogActionButtons(window, tokens.accent)
-        val background = if (useCustomBackground) {
-            createSettingsDialogCustomBackground(window.context, tokens, density)
-        } else {
-            null
-        }
-        if (background != null) {
-            window.setBackgroundDrawable(NoIntrinsicInsetDrawable(background, tokens.dialogInsetPx))
-        } else {
-            UiStyle.applyDialogCard(window, tokens)
-        }
-        clearSystemDialogCustomPanelPadding(window)
-        applyStableDialogWindowLayout(window, density)
-    }
-
-    private fun clearSystemDialogCustomPanelPadding(window: Window) {
-        val customPanel = window.decorView.findViewById<View>(android.R.id.custom) ?: return
-        if (
-            customPanel.paddingLeft != 0 ||
-            customPanel.paddingTop != 0 ||
-            customPanel.paddingRight != 0 ||
-            customPanel.paddingBottom != 0
-        ) {
-            customPanel.setPadding(0, 0, 0, 0)
-        }
-    }
-
-    private fun applyStableDialogWindowLayout(window: Window, density: Float) {
-        val screenWidth = window.context.resources.displayMetrics.widthPixels
-        val horizontalMargin = (12f * density).toInt().coerceAtLeast(1)
-        val availableWidth = screenWidth - horizontalMargin * 2
-        if (availableWidth <= 0) return
-
-        val maxWidth = (560f * density).toInt().coerceAtLeast(1)
-        val minWidth = (280f * density).toInt().coerceAtMost(availableWidth)
-        val targetWidth = availableWidth
-            .coerceAtMost(maxWidth)
-            .coerceAtLeast(minWidth)
-
-        window.setGravity(Gravity.CENTER)
-        val attrs = window.attributes
-        attrs.gravity = Gravity.CENTER
-        attrs.x = 0
-        attrs.y = 0
-        attrs.width = targetWidth
-        attrs.height = ViewGroup.LayoutParams.WRAP_CONTENT
-        window.attributes = attrs
-        window.setLayout(targetWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
-    }
-
-    private class NoIntrinsicInsetDrawable(
-        drawable: Drawable,
-        inset: Int,
-    ) : InsetDrawable(drawable, inset) {
-        override fun getIntrinsicWidth(): Int = -1
-
-        override fun getIntrinsicHeight(): Int = -1
-    }
-
-    private class MaxHeightScrollView(
-        context: Context,
-        private val maxHeightPx: Int,
-    ) : ScrollView(context) {
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val parentMode = MeasureSpec.getMode(heightMeasureSpec)
-            val parentSize = MeasureSpec.getSize(heightMeasureSpec)
-            val cappedHeight = if (parentMode == MeasureSpec.UNSPECIFIED) {
-                maxHeightPx
-            } else {
-                maxHeightPx.coerceAtMost(parentSize)
-            }.coerceAtLeast(1)
-            val cappedHeightSpec = MeasureSpec.makeMeasureSpec(cappedHeight, MeasureSpec.AT_MOST)
-            super.onMeasure(widthMeasureSpec, cappedHeightSpec)
-        }
-    }
-
-    private fun tintSettingsDialogActionButtons(window: Window, color: Int) {
-        val decor = window.decorView
-        intArrayOf(android.R.id.button1, android.R.id.button2, android.R.id.button3).forEach { id ->
-            (decor.findViewById(id) as? Button)?.setTextColor(color)
-        }
-    }
-
-    private fun applySettingsDialogShadow(window: Window, density: Float, enabled: Boolean) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
-        val decor = window.decorView
-        decor.elevation = if (enabled) 10f * density else 0f
-        decor.translationZ = if (enabled) 2f * density else 0f
-    }
-
-    private fun createSettingsDialogCustomBackground(
-        context: Context,
-        tokens: UiStyle.Tokens,
-        density: Float,
-    ): Drawable? {
-        val path = resolveSettingsDialogBackgroundImagePath(context)
-        if (path.isBlank()) return null
-        val metrics = context.resources.displayMetrics
-        val targetWidth = (metrics.widthPixels - tokens.dialogInsetPx * 2).coerceAtLeast(1)
-        val targetHeight = (metrics.heightPixels - tokens.dialogInsetPx * 2).coerceAtLeast(1)
-        val bitmap = runCatching {
-            HomeNativeGlassImageCache.decodeSampledBitmap(path, targetWidth, targetHeight)
-        }.getOrNull()
-        if (bitmap == null) {
-            if (firstSettingsDialogBackgroundErrorLogged.compareAndSet(false, true)) {
-                XposedCompat.logD { "[SettingsMenuHook] settings dialog background unavailable: $path" }
-            }
-            return null
-        }
-        return SettingsDialogCustomBackgroundDrawable(
-            bitmap = bitmap,
-            tokens = tokens,
-            overlayColor = settingsDialogOverlayColor(tokens),
-            density = density,
-            strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled,
-            shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled,
-        )
-    }
-
-    private fun resolveSettingsDialogBackgroundImagePath(context: Context): String {
-        val prefs = ConfigManager.getPrefs(context)
-        if (!prefs.getBoolean(ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS, false)) return ""
-        val sourcePath = prefs.getString(
-            ConfigManager.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-            ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-        )?.trim().orEmpty()
-        if (sourcePath.isBlank()) return ""
-        val blurCachePath = prefs.getString(
-            ConfigManager.KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-            ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-        )?.trim().orEmpty()
-        if (
-            blurCachePath.isNotBlank() &&
-            runCatching { File(blurCachePath).isFile }.getOrDefault(false)
-        ) {
-            return blurCachePath
-        }
-        return if (runCatching { File(sourcePath).isFile }.getOrDefault(false)) sourcePath else ""
-    }
-
-    private fun settingsDialogOverlayColor(tokens: UiStyle.Tokens): Int {
-        val tintColor = HomeNativeGlassDynamicTintCache.resolveAccentColor()
-        val surface = tokens.surface
-        val baseColor = if (tintColor == null) {
-            surface
-        } else {
-            blendRgb(surface, tintColor, 0.35f)
-        }
-        val overlayAlpha = if (tokens.night) 126 else 142
-        return Color.argb(
-            overlayAlpha,
-            Color.red(baseColor),
-            Color.green(baseColor),
-            Color.blue(baseColor),
-        )
-    }
-
-    private fun settingsDialogStrokeColor(tokens: UiStyle.Tokens): Int {
-        val tintColor = HomeNativeGlassDynamicTintCache.resolveAccentColor()
-        val baseColor = if (tintColor == null) {
-            Color.WHITE
-        } else {
-            blendRgb(tintColor, Color.WHITE, if (tokens.night) 0.35f else 0.55f)
-        }
-        val alpha = if (tokens.night) 92 else 118
-        return Color.argb(
-            alpha,
-            Color.red(baseColor),
-            Color.green(baseColor),
-            Color.blue(baseColor),
-        )
-    }
-
-    private fun blendRgb(base: Int, overlay: Int, overlayRatio: Float): Int {
-        val ratio = overlayRatio.coerceIn(0f, 1f)
-        val inverse = 1f - ratio
-        return Color.rgb(
-            (Color.red(base) * inverse + Color.red(overlay) * ratio).toInt().coerceIn(0, 255),
-            (Color.green(base) * inverse + Color.green(overlay) * ratio).toInt().coerceIn(0, 255),
-            (Color.blue(base) * inverse + Color.blue(overlay) * ratio).toInt().coerceIn(0, 255),
-        )
-    }
-
-    private class SettingsDialogCustomBackgroundDrawable(
-        private val bitmap: Bitmap,
-        private val tokens: UiStyle.Tokens,
-        private val overlayColor: Int,
-        density: Float,
-        private val strokeEnabled: Boolean,
-        private val shadowEnabled: Boolean,
-    ) : Drawable() {
-        private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
-        private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-        }
-        private val strokeWidth = max(1f, density)
-        private val src = Rect()
-        private val dst = Rect()
-        private val rect = RectF()
-        private val insetRect = RectF()
-        private val clipPath = Path()
-        private var drawableAlpha = 255
-
-        override fun draw(canvas: Canvas) {
-            dst.set(bounds)
-            val width = dst.width()
-            val height = dst.height()
-            val bitmapWidth = bitmap.width
-            val bitmapHeight = bitmap.height
-            if (width <= 0 || height <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return
-
-            rect.set(dst)
-            clipPath.reset()
-            clipPath.addRoundRect(rect, tokens.cardCornerPx, tokens.cardCornerPx, Path.Direction.CW)
-            val save = canvas.save()
-            canvas.clipPath(clipPath)
-
-            if (bitmapWidth.toLong() * height > width.toLong() * bitmapHeight) {
-                val srcWidth = (bitmapHeight.toLong() * width / height).toInt().coerceIn(1, bitmapWidth)
-                val left = (bitmapWidth - srcWidth) / 2
-                src.set(left, 0, left + srcWidth, bitmapHeight)
-            } else {
-                val srcHeight = (bitmapWidth.toLong() * height / width).toInt().coerceIn(1, bitmapHeight)
-                val top = (bitmapHeight - srcHeight) / 2
-                src.set(0, top, bitmapWidth, top + srcHeight)
-            }
-
-            bitmapPaint.alpha = drawableAlpha
-            canvas.drawBitmap(bitmap, src, dst, bitmapPaint)
-            overlayPaint.color = scaleAlpha(overlayColor, drawableAlpha)
-            canvas.drawRect(rect, overlayPaint)
-            if (shadowEnabled) {
-                drawSoftShadow(canvas)
-            }
-            canvas.restoreToCount(save)
-            if (strokeEnabled) {
-                drawStroke(canvas)
-            }
-        }
-
-        override fun setAlpha(alpha: Int) {
-            drawableAlpha = alpha.coerceIn(0, 255)
-            invalidateSelf()
-        }
-
-        override fun setColorFilter(colorFilter: ColorFilter?) {
-            bitmapPaint.colorFilter = colorFilter
-            invalidateSelf()
-        }
-
-        @Suppress("OVERRIDE_DEPRECATION")
-        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-
-        override fun getIntrinsicWidth(): Int = -1
-
-        override fun getIntrinsicHeight(): Int = -1
-
-        private fun scaleAlpha(color: Int, alpha: Int): Int {
-            return Color.argb(
-                (Color.alpha(color) * alpha / 255f).toInt().coerceIn(0, 255),
-                Color.red(color),
-                Color.green(color),
-                Color.blue(color),
-            )
-        }
-
-        private fun drawSoftShadow(canvas: Canvas) {
-            val alpha = (24 * drawableAlpha / 255f).toInt().coerceIn(0, 255)
-            if (alpha <= 0) return
-            shadowPaint.shader = LinearGradient(
-                0f,
-                rect.top,
-                0f,
-                rect.bottom,
-                intArrayOf(
-                    Color.TRANSPARENT,
-                    Color.TRANSPARENT,
-                    Color.argb(alpha, 0, 0, 0),
-                ),
-                floatArrayOf(0f, 0.58f, 1f),
-                Shader.TileMode.CLAMP,
-            )
-            canvas.drawRoundRect(rect, tokens.cardCornerPx, tokens.cardCornerPx, shadowPaint)
-            shadowPaint.shader = null
-        }
-
-        private fun drawStroke(canvas: Canvas) {
-            insetRect.set(rect)
-            val inset = strokeWidth * 0.5f
-            insetRect.inset(inset, inset)
-            val radius = (tokens.cardCornerPx - inset).coerceAtLeast(0f)
-            strokePaint.strokeWidth = strokeWidth
-            strokePaint.color = scaleAlpha(settingsDialogStrokeColor(tokens), drawableAlpha)
-            canvas.drawRoundRect(insetRect, radius, radius, strokePaint)
-        }
-    }
-
-    private fun dialogThemeFor(context: Context): Int {
-        return if (UiStyle.tokens(context).night) {
-            android.R.style.Theme_DeviceDefault_Dialog_Alert
-        } else {
-            android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
-        }
-    }
-
-    private fun createDialogScrollContainer(context: Context, content: View): ScrollView {
-        return ScrollView(context).apply {
-            isFillViewport = false
-            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            clipToPadding = false
-            addView(
-                content,
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                )
-            )
-        }
-    }
-
-    private fun Button.updateButtonEnabledState(enabled: Boolean) {
-        UiStyle.setButtonEnabledState(this, enabled)
-    }
-
-    private fun findSwitchView(root: View): Switch? {
-        if (root is Switch) return root
-        if (root !is ViewGroup) return null
-        for (index in 0 until root.childCount) {
-            val found = findSwitchView(root.getChildAt(index))
-            if (found != null) return found
-        }
-        return null
-    }
-
-    private fun createSwitchRow(
-        context: Context, prefs: android.content.SharedPreferences,
-        label: String, description: String?, prefKey: String?, padding: Int, enabled: Boolean = true,
-        defaultValue: Boolean = false,
-        actionIcon: String? = null,
-        onActionClick: (() -> Unit)? = null,
-        linkedPrefKeys: List<String> = emptyList(),
-    ): View {
-        val tokens = UiStyle.tokens(context)
-        val density = context.resources.displayMetrics.density
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, (padding * 0.55f).toInt(), 0, (padding * 0.55f).toInt())
-        }
-
-        val textContainer = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-
-        val tvLabel = TextView(context).apply {
-            text = label
-            textSize = 14.5f
-            setTextColor(if (enabled) tokens.textPrimary else tokens.textMuted)
-            typeface = Typeface.DEFAULT_BOLD
-            includeFontPadding = false
-            setLineSpacing(1.5f * density, 1f)
-        }
-        textContainer.addView(tvLabel)
-
-        if (description != null) {
-            val tvDesc = TextView(context).apply {
-                text = description
-                textSize = 11.5f
-                setTextColor(if (enabled) tokens.textSecondary else tokens.textMuted)
-                setPadding(0, (3 * density).toInt(), (14 * density).toInt(), 0)
-                includeFontPadding = false
-                setLineSpacing(1f * density, 1f)
-            }
-            textContainer.addView(tvDesc)
-        }
-
-        row.addView(textContainer, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f))
-
-        if (actionIcon != null && onActionClick != null) {
-            val actionBtn = TextView(context).apply {
-                text = actionIcon
-                textSize = 18f
-                setTextColor(if (enabled) tokens.accent else tokens.textMuted)
-                gravity = Gravity.CENTER
-                setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
-                setOnClickListener {
-                    if (enabled) {
-                        UiStyle.animateActionPress(this)
-                        onActionClick()
-                    }
-                }
-            }
-            row.addView(actionBtn)
-        }
-
-        @Suppress("DEPRECATION")
-        val sw = Switch(context).apply {
-            isChecked = if (enabled && prefKey != null) {
-                resolveSwitchChecked(prefs, prefKey, linkedPrefKeys, defaultValue)
-            } else {
-                defaultValue
-            }
-            isEnabled = enabled
-
-            val states = arrayOf(
-                intArrayOf(android.R.attr.state_checked),
-                intArrayOf(-android.R.attr.state_checked)
-            )
-            thumbTintList = ColorStateList(states, intArrayOf(
-                tokens.accent,
-                tokens.accentThumbOff,
-            ))
-            trackTintList = ColorStateList(states, intArrayOf(
-                tokens.accentTrackOn,
-                tokens.accentTrackOff,
-            ))
-
-            setOnCheckedChangeListener { _, isChecked ->
-                if (enabled) {
-                    if (prefKey != null) {
-                        val editor = prefs.edit().putBoolean(prefKey, isChecked)
-                        for (linkedPrefKey in linkedPrefKeys) {
-                            editor.putBoolean(linkedPrefKey, isChecked)
-                        }
-                        editor.apply()
-                    }
-                }
-            }
-        }
-        row.addView(sw)
-
-        return row
-    }
-
-    private fun resolveSwitchChecked(
-        prefs: android.content.SharedPreferences,
-        prefKey: String,
-        linkedPrefKeys: List<String>,
-        defaultValue: Boolean,
-    ): Boolean {
-        if (!prefs.contains(prefKey) && linkedPrefKeys.none { prefs.contains(it) }) {
-            return defaultValue
-        }
-        if (prefs.getBoolean(prefKey, false)) return true
-        return linkedPrefKeys.any { prefs.getBoolean(it, false) }
-    }
-
-    private fun createAboutItem(
-        context: Context,
-        density: Float,
-        padding: Int,
-        title: String,
-        content: String,
-        url: String? = null,
-        onClick: (() -> Unit)? = null,
-    ): View {
-        val tokens = UiStyle.tokens(context)
-        return LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, (padding * 0.4f).toInt(), 0, (padding * 0.4f).toInt())
-            if (onClick != null) {
-                isClickable = true
-                setOnClickListener { onClick() }
-            }
-
-            addView(TextView(context).apply {
-                text = title
-                textSize = 14.5f
-                setTextColor(tokens.textPrimary)
-                typeface = Typeface.DEFAULT_BOLD
-                includeFontPadding = false
-                gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            })
-
-            addView(TextView(context).apply {
-                text = content
-                textSize = 13f
-                setTextColor(if (url != null) tokens.accent else tokens.textSecondary)
-                gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                includeFontPadding = false
-                setPadding(0, (3 * density).toInt(), 0, 0)
-
-                if (url != null) {
-                    setOnClickListener {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(intent)
-                        } catch (t: Throwable) {
-                            XposedCompat.logW("[SettingsMenuHook] open about link failed: url=$url, msg=${t.message}")
-                        }
-                    }
-                }
-            })
-        }
-    }
-
-    private fun createDivider(context: Context, padding: Int): View {
-        val tokens = UiStyle.tokens(context)
-        val density = context.resources.displayMetrics.density
-        val divider = View(context)
-        divider.setBackgroundColor(tokens.divider)
-        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (0.8f * density).toInt().coerceAtLeast(1))
-        lp.setMargins(0, (padding * 0.4f).toInt(), 0, (padding * 0.4f).toInt())
-        divider.layoutParams = lp
-        return divider
-    }
 }
