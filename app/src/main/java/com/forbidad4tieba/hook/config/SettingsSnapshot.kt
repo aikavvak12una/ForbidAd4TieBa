@@ -23,8 +23,6 @@ data class SettingsSnapshot(
         ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
     val homeNativeGlassBlurCacheImagePath: String =
         ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-    val homeNativeGlassTextPaletteLight: String = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
-    val homeNativeGlassTextPaletteDark: String = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
     val homeNativeGlassTintColor: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
     val homeNativeGlassAutoTintColor: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
     val homeNativeGlassTintAlphaPercent: Int =

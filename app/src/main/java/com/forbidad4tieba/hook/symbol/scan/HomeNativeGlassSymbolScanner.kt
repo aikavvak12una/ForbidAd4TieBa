@@ -30,6 +30,12 @@ internal object HomeNativeGlassSymbolScanner {
     private const val ENTER_FORUM_CAPSULE_CLASS_SCAN_LIMIT = 24
     private const val ENTER_FORUM_CAPSULE_MIN_CLASS_SCORE = 170
     private const val ENTER_FORUM_CAPSULE_MIN_SCORE_GAP = 24
+    private const val MORE_ACTIVITY_CLASS = "com.baidu.tieba.setting.more.MoreActivity"
+    private const val BD_SWITCH_VIEW_CLASS = "com.baidu.adp.widget.BdSwitchView.BdSwitchView"
+    private const val HOST_DARK_MODE_SWITCH_GETTER_METHOD_HINT = "R"
+    private const val HOST_SWITCH_STATE_FIELD_HINT = "a"
+    private const val HOST_SWITCH_SET_ON_METHOD_HINT = "j"
+    private const val HOST_SWITCH_SET_OFF_METHOD_HINT = "g"
     private val DYNAMIC_BACKGROUND_COLOR_RES_NAMES = arrayOf(
         "CAM_X0110",
         "CAM_X0112",
@@ -48,41 +54,6 @@ internal object HomeNativeGlassSymbolScanner {
         "color_bg_page",
         "color_bg_primary_tiny",
     )
-    private val READABLE_TEXT_RESOURCE_NAMES = arrayOf(
-        "CAM_X0101",
-        "CAM_X0105",
-        "CAM_X0106",
-        "CAM_X0107",
-        "CAM_X0108",
-        "CAM_X0109",
-        "CAM_X0110",
-        "CAM_X0301",
-        "CAM_X0302",
-        "CAM_X0304",
-        "CAM_X0305",
-        "CAM_X0312",
-        "btn_forum_focus_color",
-        "color_text",
-        "color_text_blue",
-        "color_text_disable",
-        "color_text_disabled",
-        "color_text_gray",
-        "color_text_link",
-        "color_text_minor",
-        "color_text_primary",
-        "color_text_regular",
-        "color_text_secondary",
-        "color_text_slim",
-        "color_text_tertiary",
-        "color_text_tiny",
-        "cp_cont_b_alpha50",
-        "cp_link_tip_a",
-        "cp_link_tip_a_alpha50",
-        "link_color",
-        "pb_like_user_select_color",
-        "selector_comment_and_prise_item_text_color",
-    )
-    private val READABLE_TEXT_RESOURCE_ID_TYPES = arrayOf("color", "drawable")
     private val TARGET_APP_R_ID_CLASSES = listOf(
         "com.baidu.tieba.R\$id",
         "com.baidu.searchbox.livenps.R\$id",
@@ -90,10 +61,6 @@ internal object HomeNativeGlassSymbolScanner {
     private val TARGET_APP_R_COLOR_CLASSES = listOf(
         "com.baidu.tieba.R\$color",
         "com.baidu.searchbox.livenps.R\$color",
-    )
-    private val TARGET_APP_R_DRAWABLE_CLASSES = listOf(
-        "com.baidu.tieba.R\$drawable",
-        "com.baidu.searchbox.livenps.R\$drawable",
     )
 
     fun scanResourceIds(context: Context, cl: ClassLoader, logger: ScanLogger?): HomeNativeGlassResourceIds {
@@ -141,52 +108,19 @@ internal object HomeNativeGlassSymbolScanner {
             return null
         }
 
-        fun resolveReadableTextResource(resourceName: String): Int? {
-            val name = resourceName.trim()
-            if (name.isEmpty()) return null
-
-            for (type in READABLE_TEXT_RESOURCE_ID_TYPES) {
-                val resourceId = context.resources.getIdentifier(name, type, context.packageName)
-                if (resourceId > 0 && isResolvedResourceType(context, resourceId, type, logger, "resources.getIdentifier($name)")) {
-                    log(logger, "homeNativeGlassResources: $type/$resourceName resolved by resources name $name")
-                    return resourceId
-                }
-
-                val rClasses = when (type) {
-                    "color" -> TARGET_APP_R_COLOR_CLASSES
-                    "drawable" -> TARGET_APP_R_DRAWABLE_CLASSES
-                    else -> emptyList()
-                }
-                for (className in rClasses) {
-                    val id = resolveRIdField(cl, className, name, logger) ?: continue
-                    if (isResolvedResourceType(context, id, type, logger, "$className.$name")) {
-                        log(logger, "homeNativeGlassResources: $type/$resourceName resolved by $className.$name")
-                        return id
-                    }
-                }
-            }
-
-            log(logger, "homeNativeGlassResources: missing readableText/$resourceName")
-            return null
-        }
-
         val out = HomeNativeGlassResourceIds(
             subPbNextPageMoreViewId = resolveId(SUB_PB_NEXT_PAGE_MORE_VIEW_RES_NAME),
             pbReplyTitleDividerViewId = resolveId(PB_REPLY_TITLE_DIVIDER_VIEW_RES_NAME),
             dynamicBackgroundColorIds = DYNAMIC_BACKGROUND_COLOR_RES_NAMES
                 .mapNotNull(::resolveColor)
                 .distinct(),
-            readableTextResourceIdsByName = READABLE_TEXT_RESOURCE_NAMES
-                .mapNotNull { name -> resolveReadableTextResource(name)?.let { id -> name to id } }
-                .toMap(),
         )
         log(
             logger,
             "homeNativeGlassResources: " +
                 "subPbNext=${formatResourceId(out.subPbNextPageMoreViewId)}, " +
                 "titleDivider=${formatResourceId(out.pbReplyTitleDividerViewId)}, " +
-                "dynamicBackgroundColors=${out.dynamicBackgroundColorIds.size}, " +
-                "readableTextResources=${out.readableTextResourceIdsByName.size}",
+                "dynamicBackgroundColors=${out.dynamicBackgroundColorIds.size}",
         )
         return out
     }
@@ -305,6 +239,133 @@ internal object HomeNativeGlassSymbolScanner {
             backgroundPaintField = backgroundPaint?.name,
             slideDrawMethod = slideDrawMethod?.name,
             slidePathField = slidePath?.name,
+        )
+    }
+
+    fun scanHostDarkModeSwitch(
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): HomeNativeGlassHostDarkModeSwitchSymbols {
+        val moreActivityClass = safeFindClass(MORE_ACTIVITY_CLASS, cl) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: class missing $MORE_ACTIVITY_CLASS")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val switchClass = safeFindClass(BD_SWITCH_VIEW_CLASS, cl) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: class missing $BD_SWITCH_VIEW_CLASS")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val switchMethods = try {
+            switchClass.declaredMethods.toList()
+        } catch (t: Throwable) {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: switch declaredMethods failed: ${t.message}")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val switchFields = try {
+            collectInstanceFields(switchClass)
+        } catch (t: Throwable) {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: switch fields failed: ${t.message}")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val stateField = selectHostSwitchStateField(switchFields, logger) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: state field missing")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val setOnMethod = selectHostSwitchNamedNoArgVoidMethod(
+            switchMethods,
+            HOST_SWITCH_SET_ON_METHOD_HINT,
+            "setOn",
+            logger,
+        ) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: set on method missing")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val setOffMethod = selectHostSwitchNamedNoArgVoidMethod(
+            switchMethods,
+            HOST_SWITCH_SET_OFF_METHOD_HINT,
+            "setOff",
+            logger,
+        ) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: set off method missing")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+
+        val fields = try {
+            collectInstanceFields(moreActivityClass)
+        } catch (t: Throwable) {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: activity fields failed: ${t.message}")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val candidates = fields.mapNotNull { field ->
+            val methods = try {
+                collectInstanceMethods(field.type).filter { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.parameterTypes.isEmpty() &&
+                        switchClass.isAssignableFrom(method.returnType)
+                }
+            } catch (t: Throwable) {
+                log(
+                    logger,
+                    "homeNativeGlassHostDarkModeSwitch: controller methods failed " +
+                        "${field.type.name}: ${t.message}",
+                )
+                return@mapNotNull null
+            }
+            val getter = selectHostDarkModeSwitchGetter(methods, logger) ?: return@mapNotNull null
+            HostDarkModeSwitchCandidate(
+                field = field,
+                getter = getter,
+                score = scoreHostDarkModeSwitchCandidate(field, getter, methods),
+            )
+        }.sortedWith(
+            compareByDescending<HostDarkModeSwitchCandidate> { it.score }
+                .thenBy { it.field.name }
+                .thenBy { it.getter.name },
+        )
+
+        if (candidates.isEmpty()) {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: controller field missing")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val best = candidates.first()
+        if (candidates.size > 1 && candidates[1].score == best.score) {
+            log(
+                logger,
+                "homeNativeGlassHostDarkModeSwitch: ambiguous candidates=" +
+                    candidates.joinToString(",") { "${it.field.name}.${it.getter.name}/score=${it.score}" },
+            )
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val activityMethods = try {
+            collectInstanceMethods(moreActivityClass)
+        } catch (t: Throwable) {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: activity methods failed: ${t.message}")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        val callbackMethod = selectHostDarkModeSwitchCallbackMethod(
+            activityMethods,
+            best.getter.returnType,
+            stateField.type,
+            logger,
+        ) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: switch callback missing")
+            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        }
+        log(
+            logger,
+            "homeNativeGlassHostDarkModeSwitch: activity=${moreActivityClass.name}, " +
+                "controllerField=${best.field.name}, getter=${best.getter.name}, " +
+                "state=${stateField.name}, " +
+                "setOn=${setOnMethod.name}, setOff=${setOffMethod.name}, " +
+                "callback=${callbackMethod.name}",
+        )
+        return HomeNativeGlassHostDarkModeSwitchSymbols(
+            moreActivityClass = moreActivityClass.name,
+            controllerField = best.field.name,
+            switchGetterMethod = best.getter.name,
+            switchStateField = stateField.name,
+            switchSetOnMethod = setOnMethod.name,
+            switchSetOffMethod = setOffMethod.name,
+            switchCallbackMethod = callbackMethod.name,
         )
     }
 
@@ -677,6 +738,107 @@ internal object HomeNativeGlassSymbolScanner {
             method.returnType == Void.TYPE
     }
 
+    private fun selectHostDarkModeSwitchGetter(
+        methods: List<Method>,
+        logger: ScanLogger?,
+    ): Method? {
+        methods.singleOrNull { it.name == HOST_DARK_MODE_SWITCH_GETTER_METHOD_HINT }?.let { return it }
+        if (methods.size == 1) return methods.first()
+        if (methods.isNotEmpty()) {
+            log(
+                logger,
+                "homeNativeGlassHostDarkModeSwitch: getter ambiguous candidates=" +
+                    methods.joinToString(",") { describeMethodShape(it) },
+            )
+        }
+        return null
+    }
+
+    private fun selectHostDarkModeSwitchCallbackMethod(
+        methods: List<Method>,
+        switchViewType: Class<*>,
+        switchStateType: Class<*>,
+        logger: ScanLogger?,
+    ): Method? {
+        val candidates = methods.filter { method ->
+            val params = method.parameterTypes
+            !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Void.TYPE &&
+                params.size == 2 &&
+                View::class.java.isAssignableFrom(params[0]) &&
+                params[0].isAssignableFrom(switchViewType) &&
+                params[1] == switchStateType
+        }
+        if (candidates.size == 1) return candidates.first()
+        if (candidates.isNotEmpty()) {
+            log(
+                logger,
+                "homeNativeGlassHostDarkModeSwitch: callback ambiguous candidates=" +
+                    candidates.joinToString(",") { describeMethodShape(it) },
+            )
+        }
+        return null
+    }
+
+    private fun selectHostSwitchStateField(
+        fields: List<Field>,
+        logger: ScanLogger?,
+    ): Field? {
+        val candidates = fields.filter { field ->
+            !Modifier.isStatic(field.modifiers) && field.type.isEnum
+        }
+        candidates.singleOrNull { it.name == HOST_SWITCH_STATE_FIELD_HINT }?.let { return it }
+        if (candidates.size == 1) return candidates.first()
+        if (candidates.isNotEmpty()) {
+            log(
+                logger,
+                "homeNativeGlassHostDarkModeSwitch: state ambiguous candidates=" +
+                    candidates.joinToString(",") { "${it.name}:${it.type.name}" },
+            )
+        }
+        return null
+    }
+
+    private fun selectHostSwitchNamedNoArgVoidMethod(
+        methods: List<Method>,
+        name: String,
+        role: String,
+        logger: ScanLogger?,
+    ): Method? {
+        val candidates = methods.filter { method ->
+            method.name == name && isNoArgVoidMethod(method)
+        }
+        if (candidates.size == 1) return candidates.first()
+        if (candidates.size > 1) {
+            log(
+                logger,
+                "homeNativeGlassHostDarkModeSwitch: $role ambiguous candidates=" +
+                    candidates.joinToString(",") { describeMethodShape(it) },
+            )
+        }
+        return null
+    }
+
+    private fun scoreHostDarkModeSwitchCandidate(
+        field: Field,
+        getter: Method,
+        methods: List<Method>,
+    ): Int {
+        var score = 0
+        if (field.name == "a") score += 8
+        if (field.type.name.startsWith("com.baidu.tieba.")) score += 6
+        if (getter.name == HOST_DARK_MODE_SWITCH_GETTER_METHOD_HINT) score += 48
+        if (methods.any { it.name == "T" }) score += 12
+        score += methods.size.coerceAtMost(4)
+        return score
+    }
+
+    private data class HostDarkModeSwitchCandidate(
+        val field: Field,
+        val getter: Method,
+        val score: Int,
+    )
+
     private fun resolveRIdField(
         cl: ClassLoader,
         className: String,
@@ -727,28 +889,6 @@ internal object HomeNativeGlassSymbolScanner {
         return try {
             val typeName = context.resources.getResourceTypeName(id)
             if (typeName == "color") {
-                true
-            } else {
-                log(logger, "homeNativeGlassResources: rejected $source=${formatResourceId(id)} type=$typeName")
-                false
-            }
-        } catch (t: Throwable) {
-            log(logger, "homeNativeGlassResources: rejected $source=${formatResourceId(id)}: ${t.message}")
-            false
-        }
-    }
-
-    private fun isResolvedResourceType(
-        context: Context,
-        id: Int,
-        expectedType: String,
-        logger: ScanLogger?,
-        source: String,
-    ): Boolean {
-        if (id <= 0) return false
-        return try {
-            val typeName = context.resources.getResourceTypeName(id)
-            if (typeName == expectedType) {
                 true
             } else {
                 log(logger, "homeNativeGlassResources: rejected $source=${formatResourceId(id)} type=$typeName")

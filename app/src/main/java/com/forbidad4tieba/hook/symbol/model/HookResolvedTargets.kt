@@ -107,6 +107,16 @@ internal data class HomeTopBarRightSlotSymbols(
     val redDotViewMethod: Method,
 )
 
+internal data class HomeNativeGlassHostDarkModeSwitchTargets(
+    val moreActivityClass: Class<*>,
+    val controllerField: Field,
+    val switchGetterMethod: Method,
+    val switchStateField: Field,
+    val switchSetOnMethod: Method,
+    val switchSetOffMethod: Method,
+    val switchCallbackMethod: Method,
+)
+
 internal data class SearchBoxTextAdSymbols(
     val setHintMethod: Method,
     val ownerInitMethod: Method,

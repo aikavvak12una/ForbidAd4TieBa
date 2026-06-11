@@ -23,22 +23,20 @@ object ConfigManager {
     const val DEFAULT_MODEL_SCORE_AUTO_PERCENTILE = 5
     const val DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH = ""
     const val DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH = ""
-    const val DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE = ""
     const val DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR = 0
     const val DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR = 0
     const val DEFAULT_HOME_NATIVE_GLASS_TINT_PALETTE = ""
-    const val DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 54
+    const val DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 0
     const val DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 72
     const val DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP = 24
     const val DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED = true
     const val DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED = true
     const val DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED = true
-    const val APPLE_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 54
-    const val APPLE_HOME_NATIVE_GLASS_DARK_TINT_ALPHA_PERCENT = 78
+    const val APPLE_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 0
     const val APPLE_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 72
     const val APPLE_HOME_NATIVE_GLASS_CARD_RADIUS_DP = 24
-    const val MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 0
-    const val MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 100
+    const val MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = -50
+    const val MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 50
     const val MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 0
     const val MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 100
     const val MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP = 0
@@ -73,12 +71,12 @@ object ConfigManager {
     const val KEY_ENABLE_HOME_TAB_DYNAMIC_TINT = "enable_home_tab_dynamic_tint"
     const val KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH = "home_native_glass_background_image_path"
     const val KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH = "home_native_glass_blur_cache_image_path"
-    const val KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_LIGHT = "home_native_glass_text_palette_light"
-    const val KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_DARK = "home_native_glass_text_palette_dark"
     const val KEY_HOME_NATIVE_GLASS_TINT_COLOR = "home_native_glass_tint_color"
     const val KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR = "home_native_glass_auto_tint_color"
     const val KEY_HOME_NATIVE_GLASS_TINT_PALETTE = "home_native_glass_tint_palette"
     const val KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = "home_native_glass_tint_alpha_percent"
+    const val KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED =
+        "home_native_glass_tint_alpha_offset_migrated"
     const val KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = "home_native_glass_card_blur_percent"
     const val KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP = "home_native_glass_card_radius_dp"
     const val KEY_HOME_NATIVE_GLASS_STROKE_ENABLED = "home_native_glass_stroke_enabled"
@@ -160,8 +158,6 @@ object ConfigManager {
         set(value) {
             replaceSettingsSnapshot(settingsSnapshot.copy(homeNativeGlassBlurCacheImagePath = value))
         }
-    val homeNativeGlassTextPaletteLight: String get() = settingsSnapshot.homeNativeGlassTextPaletteLight
-    val homeNativeGlassTextPaletteDark: String get() = settingsSnapshot.homeNativeGlassTextPaletteDark
     val homeNativeGlassTintColor: Int get() = settingsSnapshot.homeNativeGlassTintColor
     val homeNativeGlassAutoTintColor: Int get() = settingsSnapshot.homeNativeGlassAutoTintColor
     val homeNativeGlassTintAlphaPercent: Int get() = settingsSnapshot.homeNativeGlassTintAlphaPercent
@@ -458,8 +454,6 @@ object ConfigManager {
             ),
             homeNativeGlassBackgroundImagePath = homeNativeGlassStyle.backgroundImagePath,
             homeNativeGlassBlurCacheImagePath = homeNativeGlassStyle.blurCacheImagePath,
-            homeNativeGlassTextPaletteLight = homeNativeGlassStyle.textPaletteLight,
-            homeNativeGlassTextPaletteDark = homeNativeGlassStyle.textPaletteDark,
             homeNativeGlassTintColor = homeNativeGlassStyle.tintColor,
             homeNativeGlassAutoTintColor = homeNativeGlassStyle.autoTintColor,
             homeNativeGlassTintAlphaPercent = homeNativeGlassStyle.tintAlphaPercent,
@@ -561,8 +555,6 @@ object ConfigManager {
     private data class HomeNativeGlassStyle(
         val backgroundImagePath: String,
         val blurCacheImagePath: String,
-        val textPaletteLight: String,
-        val textPaletteDark: String,
         val tintColor: Int,
         val autoTintColor: Int,
         val tintAlphaPercent: Int,
@@ -582,14 +574,6 @@ object ConfigManager {
                 KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
                 DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
             )?.trim().orEmpty(),
-            textPaletteLight = p.getString(
-                KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_LIGHT,
-                DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
-            )?.trim().orEmpty(),
-            textPaletteDark = p.getString(
-                KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_DARK,
-                DEFAULT_HOME_NATIVE_GLASS_TEXT_PALETTE,
-            )?.trim().orEmpty(),
             tintColor = normalizeHomeNativeGlassTintColor(
                 p.getInt(
                     KEY_HOME_NATIVE_GLASS_TINT_COLOR,
@@ -602,13 +586,7 @@ object ConfigManager {
                     DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
                 )
             ),
-            tintAlphaPercent = p.getInt(
-                KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ).coerceIn(
-                MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ),
+            tintAlphaPercent = readHomeNativeGlassTintAlphaPercent(p),
             cardBlurPercent = p.getInt(
                 KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
@@ -632,6 +610,34 @@ object ConfigManager {
                 DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED,
             ),
         )
+    }
+
+    private fun readHomeNativeGlassTintAlphaPercent(p: SharedPreferences): Int {
+        val rawValue = p.getInt(
+            KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        )
+        val migrated = p.getBoolean(KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED, false)
+        val normalized = if (!migrated && p.contains(KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT)) {
+            (rawValue - 50).coerceIn(
+                MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            )
+        } else {
+            rawValue.coerceIn(
+                MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            )
+        }
+        if (!migrated && p.contains(KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT)) {
+            runCatching {
+                p.edit()
+                    .putInt(KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT, normalized)
+                    .putBoolean(KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED, true)
+                    .apply()
+            }
+        }
+        return normalized
     }
 
     fun normalizeHomeNativeGlassTintColor(color: Int): Int {

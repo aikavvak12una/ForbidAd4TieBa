@@ -19,6 +19,7 @@ import android.view.animation.PathInterpolator
 import android.widget.Button
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
+import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
 
 /**
  * 鏍峰紡鍏ュ彛锛岄泦涓鐞嗕寒鏆楁ā寮忚壊鐩樸€佸璇濇瀹瑰櫒鑳屾櫙銆佽繘搴︽潯鍜岃交閲忓姩鏁堛€? *
@@ -62,12 +63,16 @@ internal object UiStyle {
 
     internal fun tokens(context: Context): Tokens {
         val density = context.resources.displayMetrics.density
-        val base = if (isNight(context)) darkTokens(density) else lightTokens(density)
-        return if (ConfigManager.isHomeNativeGlassEnabled) {
-            base.withHomeNativeGlassOverrides(density)
-        } else {
-            base
+        if (ConfigManager.isHomeNativeGlassEnabled) {
+            val base = if (HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled() == true) {
+                darkTokens(density)
+            } else {
+                lightTokens(density)
+            }
+            return base.withHomeNativeGlassOverrides(density)
         }
+        val base = if (isNight(context)) darkTokens(density) else lightTokens(density)
+        return base
     }
 
     private fun isNight(context: Context): Boolean {
