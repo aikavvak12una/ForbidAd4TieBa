@@ -3,7 +3,6 @@ package com.forbidad4tieba.hook.feature.ui
 import android.app.Activity
 import android.animation.StateListAnimator
 import android.content.Context
-import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
@@ -18,17 +17,11 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
-import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.SystemClock
-import android.text.SpannableStringBuilder
-import android.text.Spanned
-import android.text.TextPaint
-import android.text.style.ClickableSpan
-import android.text.style.ForegroundColorSpan
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -69,7 +62,6 @@ object HomeNativeGlassHook {
     private val firstSubPbInputBarDynamicTintErrorLogged = AtomicBoolean(false)
     private val firstSubPbNavigationBarTintErrorLogged = AtomicBoolean(false)
     private val firstBackgroundImageErrorLogged = AtomicBoolean(false)
-    private val firstReadableTextColorErrorLogged = AtomicBoolean(false)
     private val homeRecyclerViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val glassBackgroundViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val scrollInvalidationInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
@@ -122,26 +114,12 @@ object HomeNativeGlassHook {
     private val homeFeedCardGlassTargets = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val homeFeedCardStyleApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val homeFeedCardStyleStates = Collections.synchronizedMap(WeakHashMap<View, HomeFeedCardStyleState>())
-    private val richTextReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val subPbRichTextViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val autoDegradeTagReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val socialBarReadableTextRefreshScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val chromeGlassOriginalStates = Collections.synchronizedMap(WeakHashMap<View, ChromeGlassOriginalState>())
     private val imageContainerRadiusStates = Collections.synchronizedMap(WeakHashMap<View, Float>())
     private val scrollInvalidateScheduled = AtomicBoolean(false)
     private val chromeDynamicTintBackgroundWriteDepth = object : ThreadLocal<Int>() {
         override fun initialValue(): Int = 0
     }
-    private val readableTextColorWriteDepth = object : ThreadLocal<Int>() {
-        override fun initialValue(): Int = 0
-    }
-    private val readableTextResourceIdRoleCache =
-        ConcurrentHashMap<String, Map<Int, Set<HomeNativeGlassTextRole>>>()
-    private val readableTextResourceColorRoleCache =
-        ConcurrentHashMap<String, Map<Int, Set<HomeNativeGlassTextRole>>>()
-    private val readableTextSpanRoles = Collections.synchronizedMap(WeakHashMap<Any, HomeNativeGlassTextRole>())
-    private val readableTextViewRoles = Collections.synchronizedMap(WeakHashMap<View, ReadableTextViewRoleState>())
-    private val readableTextApplyStates = Collections.synchronizedMap(WeakHashMap<View, ReadableTextApplyState>())
     private val emManagerFromViewFields = ConcurrentHashMap<Class<*>, Field>()
     private val emManagerFromViewMissingClasses =
         Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
@@ -164,15 +142,11 @@ object HomeNativeGlassHook {
         }
     }
     @Volatile private var runtimeTargets: RuntimeTargets? = null
-    @Volatile private var readableTextPaletteState: ReadableTextPaletteState? = null
     @Volatile private var pbCommentDynamicTintState: PbCommentDynamicTintState? = null
     @Volatile private var pbSortSwitchBackgroundPaintField: Field? = null
     @Volatile private var pbSortSwitchSlidePathField: Field? = null
     @Volatile private var pbEnterForumCapsuleViewField: Field? = null
     @Volatile private var pbEnterForumCapsuleTitleField: Field? = null
-    @Volatile private var skinManagerGetCurrentSkinTypeMethod: Method? = null
-    @Volatile private var cachedHostSkinType: Int? = null
-    @Volatile private var cachedHostSkinTypeCheckedAt: Long = 0L
 
     private data class CachedBackgroundBitmap(
         val path: String,
@@ -203,7 +177,6 @@ object HomeNativeGlassHook {
         val subPbNextPageMoreViewId: Int?,
         val pbReplyTitleDividerViewId: Int?,
         val dynamicBackgroundColorIds: Set<Int>,
-        val readableTextResourceIdsByName: Map<String, Int>,
         val sortSwitchBackgroundPaintField: String?,
         val sortSwitchSlideDrawMethod: String?,
         val sortSwitchSlidePathField: String?,
@@ -231,9 +204,6 @@ object HomeNativeGlassHook {
         val cardRadiusDp: Int,
         val strokeEnabled: Boolean,
         val shadowEnabled: Boolean,
-        val textPaletteLight: String,
-        val textPaletteDark: String,
-        val darkMode: Boolean,
     )
 
     private data class ChromeGlassOriginalState(
@@ -248,7 +218,6 @@ object HomeNativeGlassHook {
         val blurCachePath: String,
         val sourcePath: String,
         val tintAlphaPercent: Int,
-        val darkMode: Boolean,
     )
 
     private data class PbActivityType(
@@ -271,35 +240,15 @@ object HomeNativeGlassHook {
         val blurPercent: Int,
         val tintColor: Int,
         val autoTintColor: Int,
-        val tintAlphaPercent: Int,
-        val darkMode: Boolean,
         val pinnedReplyTitle: Boolean,
         val backgroundColor: Int?,
         val selectedColor: Int?,
     )
 
-    private data class ReadableTextPaletteState(
-        val lightRaw: String,
-        val darkRaw: String,
-        val light: HomeNativeGlassReadableTextPalette?,
-        val dark: HomeNativeGlassReadableTextPalette?,
-    )
-
     private data class PbCommentDynamicTintState(
         val tintColor: Int,
         val autoTintColor: Int,
-        val tintAlphaPercent: Int,
         val lightColor: Int,
-        val darkColor: Int,
-    )
-
-    private data class ReadableTextViewRoleState(
-        var normal: HomeNativeGlassTextRole? = null,
-        var link: HomeNativeGlassTextRole? = null,
-    )
-
-    private data class ReadableTextApplyState(
-        val signature: Long,
     )
 
     private data class PbSubPbLayoutCardState(
@@ -311,7 +260,6 @@ object HomeNativeGlassHook {
         val cardRadiusDp: Int,
         val strokeEnabled: Boolean,
         val shadowEnabled: Boolean,
-        val darkMode: Boolean,
     )
 
     private data class PbSubPbLayoutPaddingState(
@@ -367,8 +315,6 @@ object HomeNativeGlassHook {
 
         try {
             recyclerViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
-            skinManagerGetCurrentSkinTypeMethod =
-                XposedCompat.findMethodOrNull(StableTiebaHookPoints.SKIN_MANAGER_CLASS, cl, "getCurrentSkinType")
             runtimeTargets = resolveRuntimeTargets(symbols)
             prewarmBackgroundCacheIfNeeded()
             if (!hasHomeFeedTargets) {
@@ -403,11 +349,6 @@ object HomeNativeGlassHook {
             val dynamicColorHooks = installPbDynamicBackgroundColorHooks(cl)
             val sortSwitchHooks = installPbSortSwitchButtonDynamicTintHooks(cl)
             val enterForumCapsuleHooks = installPbEnterForumCapsuleDynamicTintHooks(cl)
-            val readableTextColorHooks = if (hasReadableTextPaletteConfigured()) {
-                installReadableTextColorHooks(cl)
-            } else {
-                0
-            }
             val tabDynamicTintEnabled = hasHomeFeedTargets && ConfigManager.isHomeTabDynamicTintEnabled
             val topTabObservers = if (tabDynamicTintEnabled) installHomeTopTabObservers(cl) else 0
             val bottomTabDynamicTintHooks = if (tabDynamicTintEnabled) {
@@ -438,7 +379,6 @@ object HomeNativeGlassHook {
                     "components=$componentHooks, pbComments=$pbCommentHooks, " +
                     "dynamicColors=$dynamicColorHooks, sortSwitch=$sortSwitchHooks, " +
                     "enterForumCapsule=$enterForumCapsuleHooks, " +
-                    "readableText=$readableTextColorHooks, " +
                     "topTabObservers=$topTabObservers, " +
                     "bottomTabDynamicTint=$bottomTabDynamicTintHooks, " +
                     "chromeDirectBackgroundBlock=$chromeDirectBackgroundBlock, searchBox=$searchBoxHooks, " +
@@ -471,8 +411,6 @@ object HomeNativeGlassHook {
             dynamicBackgroundColorIds = symbols.homeNativeGlassDynamicBackgroundColorIds
                 .filter { it != 0 }
                 .toSet(),
-            readableTextResourceIdsByName = symbols.homeNativeGlassReadableTextResourceIdsByName
-                .filterValues { it != 0 },
             sortSwitchBackgroundPaintField =
                 symbols.homeNativeGlassSortSwitchBackgroundPaintField?.takeIf { it.isNotBlank() },
             sortSwitchSlideDrawMethod =
@@ -989,1282 +927,6 @@ object HomeNativeGlassHook {
             Class::class.java.isAssignableFrom(params[3])
     }
 
-    private fun installReadableTextColorHooks(cl: ClassLoader): Int {
-        val mod = XposedCompat.module ?: return 0
-        var installedCount = 0
-        ConfigManager.getAppContext()?.let { primeReadableTextResourceCaches(it) }
-
-        XposedCompat.findClassOrNull(StableTiebaHookPoints.SKIN_MANAGER_CLASS, cl)?.let { skinManagerClass ->
-            installedCount += installSkinManagerReadableTextHook(skinManagerClass, "setTextColor", TextView::class.java, java.lang.Integer.TYPE)
-            installedCount += installSkinManagerReadableTextHook(skinManagerClass, "setViewTextColor", View::class.java, java.lang.Integer.TYPE)
-            installedCount += installSkinManagerReadableTextHook(
-                skinManagerClass,
-                "setViewTextColor",
-                View::class.java,
-                java.lang.Integer.TYPE,
-                java.lang.Integer.TYPE,
-            )
-            installedCount += installSkinManagerReadableTextHook(
-                skinManagerClass,
-                "setViewTextColor",
-                View::class.java,
-                java.lang.Integer.TYPE,
-                java.lang.Integer.TYPE,
-                java.lang.Integer.TYPE,
-            )
-            installedCount += installSkinManagerReadableTextNameHook(skinManagerClass)
-        } ?: XposedCompat.logD { "$TAG readable text SKIP: skin manager class not found" }
-
-        XposedCompat.findClassOrNull(StableTiebaHookPoints.EM_MANAGER_CLASS, cl)?.let { emManagerClass ->
-            installedCount += installEmManagerReadableTextHook(emManagerClass, "setTextColor", linkText = false)
-            installedCount += installEmManagerReadableTextHook(emManagerClass, "setLinkTextColor", linkText = true)
-            installedCount += installEmManagerReadableTextHook(emManagerClass, "setTextSelectorColor", linkText = false)
-        } ?: XposedCompat.logD { "$TAG readable text SKIP: EMManager class not found" }
-
-        XposedCompat.findClassOrNull(StableTiebaHookPoints.TB_RICH_TEXT_VIEW_CLASS, cl)?.let { richTextClass ->
-            installedCount += installDirectReadableTextHook(richTextClass, "setTextColor", linkText = false)
-            installedCount += installDirectReadableTextHook(richTextClass, "setLinkTextColor", linkText = true)
-            installedCount += installRichTextSubPbPostHook(richTextClass)
-            installedCount += installRichTextReadableTextContentHook(richTextClass)
-        } ?: XposedCompat.logD { "$TAG readable text SKIP: TbRichTextView class not found" }
-
-        XposedCompat.findClassOrNull(StableTiebaHookPoints.AUTO_DEGRADE_TAG_VIEW_CLASS, cl)?.let { tagClass ->
-            installedCount += installAutoDegradeTagReadableTextHooks(tagClass)
-        } ?: XposedCompat.logD { "$TAG readable text SKIP: AutoDegradeTagView class not found" }
-
-        XposedCompat.findClassOrNull(StableTiebaHookPoints.CARD_SOCIAL_BAR_VIEW_CLASS, cl)?.let { socialBarClass ->
-            installedCount += installSocialBarRootReadableTextHooks(socialBarClass)
-        } ?: XposedCompat.logD { "$TAG readable text SKIP: CardSocialBarView class not found" }
-
-        XposedCompat.findClassOrNull(StableTiebaHookPoints.SOCIAL_BAR_WRAPPER_CLASS, cl)?.let { socialWrapperClass ->
-            installedCount += installSocialBarRootReadableTextHooks(socialWrapperClass)
-        } ?: XposedCompat.logD { "$TAG readable text SKIP: SocialBarWrapper class not found" }
-
-        XposedCompat.findClassOrNull(StableTiebaHookPoints.AGREE_VIEW_CLASS, cl)?.let { agreeViewClass ->
-            installedCount += installAgreeViewReadableTextHooks(agreeViewClass)
-        } ?: XposedCompat.logD { "$TAG readable text SKIP: AgreeView class not found" }
-
-        return installedCount
-    }
-
-    private fun installSkinManagerReadableTextHook(
-        skinManagerClass: Class<*>,
-        methodName: String,
-        vararg parameterTypes: Class<*>,
-    ): Int {
-        val mod = XposedCompat.module ?: return 0
-        val method = XposedCompat.findMethodOrNull(skinManagerClass, methodName, *parameterTypes) ?: return 0
-        method.isAccessible = true
-        mod.hook(method).intercept { chain ->
-            val result = chain.proceed()
-            if (!isReadableTextWriteInProgress()) {
-                val view = chain.args.getOrNull(0) as? View
-                val colorResId = (chain.args.getOrNull(1) as? Number)?.toInt()
-                if (view != null && colorResId != null) {
-                    applyReadableTextColorFromResource(view, colorResId, linkText = false)
-                }
-            }
-            result
-        }
-        return 1
-    }
-
-    private fun installSkinManagerReadableTextNameHook(skinManagerClass: Class<*>): Int {
-        val mod = XposedCompat.module ?: return 0
-        val method = XposedCompat.findMethodOrNull(
-            skinManagerClass,
-            "setViewTextColor",
-            View::class.java,
-            String::class.java,
-        ) ?: return 0
-        method.isAccessible = true
-        mod.hook(method).intercept { chain ->
-            val result = chain.proceed()
-            if (!isReadableTextWriteInProgress()) {
-                val view = chain.args.getOrNull(0) as? View
-                val colorName = chain.args.getOrNull(1) as? String
-                if (view != null && !colorName.isNullOrBlank()) {
-                    applyReadableTextColorFromRole(view, readableTextRoleForResourceName(colorName), linkText = false)
-                }
-            }
-            result
-        }
-        return 1
-    }
-
-    private fun installEmManagerReadableTextHook(
-        emManagerClass: Class<*>,
-        methodName: String,
-        linkText: Boolean,
-    ): Int {
-        val mod = XposedCompat.module ?: return 0
-        val method = XposedCompat.findMethodOrNull(emManagerClass, methodName, java.lang.Integer.TYPE) ?: return 0
-        method.isAccessible = true
-        mod.hook(method).intercept { chain ->
-            val result = chain.proceed()
-            if (!isReadableTextWriteInProgress()) {
-                val manager = chain.thisObject
-                val colorResId = (chain.args.getOrNull(0) as? Number)?.toInt()
-                val view = manager?.let { readEmManagerView(it) }
-                if (view != null && colorResId != null) {
-                    applyReadableTextColorFromResource(view, colorResId, linkText)
-                }
-            }
-            result
-        }
-        return 1
-    }
-
-    private fun installAutoDegradeTagReadableTextHooks(tagClass: Class<*>): Int {
-        val mod = XposedCompat.module ?: return 0
-        var installedCount = 0
-        for (ctor in tagClass.declaredConstructors) {
-            ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
-                val result = chain.proceed()
-                (chain.thisObject as? View)?.let { scheduleAutoDegradeTagReadableTextRefresh(it) }
-                result
-            }
-            installedCount++
-        }
-        XposedCompat.findMethodOrNull(
-            tagClass,
-            "setTagConfig",
-            java.lang.Integer.TYPE,
-            java.lang.Integer.TYPE,
-            java.lang.Integer.TYPE,
-            java.lang.Integer.TYPE,
-        )?.let { method ->
-            method.isAccessible = true
-            mod.hook(method).intercept { chain ->
-                val result = chain.proceed()
-                val tagView = chain.thisObject as? View
-                val colorResId = (chain.args.getOrNull(3) as? Number)?.toInt()
-                if (tagView != null) {
-                    rememberAutoDegradeTagReadableTextRole(tagView, colorResId)
-                }
-                result
-            }
-            installedCount++
-        }
-        XposedCompat.findMethodOrNull(tagClass, "setTextColor", java.lang.Integer.TYPE)?.let { method ->
-            method.isAccessible = true
-            mod.hook(method).intercept { chain ->
-                val result = chain.proceed()
-                val tagView = chain.thisObject as? View
-                val colorResId = (chain.args.getOrNull(0) as? Number)?.toInt()
-                if (tagView != null) {
-                    rememberAutoDegradeTagReadableTextRole(tagView, colorResId)
-                }
-                result
-            }
-            installedCount++
-        }
-        XposedCompat.findMethodOrNull(tagClass, "onAttachedToWindow")?.let { method ->
-            method.isAccessible = true
-            mod.hook(method).intercept { chain ->
-                val result = chain.proceed()
-                (chain.thisObject as? View)?.let { scheduleAutoDegradeTagReadableTextRefresh(it) }
-                result
-            }
-            installedCount++
-        }
-        return installedCount
-    }
-
-    private fun installSocialBarRootReadableTextHooks(rootClass: Class<*>): Int {
-        val mod = XposedCompat.module ?: return 0
-        var installedCount = 0
-        for (ctor in rootClass.declaredConstructors) {
-            ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
-                val result = chain.proceed()
-                (chain.thisObject as? View)?.let { scheduleSocialBarReadableTextRefresh(it) }
-                result
-            }
-            installedCount++
-        }
-        val methods = LinkedHashSet<Method>()
-        XposedCompat.findMethodOrNull(rootClass, "onAttachedToWindow")?.let { methods.add(it) }
-        installedCount += installSocialBarReadableTextRefreshHooks(methods)
-        return installedCount
-    }
-
-    private fun installAgreeViewReadableTextHooks(agreeViewClass: Class<*>): Int {
-        val methods = LinkedHashSet<Method>()
-        val agreeDataClass = agreeViewClass.classLoader?.let { cl ->
-            XposedCompat.findClassOrNull(StableTiebaHookPoints.AGREE_DATA_CLASS, cl)
-        }
-        if (agreeDataClass != null) {
-            XposedCompat.findMethodOrNull(agreeViewClass, "setData", agreeDataClass)?.let { methods.add(it) }
-        }
-        XposedCompat.findMethodOrNull(agreeViewClass, "setNormalColorResourceId", java.lang.Integer.TYPE)
-            ?.let { methods.add(it) }
-        ReflectionUtils.findMethodInHierarchy(agreeViewClass, "setSelectedColor") { method ->
-            method.returnType == Void.TYPE && method.parameterTypes.size == 1
-        }?.let { methods.add(it) }
-        XposedCompat.findMethodOrNull(agreeViewClass, "onClick", View::class.java)?.let { methods.add(it) }
-        return installSocialBarReadableTextRefreshHooks(methods)
-    }
-
-    private fun installSocialBarReadableTextRefreshHooks(methods: Set<Method>): Int {
-        val mod = XposedCompat.module ?: return 0
-        var installedCount = 0
-        for (method in methods) {
-            method.isAccessible = true
-            mod.hook(method).intercept { chain ->
-                val result = chain.proceed()
-                (chain.thisObject as? View)?.let { scheduleSocialBarReadableTextRefresh(it) }
-                result
-            }
-            installedCount++
-        }
-        return installedCount
-    }
-
-    private fun installDirectReadableTextHook(
-        targetClass: Class<*>,
-        methodName: String,
-        linkText: Boolean,
-    ): Int {
-        val mod = XposedCompat.module ?: return 0
-        val method = XposedCompat.findMethodOrNull(targetClass, methodName, java.lang.Integer.TYPE) ?: return 0
-        method.isAccessible = true
-        mod.hook(method).intercept { chain ->
-            if (isReadableTextWriteInProgress()) return@intercept chain.proceed()
-            val view = chain.thisObject as? View ?: return@intercept chain.proceed()
-            val color = (chain.args.getOrNull(0) as? Number)?.toInt() ?: return@intercept chain.proceed()
-            val rawRole = resolveReadableTextRoleForRawColor(view, color, linkText) ?: return@intercept chain.proceed()
-            val role = refineReadableTextRoleForView(view, rawRole, linkText)
-            rememberReadableTextRole(view, role, linkText)
-            val palette = readableTextPaletteFor(view) ?: return@intercept chain.proceed()
-            val adjustedColor = palette.colorFor(role)
-            if (adjustedColor == color) return@intercept chain.proceed()
-            withReadableTextWrite {
-                chain.proceed(arrayOf<Any?>(adjustedColor))
-            }
-        }
-        return 1
-    }
-
-    private fun installRichTextReadableTextContentHook(richTextClass: Class<*>): Int {
-        val mod = XposedCompat.module ?: return 0
-        var installedCount = 0
-        for (method in richTextClass.declaredMethods) {
-            if (!isRichTextSetTextMethod(method)) continue
-            method.isAccessible = true
-            mod.hook(method).intercept { chain ->
-                val result = chain.proceed()
-                if (!isReadableTextWriteInProgress()) {
-                    (chain.thisObject as? View)?.let { view ->
-                        scheduleRichTextReadableTextRefresh(view)
-                    }
-                }
-                result
-            }
-            installedCount++
-        }
-        return installedCount
-    }
-
-    private fun installRichTextSubPbPostHook(richTextClass: Class<*>): Int {
-        val mod = XposedCompat.module ?: return 0
-        val method = XposedCompat.findMethodOrNull(
-            richTextClass,
-            "setSubPbPost",
-            java.lang.Boolean.TYPE,
-        ) ?: return 0
-        method.isAccessible = true
-        mod.hook(method).intercept { chain ->
-            val result = chain.proceed()
-            val view = chain.thisObject as? View
-            val isSubPbPost = (chain.args.getOrNull(0) as? Boolean) == true
-            if (view != null) {
-                if (isSubPbPost) {
-                    subPbRichTextViews[view] = true
-                    if (!isReadableTextWriteInProgress()) {
-                        scheduleRichTextReadableTextRefresh(view)
-                    }
-                } else {
-                    subPbRichTextViews.remove(view)
-                }
-            }
-            result
-        }
-        return 1
-    }
-
-    private fun isRichTextSetTextMethod(method: Method): Boolean {
-        if (method.name != "setText" || method.returnType != Void.TYPE) return false
-        val params = method.parameterTypes
-        return params.isNotEmpty() && params[0].name == TB_RICH_TEXT_MODEL_CLASS
-    }
-
-    private fun scheduleRichTextReadableTextRefresh(view: View) {
-        runReadableTextSafely {
-            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
-            if (readableTextPaletteFor(view) == null || !isReadableTextTarget(view)) return@runReadableTextSafely
-            synchronized(richTextReadableTextRefreshScheduled) {
-                if (richTextReadableTextRefreshScheduled.containsKey(view)) return@runReadableTextSafely
-                richTextReadableTextRefreshScheduled[view] = true
-            }
-            view.post {
-                richTextReadableTextRefreshScheduled.remove(view)
-                applyReadableTextPaletteToTree(view, READABLE_TEXT_DIRECT_GROUP_DEPTH)
-            }
-        }
-    }
-
-    private fun rememberAutoDegradeTagReadableTextRole(tagView: View, colorResId: Int?) {
-        runReadableTextSafely {
-            val role = colorResId?.let { readableTextRoleForResourceId(tagView, it, linkText = false) }
-                ?: HomeNativeGlassTextRole.SECONDARY
-            rememberReadableTextRole(tagView, role, linkText = false)
-            scheduleAutoDegradeTagReadableTextRefresh(tagView)
-        }
-    }
-
-    private fun scheduleAutoDegradeTagReadableTextRefresh(tagView: View) {
-        runReadableTextSafely {
-            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
-            if (readableTextPaletteFor(tagView) == null) return@runReadableTextSafely
-            synchronized(autoDegradeTagReadableTextRefreshScheduled) {
-                if (autoDegradeTagReadableTextRefreshScheduled.containsKey(tagView)) return@runReadableTextSafely
-                autoDegradeTagReadableTextRefreshScheduled[tagView] = true
-            }
-            tagView.post {
-                autoDegradeTagReadableTextRefreshScheduled.remove(tagView)
-                applyAutoDegradeTagReadableText(tagView)
-            }
-        }
-    }
-
-    private fun applyAutoDegradeTagReadableText(tagView: View) {
-        runReadableTextSafely {
-            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
-            if (!isReadableTextTarget(tagView)) return@runReadableTextSafely
-            val palette = readableTextPaletteFor(tagView) ?: return@runReadableTextSafely
-            val fallbackRole = readableTextRoleForView(tagView, linkText = false)
-                ?: HomeNativeGlassTextRole.SECONDARY
-            withReadableTextWrite {
-                applyAutoDegradeTagReadableText(tagView, palette, fallbackRole, depth = 0)
-            }
-        }
-    }
-
-    private fun applyAutoDegradeTagReadableText(
-        view: View,
-        palette: HomeNativeGlassReadableTextPalette,
-        fallbackRole: HomeNativeGlassTextRole,
-        depth: Int,
-    ) {
-        if (depth > READABLE_TEXT_DIRECT_GROUP_DEPTH) return
-        if (view is TextView) {
-            val role = refineReadableTextRoleForTextView(
-                view,
-                readableTextRoleForView(view, linkText = false)
-                    ?: readableTextRoleForPaletteColor(palette, view.currentTextColor)
-                    ?: readableTextRoleForRawColor(view, view.currentTextColor, linkText = false)
-                    ?: fallbackRole,
-            ) ?: fallbackRole
-            rememberReadableTextRole(view, role, linkText = false)
-            val color = palette.colorFor(role)
-            if (view.currentTextColor != color) {
-                view.setTextColor(color)
-            }
-            applyReadableTextPaletteToTextSpans(view, palette)
-        }
-        val group = view as? ViewGroup ?: return
-        for (index in 0 until group.childCount) {
-            applyAutoDegradeTagReadableText(
-                group.getChildAt(index) ?: continue,
-                palette,
-                fallbackRole,
-                depth + 1,
-            )
-        }
-    }
-
-    private fun scheduleSocialBarReadableTextRefresh(anchor: View) {
-        runReadableTextSafely {
-            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
-            val root = findSocialBarReadableTextRoot(anchor) ?: return@runReadableTextSafely
-            if (readableTextPaletteFor(root) == null) return@runReadableTextSafely
-            synchronized(socialBarReadableTextRefreshScheduled) {
-                if (socialBarReadableTextRefreshScheduled.containsKey(root)) return@runReadableTextSafely
-                socialBarReadableTextRefreshScheduled[root] = true
-            }
-            root.post {
-                socialBarReadableTextRefreshScheduled.remove(root)
-                applySocialBarReadableText(root)
-            }
-        }
-    }
-
-    private fun applySocialBarReadableText(root: View) {
-        runReadableTextSafely {
-            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
-            val socialRoot = findSocialBarReadableTextRoot(root) ?: return@runReadableTextSafely
-            if (!isReadableTextTarget(socialRoot)) return@runReadableTextSafely
-            val palette = readableTextPaletteFor(socialRoot) ?: return@runReadableTextSafely
-            withReadableTextWrite {
-                applySocialBarReadableText(socialRoot, palette, depth = 0)
-            }
-        }
-    }
-
-    private fun applySocialBarReadableText(
-        view: View,
-        palette: HomeNativeGlassReadableTextPalette,
-        depth: Int,
-    ) {
-        if (depth > READABLE_TEXT_SOCIAL_BAR_DEPTH) return
-        if (view is TextView) {
-            val role = refineReadableTextRoleForTextView(
-                view,
-                readableTextRoleForView(view, linkText = false)
-                    ?: readableTextRoleForPaletteColor(palette, view.currentTextColor)
-                    ?: readableTextRoleForRawColor(view, view.currentTextColor, linkText = false)
-                    ?: HomeNativeGlassTextRole.SECONDARY,
-            )
-            if (role != null) {
-                rememberReadableTextRole(view, role, linkText = false)
-                val color = palette.colorFor(role)
-                if (view.currentTextColor != color) {
-                    view.setTextColor(color)
-                }
-            }
-            applyReadableTextPaletteToTextSpans(view, palette)
-        }
-        val group = view as? ViewGroup ?: return
-        for (index in 0 until group.childCount) {
-            applySocialBarReadableText(group.getChildAt(index) ?: continue, palette, depth + 1)
-        }
-    }
-
-    private fun applyReadableTextColorFromResource(
-        view: View,
-        colorResId: Int,
-        linkText: Boolean,
-    ) {
-        runReadableTextSafely {
-            val role = readableTextRoleForResourceId(view, colorResId, linkText)
-                ?: readableTextFallbackRoleForComponent(view, linkText)
-                ?: return@runReadableTextSafely
-            applyReadableTextColorFromRole(view, role, linkText)
-        }
-    }
-
-    private fun applyReadableTextColorFromRole(
-        view: View,
-        role: HomeNativeGlassTextRole?,
-        linkText: Boolean,
-    ) {
-        runReadableTextSafely {
-            if (role == null || !canApplyReadableTextPalette(view)) return@runReadableTextSafely
-            val palette = readableTextPaletteFor(view) ?: return@runReadableTextSafely
-            val refinedRole = refineReadableTextRoleForView(view, role, linkText)
-            val color = palette.colorFor(refinedRole)
-            rememberReadableTextRole(view, refinedRole, linkText)
-            withReadableTextWrite {
-                if (linkText) {
-                    applyLinkTextColor(view, color)
-                } else {
-                    applyNormalTextColor(view, color)
-                }
-            }
-        }
-    }
-
-    private fun resolveReadableTextRoleForRawColor(
-        view: View,
-        color: Int,
-        linkText: Boolean,
-    ): HomeNativeGlassTextRole? {
-        return runCatching {
-            if (!canApplyReadableTextPalette(view)) return@runCatching null
-            readableTextRoleForRawColor(view, color, linkText)
-        }.getOrElse {
-            logReadableTextFailure(it)
-            null
-        }
-    }
-
-    private fun resolveReadableTextColorForRawColor(
-        view: View,
-        color: Int,
-        linkText: Boolean,
-    ): Int? {
-        return runCatching {
-            if (!canApplyReadableTextPalette(view)) return@runCatching null
-            val role = readableTextRoleForRawColor(view, color, linkText) ?: return@runCatching null
-            val palette = readableTextPaletteFor(view) ?: return@runCatching null
-            palette.colorFor(role)
-        }.getOrElse {
-            logReadableTextFailure(it)
-            null
-        }
-    }
-
-    private fun applyReadableTextPaletteToTree(root: View, maxDepth: Int) {
-        runReadableTextSafely {
-            if (!canApplyReadableTextPalette(root)) return@runReadableTextSafely
-            val palette = readableTextPaletteFor(root) ?: return@runReadableTextSafely
-            withReadableTextWrite {
-                applyReadableTextPaletteToTree(root, palette, depth = 0, maxDepth = maxDepth)
-            }
-        }
-    }
-
-    private fun applyKnownPbReadableTextPaletteToTree(root: View, maxDepth: Int) {
-        runReadableTextSafely {
-            if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return@runReadableTextSafely
-            val palette = readableTextPaletteFor(root) ?: return@runReadableTextSafely
-            withReadableTextWrite {
-                applyReadableTextPaletteToTree(root, palette, depth = 0, maxDepth = maxDepth)
-            }
-        }
-    }
-
-    private fun applyReadableTextPaletteToTree(
-        view: View,
-        palette: HomeNativeGlassReadableTextPalette,
-        depth: Int,
-        maxDepth: Int,
-    ) {
-        if (depth > maxDepth) return
-        if (view is TextView) {
-            applyReadableTextPaletteToTextViewIfNeeded(view, palette)
-        }
-        val group = view as? ViewGroup ?: return
-        for (index in 0 until group.childCount) {
-            applyReadableTextPaletteToTree(
-                group.getChildAt(index) ?: continue,
-                palette,
-                depth + 1,
-                maxDepth,
-            )
-        }
-    }
-
-    private fun applyReadableTextPaletteToTextViewIfNeeded(
-        textView: TextView,
-        palette: HomeNativeGlassReadableTextPalette,
-    ) {
-        val beforeSignature = readableTextApplySignature(textView, palette)
-        if (readableTextApplyStates[textView]?.signature == beforeSignature) return
-        val textRole = refineReadableTextRoleForTextView(
-            textView,
-            readableTextRoleForView(textView, linkText = false)
-                ?: readableTextRoleForPaletteColor(palette, textView.currentTextColor)
-                ?: readableTextRoleForRawColor(textView, textView.currentTextColor, linkText = false),
-        )
-        if (textRole != null) {
-            val color = palette.colorFor(textRole)
-            if (textView.currentTextColor != color) {
-                textView.setTextColor(color)
-            }
-        }
-        val linkDefaultColor = runCatching { textView.linkTextColors.defaultColor }.getOrNull()
-        val linkRole = (readableTextRoleForView(textView, linkText = true)
-            ?: linkDefaultColor?.let { readableTextRoleForPaletteColor(palette, it) }
-            ?: linkDefaultColor?.let { readableTextRoleForRawColor(textView, it, linkText = true) })
-            ?.let { refineReadableTextRoleForView(textView, it, linkText = true) }
-        if (linkRole != null) {
-            val color = palette.colorFor(linkRole)
-            if (linkDefaultColor != color) {
-                textView.setLinkTextColor(color)
-            }
-        }
-        applyReadableTextPaletteToTextSpans(textView, palette)
-        readableTextApplyStates[textView] = ReadableTextApplyState(
-            signature = readableTextApplySignature(textView, palette),
-        )
-    }
-
-    private fun readableTextApplySignature(
-        textView: TextView,
-        palette: HomeNativeGlassReadableTextPalette,
-    ): Long {
-        var result = 17L
-        fun mix(value: Int) {
-            result = result * 31L + value.toLong()
-        }
-        mix(palette.hashCode())
-        mix(textView.currentTextColor)
-        mix(runCatching { textView.linkTextColors.defaultColor }.getOrDefault(0))
-        val roleState = readableTextViewRoles[textView]
-        mix(roleState?.normal?.ordinal ?: -1)
-        mix(roleState?.link?.ordinal ?: -1)
-        val text = textView.text
-        mix(System.identityHashCode(text))
-        mix(text.length)
-        mix(sampleReadableTextHash(text))
-        if (text is Spanned) {
-            val clickableSpans = text.getSpans(0, text.length, ClickableSpan::class.java)
-            mix(clickableSpans.size)
-            for (span in clickableSpans) {
-                mix(System.identityHashCode(span))
-                mix(text.getSpanStart(span))
-                mix(text.getSpanEnd(span))
-                mix(text.getSpanFlags(span))
-                if (span is ReadableTextClickableSpan) {
-                    mix(span.role.ordinal)
-                    mix(span.color)
-                }
-            }
-            val colorSpans = text.getSpans(0, text.length, ForegroundColorSpan::class.java)
-            mix(colorSpans.size)
-            for (span in colorSpans) {
-                mix(System.identityHashCode(span))
-                mix(text.getSpanStart(span))
-                mix(text.getSpanEnd(span))
-                mix(text.getSpanFlags(span))
-                mix(span.foregroundColor)
-                mix(readableTextSpanRoles[span]?.ordinal ?: -1)
-            }
-        }
-        mix(java.lang.Float.floatToIntBits(textView.textSize))
-        return result
-    }
-
-    private fun sampleReadableTextHash(text: CharSequence): Int {
-        val length = text.length
-        if (length <= 0) return 0
-        var result = length
-        val headCount = length.coerceAtMost(8)
-        for (index in 0 until headCount) {
-            result = result * 31 + text[index].code
-        }
-        val tailStart = (length - 8).coerceAtLeast(headCount)
-        for (index in tailStart until length) {
-            result = result * 31 + text[index].code
-        }
-        return result
-    }
-
-    private fun applyReadableTextPaletteToTextSpans(
-        textView: TextView,
-        palette: HomeNativeGlassReadableTextPalette,
-    ) {
-        val text = textView.text as? Spanned ?: return
-        if (text.isEmpty()) return
-        var replacementText: SpannableStringBuilder? = null
-        fun editableText(): SpannableStringBuilder {
-            return replacementText ?: SpannableStringBuilder(text).also { replacementText = it }
-        }
-        var changed = false
-        val clickableSpans = text.getSpans(0, text.length, ClickableSpan::class.java)
-        for (span in clickableSpans) {
-            changed = applyReadableTextPaletteToClickableSpan(
-                textView,
-                text,
-                editableText = ::editableText,
-                span,
-                palette,
-            ) || changed
-        }
-        val colorSpans = text.getSpans(0, text.length, ForegroundColorSpan::class.java)
-        for (span in colorSpans) {
-            changed = applyReadableTextPaletteToForegroundColorSpan(
-                textView,
-                text,
-                editableText = ::editableText,
-                span,
-                palette,
-            ) || changed
-        }
-        if (replacementText != null) {
-            textView.text = replacementText
-            changed = true
-        }
-        if (changed) {
-            textView.invalidate()
-        }
-    }
-
-    private fun applyReadableTextPaletteToClickableSpan(
-        textView: TextView,
-        text: Spanned,
-        editableText: () -> SpannableStringBuilder,
-        span: ClickableSpan,
-        palette: HomeNativeGlassReadableTextPalette,
-    ): Boolean {
-        if (span is ReadableTextClickableSpan) {
-            val role = refineReadableTextRoleForClickableSpan(textView, span.role)
-            val color = readableTextColorForClickableSpan(textView, palette, role)
-            return if (span.role != role || span.color != color) {
-                span.role = role
-                span.color = color
-                true
-            } else {
-                false
-            }
-        }
-        val start = text.getSpanStart(span)
-        val end = text.getSpanEnd(span)
-        if (start < 0 || end < 0 || start >= end) return false
-        val flags = text.getSpanFlags(span)
-        val role = readableTextRoleForClickableSpan(textView, span)
-        val replacement = ReadableTextClickableSpan(
-            delegate = span,
-            role = role,
-            color = readableTextColorForClickableSpan(textView, palette, role),
-        )
-        val editable = editableText()
-        editable.removeSpan(span)
-        editable.setSpan(replacement, start, end, flags)
-        return true
-    }
-
-    private fun applyReadableTextPaletteToForegroundColorSpan(
-        textView: TextView,
-        text: Spanned,
-        editableText: () -> SpannableStringBuilder,
-        span: ForegroundColorSpan,
-        palette: HomeNativeGlassReadableTextPalette,
-    ): Boolean {
-        val start = text.getSpanStart(span)
-        val end = text.getSpanEnd(span)
-        if (start < 0 || end < 0 || start >= end) return false
-        val role = readableTextSpanRoles[span]
-            ?: readableTextRoleForRawColor(textView, span.foregroundColor, linkText = false)
-            ?: if (isSubPbReplyClickableTextSpan(textView, text, start, end)) {
-                HomeNativeGlassTextRole.LINK
-            } else {
-                return false
-            }
-        val refinedRole = refineReadableTextRoleForTextSpan(textView, text, start, end, role)
-        val color = readableTextColorForTextSpan(textView, text, start, end, palette, refinedRole)
-        if (span.foregroundColor == color) {
-            readableTextSpanRoles[span] = refinedRole
-            return false
-        }
-        val flags = text.getSpanFlags(span)
-        val replacement = ForegroundColorSpan(color)
-        val editable = editableText()
-        editable.removeSpan(span)
-        editable.setSpan(replacement, start, end, flags)
-        readableTextSpanRoles.remove(span)
-        readableTextSpanRoles[replacement] = refinedRole
-        return true
-    }
-
-    private fun readableTextRoleForClickableSpan(
-        textView: TextView,
-        span: ClickableSpan,
-    ): HomeNativeGlassTextRole {
-        val paint = TextPaint().apply {
-            color = textView.currentTextColor
-            linkColor = runCatching { textView.linkTextColors.defaultColor }.getOrDefault(textView.currentTextColor)
-        }
-        runCatching { span.updateDrawState(paint) }
-        val role = readableTextRoleForRawColor(textView, paint.color, linkText = true)
-            ?: readableTextRoleForPaletteColor(readableTextPaletteFor(textView), paint.color)
-        return refineReadableTextRoleForClickableSpan(textView, role)
-    }
-
-    private class ReadableTextClickableSpan(
-        val delegate: ClickableSpan,
-        var role: HomeNativeGlassTextRole,
-        var color: Int,
-    ) : ClickableSpan() {
-        override fun onClick(widget: View) {
-            delegate.onClick(widget)
-        }
-
-        override fun updateDrawState(ds: TextPaint) {
-            delegate.updateDrawState(ds)
-            ds.color = color
-        }
-    }
-
-    private fun refineReadableTextRoleForClickableSpan(
-        textView: TextView,
-        role: HomeNativeGlassTextRole?,
-    ): HomeNativeGlassTextRole {
-        val resolved = if (role == HomeNativeGlassTextRole.PRIMARY) {
-            HomeNativeGlassTextRole.LINK
-        } else {
-            role ?: HomeNativeGlassTextRole.LINK
-        }
-        return if (isSubPbReplyRichTextTextView(textView) && shouldPromoteReadableTextRoleToLink(resolved)) {
-            HomeNativeGlassTextRole.LINK
-        } else {
-            resolved
-        }
-    }
-
-    private fun refineReadableTextRoleForTextSpan(
-        textView: TextView,
-        text: Spanned,
-        start: Int,
-        end: Int,
-        role: HomeNativeGlassTextRole,
-    ): HomeNativeGlassTextRole {
-        if (isSubPbReplyClickableTextSpan(textView, text, start, end) &&
-            shouldPromoteReadableTextRoleToLink(role)
-        ) {
-            return HomeNativeGlassTextRole.LINK
-        }
-        return refineReadableTextRoleForTextView(textView, role) ?: role
-    }
-
-    private fun readableTextColorForClickableSpan(
-        textView: TextView,
-        palette: HomeNativeGlassReadableTextPalette,
-        role: HomeNativeGlassTextRole,
-    ): Int {
-        return if (isSubPbReplyRichTextTextView(textView) && isSubPbClickableRole(role)) {
-            subPbClickableTextColor(textView)
-        } else {
-            palette.colorFor(role)
-        }
-    }
-
-    private fun readableTextColorForTextSpan(
-        textView: TextView,
-        text: Spanned,
-        start: Int,
-        end: Int,
-        palette: HomeNativeGlassReadableTextPalette,
-        role: HomeNativeGlassTextRole,
-    ): Int {
-        return if (isSubPbReplyClickableTextSpan(textView, text, start, end) && isSubPbClickableRole(role)) {
-            subPbClickableTextColor(textView)
-        } else {
-            palette.colorFor(role)
-        }
-    }
-
-    private fun shouldPromoteReadableTextRoleToLink(role: HomeNativeGlassTextRole): Boolean {
-        return role == HomeNativeGlassTextRole.PRIMARY ||
-            role == HomeNativeGlassTextRole.SECONDARY ||
-            role == HomeNativeGlassTextRole.TERTIARY
-    }
-
-    private fun isSubPbClickableRole(role: HomeNativeGlassTextRole): Boolean {
-        return role == HomeNativeGlassTextRole.LINK ||
-            role == HomeNativeGlassTextRole.ACCENT_BLUE
-    }
-
-    private fun subPbClickableTextColor(view: View): Int {
-        return if (usesDarkMaterial(view)) {
-            SUB_PB_CLICKABLE_DARK_MODE_TEXT_COLOR
-        } else {
-            SUB_PB_CLICKABLE_LIGHT_MODE_TEXT_COLOR
-        }
-    }
-
-    private fun isSubPbReplyClickableTextSpan(
-        textView: TextView,
-        text: Spanned,
-        start: Int,
-        end: Int,
-    ): Boolean {
-        if (!isSubPbReplyRichTextTextView(textView)) return false
-        val clickableSpans = text.getSpans(start, end, ClickableSpan::class.java)
-        for (clickableSpan in clickableSpans) {
-            val clickableStart = text.getSpanStart(clickableSpan)
-            val clickableEnd = text.getSpanEnd(clickableSpan)
-            if (clickableStart < end && clickableEnd > start) return true
-        }
-        return false
-    }
-
-    private fun isSubPbReplyRichTextTextView(textView: TextView): Boolean {
-        var current: View? = textView
-        var depth = 0
-        while (current != null && depth < READABLE_TEXT_TARGET_PARENT_DEPTH) {
-            val className = current.javaClass.name
-            if (
-                className == StableTiebaHookPoints.PB_SUB_PB_LAYOUT_CLASS ||
-                className == StableTiebaHookPoints.PB_COMMENT_FLOOR_SUB_VIEW_CLASS ||
-                className == StableTiebaHookPoints.SUB_PB_VIEW_CLASS
-            ) {
-                return true
-            }
-            if (
-                className == StableTiebaHookPoints.TB_RICH_TEXT_VIEW_CLASS &&
-                subPbRichTextViews[current] == true
-            ) {
-                return true
-            }
-            current = current.parent as? View
-            depth++
-        }
-        return false
-    }
-
-    private fun refineReadableTextRoleForView(
-        view: View,
-        role: HomeNativeGlassTextRole,
-        linkText: Boolean,
-    ): HomeNativeGlassTextRole {
-        if (linkText && role == HomeNativeGlassTextRole.PRIMARY) return HomeNativeGlassTextRole.LINK
-        val textView = view as? TextView ?: return role
-        return refineReadableTextRoleForTextView(textView, role) ?: role
-    }
-
-    private fun rememberReadableTextRole(
-        view: View,
-        role: HomeNativeGlassTextRole,
-        linkText: Boolean,
-    ) {
-        val state = synchronized(readableTextViewRoles) {
-            readableTextViewRoles.getOrPut(view) { ReadableTextViewRoleState() }
-        }
-        if (linkText) {
-            state.link = role
-        } else {
-            state.normal = role
-        }
-    }
-
-    private fun readableTextRoleForView(
-        view: View,
-        linkText: Boolean,
-    ): HomeNativeGlassTextRole? {
-        val state = readableTextViewRoles[view] ?: return null
-        return if (linkText) state.link else state.normal
-    }
-
-    private fun readableTextRoleForPaletteColor(
-        palette: HomeNativeGlassReadableTextPalette?,
-        color: Int,
-    ): HomeNativeGlassTextRole? {
-        if (palette == null || Color.alpha(color) == 0) return null
-        val normalized = color and 0x00FFFFFF
-        return when (normalized) {
-            palette.primary and 0x00FFFFFF -> HomeNativeGlassTextRole.PRIMARY
-            palette.secondary and 0x00FFFFFF -> HomeNativeGlassTextRole.SECONDARY
-            palette.tertiary and 0x00FFFFFF -> HomeNativeGlassTextRole.TERTIARY
-            palette.link and 0x00FFFFFF -> HomeNativeGlassTextRole.LINK
-            palette.action and 0x00FFFFFF -> HomeNativeGlassTextRole.ACTION
-            palette.disabled and 0x00FFFFFF -> HomeNativeGlassTextRole.DISABLED
-            palette.accentBlue and 0x00FFFFFF -> HomeNativeGlassTextRole.ACCENT_BLUE
-            palette.accentRed and 0x00FFFFFF -> HomeNativeGlassTextRole.ACCENT_RED
-            else -> null
-        }
-    }
-
-    private fun refineReadableTextRoleForTextView(
-        view: TextView,
-        role: HomeNativeGlassTextRole?,
-    ): HomeNativeGlassTextRole? {
-        val scaledDensity = (view.resources.displayMetrics.density * view.resources.configuration.fontScale)
-            .takeIf { it > 0f } ?: return role
-        val sizeSp = view.textSize / scaledDensity
-        return when {
-            role == null -> null
-            role == HomeNativeGlassTextRole.PRIMARY && isReadableTextProminent(view) -> role
-            role == HomeNativeGlassTextRole.PRIMARY && sizeSp <= READABLE_TEXT_TERTIARY_MAX_SP ->
-                HomeNativeGlassTextRole.TERTIARY
-            role == HomeNativeGlassTextRole.PRIMARY && sizeSp <= READABLE_TEXT_SECONDARY_MAX_SP ->
-                HomeNativeGlassTextRole.SECONDARY
-            else -> role
-        }
-    }
-
-    private fun isReadableTextProminent(view: TextView): Boolean {
-        val style = view.typeface?.style ?: 0
-        return view.paint.isFakeBoldText || (style and Typeface.BOLD) != 0
-    }
-
-    private fun applyNormalTextColor(view: View, color: Int) {
-        when (view) {
-            is TextView -> {
-                if (view.currentTextColor != color) {
-                    view.setTextColor(color)
-                }
-            }
-            is ViewGroup -> {
-                applyReadableTextPaletteToTree(view, maxDepth = READABLE_TEXT_DIRECT_GROUP_DEPTH)
-            }
-        }
-    }
-
-    private fun applyLinkTextColor(view: View, color: Int) {
-        if (view is TextView) {
-            val current = runCatching { view.linkTextColors.defaultColor }.getOrNull()
-            if (current != color) {
-                view.setLinkTextColor(color)
-            }
-            return
-        }
-        val group = view as? ViewGroup ?: return
-        for (index in 0 until group.childCount) {
-            val child = group.getChildAt(index) ?: continue
-            if (child is TextView) {
-                val current = runCatching { child.linkTextColors.defaultColor }.getOrNull()
-                if (current != color) {
-                    child.setLinkTextColor(color)
-                }
-            }
-        }
-    }
-
-    private fun readableTextPaletteFor(view: View): HomeNativeGlassReadableTextPalette? {
-        val lightRaw = ConfigManager.homeNativeGlassTextPaletteLight.trim()
-        val darkRaw = ConfigManager.homeNativeGlassTextPaletteDark.trim()
-        if (lightRaw.isEmpty() && darkRaw.isEmpty()) return null
-        val cached = readableTextPaletteState
-        val state = if (cached != null && cached.lightRaw == lightRaw && cached.darkRaw == darkRaw) {
-            cached
-        } else {
-            ReadableTextPaletteState(
-                lightRaw = lightRaw,
-                darkRaw = darkRaw,
-                light = HomeNativeGlassReadableTextPalette.parse(lightRaw),
-                dark = HomeNativeGlassReadableTextPalette.parse(darkRaw),
-            ).also { readableTextPaletteState = it }
-        }
-        return if (usesDarkMaterial(view)) {
-            state.dark
-        } else {
-            state.light
-        }
-    }
-
-    private fun hasReadableTextPaletteConfigured(): Boolean {
-        return ConfigManager.homeNativeGlassTextPaletteLight.trim().isNotEmpty() ||
-            ConfigManager.homeNativeGlassTextPaletteDark.trim().isNotEmpty()
-    }
-
-    private fun canApplyReadableTextPalette(view: View): Boolean {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
-        if (readableTextPaletteFor(view) == null) return false
-        return isReadableTextTarget(view)
-    }
-
-    private fun isReadableTextTarget(view: View): Boolean {
-        val activity = findCachedActivityFromContext(view.context)
-        if (activity != null && (isPbActivity(activity) || isSubPbReplyHostActivity(activity))) {
-            return true
-        }
-        if (activity != null && isForumActivity(activity)) {
-            return false
-        }
-        var current: View? = view
-        var depth = 0
-        while (current != null && depth < READABLE_TEXT_TARGET_PARENT_DEPTH) {
-            val className = current.javaClass.name
-            if (
-                className == StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS ||
-                className == StableTiebaHookPoints.PB_ITEM_FRAME_VIEW_CLASS ||
-                className == StableTiebaHookPoints.PB_ITEM_RELATIVE_VIEW_CLASS ||
-                className == StableTiebaHookPoints.PB_SUB_PB_LAYOUT_CLASS ||
-                className == StableTiebaHookPoints.PB_COMMENT_FLOOR_VIEW_CLASS ||
-                className == StableTiebaHookPoints.PB_COMMENT_FLOOR_SUB_VIEW_CLASS ||
-                className in PB_COMMENT_SURFACE_CLASSES
-            ) {
-                return true
-            }
-            if (isRecyclerView(current) && homeRecyclerViews.containsKey(current)) return true
-            current = current.parent as? View
-            depth++
-        }
-        return false
-    }
-
-    private fun readableTextFallbackRoleForComponent(
-        view: View,
-        linkText: Boolean,
-    ): HomeNativeGlassTextRole? {
-        if (linkText) return null
-        findAutoDegradeTagAncestor(view)?.let { tagView ->
-            return readableTextRoleForView(tagView, linkText = false)
-                ?: HomeNativeGlassTextRole.SECONDARY
-        }
-        if (findSocialBarReadableTextRoot(view) != null) {
-            return HomeNativeGlassTextRole.SECONDARY
-        }
-        return null
-    }
-
-    private fun findAutoDegradeTagAncestor(anchor: View): View? {
-        var current: View? = anchor
-        var depth = 0
-        while (current != null && depth < READABLE_TEXT_TARGET_PARENT_DEPTH) {
-            if (current.javaClass.name == StableTiebaHookPoints.AUTO_DEGRADE_TAG_VIEW_CLASS) {
-                return current
-            }
-            current = current.parent as? View
-            depth++
-        }
-        return null
-    }
-
-    private fun findSocialBarReadableTextRoot(anchor: View): View? {
-        var current: View? = anchor
-        var depth = 0
-        while (current != null && depth < READABLE_TEXT_TARGET_PARENT_DEPTH) {
-            val className = current.javaClass.name
-            if (
-                className == StableTiebaHookPoints.CARD_SOCIAL_BAR_VIEW_CLASS ||
-                className == StableTiebaHookPoints.SOCIAL_BAR_WRAPPER_CLASS
-            ) {
-                return current
-            }
-            current = current.parent as? View
-            depth++
-        }
-        return null
-    }
-
-    private fun readableTextRoleForResourceId(
-        view: View,
-        colorResId: Int,
-        linkText: Boolean,
-    ): HomeNativeGlassTextRole? {
-        if (colorResId == 0) return null
-        val roles = readableTextResourceIdRoles(view.context)[colorResId] ?: return null
-        return chooseReadableTextRole(roles, linkText)
-    }
-
-    private fun readableTextRoleForResourceName(
-        name: String?,
-        linkText: Boolean = false,
-    ): HomeNativeGlassTextRole? {
-        if (name.isNullOrBlank()) return null
-        if (linkText && name in READABLE_TEXT_LINK_RESOURCE_NAMES) return HomeNativeGlassTextRole.LINK
-        return when (name) {
-            in READABLE_TEXT_PRIMARY_RESOURCE_NAMES -> HomeNativeGlassTextRole.PRIMARY
-            in READABLE_TEXT_SECONDARY_RESOURCE_NAMES -> HomeNativeGlassTextRole.SECONDARY
-            in READABLE_TEXT_TERTIARY_RESOURCE_NAMES -> HomeNativeGlassTextRole.TERTIARY
-            in READABLE_TEXT_LINK_RESOURCE_NAMES -> HomeNativeGlassTextRole.LINK
-            in READABLE_TEXT_ACTION_RESOURCE_NAMES -> HomeNativeGlassTextRole.ACTION
-            in READABLE_TEXT_DISABLED_RESOURCE_NAMES -> HomeNativeGlassTextRole.DISABLED
-            in READABLE_TEXT_ACCENT_BLUE_RESOURCE_NAMES -> HomeNativeGlassTextRole.ACCENT_BLUE
-            in READABLE_TEXT_ACCENT_RED_RESOURCE_NAMES -> HomeNativeGlassTextRole.ACCENT_RED
-            else -> null
-        }
-    }
-
-    private fun readableTextRoleForRawColor(
-        view: View,
-        color: Int,
-        linkText: Boolean,
-    ): HomeNativeGlassTextRole? {
-        if (Color.alpha(color) == 0) return null
-        val colorRoles = readableTextColorRoles(view.context)
-        val roles = colorRoles[color and 0x00FFFFFF] ?: return null
-        return chooseReadableTextRole(roles, linkText)
-    }
-
-    private fun chooseReadableTextRole(
-        roles: Set<HomeNativeGlassTextRole>,
-        linkText: Boolean,
-    ): HomeNativeGlassTextRole? {
-        if (linkText && HomeNativeGlassTextRole.LINK in roles) return HomeNativeGlassTextRole.LINK
-        if (HomeNativeGlassTextRole.PRIMARY in roles) return HomeNativeGlassTextRole.PRIMARY
-        if (HomeNativeGlassTextRole.SECONDARY in roles) return HomeNativeGlassTextRole.SECONDARY
-        if (HomeNativeGlassTextRole.TERTIARY in roles) return HomeNativeGlassTextRole.TERTIARY
-        if (HomeNativeGlassTextRole.LINK in roles) return HomeNativeGlassTextRole.LINK
-        if (HomeNativeGlassTextRole.ACTION in roles) return HomeNativeGlassTextRole.ACTION
-        if (HomeNativeGlassTextRole.ACCENT_BLUE in roles) return HomeNativeGlassTextRole.ACCENT_BLUE
-        if (HomeNativeGlassTextRole.ACCENT_RED in roles) return HomeNativeGlassTextRole.ACCENT_RED
-        if (HomeNativeGlassTextRole.DISABLED in roles) return HomeNativeGlassTextRole.DISABLED
-        return null
-    }
-
-    private fun primeReadableTextResourceCaches(context: Context) {
-        runReadableTextSafely {
-            readableTextResourceIdRoles(context)
-            readableTextColorRoles(context)
-        }
-    }
-
-    private fun readableTextResourceIdRoles(context: Context): Map<Int, Set<HomeNativeGlassTextRole>> {
-        val key = context.packageName
-        readableTextResourceIdRoleCache[key]?.let { return it }
-        val roles = LinkedHashMap<Int, MutableSet<HomeNativeGlassTextRole>>()
-        fun add(names: Set<String>, role: HomeNativeGlassTextRole) {
-            for (name in names) {
-                val resId = resolveTargetColorResIdByName(name)
-                if (resId == null || resId == 0) continue
-                roles.getOrPut(resId) { LinkedHashSet() }.add(role)
-            }
-        }
-        add(READABLE_TEXT_PRIMARY_RESOURCE_NAMES, HomeNativeGlassTextRole.PRIMARY)
-        add(READABLE_TEXT_SECONDARY_RESOURCE_NAMES, HomeNativeGlassTextRole.SECONDARY)
-        add(READABLE_TEXT_TERTIARY_RESOURCE_NAMES, HomeNativeGlassTextRole.TERTIARY)
-        add(READABLE_TEXT_LINK_RESOURCE_NAMES, HomeNativeGlassTextRole.LINK)
-        add(READABLE_TEXT_ACTION_RESOURCE_NAMES, HomeNativeGlassTextRole.ACTION)
-        add(READABLE_TEXT_DISABLED_RESOURCE_NAMES, HomeNativeGlassTextRole.DISABLED)
-        add(READABLE_TEXT_ACCENT_BLUE_RESOURCE_NAMES, HomeNativeGlassTextRole.ACCENT_BLUE)
-        add(READABLE_TEXT_ACCENT_RED_RESOURCE_NAMES, HomeNativeGlassTextRole.ACCENT_RED)
-        return roles.mapValues { (_, value) -> value.toSet() }
-            .also { readableTextResourceIdRoleCache[key] = it }
-    }
-
-    private fun readableTextColorRoles(context: Context): Map<Int, Set<HomeNativeGlassTextRole>> {
-        val mode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        val key = "${context.packageName}|$mode"
-        readableTextResourceColorRoleCache[key]?.let { return it }
-        val roles = LinkedHashMap<Int, MutableSet<HomeNativeGlassTextRole>>()
-        fun add(names: Set<String>, role: HomeNativeGlassTextRole) {
-            for (name in names) {
-                val color = resolveTargetColorByName(context, name) ?: continue
-                roles.getOrPut(color and 0x00FFFFFF) { LinkedHashSet() }.add(role)
-            }
-        }
-        add(READABLE_TEXT_PRIMARY_RESOURCE_NAMES, HomeNativeGlassTextRole.PRIMARY)
-        add(READABLE_TEXT_SECONDARY_RESOURCE_NAMES, HomeNativeGlassTextRole.SECONDARY)
-        add(READABLE_TEXT_TERTIARY_RESOURCE_NAMES, HomeNativeGlassTextRole.TERTIARY)
-        add(READABLE_TEXT_LINK_RESOURCE_NAMES, HomeNativeGlassTextRole.LINK)
-        add(READABLE_TEXT_ACTION_RESOURCE_NAMES, HomeNativeGlassTextRole.ACTION)
-        add(READABLE_TEXT_DISABLED_RESOURCE_NAMES, HomeNativeGlassTextRole.DISABLED)
-        add(READABLE_TEXT_ACCENT_BLUE_RESOURCE_NAMES, HomeNativeGlassTextRole.ACCENT_BLUE)
-        add(READABLE_TEXT_ACCENT_RED_RESOURCE_NAMES, HomeNativeGlassTextRole.ACCENT_RED)
-        return roles.mapValues { (_, value) -> value.toSet() }
-            .also { readableTextResourceColorRoleCache[key] = it }
-    }
-
-    private fun resolveTargetColorByName(context: Context, name: String): Int? {
-        val resources = context.resources ?: return null
-        val resId = resolveTargetColorResIdByName(name) ?: return null
-        return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                resources.getColor(resId, context.theme)
-            } else {
-                @Suppress("DEPRECATION")
-                resources.getColor(resId)
-            }
-        }.getOrNull()
-    }
-
-    private fun resolveTargetColorResIdByName(name: String): Int? {
-        return runtimeTargets?.readableTextResourceIdsByName?.get(name)?.takeIf { it != 0 }
-    }
-
-    private fun isReadableTextWriteInProgress(): Boolean {
-        return (readableTextColorWriteDepth.get() ?: 0) > 0
-    }
-
-    private inline fun <T> withReadableTextWrite(block: () -> T): T {
-        readableTextColorWriteDepth.set((readableTextColorWriteDepth.get() ?: 0) + 1)
-        return try {
-            block()
-        } finally {
-            readableTextColorWriteDepth.set(((readableTextColorWriteDepth.get() ?: 0) - 1).coerceAtLeast(0))
-        }
-    }
-
-    private inline fun runReadableTextSafely(block: () -> Unit) {
-        try {
-            block()
-        } catch (t: Throwable) {
-            logReadableTextFailure(t)
-        }
-    }
-
-    private fun logReadableTextFailure(t: Throwable) {
-        if (firstReadableTextColorErrorLogged.compareAndSet(false, true)) {
-            XposedCompat.logD { "$TAG readable text color failed: ${t.message}" }
-        }
-    }
-
     private fun installPbDynamicBackgroundColorHooks(cl: ClassLoader): Int {
         val targets = runtimeTargets
         val hasDynamicBackgroundTargets = targets?.dynamicBackgroundColorIds?.isNotEmpty() == true
@@ -2418,7 +1080,7 @@ object HomeNativeGlassHook {
         if (colorResId == 0 || colorResId !in targets.dynamicBackgroundColorIds) return null
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         if (!isShareDialogDynamicTintTarget(view)) return null
-        return resolveCachedPbCommentDynamicTintColorOrNull(usesDarkMaterial(view))
+        return resolveCachedPbCommentDynamicTintColorOrNull()
     }
 
     private fun isShareDialogDynamicTintTarget(view: View): Boolean {
@@ -3262,7 +1924,6 @@ object HomeNativeGlassHook {
             applyCardGlass(card, page)
             applyCardComponentGlassToDescendants(card, page)
             applyHomeFeedImageContainerRadius(card)
-            applyReadableTextPaletteToTree(card, READABLE_TEXT_HOME_CARD_DEPTH)
             homeFeedCardStyleStates[card] = state
             if (page != null) {
                 schedulePageStyleReapply(page)
@@ -3304,9 +1965,6 @@ object HomeNativeGlassHook {
             cardRadiusDp = ConfigManager.homeNativeGlassCardRadiusDp,
             strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled,
             shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled,
-            textPaletteLight = ConfigManager.homeNativeGlassTextPaletteLight,
-            textPaletteDark = ConfigManager.homeNativeGlassTextPaletteDark,
-            darkMode = usesDarkMaterial(card),
         )
     }
 
@@ -3574,22 +2232,7 @@ object HomeNativeGlassHook {
     }
 
     private fun resolveHomeNativePageFallbackColor(view: View): Int {
-        val darkMode = usesDarkMaterial(view)
-        val base = if (darkMode) {
-            Color.rgb(18, 20, 24)
-        } else {
-            Color.rgb(246, 248, 250)
-        }
-        val tint = ConfigManager.homeNativeGlassTintColor
-        if (tint == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR) return base
-        if (!darkMode) return base
-        val alpha = (
-            255f * ConfigManager.homeNativeGlassTintAlphaPercent.coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ) / 100f
-            ).toInt().coerceIn(0, 255)
-        return blendOpaqueColor(base, tint, alpha)
+        return Color.rgb(246, 248, 250)
     }
 
     private fun blendOpaqueColor(base: Int, overlay: Int, overlayAlpha: Int): Int {
@@ -3768,7 +2411,6 @@ object HomeNativeGlassHook {
             applyPbCommentBackgroundHost(host)
             clearPbCommentHostBackgroundBlockers(host)
             schedulePbReplyBarInputCapsuleDynamicTint(host)
-            applyKnownPbReadableTextPaletteToTree(host, READABLE_TEXT_PB_ITEM_DEPTH)
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb comment activity glass failed: ${t.message}" }
@@ -3873,12 +2515,10 @@ object HomeNativeGlassHook {
                 clearForeground(view)
                 clearElevation(view)
                 view.invalidate()
-                applyKnownPbReadableTextPaletteToTree(view, READABLE_TEXT_PB_ITEM_DEPTH)
                 return
             }
             if (keepPbSortSwitchComponentTransparent(view)) return
             applyPbCommentDynamicTintColor(view, resolveCachedPbCommentDynamicTintColor(view))
-            applyKnownPbReadableTextPaletteToTree(view, READABLE_TEXT_PB_ITEM_DEPTH)
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb common preloaded layout tint failed: ${t.message}" }
@@ -4012,7 +2652,6 @@ object HomeNativeGlassHook {
             if (isPbCommentRootSurface(source)) {
                 clearPbCommentHostBackgroundBlockers(source)
             }
-            applyReadableTextPaletteToTree(source, READABLE_TEXT_PB_ITEM_DEPTH)
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb comment glass failed: ${t.message}" }
@@ -4055,7 +2694,6 @@ object HomeNativeGlassHook {
             clearPbCommentBackgroundPath(itemView, host, keepSortSwitchComponent = false)
             removePbCommentReplyTitleDecorationsSafely(itemView, requireKnownDivider = true)
             clearPbCommentListItemBackgrounds(itemView, depth = 0, keepSortSwitchComponent = false)
-            applyKnownPbReadableTextPaletteToTree(itemView, READABLE_TEXT_PB_ITEM_DEPTH)
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb comment list item glass failed: ${t.message}" }
@@ -4099,7 +2737,6 @@ object HomeNativeGlassHook {
             clearForeground(itemView)
             clearNativePressVisual(itemView)
             clearSubPbReplyItemContentBackgrounds(itemView)
-            applyKnownPbReadableTextPaletteToTree(itemView, READABLE_TEXT_PB_ITEM_DEPTH)
             itemView.invalidate()
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
@@ -4130,7 +2767,6 @@ object HomeNativeGlassHook {
         val host = findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(listView) ?: return false
         applyPbCommentBackgroundHost(host)
         clearSubPbNextPageMoreViewBackground(target)
-        applyKnownPbReadableTextPaletteToTree(target, READABLE_TEXT_DIRECT_GROUP_DEPTH)
         listView.invalidate()
         return true
     }
@@ -4278,7 +2914,6 @@ object HomeNativeGlassHook {
             blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim(),
             sourcePath = ConfigManager.homeNativeGlassBackgroundImagePath.trim(),
             tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent,
-            darkMode = usesDarkMaterial(host),
         )
         if (
             pbCommentBackgroundHostStates[host] == state &&
@@ -4308,7 +2943,6 @@ object HomeNativeGlassHook {
         host.background = PbCommentGlassBackgroundDrawable(
             bitmap = bitmap,
             tintAlphaPercent = state.tintAlphaPercent,
-            darkMode = state.darkMode,
         )
         if (host is AbsListView) {
             host.cacheColorHint = Color.TRANSPARENT
@@ -4343,7 +2977,6 @@ object HomeNativeGlassHook {
             cardRadiusDp = radiusDp,
             strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled,
             shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled,
-            darkMode = usesDarkMaterial(subPbLayout),
         )
         val shouldUpdateBackground = pbSubPbLayoutCardStates[subPbLayout] != state ||
             subPbLayout.background !is CardGlassDrawable
@@ -4358,7 +2991,6 @@ object HomeNativeGlassHook {
         clearForeground(subPbLayout)
         applyPbSubPbLayoutExtraHeight(subPbLayout)
         clearPbSubPbLayoutContentBackgrounds(subPbLayout)
-        applyKnownPbReadableTextPaletteToTree(subPbLayout, READABLE_TEXT_PB_ITEM_DEPTH)
     }
 
     private fun applyPbSubPbLayoutExtraHeight(subPbLayout: View) {
@@ -4785,7 +3417,6 @@ object HomeNativeGlassHook {
                 (root.resources.displayMetrics.density * PB_REPLY_TITLE_DECORATIVE_MAX_HEIGHT_DP).toInt(),
             )
             clearPbReplyTitleBackgrounds(root, root, maxHeightPx, depth = 0)
-            applyKnownPbReadableTextPaletteToTree(root, READABLE_TEXT_PB_ITEM_DEPTH)
             findPbSortSwitchButton(root, depth = 0)?.let { sortButton ->
                 applyPbSortSwitchBackgroundDynamicTint(sortButton, invalidateOnChange = true)
             }
@@ -5041,7 +3672,6 @@ object HomeNativeGlassHook {
         }
         applyPbCommentDynamicTintColor(navigationBar, resolveCachedPbCommentDynamicTintColor(navigationBar))
         clearSubPbNavigationBarChromeBackgrounds(navigationBar)
-        applyKnownPbReadableTextPaletteToTree(navigationBar, READABLE_TEXT_DIRECT_GROUP_DEPTH)
         navigationBar.invalidate()
         return true
     }
@@ -5116,7 +3746,7 @@ object HomeNativeGlassHook {
         val match = findSubPbInputBarMatch(anchor) ?: return
         val frameColor = resolvePbCachedDynamicTintColor(match.capsule) ?: return
         applySubPbInputFrameBackgrounds(match, frameColor)
-        val capsuleColor = offsetSubPbInputCapsuleColor(frameColor, usesDarkMaterial(match.capsule))
+        val capsuleColor = offsetSubPbInputCapsuleColor(frameColor)
         setSubPbInputCapsuleDynamicBackground(match.capsule, capsuleColor)
     }
 
@@ -5361,8 +3991,8 @@ object HomeNativeGlassHook {
         view.invalidate()
     }
 
-    private fun offsetSubPbInputCapsuleColor(color: Int, darkMode: Boolean): Int {
-        val target = if (darkMode) 255 else 0
+    private fun offsetSubPbInputCapsuleColor(color: Int): Int {
+        val target = 0
         val alpha = SUB_PB_INPUT_CAPSULE_COLOR_SHIFT_ALPHA
         return Color.rgb(
             blendPbCommentReplyBoxOverlayChannel(Color.red(color), target, alpha),
@@ -5387,12 +4017,7 @@ object HomeNativeGlassHook {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         val activity = findCachedActivityFromContext(view.context) ?: return null
         if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return null
-        val darkMode = when (skinType) {
-            4 -> true
-            0, 1, 2, 3 -> false
-            else -> usesDarkMaterial(view)
-        }
-        return resolveCachedPbCommentDynamicTintColorOrNull(darkMode)
+        return resolveCachedPbCommentDynamicTintColorOrNull()
     }
 
     private fun applyPbSortSwitchBackgroundDynamicTint(
@@ -5452,21 +4077,19 @@ object HomeNativeGlassHook {
         val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
         val tintColor = ConfigManager.homeNativeGlassTintColor
         val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
-        val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
-        val darkMode = usesDarkMaterial(view)
         val pinnedReplyTitle = isPbSortSwitchPinnedReplyTitle(view)
         val canApply = isPbSortSwitchDynamicTintHost(view)
         if (!canApply) {
             pbSortSwitchTintStates.remove(view)
             return null
         }
-        val baseColor = resolveCachedPbCommentDynamicTintColorOrNull(darkMode)
+        val baseColor = resolveCachedPbCommentDynamicTintColorOrNull()
         val backgroundColor = when {
             pinnedReplyTitle -> baseColor
             else -> Color.TRANSPARENT
         }
         val selectedColor = if (baseColor != null) {
-            if (pinnedReplyTitle) applyPbSortSwitchSelectedTintOverlay(baseColor, darkMode) else baseColor
+            if (pinnedReplyTitle) applyPbSortSwitchSelectedTintOverlay(baseColor) else baseColor
         } else {
             null
         }
@@ -5476,8 +4099,6 @@ object HomeNativeGlassHook {
             blurPercent = blurPercent,
             tintColor = tintColor,
             autoTintColor = autoTintColor,
-            tintAlphaPercent = tintAlphaPercent,
-            darkMode = darkMode,
             pinnedReplyTitle = pinnedReplyTitle,
             backgroundColor = backgroundColor,
             selectedColor = selectedColor,
@@ -5486,8 +4107,8 @@ object HomeNativeGlassHook {
         return state
     }
 
-    private fun applyPbSortSwitchSelectedTintOverlay(color: Int, darkMode: Boolean): Int {
-        val overlay = if (darkMode) 255 else 0
+    private fun applyPbSortSwitchSelectedTintOverlay(color: Int): Int {
+        val overlay = 0
         val alpha = PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA
         return Color.rgb(
             blendPbCommentReplyBoxOverlayChannel(Color.red(color), overlay, alpha),
@@ -5502,8 +4123,6 @@ object HomeNativeGlassHook {
             blurPercent == ConfigManager.homeNativeGlassCardBlurPercent &&
             tintColor == ConfigManager.homeNativeGlassTintColor &&
             autoTintColor == ConfigManager.homeNativeGlassAutoTintColor &&
-            tintAlphaPercent == ConfigManager.homeNativeGlassTintAlphaPercent &&
-            darkMode == usesDarkMaterial(view) &&
             pinnedReplyTitle == isPbSortSwitchPinnedReplyTitle(view)
     }
 
@@ -5536,7 +4155,7 @@ object HomeNativeGlassHook {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         val activity = findCachedActivityFromContext(view.context) ?: return null
         if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return null
-        return resolveCachedPbCommentDynamicTintColorOrNull(usesDarkMaterial(view))
+        return resolveCachedPbCommentDynamicTintColorOrNull()
     }
 
     private fun schedulePbReplyBarInputCapsuleDynamicTint(anchor: View) {
@@ -5584,7 +4203,7 @@ object HomeNativeGlassHook {
         val searchRoot = findPbReplyBarSearchRoot(anchor, activity) ?: return
         val capsule = findPbReplyBarInputCapsule(searchRoot) ?: return
         val frameColor = resolvePbCachedDynamicTintColor(capsule) ?: return
-        val capsuleColor = offsetPbReplyBarInputCapsuleColor(frameColor, usesDarkMaterial(capsule))
+        val capsuleColor = offsetPbReplyBarInputCapsuleColor(frameColor)
         setPbReplyBarInputCapsuleDynamicBackground(capsule, capsuleColor)
         applyPbReplyBarGestureNavigationBridge(activity, capsule, frameColor)
     }
@@ -5764,8 +4383,8 @@ object HomeNativeGlassHook {
         return view.resources.displayMetrics.density * PB_REPLY_BAR_INPUT_CAPSULE_FALLBACK_RADIUS_DP
     }
 
-    private fun offsetPbReplyBarInputCapsuleColor(color: Int, darkMode: Boolean): Int {
-        val target = if (darkMode) 255 else 0
+    private fun offsetPbReplyBarInputCapsuleColor(color: Int): Int {
+        val target = 0
         val alpha = PB_REPLY_BAR_INPUT_CAPSULE_COLOR_SHIFT_ALPHA
         return Color.rgb(
             blendPbCommentReplyBoxOverlayChannel(Color.red(color), target, alpha),
@@ -6106,52 +4725,33 @@ object HomeNativeGlassHook {
     }
 
     private fun resolveCachedPbCommentDynamicTintColor(view: View): Int {
-        val darkMode = usesDarkMaterial(view)
-        resolveCachedPbCommentDynamicTintColorOrNull(darkMode)?.let { return it }
-        val fallback = if (darkMode) Color.rgb(0, 0, 0) else Color.rgb(255, 255, 255)
-        return if (darkMode) applyPbCommentDarkOverlay(fallback) else fallback
+        resolveCachedPbCommentDynamicTintColorOrNull()?.let { return it }
+        return Color.rgb(255, 255, 255)
     }
 
     private fun resolveCachedHomeTabDynamicTintColor(view: View): Int? {
-        return resolveCachedPbCommentDynamicTintColorOrNull(usesDarkMaterial(view))
+        return resolveCachedPbCommentDynamicTintColorOrNull()
     }
 
-    private fun resolveCachedPbCommentDynamicTintColorOrNull(darkMode: Boolean): Int? {
+    private fun resolveCachedPbCommentDynamicTintColorOrNull(): Int? {
         val tintColor = ConfigManager.homeNativeGlassTintColor
         val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
-        val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
         val cached = pbCommentDynamicTintState
         if (
             cached != null &&
             cached.tintColor == tintColor &&
-            cached.autoTintColor == autoTintColor &&
-            cached.tintAlphaPercent == tintAlphaPercent
+            cached.autoTintColor == autoTintColor
         ) {
-            return if (darkMode) cached.darkColor else cached.lightColor
+            return cached.lightColor
         }
         val baseColor = configuredPbCommentTintColor() ?: return null
         val state = PbCommentDynamicTintState(
             tintColor = tintColor,
             autoTintColor = autoTintColor,
-            tintAlphaPercent = tintAlphaPercent,
             lightColor = pbCommentBaseRgb(baseColor),
-            darkColor = applyPbCommentDarkOverlay(baseColor),
         )
         pbCommentDynamicTintState = state
-        return if (darkMode) state.darkColor else state.lightColor
-    }
-
-    private fun applyPbCommentDarkOverlay(baseColor: Int): Int {
-        val alpha = ConfigManager.homeNativeGlassTintAlphaPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-        )
-        if (alpha <= 0) return Color.rgb(Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))
-        return Color.rgb(
-            blendPbCommentReplyBoxOverlayChannel(Color.red(baseColor), 0, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.green(baseColor), 0, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.blue(baseColor), 0, alpha),
-        )
+        return state.lightColor
     }
 
     private fun pbCommentBaseRgb(color: Int): Int {
@@ -6988,25 +5588,26 @@ object HomeNativeGlassHook {
             applyCardStyleSafely(child, force = true)
             scheduleHomeFeedCardStyleReapply(child)
         } else {
-            scheduleHomeRecyclerChildReadableTextRefresh(child)
+            scheduleHomeRecyclerChildBackgroundRefresh(child)
         }
     }
 
-    private fun scheduleHomeRecyclerChildReadableTextRefresh(child: View) {
+    private fun scheduleHomeRecyclerChildBackgroundRefresh(child: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         child.post {
-            applyHomeRecyclerChildReadableTextSafely(child)
+            applyHomeRecyclerChildBackgroundSafely(child)
         }
     }
 
-    private fun applyHomeRecyclerChildReadableTextSafely(child: View) {
+    private fun applyHomeRecyclerChildBackgroundSafely(child: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         try {
             if (!isInsideHomeNativePage(child)) return
             markNestedHomeRecyclerViews(child)
-            applyReadableTextPaletteToTree(child, READABLE_TEXT_HOME_CARD_DEPTH)
         } catch (t: Throwable) {
-            logReadableTextFailure(t)
+            if (firstPageErrorLogged.compareAndSet(false, true)) {
+                XposedCompat.logD { "$TAG home recycler child background refresh failed: ${t.message}" }
+            }
         }
     }
 
@@ -7073,8 +5674,6 @@ object HomeNativeGlassHook {
         val blurredBitmap = cachedEntry?.blurredBitmap
         val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
         val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        val darkMode = usesDarkMaterial(view)
-        val materialTintColor = resolveCardMaterialTintColor(view)
         val strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled
         val shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled
         val background = if (page != null && blurredBitmap != null) {
@@ -7088,8 +5687,6 @@ object HomeNativeGlassHook {
                     tintAlphaPercent = tintAlphaPercent,
                     tintAlphaExtra = tintAlphaExtra,
                     blurPercent = blurPercent,
-                    darkMode = darkMode,
-                    materialTintColor = materialTintColor,
                     strokeEnabled = strokeEnabled,
                     shadowEnabled = shadowEnabled,
                 )
@@ -7106,8 +5703,6 @@ object HomeNativeGlassHook {
                 tintAlphaPercent = tintAlphaPercent,
                 tintAlphaExtra = tintAlphaExtra,
                 blurPercent = blurPercent,
-                darkMode = darkMode,
-                materialTintColor = materialTintColor,
                 strokeEnabled = strokeEnabled,
                 shadowEnabled = shadowEnabled,
             )
@@ -7168,48 +5763,6 @@ object HomeNativeGlassHook {
 
     private fun hasPageBackgroundOverride(): Boolean {
         return ConfigManager.homeNativeGlassBackgroundImagePath.isNotBlank()
-    }
-
-    private fun usesDarkMaterial(view: View): Boolean {
-        hostSkinTypeDarkMode(cachedHostSkinTypeIfFresh() ?: refreshCachedHostSkinType())?.let { return it }
-        val mode = view.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        return mode == Configuration.UI_MODE_NIGHT_YES
-    }
-
-    private fun cachedHostSkinTypeIfFresh(): Int? {
-        val cached = cachedHostSkinType ?: return null
-        val now = SystemClock.uptimeMillis()
-        if (now - cachedHostSkinTypeCheckedAt <= HOST_SKIN_TYPE_CACHE_TTL_MS) return cached
-        return null
-    }
-
-    private fun refreshCachedHostSkinType(): Int? {
-        val skinType = readHostSkinType()
-        if (skinType != null) {
-            cachedHostSkinType = skinType
-            cachedHostSkinTypeCheckedAt = SystemClock.uptimeMillis()
-        }
-        return skinType
-    }
-
-    private fun readHostSkinType(): Int? {
-        val method = skinManagerGetCurrentSkinTypeMethod ?: return null
-        return runCatching { (method.invoke(null) as? Number)?.toInt() }.getOrNull()
-    }
-
-    private fun hostSkinTypeDarkMode(skinType: Int?): Boolean? {
-        return when (skinType) {
-            4 -> true
-            0,
-            1,
-            2,
-            3 -> false
-            else -> null
-        }
-    }
-
-    private fun resolveCardMaterialTintColor(view: View): Int? {
-        return configuredPbCommentTintColor()
     }
 
     private fun createBackgroundDrawable(view: View, imagePath: String): Drawable? {
@@ -7710,69 +6263,7 @@ object HomeNativeGlassHook {
     private const val TB_RICH_TEXT_MODEL_CLASS = "com.baidu.tbadk.widget.richText.TbRichText"
     private val HOME_SEARCH_BOX_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 160L)
     private val CARD_COMPONENT_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 160L)
-    private val READABLE_TEXT_PRIMARY_RESOURCE_NAMES = setOf(
-        "CAM_X0101",
-        "CAM_X0105",
-        "CAM_X0106",
-        "color_text",
-        "color_text_primary",
-        "color_text_regular",
-    )
-    private val READABLE_TEXT_SECONDARY_RESOURCE_NAMES = setOf(
-        "CAM_X0107",
-        "CAM_X0109",
-        "color_text_minor",
-        "color_text_secondary",
-        "color_text_slim",
-        "color_text_tiny",
-        "selector_comment_and_prise_item_text_color",
-    )
-    private val READABLE_TEXT_TERTIARY_RESOURCE_NAMES = setOf(
-        "CAM_X0108",
-        "CAM_X0110",
-        "color_text_gray",
-        "color_text_tertiary",
-    )
-    private val READABLE_TEXT_LINK_RESOURCE_NAMES = setOf(
-        "CAM_X0108",
-        "CAM_X0304",
-        "color_text_link",
-        "cp_link_tip_a",
-        "cp_link_tip_a_alpha50",
-        "link_color",
-    )
-    private val READABLE_TEXT_ACTION_RESOURCE_NAMES = setOf(
-        "CAM_X0302",
-        "CAM_X0304",
-        "CAM_X0305",
-        "btn_forum_focus_color",
-        "color_text_blue",
-        "pb_like_user_select_color",
-    )
-    private val READABLE_TEXT_DISABLED_RESOURCE_NAMES = setOf(
-        "CAM_X0110",
-        "color_text_disable",
-        "color_text_disabled",
-        "cp_cont_b_alpha50",
-    )
-    private val READABLE_TEXT_ACCENT_BLUE_RESOURCE_NAMES = setOf(
-        "CAM_X0302",
-        "CAM_X0304",
-        "btn_forum_focus_color",
-        "pb_like_user_select_color",
-    )
-    private val READABLE_TEXT_ACCENT_RED_RESOURCE_NAMES = setOf(
-        "CAM_X0301",
-        "CAM_X0312",
-    )
     private const val HOME_BOTTOM_TAB_BOUNDARY_PARENT_DEPTH = 4
-    private const val READABLE_TEXT_TARGET_PARENT_DEPTH = 16
-    private const val READABLE_TEXT_DIRECT_GROUP_DEPTH = 3
-    private const val READABLE_TEXT_SOCIAL_BAR_DEPTH = 10
-    private const val READABLE_TEXT_HOME_CARD_DEPTH = 12
-    private const val READABLE_TEXT_PB_ITEM_DEPTH = 10
-    private const val READABLE_TEXT_SECONDARY_MAX_SP = 14.5f
-    private const val READABLE_TEXT_TERTIARY_MAX_SP = 12.5f
     private const val HOME_TOP_TAB_RECOMMEND_TYPE = 1
     private const val HOME_TOP_TAB_RECOMMEND_CODE = "recommend"
     private const val CARD_COMPONENT_TINT_ALPHA_EXTRA = 25
@@ -7787,15 +6278,11 @@ object HomeNativeGlassHook {
     private const val SUB_PB_REPLY_ITEM_CONTENT_CLEAR_DEPTH = 2
     private const val SUB_PB_NAVIGATION_BAR_BACKGROUND_CLEAR_DEPTH = 3
     private const val SUB_PB_NAVIGATION_BAR_REAPPLY_DELAY_MS = 160L
-    private val SUB_PB_CLICKABLE_LIGHT_MODE_TEXT_COLOR = Color.rgb(23, 87, 202)
-    private val SUB_PB_CLICKABLE_DARK_MODE_TEXT_COLOR = Color.rgb(143, 186, 255)
     private const val APPLE_NOISE_ALPHA = 52
     private const val APPLE_STROKE_ALPHA = 56
     private const val APPLE_EDGE_HIGHLIGHT_ALPHA = 86
     private const val APPLE_INNER_SHADOW_ALPHA = 22
     private const val APPLE_AMBIENT_SHADOW_ALPHA = 18
-    private const val APPLE_MATERIAL_TINT_BLEND_LIGHT = 0.08f
-    private const val APPLE_MATERIAL_TINT_BLEND_DARK = 0.12f
     private const val NOISE_TEXTURE_SIZE = 64
     private const val HOME_TOP_BACKGROUND_CLEAR_DEPTH = 2
     private const val HOME_TOP_RECYCLER_CHILD_CLEAR_DEPTH = 1
@@ -7809,7 +6296,6 @@ object HomeNativeGlassHook {
     private const val SHARE_DIALOG_MARKER_SCAN_DEPTH = 8
     private const val BACKGROUND_CACHE_SAMPLE_EDGE = 48
     private const val BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS = 1500L
-    private const val HOST_SKIN_TYPE_CACHE_TTL_MS = 500L
     private const val GLASS_INVALIDATE_PARENT_SCAN_DEPTH = 24
     private const val PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA = 28
     private const val IMAGE_CONTAINER_RADIUS_CHILD_DEPTH = 3
@@ -7906,7 +6392,6 @@ object HomeNativeGlassHook {
     private class PbCommentGlassBackgroundDrawable(
         private val bitmap: Bitmap,
         tintAlphaPercent: Int,
-        private val darkMode: Boolean,
     ) : Drawable() {
         private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
         private val overlayPaint = Paint()
@@ -7944,11 +6429,7 @@ object HomeNativeGlassHook {
             canvas.drawBitmap(bitmap, src, dst, bitmapPaint)
             val overlayAlpha = overlayAlpha()
             if (overlayAlpha <= 0) return
-            overlayPaint.color = if (darkMode) {
-                Color.argb(overlayAlpha, 0, 0, 0)
-            } else {
-                Color.argb(overlayAlpha, 255, 255, 255)
-            }
+            overlayPaint.color = Color.argb(overlayAlpha, 255, 255, 255)
             canvas.drawRect(dst, overlayPaint)
         }
 
@@ -7970,14 +6451,7 @@ object HomeNativeGlassHook {
         override fun getIntrinsicHeight(): Int = bitmap.height
 
         private fun overlayAlpha(): Int {
-            val alpha = if (darkMode) {
-                val lightBase = ConfigManager.APPLE_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
-                    .coerceAtLeast(1)
-                (baseTintAlpha * ConfigManager.APPLE_HOME_NATIVE_GLASS_DARK_TINT_ALPHA_PERCENT.toFloat() /
-                    lightBase.toFloat()).toInt()
-            } else {
-                0
-            }.coerceIn(0, 255)
+            val alpha = 0
             return (alpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
         }
     }
@@ -7990,8 +6464,6 @@ object HomeNativeGlassHook {
         tintAlphaPercent: Int,
         private val tintAlphaExtra: Int,
         blurPercent: Int,
-        private val darkMode: Boolean,
-        private val materialTintColor: Int?,
         private val strokeEnabled: Boolean,
         private val shadowEnabled: Boolean,
     ) : Drawable() {
@@ -8010,7 +6482,7 @@ object HomeNativeGlassHook {
             ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
         )
         private val materialIntensity = cardBlurPercent / 100f
-        private val materialOverlayRgb = materialOverlayColor(darkMode)
+        private val materialOverlayRgb = Color.WHITE
         private val strokeWidthPx = (1.0f + materialIntensity * 0.8f).coerceIn(1f, 1.8f)
         private val ambientShadowStrokeWidthPx = (2.2f + materialIntensity * 2.4f).coerceIn(2f, 4.6f)
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
@@ -8066,14 +6538,14 @@ object HomeNativeGlassHook {
             if (target != null && page != null && page.width > 0 && page.height > 0) {
                 updateBitmapShader(target, page)
                 canvas.drawRoundRect(rect, radius, radius, bitmapPaint)
-                drawMaterialOverlay(canvas, darkMode)
+                drawMaterialOverlay(canvas)
                 drawNoise(canvas)
                 if (shadowEnabled) {
                     drawSoftShadow(canvas)
                     drawAmbientShadow(canvas)
                 }
                 if (strokeEnabled) {
-                    drawStroke(canvas, darkMode)
+                    drawStroke(canvas)
                     drawEdgeHighlight(canvas)
                 }
             }
@@ -8107,8 +6579,6 @@ object HomeNativeGlassHook {
             tintAlphaPercent: Int,
             tintAlphaExtra: Int,
             blurPercent: Int,
-            darkMode: Boolean,
-            materialTintColor: Int?,
             strokeEnabled: Boolean,
             shadowEnabled: Boolean,
         ): Boolean {
@@ -8124,8 +6594,6 @@ object HomeNativeGlassHook {
                     ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                     ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 ) &&
-                this.darkMode == darkMode &&
-                this.materialTintColor == materialTintColor &&
                 this.strokeEnabled == strokeEnabled &&
                 this.shadowEnabled == shadowEnabled
         }
@@ -8161,8 +6629,8 @@ object HomeNativeGlassHook {
             lastRelativeY = relativeY
         }
 
-        private fun drawMaterialOverlay(canvas: Canvas, darkMode: Boolean) {
-            val overlayAlpha = overlayAlpha(darkMode)
+        private fun drawMaterialOverlay(canvas: Canvas) {
+            val overlayAlpha = overlayAlpha()
             if (overlayAlpha <= 0) return
             overlayPaint.color = Color.argb(
                 overlayAlpha,
@@ -8207,7 +6675,7 @@ object HomeNativeGlassHook {
             canvas.drawRoundRect(rect, radius, radius, noisePaint)
         }
 
-        private fun drawStroke(canvas: Canvas, darkMode: Boolean) {
+        private fun drawStroke(canvas: Canvas) {
             val strokeWidth = strokeWidth()
             if (strokeWidth <= 0f) return
             val alpha = materialAlpha(APPLE_STROKE_ALPHA)
@@ -8217,11 +6685,7 @@ object HomeNativeGlassHook {
             insetRect.inset(inset, inset)
             strokePaint.strokeWidth = strokeWidth
             strokePaint.shader = null
-            strokePaint.color = if (darkMode) {
-                Color.argb((alpha * 0.55f).toInt().coerceIn(0, 255), 255, 255, 255)
-            } else {
-                Color.argb(alpha, 255, 255, 255)
-            }
+            strokePaint.color = Color.argb(alpha, 255, 255, 255)
             val insetRadius = (radius - inset).coerceAtLeast(0f)
             canvas.drawRoundRect(insetRect, insetRadius, insetRadius, strokePaint)
         }
@@ -8240,43 +6704,10 @@ object HomeNativeGlassHook {
             canvas.drawRoundRect(insetRect, insetRadius, insetRadius, edgeHighlightPaint)
         }
 
-        private fun overlayAlpha(darkMode: Boolean): Int {
-            val alpha = (effectiveTintAlpha(darkMode) + tintAlphaExtra + pressTintAlphaExtra)
+        private fun overlayAlpha(): Int {
+            val alpha = (tintAlphaExtra + pressTintAlphaExtra)
                 .coerceIn(0, 255)
             return (alpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
-        }
-
-        private fun effectiveTintAlpha(darkMode: Boolean): Int {
-            val alpha = if (darkMode) {
-                val lightBase = ConfigManager.APPLE_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
-                    .coerceAtLeast(1)
-                (baseTintAlpha * ConfigManager.APPLE_HOME_NATIVE_GLASS_DARK_TINT_ALPHA_PERCENT.toFloat() /
-                    lightBase.toFloat()).toInt()
-            } else {
-                0
-            }
-            return alpha.coerceIn(0, 255)
-        }
-
-        private fun materialOverlayColor(darkMode: Boolean): Int {
-            val baseColor = if (darkMode) Color.BLACK else Color.WHITE
-            val tintColor = materialTintColor ?: return baseColor
-            val ratio = if (darkMode) {
-                APPLE_MATERIAL_TINT_BLEND_DARK
-            } else {
-                APPLE_MATERIAL_TINT_BLEND_LIGHT
-            }
-            return blendRgb(baseColor, tintColor, ratio)
-        }
-
-        private fun blendRgb(baseColor: Int, overlayColor: Int, overlayRatio: Float): Int {
-            val ratio = overlayRatio.coerceIn(0f, 1f)
-            val inverse = 1f - ratio
-            return Color.rgb(
-                (Color.red(baseColor) * inverse + Color.red(overlayColor) * ratio).toInt().coerceIn(0, 255),
-                (Color.green(baseColor) * inverse + Color.green(overlayColor) * ratio).toInt().coerceIn(0, 255),
-                (Color.blue(baseColor) * inverse + Color.blue(overlayColor) * ratio).toInt().coerceIn(0, 255),
-            )
         }
 
         private fun materialAlpha(appleAlpha: Int): Int {

@@ -206,7 +206,6 @@ internal class HookSymbolsBuilder {
     var homeNativeGlassSubPbNextPageMoreViewId: Int? = null
     var homeNativeGlassPbReplyTitleDividerViewId: Int? = null
     var homeNativeGlassDynamicBackgroundColorIds: List<Int> = emptyList()
-    var homeNativeGlassReadableTextResourceIdsByName: Map<String, Int> = emptyMap()
     var homeNativeGlassSortSwitchBackgroundPaintField: String? = null
     var homeNativeGlassSortSwitchSlideDrawMethod: String? = null
     var homeNativeGlassSortSwitchSlidePathField: String? = null
@@ -215,6 +214,13 @@ internal class HookSymbolsBuilder {
     var homeNativeGlassEnterForumCapsuleRefreshMethod: String? = null
     var homeNativeGlassEnterForumCapsuleViewField: String? = null
     var homeNativeGlassEnterForumCapsuleTitleField: String? = null
+    var homeNativeGlassHostDarkModeMoreActivityClass: String? = null
+    var homeNativeGlassHostDarkModeControllerField: String? = null
+    var homeNativeGlassHostDarkModeSwitchGetterMethod: String? = null
+    var homeNativeGlassHostDarkModeSwitchStateField: String? = null
+    var homeNativeGlassHostDarkModeSwitchSetOnMethod: String? = null
+    var homeNativeGlassHostDarkModeSwitchSetOffMethod: String? = null
+    var homeNativeGlassHostDarkModeSwitchCallbackMethod: String? = null
     var pbCommonLayoutPreloaderGetOrDefaultMethod: String? = null
     var feedCardBindMethod: String? = null
     var feedCardDataListField: String? = null
@@ -312,6 +318,15 @@ internal class HookSymbolsBuilder {
                     homeNativeGlassEnterForumCapsuleRefreshMethod,
                     homeNativeGlassEnterForumCapsuleViewField,
                     homeNativeGlassEnterForumCapsuleTitleField,
+                ),
+                hostDarkModeSwitch = HomeNativeGlassHostDarkModeSwitchSymbolsGroup(
+                    homeNativeGlassHostDarkModeMoreActivityClass,
+                    homeNativeGlassHostDarkModeControllerField,
+                    homeNativeGlassHostDarkModeSwitchGetterMethod,
+                    homeNativeGlassHostDarkModeSwitchStateField,
+                    homeNativeGlassHostDarkModeSwitchSetOnMethod,
+                    homeNativeGlassHostDarkModeSwitchSetOffMethod,
+                    homeNativeGlassHostDarkModeSwitchCallbackMethod,
                 ),
             ),
         )
@@ -654,7 +669,6 @@ internal class HookSymbolsBuilder {
             homeNativeGlassSubPbNextPageMoreViewId,
             homeNativeGlassPbReplyTitleDividerViewId,
             homeNativeGlassDynamicBackgroundColorIds,
-            homeNativeGlassReadableTextResourceIdsByName,
         )
     }
 

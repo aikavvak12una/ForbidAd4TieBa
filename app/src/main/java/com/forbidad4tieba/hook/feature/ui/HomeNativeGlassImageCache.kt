@@ -19,7 +19,7 @@ object HomeNativeGlassImageCache {
     private const val CACHE_ROOT_DIR_NAME = "home_native_glass"
     private const val CACHE_EFFECT_DIR_NAME = "effects"
     private const val CACHE_FILE_PREFIX = "blur_"
-    private const val CACHE_VERSION = 4
+    private const val CACHE_VERSION = 5
     private const val BLUR_CACHE_MAX_EDGE = 720
     private const val CARD_BLUR_MIN_RADIUS = 2
     private const val CARD_BLUR_MAX_RADIUS = 12
@@ -31,6 +31,7 @@ object HomeNativeGlassImageCache {
         context: Context,
         sourcePath: String,
         blurPercent: Int,
+        tintOffset: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         appleMaterial: Boolean = true,
     ): String {
         val path = sourcePath.trim()
@@ -47,11 +48,16 @@ object HomeNativeGlassImageCache {
             ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
         )
+        val normalizedTintOffset = tintOffset.coerceIn(
+            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        )
         val cacheKey = cacheKey(
             path = path,
             lastModified = runCatching { sourceFile.lastModified() }.getOrDefault(0L),
             length = sourceLength,
             blurPercent = normalizedBlur,
+            tintOffset = normalizedTintOffset,
             appleMaterial = appleMaterial,
         )
         val cacheFile = File(cacheDir, "$CACHE_FILE_PREFIX$cacheKey.png")
@@ -63,7 +69,12 @@ object HomeNativeGlassImageCache {
         val bitmap = decodeSampledBitmapForMaxEdge(path, BLUR_CACHE_MAX_EDGE) ?: return ""
         var cacheBitmap: Bitmap? = null
         try {
-            val outputBitmap = createBlurredBitmap(bitmap, normalizedBlur, appleMaterial) ?: return ""
+            val outputBitmap = createBlurredBitmap(
+                source = bitmap,
+                blurPercent = normalizedBlur,
+                tintOffset = normalizedTintOffset,
+                appleMaterial = appleMaterial,
+            ) ?: return ""
             cacheBitmap = outputBitmap
             val tempFile = File(cacheDir, "${cacheFile.name}.tmp")
             val written = runCatching {
@@ -136,7 +147,12 @@ object HomeNativeGlassImageCache {
         return scaled
     }
 
-    private fun createBlurredBitmap(source: Bitmap, blurPercent: Int, appleMaterial: Boolean): Bitmap? {
+    private fun createBlurredBitmap(
+        source: Bitmap,
+        blurPercent: Int,
+        tintOffset: Int,
+        appleMaterial: Boolean,
+    ): Bitmap? {
         val mutable = runCatching {
             source.copy(Bitmap.Config.ARGB_8888, true)
         }.getOrNull() ?: return null
@@ -154,8 +170,32 @@ object HomeNativeGlassImageCache {
                 return null
             }
         }
-        if (!appleMaterial) return blurred
-        return runCatching { applyMaterialColorTreatment(blurred) }.getOrDefault(blurred)
+        val materialBitmap = if (appleMaterial) {
+            runCatching { applyMaterialColorTreatment(blurred) }.getOrDefault(blurred)
+        } else {
+            blurred
+        }
+        return applyTintOffset(materialBitmap, tintOffset)
+    }
+
+    private fun applyTintOffset(bitmap: Bitmap, tintOffset: Int): Bitmap {
+        val offset = tintOffset.coerceIn(
+            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        )
+        if (offset == 0) return bitmap
+        val alpha = (kotlin.math.abs(offset) * 255 / 100).coerceIn(0, 255)
+        if (alpha <= 0) return bitmap
+        val overlay = if (offset < 0) Color.BLACK else Color.WHITE
+        Canvas(bitmap).drawColor(
+            Color.argb(
+                alpha,
+                Color.red(overlay),
+                Color.green(overlay),
+                Color.blue(overlay),
+            )
+        )
+        return bitmap
     }
 
     private fun applyMaterialColorTreatment(bitmap: Bitmap): Bitmap {
@@ -303,9 +343,10 @@ object HomeNativeGlassImageCache {
         lastModified: Long,
         length: Long,
         blurPercent: Int,
+        tintOffset: Int,
         appleMaterial: Boolean,
     ): String {
-        val raw = "$CACHE_VERSION|$path|$lastModified|$length|$blurPercent|$appleMaterial"
+        val raw = "$CACHE_VERSION|$path|$lastModified|$length|$blurPercent|$tintOffset|$appleMaterial"
         val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
         return digest.joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xFF) }
     }

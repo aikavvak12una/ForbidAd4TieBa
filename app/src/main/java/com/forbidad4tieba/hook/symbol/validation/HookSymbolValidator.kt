@@ -32,6 +32,7 @@ internal object HookSymbolValidator {
     private const val TB_WEB_VIEW_CLASS = "com.baidu.tieba.browser.TbWebView"
     private const val PERSONALIZE_PAGE_VIEW_CLASS =
         "com.baidu.tieba.homepage.personalize.PersonalizePageView"
+    private const val BD_SWITCH_VIEW_CLASS = "com.baidu.adp.widget.BdSwitchView.BdSwitchView"
     private const val PB_FRAGMENT_CLASS = StableTiebaHookPoints.PB_FRAGMENT_CLASS
     private const val AI_PB_NEW_EDITOR_INPUT_SHOW_TYPE_CLASS =
         "com.baidu.tbadk.editortools.pb.PbNewEditorTool\$InputShowType"
@@ -174,6 +175,20 @@ internal object HookSymbolValidator {
     if (
         hasHomeNativeGlassEnterForumCapsuleSymbols &&
         !isHomeNativeGlassEnterForumCapsuleValid(symbols, cl)
+    ) {
+        return false
+    }
+    val hasHomeNativeGlassHostDarkModeSwitchSymbols =
+        symbols.homeNativeGlassHostDarkModeMoreActivityClass != null ||
+            symbols.homeNativeGlassHostDarkModeControllerField != null ||
+            symbols.homeNativeGlassHostDarkModeSwitchGetterMethod != null ||
+            symbols.homeNativeGlassHostDarkModeSwitchStateField != null ||
+            symbols.homeNativeGlassHostDarkModeSwitchSetOnMethod != null ||
+            symbols.homeNativeGlassHostDarkModeSwitchSetOffMethod != null ||
+            symbols.homeNativeGlassHostDarkModeSwitchCallbackMethod != null
+    if (
+        hasHomeNativeGlassHostDarkModeSwitchSymbols &&
+        !isHomeNativeGlassHostDarkModeSwitchValid(symbols, cl)
     ) {
         return false
     }
@@ -355,6 +370,69 @@ private fun isHomeNativeGlassSortSwitchValid(symbols: HookSymbols, cl: ClassLoad
             }
         }
         true
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isHomeNativeGlassHostDarkModeSwitchValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val moreActivityClassName = symbols.homeNativeGlassHostDarkModeMoreActivityClass ?: return false
+    val controllerFieldName = symbols.homeNativeGlassHostDarkModeControllerField ?: return false
+    val getterMethodName = symbols.homeNativeGlassHostDarkModeSwitchGetterMethod ?: return false
+    val stateFieldName = symbols.homeNativeGlassHostDarkModeSwitchStateField ?: return false
+    val setOnMethodName = symbols.homeNativeGlassHostDarkModeSwitchSetOnMethod ?: return false
+    val setOffMethodName = symbols.homeNativeGlassHostDarkModeSwitchSetOffMethod ?: return false
+    val callbackMethodName = symbols.homeNativeGlassHostDarkModeSwitchCallbackMethod ?: return false
+    return try {
+        val moreActivityClass = safeFindClass(moreActivityClassName, cl) ?: return false
+        val switchClass = safeFindClass(BD_SWITCH_VIEW_CLASS, cl) ?: return false
+        val controllerField = collectInstanceFields(moreActivityClass).singleOrNull { field ->
+            field.name == controllerFieldName &&
+                !Modifier.isStatic(field.modifiers)
+        } ?: return false
+        val getterOk = collectInstanceMethods(controllerField.type).any { method ->
+            method.name == getterMethodName &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                switchClass.isAssignableFrom(method.returnType)
+        }
+        val getterMethod = collectInstanceMethods(controllerField.type).singleOrNull { method ->
+            method.name == getterMethodName &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                switchClass.isAssignableFrom(method.returnType)
+        } ?: return false
+        if (!getterOk) return false
+        val stateField = collectInstanceFields(switchClass).singleOrNull { field ->
+            field.name == stateFieldName &&
+                !Modifier.isStatic(field.modifiers) &&
+                field.type.isEnum
+        } ?: return false
+        val switchMethods = switchClass.declaredMethods.toList()
+        val setOnOk = switchMethods.any { method ->
+            method.name == setOnMethodName &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == Void.TYPE
+        }
+        if (!setOnOk) return false
+        val setOffOk = switchMethods.any { method ->
+            method.name == setOffMethodName &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == Void.TYPE
+        }
+        if (!setOffOk) return false
+        collectInstanceMethods(moreActivityClass).any { method ->
+            val params = method.parameterTypes
+            method.name == callbackMethodName &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Void.TYPE &&
+                params.size == 2 &&
+                View::class.java.isAssignableFrom(params[0]) &&
+                params[0].isAssignableFrom(getterMethod.returnType) &&
+                params[1] == stateField.type
+        }
     } catch (_: Throwable) {
         false
     }

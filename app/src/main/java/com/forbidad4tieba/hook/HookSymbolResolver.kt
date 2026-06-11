@@ -110,6 +110,9 @@ internal object HookSymbolResolver {
     private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_REFRESH_METHOD = "D"
     private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_VIEW_FIELD = "l"
     private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_TITLE_FIELD = "q"
+    private const val HOME_NATIVE_GLASS_MORE_ACTIVITY_CLASS = "com.baidu.tieba.setting.more.MoreActivity"
+    private const val HOME_NATIVE_GLASS_BD_SWITCH_VIEW_CLASS =
+        "com.baidu.adp.widget.BdSwitchView.BdSwitchView"
     private const val HOME_NATIVE_GLASS_BASE_FRAGMENT_CLASS = "com.baidu.tbadk.core.BaseFragment"
     private const val HOME_NATIVE_GLASS_PB_BAR_IMAGE_VIEW_CLASS = "com.baidu.tbadk.core.view.PbBarImageView"
     private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_CLASS_SCAN_LIMIT = 24
@@ -1381,6 +1384,109 @@ internal object HookSymbolResolver {
         } catch (t: Throwable) {
             XposedCompat.log("[HomeTopBarRightSlotHook] symbol resolve FAILED: ${t.message}")
             XposedCompat.log(t)
+            null
+        }
+    }
+
+    fun resolveHomeNativeGlassHostDarkModeSwitchSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): HomeNativeGlassHostDarkModeSwitchTargets? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[HomeNativeGlassHook] host dark mode switch skipped: scan symbols unavailable")
+                return null
+            }
+            fun required(name: String, value: String?): String {
+                return value?.takeIf { it.isNotBlank() } ?: error("missing $name")
+            }
+
+            val moreActivityClassName = required(
+                "homeNativeGlassHostDarkModeMoreActivityClass",
+                resolvedSymbols.homeNativeGlassHostDarkModeMoreActivityClass,
+            )
+            val controllerFieldName = required(
+                "homeNativeGlassHostDarkModeControllerField",
+                resolvedSymbols.homeNativeGlassHostDarkModeControllerField,
+            )
+            val switchGetterMethodName = required(
+                "homeNativeGlassHostDarkModeSwitchGetterMethod",
+                resolvedSymbols.homeNativeGlassHostDarkModeSwitchGetterMethod,
+            )
+            val switchStateFieldName = required(
+                "homeNativeGlassHostDarkModeSwitchStateField",
+                resolvedSymbols.homeNativeGlassHostDarkModeSwitchStateField,
+            )
+            val switchSetOnMethodName = required(
+                "homeNativeGlassHostDarkModeSwitchSetOnMethod",
+                resolvedSymbols.homeNativeGlassHostDarkModeSwitchSetOnMethod,
+            )
+            val switchSetOffMethodName = required(
+                "homeNativeGlassHostDarkModeSwitchSetOffMethod",
+                resolvedSymbols.homeNativeGlassHostDarkModeSwitchSetOffMethod,
+            )
+            val switchCallbackMethodName = required(
+                "homeNativeGlassHostDarkModeSwitchCallbackMethod",
+                resolvedSymbols.homeNativeGlassHostDarkModeSwitchCallbackMethod,
+            )
+            val moreActivityClass = safeFindClass(moreActivityClassName, cl)
+                ?: error("class not found: $moreActivityClassName")
+            val switchClass = safeFindClass(HOME_NATIVE_GLASS_BD_SWITCH_VIEW_CLASS, cl)
+                ?: error("class not found: $HOME_NATIVE_GLASS_BD_SWITCH_VIEW_CLASS")
+            val controllerField = collectInstanceFields(moreActivityClass).singleOrNull { field ->
+                field.name == controllerFieldName &&
+                    !Modifier.isStatic(field.modifiers)
+            } ?: error("controller field mismatch: $moreActivityClassName.$controllerFieldName")
+            val switchGetterMethod = collectInstanceMethods(controllerField.type).singleOrNull { method ->
+                method.name == switchGetterMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.isEmpty() &&
+                    switchClass.isAssignableFrom(method.returnType)
+            } ?: error("switch getter mismatch: ${controllerField.type.name}.$switchGetterMethodName()")
+            val switchStateField = collectInstanceFields(switchClass).singleOrNull { field ->
+                field.name == switchStateFieldName &&
+                    !Modifier.isStatic(field.modifiers) &&
+                    field.type.isEnum
+            } ?: error("switch state field mismatch: $HOME_NATIVE_GLASS_BD_SWITCH_VIEW_CLASS.$switchStateFieldName")
+            val switchSetOnMethod = switchClass.declaredMethods.singleOrNull { method ->
+                method.name == switchSetOnMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.isEmpty() &&
+                    method.returnType == Void.TYPE
+            } ?: error("switch set on mismatch: $HOME_NATIVE_GLASS_BD_SWITCH_VIEW_CLASS.$switchSetOnMethodName()")
+            val switchSetOffMethod = switchClass.declaredMethods.singleOrNull { method ->
+                method.name == switchSetOffMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.isEmpty() &&
+                    method.returnType == Void.TYPE
+            } ?: error("switch set off mismatch: $HOME_NATIVE_GLASS_BD_SWITCH_VIEW_CLASS.$switchSetOffMethodName()")
+            val switchCallbackMethod = collectInstanceMethods(moreActivityClass).singleOrNull { method ->
+                val params = method.parameterTypes
+                method.name == switchCallbackMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    params.size == 2 &&
+                    params[0].isAssignableFrom(switchGetterMethod.returnType) &&
+                    params[1] == switchStateField.type
+            } ?: error("switch callback mismatch: $moreActivityClassName.$switchCallbackMethodName(View, SwitchState)")
+
+            controllerField.isAccessible = true
+            switchGetterMethod.isAccessible = true
+            switchStateField.isAccessible = true
+            switchSetOnMethod.isAccessible = true
+            switchSetOffMethod.isAccessible = true
+            switchCallbackMethod.isAccessible = true
+            HomeNativeGlassHostDarkModeSwitchTargets(
+                moreActivityClass = moreActivityClass,
+                controllerField = controllerField,
+                switchGetterMethod = switchGetterMethod,
+                switchStateField = switchStateField,
+                switchSetOnMethod = switchSetOnMethod,
+                switchSetOffMethod = switchSetOffMethod,
+                switchCallbackMethod = switchCallbackMethod,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[HomeNativeGlassHook] host dark mode switch symbol resolve FAILED: ${t.message}")
             null
         }
     }
@@ -3936,6 +4042,13 @@ internal object HookSymbolResolver {
         var homeNativeGlassEnterForumCapsuleRefreshMethod: String? = null
         var homeNativeGlassEnterForumCapsuleViewField: String? = null
         var homeNativeGlassEnterForumCapsuleTitleField: String? = null
+        var homeNativeGlassHostDarkModeMoreActivityClass: String? = null
+        var homeNativeGlassHostDarkModeControllerField: String? = null
+        var homeNativeGlassHostDarkModeSwitchGetterMethod: String? = null
+        var homeNativeGlassHostDarkModeSwitchStateField: String? = null
+        var homeNativeGlassHostDarkModeSwitchSetOnMethod: String? = null
+        var homeNativeGlassHostDarkModeSwitchSetOffMethod: String? = null
+        var homeNativeGlassHostDarkModeSwitchCallbackMethod: String? = null
         var pbCommonLayoutPreloaderGetOrDefaultMethod: String? = null
         var aiSpriteMemePanControllerClass: String? = null
         var aiSpriteMemeEnableMethod: String? = null
@@ -4505,8 +4618,6 @@ internal object HookSymbolResolver {
         homeNativeGlassSubPbNextPageMoreViewId = homeNativeGlassResourceIds.subPbNextPageMoreViewId
         homeNativeGlassPbReplyTitleDividerViewId = homeNativeGlassResourceIds.pbReplyTitleDividerViewId
         val homeNativeGlassDynamicBackgroundColorIds = homeNativeGlassResourceIds.dynamicBackgroundColorIds
-        val homeNativeGlassReadableTextResourceIdsByName =
-            homeNativeGlassResourceIds.readableTextResourceIdsByName
 
         val homeNativeGlassSortSwitchSymbols = runScanStep(
             "HomeNativeGlassHook.SortSwitch",
@@ -4541,6 +4652,29 @@ internal object HookSymbolResolver {
             homeNativeGlassEnterForumCapsuleSymbols.viewField
         homeNativeGlassEnterForumCapsuleTitleField =
             homeNativeGlassEnterForumCapsuleSymbols.titleField
+
+        val homeNativeGlassHostDarkModeSwitchSymbols = runScanStep(
+            "HomeNativeGlassHook.HostDarkModeSwitch",
+            logger,
+            scanErrors,
+            HomeNativeGlassHostDarkModeSwitchSymbols(),
+        ) {
+            HomeNativeGlassSymbolScanner.scanHostDarkModeSwitch(cl, logger)
+        }
+        homeNativeGlassHostDarkModeMoreActivityClass =
+            homeNativeGlassHostDarkModeSwitchSymbols.moreActivityClass
+        homeNativeGlassHostDarkModeControllerField =
+            homeNativeGlassHostDarkModeSwitchSymbols.controllerField
+        homeNativeGlassHostDarkModeSwitchGetterMethod =
+            homeNativeGlassHostDarkModeSwitchSymbols.switchGetterMethod
+        homeNativeGlassHostDarkModeSwitchStateField =
+            homeNativeGlassHostDarkModeSwitchSymbols.switchStateField
+        homeNativeGlassHostDarkModeSwitchSetOnMethod =
+            homeNativeGlassHostDarkModeSwitchSymbols.switchSetOnMethod
+        homeNativeGlassHostDarkModeSwitchSetOffMethod =
+            homeNativeGlassHostDarkModeSwitchSymbols.switchSetOffMethod
+        homeNativeGlassHostDarkModeSwitchCallbackMethod =
+            homeNativeGlassHostDarkModeSwitchSymbols.switchCallbackMethod
 
         pbCommonLayoutPreloaderGetOrDefaultMethod = runScanStep(
             "HomeNativeGlassHook.CommonLayoutPreloader",
@@ -4880,7 +5014,6 @@ internal object HookSymbolResolver {
             this.homeNativeGlassSubPbNextPageMoreViewId = homeNativeGlassSubPbNextPageMoreViewId
             this.homeNativeGlassPbReplyTitleDividerViewId = homeNativeGlassPbReplyTitleDividerViewId
             this.homeNativeGlassDynamicBackgroundColorIds = homeNativeGlassDynamicBackgroundColorIds
-            this.homeNativeGlassReadableTextResourceIdsByName = homeNativeGlassReadableTextResourceIdsByName
             this.homeNativeGlassSortSwitchBackgroundPaintField = homeNativeGlassSortSwitchBackgroundPaintField
             this.homeNativeGlassSortSwitchSlideDrawMethod = homeNativeGlassSortSwitchSlideDrawMethod
             this.homeNativeGlassSortSwitchSlidePathField = homeNativeGlassSortSwitchSlidePathField
@@ -4894,6 +5027,20 @@ internal object HookSymbolResolver {
                 homeNativeGlassEnterForumCapsuleViewField
             this.homeNativeGlassEnterForumCapsuleTitleField =
                 homeNativeGlassEnterForumCapsuleTitleField
+            this.homeNativeGlassHostDarkModeMoreActivityClass =
+                homeNativeGlassHostDarkModeMoreActivityClass
+            this.homeNativeGlassHostDarkModeControllerField =
+                homeNativeGlassHostDarkModeControllerField
+            this.homeNativeGlassHostDarkModeSwitchGetterMethod =
+                homeNativeGlassHostDarkModeSwitchGetterMethod
+            this.homeNativeGlassHostDarkModeSwitchStateField =
+                homeNativeGlassHostDarkModeSwitchStateField
+            this.homeNativeGlassHostDarkModeSwitchSetOnMethod =
+                homeNativeGlassHostDarkModeSwitchSetOnMethod
+            this.homeNativeGlassHostDarkModeSwitchSetOffMethod =
+                homeNativeGlassHostDarkModeSwitchSetOffMethod
+            this.homeNativeGlassHostDarkModeSwitchCallbackMethod =
+                homeNativeGlassHostDarkModeSwitchCallbackMethod
             this.pbCommonLayoutPreloaderGetOrDefaultMethod = pbCommonLayoutPreloaderGetOrDefaultMethod
             this.aiSpriteMemePanControllerClass = aiSpriteMemePanControllerClass
             this.aiSpriteMemeEnableMethod = aiSpriteMemeEnableMethod

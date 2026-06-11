@@ -436,8 +436,6 @@ data class HookSymbols(
         get() = resources.homeNativeGlassPbReplyTitleDividerViewId
     val homeNativeGlassDynamicBackgroundColorIds: List<Int>
         get() = resources.homeNativeGlassDynamicBackgroundColorIds
-    val homeNativeGlassReadableTextResourceIdsByName: Map<String, Int>
-        get() = resources.homeNativeGlassReadableTextResourceIdsByName
     val homeNativeGlassSortSwitchBackgroundPaintField: String?
         get() = hookPoints.primary.home.nativeGlass.sortSwitch.homeNativeGlassSortSwitchBackgroundPaintField
     val homeNativeGlassSortSwitchSlideDrawMethod: String?
@@ -454,6 +452,27 @@ data class HookSymbols(
         get() = hookPoints.primary.home.nativeGlass.enterForumCapsule.homeNativeGlassEnterForumCapsuleViewField
     val homeNativeGlassEnterForumCapsuleTitleField: String?
         get() = hookPoints.primary.home.nativeGlass.enterForumCapsule.homeNativeGlassEnterForumCapsuleTitleField
+    val homeNativeGlassHostDarkModeMoreActivityClass: String?
+        get() = hookPoints.primary.home.nativeGlass
+            .hostDarkModeSwitch.homeNativeGlassHostDarkModeMoreActivityClass
+    val homeNativeGlassHostDarkModeControllerField: String?
+        get() = hookPoints.primary.home.nativeGlass
+            .hostDarkModeSwitch.homeNativeGlassHostDarkModeControllerField
+    val homeNativeGlassHostDarkModeSwitchGetterMethod: String?
+        get() = hookPoints.primary.home.nativeGlass
+            .hostDarkModeSwitch.homeNativeGlassHostDarkModeSwitchGetterMethod
+    val homeNativeGlassHostDarkModeSwitchStateField: String?
+        get() = hookPoints.primary.home.nativeGlass
+            .hostDarkModeSwitch.homeNativeGlassHostDarkModeSwitchStateField
+    val homeNativeGlassHostDarkModeSwitchSetOnMethod: String?
+        get() = hookPoints.primary.home.nativeGlass
+            .hostDarkModeSwitch.homeNativeGlassHostDarkModeSwitchSetOnMethod
+    val homeNativeGlassHostDarkModeSwitchSetOffMethod: String?
+        get() = hookPoints.primary.home.nativeGlass
+            .hostDarkModeSwitch.homeNativeGlassHostDarkModeSwitchSetOffMethod
+    val homeNativeGlassHostDarkModeSwitchCallbackMethod: String?
+        get() = hookPoints.primary.home.nativeGlass
+            .hostDarkModeSwitch.homeNativeGlassHostDarkModeSwitchCallbackMethod
     val pbCommonLayoutPreloaderGetOrDefaultMethod: String?
         get() = hookPoints.primary.pb.misc.commonLayoutPreloader.pbCommonLayoutPreloaderGetOrDefaultMethod
     val feedCardBindMethod: String?
@@ -777,15 +796,6 @@ data class HookSymbols(
                 homeNativeGlassDynamicBackgroundColorIds.forEach { array.put(it) }
                 put("homeNativeGlassDynamicBackgroundColorIds", array)
             }
-            if (homeNativeGlassReadableTextResourceIdsByName.isNotEmpty()) {
-                val resourceIds = JSONObject()
-                homeNativeGlassReadableTextResourceIdsByName.forEach { (name, id) ->
-                    if (name.isNotBlank() && id != 0) resourceIds.put(name, id)
-                }
-                if (resourceIds.length() > 0) {
-                    put("homeNativeGlassReadableTextResourceIdsByName", resourceIds)
-                }
-            }
             put(
                 "homeNativeGlassSortSwitchBackgroundPaintField",
                 homeNativeGlassSortSwitchBackgroundPaintField,
@@ -817,6 +827,34 @@ data class HookSymbols(
             put(
                 "homeNativeGlassEnterForumCapsuleTitleField",
                 homeNativeGlassEnterForumCapsuleTitleField,
+            )
+            put(
+                "homeNativeGlassHostDarkModeMoreActivityClass",
+                homeNativeGlassHostDarkModeMoreActivityClass,
+            )
+            put(
+                "homeNativeGlassHostDarkModeControllerField",
+                homeNativeGlassHostDarkModeControllerField,
+            )
+            put(
+                "homeNativeGlassHostDarkModeSwitchGetterMethod",
+                homeNativeGlassHostDarkModeSwitchGetterMethod,
+            )
+            put(
+                "homeNativeGlassHostDarkModeSwitchStateField",
+                homeNativeGlassHostDarkModeSwitchStateField,
+            )
+            put(
+                "homeNativeGlassHostDarkModeSwitchSetOnMethod",
+                homeNativeGlassHostDarkModeSwitchSetOnMethod,
+            )
+            put(
+                "homeNativeGlassHostDarkModeSwitchSetOffMethod",
+                homeNativeGlassHostDarkModeSwitchSetOffMethod,
+            )
+            put(
+                "homeNativeGlassHostDarkModeSwitchCallbackMethod",
+                homeNativeGlassHostDarkModeSwitchCallbackMethod,
             )
             put("pbCommonLayoutPreloaderGetOrDefaultMethod", pbCommonLayoutPreloaderGetOrDefaultMethod)
 
@@ -872,7 +910,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 2
+        const val CACHE_SCHEMA_VERSION = 4
 
         fun unsupported(
             featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
@@ -1148,8 +1186,6 @@ data class HookSymbols(
                     homeNativeGlassPbReplyTitleDividerViewId = obj.optIntOrNull("homeNativeGlassPbReplyTitleDividerViewId")
                     homeNativeGlassDynamicBackgroundColorIds =
                         obj.optIntArray("homeNativeGlassDynamicBackgroundColorIds")
-                    homeNativeGlassReadableTextResourceIdsByName =
-                        obj.optStringIntMap("homeNativeGlassReadableTextResourceIdsByName")
                     homeNativeGlassSortSwitchBackgroundPaintField =
                         obj.optStringOrNull("homeNativeGlassSortSwitchBackgroundPaintField")
                     homeNativeGlassSortSwitchSlideDrawMethod =
@@ -1166,6 +1202,20 @@ data class HookSymbols(
                         obj.optStringOrNull("homeNativeGlassEnterForumCapsuleViewField")
                     homeNativeGlassEnterForumCapsuleTitleField =
                         obj.optStringOrNull("homeNativeGlassEnterForumCapsuleTitleField")
+                    homeNativeGlassHostDarkModeMoreActivityClass =
+                        obj.optStringOrNull("homeNativeGlassHostDarkModeMoreActivityClass")
+                    homeNativeGlassHostDarkModeControllerField =
+                        obj.optStringOrNull("homeNativeGlassHostDarkModeControllerField")
+                    homeNativeGlassHostDarkModeSwitchGetterMethod =
+                        obj.optStringOrNull("homeNativeGlassHostDarkModeSwitchGetterMethod")
+                    homeNativeGlassHostDarkModeSwitchStateField =
+                        obj.optStringOrNull("homeNativeGlassHostDarkModeSwitchStateField")
+                    homeNativeGlassHostDarkModeSwitchSetOnMethod =
+                        obj.optStringOrNull("homeNativeGlassHostDarkModeSwitchSetOnMethod")
+                    homeNativeGlassHostDarkModeSwitchSetOffMethod =
+                        obj.optStringOrNull("homeNativeGlassHostDarkModeSwitchSetOffMethod")
+                    homeNativeGlassHostDarkModeSwitchCallbackMethod =
+                        obj.optStringOrNull("homeNativeGlassHostDarkModeSwitchCallbackMethod")
                     pbCommonLayoutPreloaderGetOrDefaultMethod =
                         obj.optStringOrNull("pbCommonLayoutPreloaderGetOrDefaultMethod")
 
@@ -1244,16 +1294,5 @@ data class HookSymbols(
             return out
         }
 
-        private fun JSONObject.optStringIntMap(name: String): Map<String, Int> {
-            val obj = optJSONObject(name) ?: return emptyMap()
-            val out = LinkedHashMap<String, Int>()
-            val keys = obj.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                val value = obj.optInt(key, 0)
-                if (key.isNotBlank() && value != 0) out[key] = value
-            }
-            return out
-        }
     }
 }
