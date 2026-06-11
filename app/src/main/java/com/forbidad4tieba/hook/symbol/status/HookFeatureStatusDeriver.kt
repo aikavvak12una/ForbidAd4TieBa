@@ -191,9 +191,6 @@ internal object HookFeatureStatusDeriver {
         if (symbols.homeNativeGlassDynamicBackgroundColorIds.isEmpty()) {
             homeNativeGlassOptional.add("homeNativeGlassDynamicBackgroundColorIds")
         }
-        if (symbols.homeNativeGlassReadableTextResourceIdsByName.isEmpty()) {
-            homeNativeGlassOptional.add("homeNativeGlassReadableTextResourceIdsByName")
-        }
         if (symbols.homeNativeGlassSortSwitchBackgroundPaintField.isNullOrBlank()) {
             homeNativeGlassOptional.add("homeNativeGlassSortSwitchBackgroundPaintField")
         }
@@ -217,6 +214,27 @@ internal object HookFeatureStatusDeriver {
         }
         if (symbols.homeNativeGlassEnterForumCapsuleTitleField.isNullOrBlank()) {
             homeNativeGlassOptional.add("homeNativeGlassEnterForumCapsuleTitleField")
+        }
+        if (symbols.homeNativeGlassHostDarkModeMoreActivityClass.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassHostDarkModeMoreActivityClass")
+        }
+        if (symbols.homeNativeGlassHostDarkModeControllerField.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassHostDarkModeControllerField")
+        }
+        if (symbols.homeNativeGlassHostDarkModeSwitchGetterMethod.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassHostDarkModeSwitchGetterMethod")
+        }
+        if (symbols.homeNativeGlassHostDarkModeSwitchStateField.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassHostDarkModeSwitchStateField")
+        }
+        if (symbols.homeNativeGlassHostDarkModeSwitchSetOnMethod.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassHostDarkModeSwitchSetOnMethod")
+        }
+        if (symbols.homeNativeGlassHostDarkModeSwitchSetOffMethod.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassHostDarkModeSwitchSetOffMethod")
+        }
+        if (symbols.homeNativeGlassHostDarkModeSwitchCallbackMethod.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassHostDarkModeSwitchCallbackMethod")
         }
         out[HookFeatureKey.HOME_NATIVE_GLASS] = if (homeNativeGlassCritical.isEmpty()) {
             if (homeNativeGlassOptional.isEmpty()) {

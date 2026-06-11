@@ -46,10 +46,6 @@ internal object HookSymbolStatusFormatter {
             val ids = values.orEmpty().filter { it != 0 }
             return if (ids.isEmpty()) "-" else "count=${ids.size}"
         }
-        fun resourceMapTarget(values: Map<String, Int>?): String {
-            val ids = values.orEmpty().filterValues { it != 0 }
-            return if (ids.isEmpty()) "-" else "count=${ids.size}"
-        }
         fun add(name: String, target: String, checks: List<Pair<String, Boolean>>) {
             val missing = checks.asSequence()
                 .filter { !it.second }
@@ -179,14 +175,6 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
-            "HomeNativeGlassHook.ReadableTextResources",
-            resourceMapTarget(symbols.homeNativeGlassReadableTextResourceIdsByName),
-            listOf(
-                "homeNativeGlassReadableTextResourceIdsByName" to
-                    symbols.homeNativeGlassReadableTextResourceIdsByName.any { it.value != 0 },
-            ),
-        )
-        add(
             "HomeNativeGlassHook.SortSwitchBackground",
             "${StableTiebaHookPoints.SORT_SWITCH_BUTTON_CLASS}.${symbols.homeNativeGlassSortSwitchBackgroundPaintField}",
             listOf(
@@ -223,6 +211,32 @@ internal object HookSymbolStatusFormatter {
                     has(symbols.homeNativeGlassEnterForumCapsuleViewField),
                 "homeNativeGlassEnterForumCapsuleTitleField" to
                     has(symbols.homeNativeGlassEnterForumCapsuleTitleField),
+            ),
+        )
+        add(
+            "HomeNativeGlassHook.HostDarkModeSwitch",
+            "${symbols.homeNativeGlassHostDarkModeMoreActivityClass}" +
+                "[${symbols.homeNativeGlassHostDarkModeControllerField}]." +
+                "${symbols.homeNativeGlassHostDarkModeSwitchGetterMethod}/" +
+                "${symbols.homeNativeGlassHostDarkModeSwitchStateField}/" +
+                "${symbols.homeNativeGlassHostDarkModeSwitchSetOnMethod}/" +
+                "${symbols.homeNativeGlassHostDarkModeSwitchSetOffMethod}/" +
+                "${symbols.homeNativeGlassHostDarkModeSwitchCallbackMethod}",
+            listOf(
+                "homeNativeGlassHostDarkModeMoreActivityClass" to
+                    has(symbols.homeNativeGlassHostDarkModeMoreActivityClass),
+                "homeNativeGlassHostDarkModeControllerField" to
+                    has(symbols.homeNativeGlassHostDarkModeControllerField),
+                "homeNativeGlassHostDarkModeSwitchGetterMethod" to
+                    has(symbols.homeNativeGlassHostDarkModeSwitchGetterMethod),
+                "homeNativeGlassHostDarkModeSwitchStateField" to
+                    has(symbols.homeNativeGlassHostDarkModeSwitchStateField),
+                "homeNativeGlassHostDarkModeSwitchSetOnMethod" to
+                    has(symbols.homeNativeGlassHostDarkModeSwitchSetOnMethod),
+                "homeNativeGlassHostDarkModeSwitchSetOffMethod" to
+                    has(symbols.homeNativeGlassHostDarkModeSwitchSetOffMethod),
+                "homeNativeGlassHostDarkModeSwitchCallbackMethod" to
+                    has(symbols.homeNativeGlassHostDarkModeSwitchCallbackMethod),
             ),
         )
         add(

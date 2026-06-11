@@ -64,6 +64,8 @@ data class MainTabStructureSymbolsGroup(
 data class HomeNativeGlassSymbolsGroup(
     val sortSwitch: HomeNativeGlassSortSwitchSymbolsGroup = HomeNativeGlassSortSwitchSymbolsGroup(),
     val enterForumCapsule: HomeNativeGlassEnterForumCapsuleSymbolsGroup = HomeNativeGlassEnterForumCapsuleSymbolsGroup(),
+    val hostDarkModeSwitch: HomeNativeGlassHostDarkModeSwitchSymbolsGroup =
+        HomeNativeGlassHostDarkModeSwitchSymbolsGroup(),
 )
 
 data class HomeNativeGlassSortSwitchSymbolsGroup(
@@ -78,4 +80,14 @@ data class HomeNativeGlassEnterForumCapsuleSymbolsGroup(
     val homeNativeGlassEnterForumCapsuleRefreshMethod: String? = null,
     val homeNativeGlassEnterForumCapsuleViewField: String? = null,
     val homeNativeGlassEnterForumCapsuleTitleField: String? = null,
+)
+
+data class HomeNativeGlassHostDarkModeSwitchSymbolsGroup(
+    val homeNativeGlassHostDarkModeMoreActivityClass: String? = null,
+    val homeNativeGlassHostDarkModeControllerField: String? = null,
+    val homeNativeGlassHostDarkModeSwitchGetterMethod: String? = null,
+    val homeNativeGlassHostDarkModeSwitchStateField: String? = null,
+    val homeNativeGlassHostDarkModeSwitchSetOnMethod: String? = null,
+    val homeNativeGlassHostDarkModeSwitchSetOffMethod: String? = null,
+    val homeNativeGlassHostDarkModeSwitchCallbackMethod: String? = null,
 )

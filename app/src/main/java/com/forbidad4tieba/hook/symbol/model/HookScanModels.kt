@@ -132,7 +132,6 @@ internal data class HomeNativeGlassResourceIds(
     val subPbNextPageMoreViewId: Int? = null,
     val pbReplyTitleDividerViewId: Int? = null,
     val dynamicBackgroundColorIds: List<Int> = emptyList(),
-    val readableTextResourceIdsByName: Map<String, Int> = emptyMap(),
 )
 
 internal data class HomeNativeGlassSortSwitchSymbols(
@@ -147,6 +146,16 @@ internal data class HomeNativeGlassEnterForumCapsuleSymbols(
     val refreshMethod: String? = null,
     val viewField: String? = null,
     val titleField: String? = null,
+)
+
+internal data class HomeNativeGlassHostDarkModeSwitchSymbols(
+    val moreActivityClass: String? = null,
+    val controllerField: String? = null,
+    val switchGetterMethod: String? = null,
+    val switchStateField: String? = null,
+    val switchSetOnMethod: String? = null,
+    val switchSetOffMethod: String? = null,
+    val switchCallbackMethod: String? = null,
 )
 
 internal data class HomeNativeGlassEnterForumCapsuleClassCandidate(

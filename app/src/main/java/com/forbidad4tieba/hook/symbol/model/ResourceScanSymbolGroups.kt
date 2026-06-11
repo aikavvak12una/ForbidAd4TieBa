@@ -5,7 +5,6 @@ data class ResourceSymbols(
     val homeNativeGlassSubPbNextPageMoreViewId: Int? = null,
     val homeNativeGlassPbReplyTitleDividerViewId: Int? = null,
     val homeNativeGlassDynamicBackgroundColorIds: List<Int> = emptyList(),
-    val homeNativeGlassReadableTextResourceIdsByName: Map<String, Int> = emptyMap(),
 )
 
 data class ScanMeta(

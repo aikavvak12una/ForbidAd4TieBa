@@ -25,6 +25,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -55,8 +56,8 @@ import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreCatalog
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
+import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassImageCache
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassReadableTextPalette
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import com.forbidad4tieba.hook.utils.ViewExt
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -83,10 +84,20 @@ object SettingsMenuHook {
     private const val HOME_NATIVE_GLASS_TINT_PALETTE_SAMPLE_EDGE = 96
     private const val HOME_NATIVE_GLASS_TINT_PALETTE_MIN_PIXEL_ALPHA = 32
     private const val HOME_NATIVE_GLASS_TINT_PALETTE_MIN_DISTANCE = 34
+    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MIN_LUMA = 16
+    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MAX_LUMA = 240
+    private const val HOME_NATIVE_GLASS_TINT_PALETTE_TARGET_LUMA = 144
+    private const val HOME_NATIVE_GLASS_TINT_PALETTE_TARGET_LUMA_RANGE = 128
+    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MIN_HUE_DISTANCE = 20.0
+    private const val HOME_NATIVE_GLASS_TINT_PALETTE_HUE_SATURATION_FLOOR = 0.12
     private const val HOME_NATIVE_GLASS_DEFAULT_TINT_SAMPLE_EDGE = 48
     private const val HOME_NATIVE_GLASS_DEFAULT_TINT_MIN_LUMA = 24
     private const val HOME_NATIVE_GLASS_DEFAULT_TINT_MAX_LUMA = 232
     private const val HOME_NATIVE_GLASS_DEFAULT_TINT_CHROMA_BIAS = 32
+    private const val HOME_NATIVE_GLASS_AUTO_DARK_MODE_LUMA = 128
+    private const val HOME_NATIVE_GLASS_AUTO_TINT_MID_LUMA = 128
+    private const val HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE = 72
+    private const val HOME_NATIVE_GLASS_AUTO_TINT_MAX_ABS_PERCENT = 22
 
     private class HomeNativeGlassImageSelectionState(
         var path: String,
@@ -96,11 +107,19 @@ object SettingsMenuHook {
         var defaultTintColor: Int? = null
     }
 
+    private data class HomeNativeGlassImageAnalysis(
+        val paletteColors: List<Int>,
+        val defaultTintColor: Int?,
+        val darkModeEnabled: Boolean,
+        val tintAlphaPercent: Int,
+    )
+
     private data class PendingHomeNativeGlassImagePick(
         val contextRef: WeakReference<Context>,
         val displayRef: WeakReference<TextView>,
         val state: HomeNativeGlassImageSelectionState,
         val refreshPalette: (() -> Unit)?,
+        val onImportedAnalysis: ((HomeNativeGlassImageAnalysis) -> Unit)?,
     )
 
     private data class SwitchItem(
@@ -178,6 +197,7 @@ object SettingsMenuHook {
 
     private val sSettingsFieldCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Class<*>, Field>())
     private val homeNativeGlassImagePickerResultHookInstalled = AtomicBoolean(false)
+    private val homeNativeGlassHostDarkModeBridgeHookInstalled = AtomicBoolean(false)
     private val firstSettingsDialogBackgroundErrorLogged = AtomicBoolean(false)
     private val homeNativeGlassImagePickerActivityResultHooks =
         java.util.Collections.synchronizedMap(java.util.WeakHashMap<Class<*>, Boolean>())
@@ -185,6 +205,7 @@ object SettingsMenuHook {
 
     internal fun hook(cl: ClassLoader, symbols: HookSymbols) {
         val mod = XposedCompat.module ?: return
+        installHomeNativeGlassHostDarkModeBridgeHook(cl, symbols)
         val className = symbols.settingsClass
         val methodName = symbols.settingsInitMethod
         val containerField = symbols.settingsContainerField
@@ -213,6 +234,8 @@ object SettingsMenuHook {
             }
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
+                val settingsOwner = chain.thisObject
+                HomeNativeGlassHostDarkModeBridge.cacheFromController(settingsOwner)
                 XposedCompat.logD("[SettingsMenuHook] > settings init intercepted")
                 val context = chain.args.firstOrNull { it is Context } as? Context
                     ?: (chain.args.firstOrNull { it is View } as? View)?.context
@@ -220,6 +243,7 @@ object SettingsMenuHook {
                     val settingsContainer = resolveSettingsContainer(chain.thisObject, containerField)
                     if (settingsContainer != null && context != null && ViewExt.markSettingsLongPressBound(settingsContainer)) {
                         settingsContainer.setOnLongClickListener {
+                            HomeNativeGlassHostDarkModeBridge.cacheFromController(settingsOwner)
                             showModuleSettingsDialog(settingsContainer.context ?: context, cl)
                             true
                         }
@@ -232,6 +256,55 @@ object SettingsMenuHook {
         } catch (t: Throwable) {
             XposedCompat.log("[SettingsMenuHook] FAILED ($className.$methodName): ${t.message}")
             XposedCompat.log(t)
+        }
+    }
+
+    private fun installHomeNativeGlassHostDarkModeBridgeHook(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ) {
+        val mod = XposedCompat.module ?: return
+        val targets = HookSymbolResolver.resolveHomeNativeGlassHostDarkModeSwitchSymbols(
+            cl,
+            symbols,
+        ) ?: return
+        HomeNativeGlassHostDarkModeBridge.configure(targets)
+        if (!homeNativeGlassHostDarkModeBridgeHookInstalled.compareAndSet(false, true)) return
+        try {
+            val onCreateMethod = XposedCompat.findMethodOrNull(
+                targets.moreActivityClass,
+                "onCreate",
+                Bundle::class.java,
+            ) ?: run {
+                homeNativeGlassHostDarkModeBridgeHookInstalled.set(false)
+                XposedCompat.logW(
+                    "[SettingsMenuHook] host dark mode bridge skipped: " +
+                        "${targets.moreActivityClass.name}.onCreate(Bundle) missing",
+                )
+                return
+            }
+            mod.hook(onCreateMethod).intercept { chain ->
+                val result = chain.proceed()
+                HomeNativeGlassHostDarkModeBridge.cacheFromActivity(chain.thisObject)
+                result
+            }
+            mod.hook(targets.switchCallbackMethod).intercept { chain ->
+                val result = chain.proceed()
+                HomeNativeGlassHostDarkModeBridge.cacheFromHostCallback(
+                    activity = chain.thisObject,
+                    switchView = chain.args.getOrNull(0),
+                    state = chain.args.getOrNull(1),
+                )
+                result
+            }
+            XposedCompat.log(
+                "[SettingsMenuHook] host dark mode bridge hook INSTALLED: " +
+                    "${targets.moreActivityClass.name}.onCreate/" +
+                    targets.switchCallbackMethod.name,
+            )
+        } catch (t: Throwable) {
+            homeNativeGlassHostDarkModeBridgeHookInstalled.set(false)
+            XposedCompat.logW("[SettingsMenuHook] host dark mode bridge install failed: ${t.message}")
         }
     }
 
@@ -327,6 +400,7 @@ object SettingsMenuHook {
         state: HomeNativeGlassImageSelectionState,
         display: TextView,
         refreshPalette: (() -> Unit)? = null,
+        onImportedAnalysis: ((HomeNativeGlassImageAnalysis) -> Unit)? = null,
     ) {
         val activity = ReflectionUtils.findActivityFromContext(context)
         if (activity == null) {
@@ -348,6 +422,7 @@ object SettingsMenuHook {
             displayRef = WeakReference(display),
             state = state,
             refreshPalette = refreshPalette,
+            onImportedAnalysis = onImportedAnalysis,
         )
         try {
             @Suppress("DEPRECATION")
@@ -385,15 +460,14 @@ object SettingsMenuHook {
             }.onFailure {
                 XposedCompat.logW("[SettingsMenuHook] import home native image failed: ${it.message}")
             }.getOrNull()
-            val paletteColors = if (copiedPath.isNullOrBlank()) {
-                emptyList()
-            } else {
-                extractHomeNativeGlassTintPalette(copiedPath)
-            }
-            val defaultTintColor = if (copiedPath.isNullOrBlank()) {
+            val imageAnalysis = if (copiedPath.isNullOrBlank()) {
                 null
             } else {
-                extractHomeNativeGlassDefaultTintColor(copiedPath)
+                runCatching {
+                    analyzeHomeNativeGlassImage(copiedPath)
+                }.onFailure {
+                    XposedCompat.logW("[SettingsMenuHook] analyze home native image failed: ${it.message}")
+                }.getOrNull()
             }
             Handler(Looper.getMainLooper()).post {
                 if (pendingHomeNativeGlassImagePick !== pending) return@post
@@ -406,10 +480,11 @@ object SettingsMenuHook {
                 } else {
                     pending.state.path = copiedPath
                     pending.state.tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
-                    pending.state.paletteColors = paletteColors
-                    pending.state.defaultTintColor = defaultTintColor
+                    pending.state.paletteColors = imageAnalysis?.paletteColors.orEmpty()
+                    pending.state.defaultTintColor = imageAnalysis?.defaultTintColor
                     pending.displayRef.get()?.text = homeNativeGlassImageDisplayText(copiedPath)
                     pending.refreshPalette?.invoke()
+                    imageAnalysis?.let { pending.onImportedAnalysis?.invoke(it) }
                     Toast.makeText(
                         context,
                         UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_IMPORTED,
@@ -421,7 +496,7 @@ object SettingsMenuHook {
         }
     }
 
-    private fun extractHomeNativeGlassDefaultTintColor(path: String): Int? {
+    private fun analyzeHomeNativeGlassImage(path: String): HomeNativeGlassImageAnalysis? {
         val file = File(path.trim())
         if (!file.isFile || file.length() <= 0L) return null
         val bounds = BitmapFactory.Options().apply {
@@ -431,8 +506,12 @@ object SettingsMenuHook {
         val width = bounds.outWidth
         val height = bounds.outHeight
         if (width <= 0 || height <= 0) return null
+        val sampleEdge = max(
+            HOME_NATIVE_GLASS_TINT_PALETTE_SAMPLE_EDGE,
+            HOME_NATIVE_GLASS_DEFAULT_TINT_SAMPLE_EDGE,
+        )
         var sampleSize = 1
-        while (max(width, height) / sampleSize > HOME_NATIVE_GLASS_DEFAULT_TINT_SAMPLE_EDGE) {
+        while (max(width, height) / sampleSize > sampleEdge) {
             sampleSize *= 2
         }
         val bitmap = BitmapFactory.decodeFile(
@@ -443,7 +522,19 @@ object SettingsMenuHook {
             },
         ) ?: return null
         return try {
-            extractHomeNativeGlassDefaultTintColor(bitmap)
+            val averageLuma = computeHomeNativeGlassAverageLuma(bitmap)
+            val darkModeEnabled = averageLuma
+                ?.let { it < HOME_NATIVE_GLASS_AUTO_DARK_MODE_LUMA }
+                ?: false
+            HomeNativeGlassImageAnalysis(
+                paletteColors = extractHomeNativeGlassTintPalette(bitmap),
+                defaultTintColor = extractHomeNativeGlassDefaultTintColor(bitmap),
+                darkModeEnabled = darkModeEnabled,
+                tintAlphaPercent = averageLuma?.let {
+                    homeNativeGlassAutoTintAlphaPercent(it, darkModeEnabled)
+                }
+                    ?: ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            )
         } finally {
             bitmap.recycle()
         }
@@ -507,6 +598,60 @@ object SettingsMenuHook {
         )
     }
 
+    private fun computeHomeNativeGlassAverageLuma(bitmap: Bitmap): Int? {
+        val width = bitmap.width
+        val height = bitmap.height
+        if (width <= 0 || height <= 0) return null
+        val step = (max(width, height) / HOME_NATIVE_GLASS_TINT_PALETTE_SAMPLE_EDGE).coerceAtLeast(1)
+        var lumaSum = 0L
+        var alphaSum = 0L
+        var y = 0
+        while (y < height) {
+            var x = 0
+            while (x < width) {
+                val color = bitmap.getPixel(x, y)
+                val alpha = color ushr 24
+                if (alpha >= HOME_NATIVE_GLASS_TINT_PALETTE_MIN_PIXEL_ALPHA) {
+                    val red = color shr 16 and 0xFF
+                    val green = color shr 8 and 0xFF
+                    val blue = color and 0xFF
+                    val luma = (red * 299 + green * 587 + blue * 114) / 1000
+                    lumaSum += luma.toLong() * alpha
+                    alphaSum += alpha.toLong()
+                }
+                x += step
+            }
+            y += step
+        }
+        if (alphaSum <= 0L) return null
+        return (lumaSum / alphaSum).toInt().coerceIn(0, 255)
+    }
+
+    private fun homeNativeGlassAutoTintAlphaPercent(
+        averageLuma: Int,
+        darkModeEnabled: Boolean,
+    ): Int {
+        val luma = averageLuma.coerceIn(0, 255)
+        val distanceFromMid = if (luma >= HOME_NATIVE_GLASS_AUTO_TINT_MID_LUMA) {
+            luma - HOME_NATIVE_GLASS_AUTO_TINT_MID_LUMA
+        } else {
+            HOME_NATIVE_GLASS_AUTO_TINT_MID_LUMA - luma
+        }
+        if (distanceFromMid >= HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE) {
+            return ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
+        }
+        val strength = (
+            (HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE - distanceFromMid) *
+                HOME_NATIVE_GLASS_AUTO_TINT_MAX_ABS_PERCENT +
+                HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE / 2
+            ) / HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE
+        val signedStrength = if (darkModeEnabled) -strength else strength
+        return signedStrength.coerceIn(
+            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        )
+    }
+
     private fun copyHomeNativeGlassImageToPrivateFile(context: Context, uri: Uri): String? {
         val appContext = context.applicationContext ?: context
         val sourceDir = File(appContext.filesDir, HOME_NATIVE_GLASS_SOURCE_DIR_NAME)
@@ -560,34 +705,6 @@ object SettingsMenuHook {
         }
     }
 
-    private fun extractHomeNativeGlassTintPalette(path: String): List<Int> {
-        val file = File(path.trim())
-        if (!file.isFile || file.length() <= 0L) return emptyList()
-        val bounds = BitmapFactory.Options().apply {
-            inJustDecodeBounds = true
-        }
-        BitmapFactory.decodeFile(file.absolutePath, bounds)
-        val width = bounds.outWidth
-        val height = bounds.outHeight
-        if (width <= 0 || height <= 0) return emptyList()
-        var sampleSize = 1
-        while (max(width, height) / sampleSize > HOME_NATIVE_GLASS_TINT_PALETTE_SAMPLE_EDGE) {
-            sampleSize *= 2
-        }
-        val bitmap = BitmapFactory.decodeFile(
-            file.absolutePath,
-            BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            },
-        ) ?: return emptyList()
-        return try {
-            extractHomeNativeGlassTintPalette(bitmap)
-        } finally {
-            bitmap.recycle()
-        }
-    }
-
     private fun extractHomeNativeGlassTintPalette(bitmap: Bitmap): List<Int> {
         val width = bitmap.width
         val height = bitmap.height
@@ -616,8 +733,12 @@ object SettingsMenuHook {
             y += step
         }
         if (buckets.isEmpty()) return emptyList()
-        val selected = ArrayList<Int>(HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS)
-        val ranked = buckets.values.asSequence()
+        var maxWeight = 0L
+        buckets.values.forEach { bucket ->
+            if (bucket.weight > maxWeight) maxWeight = bucket.weight
+        }
+        if (maxWeight <= 0L) return emptyList()
+        val candidates = buckets.values.asSequence()
             .filter { it.weight > 0L }
             .map { bucket ->
                 val red = (bucket.red / bucket.weight).toInt().coerceIn(0, 255)
@@ -625,23 +746,105 @@ object SettingsMenuHook {
                 val blue = (bucket.blue / bucket.weight).toInt().coerceIn(0, 255)
                 val maxChannel = max(red, max(green, blue))
                 val minChannel = red.coerceAtMost(green).coerceAtMost(blue)
+                val chroma = maxChannel - minChannel
+                val luma = (red * 299 + green * 587 + blue * 114) / 1000
+                val saturation = homeNativeGlassTintPaletteSaturation(maxChannel, minChannel, chroma)
+                val populationScore = Math.sqrt(bucket.weight.toDouble() / maxWeight.toDouble())
+                val saturationScore = saturation.coerceIn(0.0, 1.0)
+                val toneScore = (
+                    1.0 - Math.abs(luma - HOME_NATIVE_GLASS_TINT_PALETTE_TARGET_LUMA).toDouble() /
+                        HOME_NATIVE_GLASS_TINT_PALETTE_TARGET_LUMA_RANGE
+                    ).coerceIn(0.0, 1.0)
+                val neutralPenalty = if (chroma < 8) 0.65 else 1.0
                 HomeNativeGlassPaletteColor(
                     color = Color.rgb(red, green, blue),
-                    score = bucket.weight * (maxChannel - minChannel + 64),
+                    score = (
+                        populationScore * 0.52 +
+                            saturationScore * 0.28 +
+                            toneScore * 0.20
+                        ) * neutralPenalty,
+                    luma = luma,
+                    saturation = saturation,
+                    hue = homeNativeGlassTintPaletteHue(red, green, blue, maxChannel, chroma),
                 )
             }
-            .sortedByDescending { it.score }
             .toList()
+        val ranked = (
+            candidates
+                .filter {
+                    it.luma in HOME_NATIVE_GLASS_TINT_PALETTE_MIN_LUMA..HOME_NATIVE_GLASS_TINT_PALETTE_MAX_LUMA
+                }
+                .takeIf { it.isNotEmpty() }
+                ?: candidates
+            )
+            .sortedByDescending { it.score }
         val minDistanceSquared = HOME_NATIVE_GLASS_TINT_PALETTE_MIN_DISTANCE *
             HOME_NATIVE_GLASS_TINT_PALETTE_MIN_DISTANCE
+        val selected = ArrayList<HomeNativeGlassPaletteColor>(HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS)
+        val postponed = ArrayList<HomeNativeGlassPaletteColor>()
         for (candidate in ranked) {
-            if (selected.any { homeNativeGlassTintColorDistanceSquared(it, candidate.color) < minDistanceSquared }) {
+            if (selected.any { homeNativeGlassTintColorDistanceSquared(it.color, candidate.color) < minDistanceSquared }) {
                 continue
             }
-            selected.add(candidate.color)
+            if (selected.any { homeNativeGlassTintPaletteHueDistanceTooSmall(it, candidate) }) {
+                postponed.add(candidate)
+                continue
+            }
+            selected.add(candidate)
             if (selected.size >= HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS) break
         }
-        return selected
+        if (selected.size < HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS) {
+            for (candidate in postponed) {
+                if (selected.any { homeNativeGlassTintColorDistanceSquared(it.color, candidate.color) < minDistanceSquared }) {
+                    continue
+                }
+                selected.add(candidate)
+                if (selected.size >= HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS) break
+            }
+        }
+        return selected.map { it.color }
+    }
+
+    private fun homeNativeGlassTintPaletteSaturation(
+        maxChannel: Int,
+        minChannel: Int,
+        chroma: Int,
+    ): Double {
+        if (chroma <= 0) return 0.0
+        val denominator = 255 - Math.abs(maxChannel + minChannel - 255)
+        if (denominator <= 0) return 0.0
+        return (chroma.toDouble() / denominator.toDouble()).coerceIn(0.0, 1.0)
+    }
+
+    private fun homeNativeGlassTintPaletteHue(
+        red: Int,
+        green: Int,
+        blue: Int,
+        maxChannel: Int,
+        chroma: Int,
+    ): Double {
+        if (chroma <= 0) return 0.0
+        val rawHue = when (maxChannel) {
+            red -> ((green - blue).toDouble() / chroma.toDouble()) % 6.0
+            green -> ((blue - red).toDouble() / chroma.toDouble()) + 2.0
+            else -> ((red - green).toDouble() / chroma.toDouble()) + 4.0
+        } * 60.0
+        return if (rawHue < 0.0) rawHue + 360.0 else rawHue
+    }
+
+    private fun homeNativeGlassTintPaletteHueDistanceTooSmall(
+        a: HomeNativeGlassPaletteColor,
+        b: HomeNativeGlassPaletteColor,
+    ): Boolean {
+        if (
+            a.saturation < HOME_NATIVE_GLASS_TINT_PALETTE_HUE_SATURATION_FLOOR ||
+            b.saturation < HOME_NATIVE_GLASS_TINT_PALETTE_HUE_SATURATION_FLOOR
+        ) {
+            return false
+        }
+        val distance = Math.abs(a.hue - b.hue)
+        val circularDistance = distance.coerceAtMost(360.0 - distance)
+        return circularDistance < HOME_NATIVE_GLASS_TINT_PALETTE_MIN_HUE_DISTANCE
     }
 
     private fun homeNativeGlassTintColorDistanceSquared(a: Int, b: Int): Int {
@@ -660,7 +863,10 @@ object SettingsMenuHook {
 
     private data class HomeNativeGlassPaletteColor(
         val color: Int,
-        val score: Long,
+        val score: Double,
+        val luma: Int,
+        val saturation: Double,
+        val hue: Double,
     )
 
     fun ensureInitialScanDialogHook(classLoader: ClassLoader) {
@@ -1009,7 +1215,10 @@ object SettingsMenuHook {
                         false,
                         UiText.Settings.ACTION_ICON_SETTINGS
                     ) {
-                        showHomeNativeGlassDialog(context, prefs)
+                        showHomeNativeGlassDialog(
+                            context,
+                            prefs,
+                        )
                     },
                     SwitchItem(
                         UiText.Settings.FORCE_FEED_UI_OPT_LABEL,
@@ -2191,6 +2400,9 @@ object SettingsMenuHook {
         try {
             val density = context.resources.displayMetrics.density
             val padding = (16 * density).toInt()
+            ReflectionUtils.findActivityFromContext(context)?.let { activity ->
+                HomeNativeGlassHostDarkModeBridge.cacheFromActivity(activity)
+            }
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(padding, padding, padding, padding)
@@ -2236,13 +2448,38 @@ object SettingsMenuHook {
                 density = density,
             )
             val tintColorRefresh = tintColorRowAndRefresh.second
-            createHomeNativeGlassImagePickerRow(
+            val hostDarkModeRowAndSwitch = createHomeNativeGlassSwitchRow(
                 context = context,
-                state = backgroundImageState,
+                label = UiText.Settings.HOME_NATIVE_GLASS_HOST_DARK_MODE_LABEL,
+                description = UiText.Settings.HOME_NATIVE_GLASS_HOST_DARK_MODE_DESC,
+                checked = HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled() == true,
                 density = density,
-                refreshPalette = tintColorRefresh,
-            ).also { addHomeNativeGlassSettingRow(root, it.first, density, topMarginDp = 0) }
-            addHomeNativeGlassSettingRow(root, tintColorRowAndRefresh.first, density)
+            )
+            val hostDarkModeSwitch = hostDarkModeRowAndSwitch.second
+            var suppressHostDarkModeChange = false
+            fun updateHostDarkModeSwitch(checked: Boolean) {
+                suppressHostDarkModeChange = true
+                hostDarkModeSwitch.isChecked = checked
+                suppressHostDarkModeChange = false
+            }
+            hostDarkModeSwitch.setOnCheckedChangeListener { _, isChecked ->
+                if (suppressHostDarkModeChange) return@setOnCheckedChangeListener
+                if (HomeNativeGlassHostDarkModeBridge.setDarkModeEnabled(isChecked)) {
+                    return@setOnCheckedChangeListener
+                }
+                Toast.makeText(
+                    context,
+                    if (HomeNativeGlassHostDarkModeBridge.isAvailable()) {
+                        UiText.Settings.HOME_NATIVE_GLASS_HOST_DARK_MODE_FAILED
+                    } else {
+                        UiText.Settings.HOME_NATIVE_GLASS_HOST_DARK_MODE_UNAVAILABLE
+                    },
+                    Toast.LENGTH_SHORT,
+                ).show()
+                updateHostDarkModeSwitch(
+                    HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled() ?: !isChecked
+                )
+            }
 
             val tintAlphaRowAndSeekBar = createSeekBarRow(
                 context = context,
@@ -2256,8 +2493,33 @@ object SettingsMenuHook {
                 ),
                 suffix = "",
                 density = density,
-            ).also { addHomeNativeGlassSettingRow(root, it.first, density) }
+            )
             val tintAlphaSeekBar = tintAlphaRowAndSeekBar.second
+            val backgroundImageImportCallback: (HomeNativeGlassImageAnalysis) -> Unit = { analysis ->
+                tintAlphaSeekBar.progress = analysis.tintAlphaPercent.coerceIn(
+                    ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ) - ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
+                if (HomeNativeGlassHostDarkModeBridge.setDarkModeEnabled(analysis.darkModeEnabled)) {
+                    updateHostDarkModeSwitch(analysis.darkModeEnabled)
+                } else {
+                    HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled()?.let(::updateHostDarkModeSwitch)
+                }
+            }
+            createHomeNativeGlassImagePickerRow(
+                context = context,
+                state = backgroundImageState,
+                density = density,
+                refreshPalette = tintColorRefresh,
+                onImportedAnalysis = backgroundImageImportCallback,
+            ).also { addHomeNativeGlassSettingRow(root, it.first, density, topMarginDp = 0) }
+            addHomeNativeGlassSettingRow(root, tintColorRowAndRefresh.first, density)
+            addHomeNativeGlassSettingRow(
+                root,
+                hostDarkModeRowAndSwitch.first,
+                density,
+            )
+            addHomeNativeGlassSettingRow(root, tintAlphaRowAndSeekBar.first, density)
 
             val blurRowAndSeekBar = createSeekBarRow(
                 context = context,
@@ -2334,7 +2596,7 @@ object SettingsMenuHook {
                     applyUnifiedDialogCardStyle(window, density)
                 }
                 dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
-                    tintAlphaSeekBar.progress = ConfigManager.APPLE_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT -
+                    tintAlphaSeekBar.progress = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT -
                         ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
                     blurSeekBar.progress = ConfigManager.APPLE_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT -
                         ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
@@ -2381,23 +2643,12 @@ object SettingsMenuHook {
                                 context = context,
                                 sourcePath = backgroundImagePath,
                                 blurPercent = blurPercent,
+                                tintOffset = tintAlphaPercent,
                                 appleMaterial = true,
                             )
                         }.onFailure {
                             XposedCompat.logW("[SettingsMenuHook] home native blur cache failed: ${it.message}")
                         }.getOrDefault("")
-                        val textPalettes = runCatching {
-                            HomeNativeGlassReadableTextPalette.computeSerialized(
-                                context = context,
-                                blurCachePath = blurCacheImagePath,
-                                sourcePath = backgroundImagePath,
-                                tintAlphaPercent = tintAlphaPercent,
-                            )
-                        }.onFailure {
-                            XposedCompat.logW("[SettingsMenuHook] home native text palette failed: ${it.message}")
-                        }.getOrDefault(
-                            HomeNativeGlassReadableTextPalette.Serialized(light = "", dark = "")
-                        )
                         Handler(Looper.getMainLooper()).post {
                             if (!dialog.isShowing) return@post
                             prefs.edit()
@@ -2408,14 +2659,6 @@ object SettingsMenuHook {
                                 .putString(
                                     ConfigManager.KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
                                     blurCacheImagePath,
-                                )
-                                .putString(
-                                    ConfigManager.KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_LIGHT,
-                                    textPalettes.light,
-                                )
-                                .putString(
-                                    ConfigManager.KEY_HOME_NATIVE_GLASS_TEXT_PALETTE_DARK,
-                                    textPalettes.dark,
                                 )
                                 .putInt(
                                     ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_COLOR,
@@ -2432,6 +2675,10 @@ object SettingsMenuHook {
                                 .putInt(
                                     ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                                     tintAlphaPercent,
+                                )
+                                .putBoolean(
+                                    ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED,
+                                    true,
                                 )
                                 .putBoolean(
                                     ConfigManager.KEY_ENABLE_HOME_TAB_DYNAMIC_TINT,
@@ -2480,6 +2727,7 @@ object SettingsMenuHook {
         state: HomeNativeGlassImageSelectionState,
         density: Float,
         refreshPalette: (() -> Unit)? = null,
+        onImportedAnalysis: ((HomeNativeGlassImageAnalysis) -> Unit)? = null,
     ): Pair<View, TextView> {
         val tokens = UiStyle.tokens(context)
         val root = LinearLayout(context).apply {
@@ -2514,7 +2762,7 @@ object SettingsMenuHook {
             background = createModelScoreThresholdInputBackground(context, density)
             setPadding((10 * density).toInt(), 0, (10 * density).toInt(), 0)
             setOnClickListener {
-                launchHomeNativeGlassImagePicker(context, state, this, refreshPalette)
+                launchHomeNativeGlassImagePicker(context, state, this, refreshPalette, onImportedAnalysis)
             }
         }
         controlRow.addView(
@@ -2526,7 +2774,7 @@ object SettingsMenuHook {
             text = UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_CHOOSE
             UiStyle.paintScanActionButton(this, density, tokens.accent)
             setOnClickListener {
-                launchHomeNativeGlassImagePicker(context, state, display, refreshPalette)
+                launchHomeNativeGlassImagePicker(context, state, display, refreshPalette, onImportedAnalysis)
             }
         }
         controlRow.addView(
@@ -2584,6 +2832,33 @@ object SettingsMenuHook {
             .filter { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR }
             .distinct()
             .joinToString(",") { it.toString() }
+    }
+
+    private fun parseHomeNativeGlassUserTintColor(raw: String): Int? {
+        val value = raw.trim()
+        if (value.isEmpty()) return null
+        val hex = when {
+            value.startsWith("#") -> value.substring(1)
+            value.startsWith("0x", ignoreCase = true) -> value.substring(2)
+            else -> value
+        }
+        if (hex.length != 6 && hex.length != 8) return null
+        if (hex.any { digit ->
+                digit !in '0'..'9' &&
+                    digit !in 'a'..'f' &&
+                    digit !in 'A'..'F'
+            }
+        ) {
+            return null
+        }
+        val rgb = (hex.toLongOrNull(16) ?: return null) and 0xFFFFFFL
+        return ConfigManager.normalizeHomeNativeGlassTintColor(
+            Color.rgb(
+                ((rgb ushr 16) and 0xFFL).toInt(),
+                ((rgb ushr 8) and 0xFFL).toInt(),
+                (rgb and 0xFFL).toInt(),
+            )
+        )
     }
 
     private fun homeNativeGlassCachedAutoTintColorOrNull(color: Int): Int? {
@@ -2682,6 +2957,25 @@ object SettingsMenuHook {
                     },
                 )
             }
+            if (state.path.isNotBlank()) {
+                swatchRow.addView(
+                    createHomeNativeGlassTintAddSwatch(
+                        context = context,
+                        tokens = tokens,
+                        density = density,
+                    ) {
+                        showHomeNativeGlassAddTintColorDialog(
+                            context = context,
+                            state = state,
+                            density = density,
+                            refreshPalette = refresh,
+                        )
+                    },
+                    LinearLayout.LayoutParams((36 * density).toInt(), (36 * density).toInt()).apply {
+                        rightMargin = (8 * density).toInt()
+                    },
+                )
+            }
             emptyText.text = if (state.path.isBlank()) {
                 UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_EMPTY
             } else {
@@ -2702,6 +2996,86 @@ object SettingsMenuHook {
         return state.paletteColors.filter { color ->
             state.tintColor == color ||
                 homeNativeGlassTintColorDistanceSquared(color, defaultColor) >= minDistanceSquared
+        }
+    }
+
+    private fun showHomeNativeGlassAddTintColorDialog(
+        context: Context,
+        state: HomeNativeGlassImageSelectionState,
+        density: Float,
+        refreshPalette: () -> Unit,
+    ) {
+        try {
+            val tokens = UiStyle.tokens(context)
+            val padding = (16 * density).toInt()
+            val input = android.widget.EditText(context).apply {
+                setSingleLine(true)
+                hint = UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_HINT
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+                setTextColor(tokens.textPrimary)
+                setHintTextColor(tokens.textMuted)
+                textSize = 15f
+                includeFontPadding = false
+                background = UiStyle.createPlainInputUnderlineBackground(tokens, density)
+                setPadding(
+                    0,
+                    (2 * density).toInt(),
+                    0,
+                    (8 * density).toInt(),
+                )
+            }
+            val container = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(padding, padding, padding, 0)
+                addView(
+                    input,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
+            }
+            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
+                .setTitle(UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_DIALOG_TITLE)
+                .setView(createDialogScrollContainer(context, container))
+                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
+                .setPositiveButton(UiText.Settings.SAVE, null)
+                .create()
+            dialog.setOnShowListener {
+                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                    val color = parseHomeNativeGlassUserTintColor(input.text?.toString().orEmpty())
+                    if (color == null) {
+                        input.error = UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_INVALID
+                        return@setOnClickListener
+                    }
+                    val existed = state.paletteColors.any { it == color }
+                    if (!existed) {
+                        state.paletteColors = state.paletteColors + color
+                    }
+                    state.tintColor = color
+                    refreshPalette()
+                    Toast.makeText(
+                        context,
+                        if (existed) {
+                            UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_DUPLICATED
+                        } else {
+                            UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADDED
+                        },
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    dialog.dismiss()
+                }
+                input.post {
+                    input.requestFocus()
+                    (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                        ?.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+                }
+            }
+            dialog.show()
+        } catch (t: Throwable) {
+            XposedCompat.logW("[SettingsMenuHook] showHomeNativeGlassAddTintColorDialog failed: ${t.message}")
         }
     }
 
@@ -2742,6 +3116,39 @@ object SettingsMenuHook {
                 ((if (selected) 3f else 1f) * density).toInt().coerceAtLeast(1),
                 if (selected) tokens.accent else tokens.divider,
             )
+        }
+    }
+
+    private fun createHomeNativeGlassTintAddSwatch(
+        context: Context,
+        tokens: UiStyle.Tokens,
+        density: Float,
+        onClick: () -> Unit,
+    ): View {
+        return TextView(context).apply {
+            text = UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD
+            textSize = 24f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            setTextColor(tokens.accent)
+            background = createHomeNativeGlassTintAddSwatchBackground(tokens, density)
+            contentDescription = UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_DESC
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun createHomeNativeGlassTintAddSwatchBackground(
+        tokens: UiStyle.Tokens,
+        density: Float,
+    ): Drawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(tokens.surfaceAlt)
+            cornerRadius = 999f * density
+            setStroke((1 * density).toInt().coerceAtLeast(1), tokens.divider)
         }
     }
 
@@ -4495,15 +4902,7 @@ object SettingsMenuHook {
         } else {
             blendRgb(surface, tintColor, 0.35f)
         }
-        val tintAlpha = ConfigManager.homeNativeGlassTintAlphaPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-        )
-        val overlayAlpha = if (tokens.night) {
-            (126 + tintAlpha).coerceIn(126, 226)
-        } else {
-            (142 + tintAlpha).coerceIn(142, 242)
-        }
+        val overlayAlpha = if (tokens.night) 126 else 142
         return Color.argb(
             overlayAlpha,
             Color.red(baseColor),
