@@ -158,6 +158,13 @@ internal data class HomeNativeGlassHostDarkModeSwitchSymbols(
     val switchCallbackMethod: String? = null,
 )
 
+internal data class DexHostDarkModeSwitchMatch(
+    val controllerFieldName: String,
+    val getterMethodName: String,
+    val score: Int,
+    val evidence: String,
+)
+
 internal data class HomeNativeGlassEnterForumCapsuleClassCandidate(
     val clazz: Class<*>,
     val fields: List<Field>,
