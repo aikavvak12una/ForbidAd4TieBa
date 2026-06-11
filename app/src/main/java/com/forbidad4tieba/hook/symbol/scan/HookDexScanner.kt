@@ -48,6 +48,8 @@ internal object DexShareIconScanner {
     private const val AGREE_DATA_DESCRIPTOR = "Lcom/baidu/tieba/tbadkcore/data/AgreeData;"
     private const val AGREE_DATA_HAS_AGREE_FIELD = "hasAgree"
     private const val AGREE_DATA_AGREE_TYPE_FIELD = "agreeType"
+    private const val BD_SWITCH_VIEW_DESCRIPTOR = "Lcom/baidu/adp/widget/BdSwitchView/BdSwitchView;"
+    private const val HOST_FOLLOW_SYSTEM_PREF_KEY = "key_is_follow_system_mode"
     private const val AI_PB_NEW_INPUT_INIT_SPRITE_MEME_METHOD = "e0"
     private const val AI_PB_NEW_INPUT_INIT_AI_WRITE_METHOD = "X"
     private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_INIT_METHOD = "r"
@@ -261,6 +263,54 @@ internal object DexShareIconScanner {
         }
         recordDexScanIssue(logger, "AiComponentDisableHook.ImageViewerJumpButtonDex", errorCount, firstError)
         return out
+    }
+
+    fun scanHostDarkModeSwitch(
+        sourcePaths: List<String>,
+        controllerFields: Map<String, String> = emptyMap(),
+        logger: ScanLogger? = null,
+    ): List<DexHostDarkModeSwitchMatch> {
+        if (controllerFields.isEmpty()) return emptyList()
+        val controllerFieldDescriptors = controllerFields.mapNotNull { (fieldName, className) ->
+            if (fieldName.isBlank() || className.isBlank()) {
+                null
+            } else {
+                fieldName to "L${className.replace('.', '/')};"
+            }
+        }.toMap()
+        if (controllerFieldDescriptors.isEmpty()) return emptyList()
+        val out = ArrayList<DexHostDarkModeSwitchMatch>(2)
+        var errorCount = 0
+        var firstError: String? = null
+        fun recordError(t: Throwable) {
+            errorCount++
+            if (firstError == null) firstError = sanitizeScanStatusText(formatScanException(t))
+        }
+        for (sourcePath in sourcePaths) {
+            val file = File(sourcePath)
+            if (!file.isFile) continue
+            scanDexFiles(file, ::recordError) { dexBytes ->
+                val reader = try {
+                    DexImage(dexBytes)
+                } catch (t: Throwable) {
+                    recordError(t)
+                    return@scanDexFiles
+                }
+                try {
+                    out.addAll(
+                        reader.findHostDarkModeSwitchMatches(controllerFieldDescriptors),
+                    )
+                } catch (t: Throwable) {
+                    recordError(t)
+                }
+            }
+        }
+        recordDexScanIssue(logger, "HomeNativeGlassHook.HostDarkModeSwitchDex", errorCount, firstError)
+        return out.sortedWith(
+            compareByDescending<DexHostDarkModeSwitchMatch> { it.score }
+                .thenBy { it.controllerFieldName }
+                .thenBy { it.getterMethodName },
+        )
     }
 
     private fun recordDexScanIssue(
@@ -502,6 +552,23 @@ internal object DexShareIconScanner {
                 return scanEnterForumCapsuleClassData(classDataOff, ownerDescriptor)
             }
             return emptyList()
+        }
+
+        fun findHostDarkModeSwitchMatches(
+            controllerFieldDescriptors: Map<String, String>,
+        ): List<DexHostDarkModeSwitchMatch> {
+            val out = ArrayList<DexHostDarkModeSwitchMatch>(controllerFieldDescriptors.size)
+            for ((fieldName, controllerDescriptor) in controllerFieldDescriptors) {
+                val classDataOff = classDataOffset(controllerDescriptor) ?: continue
+                out.addAll(
+                    scanHostDarkModeSwitchControllerClassData(
+                        classDataOff = classDataOff,
+                        controllerFieldName = fieldName,
+                        ownerDescriptor = controllerDescriptor,
+                    ),
+                )
+            }
+            return out
         }
 
         fun findPbAdBidModelMatches(): List<DexPbAdBidModelMatch> {
@@ -760,6 +827,221 @@ internal object DexShareIconScanner {
                 )
             }
             return out
+        }
+
+        private fun scanHostDarkModeSwitchControllerClassData(
+            classDataOff: Int,
+            controllerFieldName: String,
+            ownerDescriptor: String,
+        ): List<DexHostDarkModeSwitchMatch> {
+            var cursor = classDataOff
+            val staticFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val instanceFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val directMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val virtualMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+
+            repeat(staticFieldsSize) { cursor = skipEncodedField(cursor) }
+            repeat(instanceFieldsSize) { cursor = skipEncodedField(cursor) }
+
+            val getterFields = LinkedHashMap<String, String>()
+            val followSwitchFieldCounts = LinkedHashMap<String, Int>()
+
+            fun countFollowFields(fields: Map<String, Int>) {
+                for ((fieldName, count) in fields) {
+                    followSwitchFieldCounts[fieldName] =
+                        (followSwitchFieldCounts[fieldName] ?: 0) + count
+                }
+            }
+
+            fun scanMethod(method: EncodedMethod) {
+                if (isStaticAccess(method.accessFlags)) return
+                val name = methodName(method.methodIdx)?.takeIf { it.isNotBlank() }
+                if (name != null &&
+                    methodParameterDescriptors(method.methodIdx).isEmpty() &&
+                    isBdSwitchViewDescriptor(methodReturnDescriptor(method.methodIdx).orEmpty())
+                ) {
+                    scanHostSwitchGetterReturnField(method, ownerDescriptor)?.let { fieldName ->
+                        getterFields[name] = fieldName
+                    }
+                }
+                if (codeContainsString(method.codeOff, HOST_FOLLOW_SYSTEM_PREF_KEY)) {
+                    countFollowFields(scanHostFollowSystemSwitchFields(method.codeOff, ownerDescriptor))
+                }
+            }
+
+            var methodIdx = 0
+            repeat(directMethodsSize) {
+                val method = readEncodedMethod(cursor, methodIdx)
+                cursor = method.next
+                methodIdx = method.methodIdx
+                scanMethod(method)
+            }
+
+            methodIdx = 0
+            repeat(virtualMethodsSize) {
+                val method = readEncodedMethod(cursor, methodIdx)
+                cursor = method.next
+                methodIdx = method.methodIdx
+                scanMethod(method)
+            }
+
+            val getterSwitchFields = getterFields.values.toSet()
+            if (getterSwitchFields.size < 2) return emptyList()
+            val followCandidates = followSwitchFieldCounts
+                .filterKeys { it in getterSwitchFields }
+                .entries
+                .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            val followField = followCandidates.firstOrNull()?.key ?: return emptyList()
+            if (followCandidates.getOrNull(1)?.value == followCandidates.first().value) return emptyList()
+
+            val darkGetters = getterFields.filterValues { it != followField }
+            if (darkGetters.size != 1) return emptyList()
+            val (getterName, darkField) = darkGetters.entries.first()
+            val score = 320 + (followSwitchFieldCounts[followField] ?: 0).coerceAtMost(3) * 30
+            return listOf(
+                DexHostDarkModeSwitchMatch(
+                    controllerFieldName = controllerFieldName,
+                    getterMethodName = getterName,
+                    score = score,
+                    evidence = "controller,returnField=$darkField,followField=$followField",
+                ),
+            )
+        }
+
+        private fun scanHostSwitchGetterReturnField(
+            method: EncodedMethod,
+            ownerDescriptor: String,
+        ): String? {
+            val codeOff = method.codeOff
+            if (codeOff <= 0 || codeOff + 16 > bytes.size) return null
+            val registersSize = ushortAt(codeOff)
+            val insSize = ushortAt(codeOff + 2)
+            if (insSize < 1 || registersSize < insSize) return null
+            val thisReg = registersSize - insSize
+            val insnsSize = intAt(codeOff + 12)
+            val insnsOff = codeOff + 16
+            if (insnsOff <= 0 || insnsOff + insnsSize * 2 > bytes.size) return null
+
+            val fieldByReg = HashMap<Int, String>()
+            val returnedFields = LinkedHashSet<String>()
+
+            fun clear(reg: Int) {
+                if (reg != thisReg) fieldByReg.remove(reg)
+            }
+
+            fun copy(dest: Int, src: Int) {
+                clear(dest)
+                fieldByReg[src]?.let { fieldByReg[dest] = it }
+            }
+
+            var i = 0
+            while (i < insnsSize) {
+                val offset = insnsOff + i * 2
+                val unit = ushortAt(offset)
+                val op = unit and 0xFF
+                when (op) {
+                    0x07 -> copy(regA4(unit), regB4(unit))
+                    0x08 -> copy((unit ushr 8) and 0xFF, ushortAt(offset + 2))
+                    0x09 -> copy(ushortAt(offset + 2), ushortAt(offset + 4))
+                    0x0C -> clear((unit ushr 8) and 0xFF)
+                    0x11 -> {
+                        val reg = (unit ushr 8) and 0xFF
+                        fieldByReg[reg]?.let(returnedFields::add)
+                    }
+                    0x1F -> {
+                        // check-cast keeps the object register value.
+                    }
+                    0x54 -> {
+                        val dest = regA4(unit)
+                        val receiver = regB4(unit)
+                        clear(dest)
+                        val fieldIdx = ushortAt(offset + 2)
+                        if (receiver == thisReg &&
+                            fieldIdx in 0 until fieldIdsSize &&
+                            fieldClassDescriptor(fieldIdx) == ownerDescriptor &&
+                            isBdSwitchViewDescriptor(fieldTypeDescriptor(fieldIdx).orEmpty())
+                        ) {
+                            fieldName(fieldIdx)?.takeIf { it.isNotBlank() }?.let { fieldName ->
+                                fieldByReg[dest] = fieldName
+                            }
+                        }
+                    }
+                    0x22 -> clear((unit ushr 8) and 0xFF)
+                }
+                i += instructionCodeUnits(op)
+            }
+            return returnedFields.singleOrNull()
+        }
+
+        private fun scanHostFollowSystemSwitchFields(
+            codeOff: Int,
+            ownerDescriptor: String,
+        ): Map<String, Int> {
+            if (codeOff <= 0 || codeOff + 16 > bytes.size) return emptyMap()
+            val insnsSize = intAt(codeOff + 12)
+            val insnsOff = codeOff + 16
+            if (insnsOff <= 0 || insnsOff + insnsSize * 2 > bytes.size) return emptyMap()
+            val stringIndexes = hostFollowSystemPrefStringIndexes(insnsOff, insnsSize)
+            if (stringIndexes.isEmpty()) return emptyMap()
+            val counts = LinkedHashMap<String, Int>()
+            for (stringIndex in stringIndexes) {
+                val end = (stringIndex + 180).coerceAtMost(insnsSize)
+                countHostSwitchFieldAccesses(
+                    insnsOff = insnsOff,
+                    ownerDescriptor = ownerDescriptor,
+                    segmentStart = stringIndex,
+                    segmentEnd = end,
+                    counts = counts,
+                )
+            }
+            return counts
+        }
+
+        private fun hostFollowSystemPrefStringIndexes(
+            insnsOff: Int,
+            insnsSize: Int,
+        ): List<Int> {
+            val out = ArrayList<Int>(2)
+            var i = 0
+            while (i < insnsSize) {
+                val offset = insnsOff + i * 2
+                val unit = ushortAt(offset)
+                val op = unit and 0xFF
+                val value = when (op) {
+                    0x1A -> stringAt(ushortAt(offset + 2))
+                    0x1B -> stringAt(intAt(offset + 2))
+                    else -> null
+                }
+                if (value == HOST_FOLLOW_SYSTEM_PREF_KEY) out.add(i)
+                i += instructionCodeUnits(op)
+            }
+            return out
+        }
+
+        private fun countHostSwitchFieldAccesses(
+            insnsOff: Int,
+            ownerDescriptor: String,
+            segmentStart: Int,
+            segmentEnd: Int,
+            counts: MutableMap<String, Int>,
+        ) {
+            var i = segmentStart
+            while (i < segmentEnd) {
+                val offset = insnsOff + i * 2
+                val unit = ushortAt(offset)
+                val op = unit and 0xFF
+                if (op in 0x52..0x5F) {
+                    val fieldIdx = ushortAt(offset + 2)
+                    if (fieldIdx in 0 until fieldIdsSize &&
+                        fieldClassDescriptor(fieldIdx) == ownerDescriptor &&
+                        isBdSwitchViewDescriptor(fieldTypeDescriptor(fieldIdx).orEmpty())
+                    ) {
+                        val name = fieldName(fieldIdx).orEmpty()
+                        if (name.isNotBlank()) counts[name] = (counts[name] ?: 0) + 1
+                    }
+                }
+                i += instructionCodeUnits(op)
+            }
         }
 
         private fun scanAiWriteListenerClassData(classDataOff: Int): Boolean {
@@ -1933,6 +2215,64 @@ internal object DexShareIconScanner {
                 }
             }
             return bestName
+        }
+
+        private fun isBdSwitchViewDescriptor(descriptor: String): Boolean {
+            return descriptor == BD_SWITCH_VIEW_DESCRIPTOR ||
+                descriptor.endsWith("/BdSwitchView;") ||
+                (descriptor.startsWith("Lcom/baidu/") && descriptor.endsWith("SwitchView;"))
+        }
+
+        private fun regA4(unit: Int): Int {
+            return (unit ushr 8) and 0x0F
+        }
+
+        private fun regB4(unit: Int): Int {
+            return (unit ushr 12) and 0x0F
+        }
+
+        private fun instructionCodeUnits(op: Int): Int {
+            return when (op) {
+                0x00,
+                in 0x01..0x01,
+                in 0x04..0x04,
+                in 0x07..0x07,
+                in 0x0A..0x12,
+                in 0x1D..0x1E,
+                0x21,
+                0x27,
+                0x28,
+                in 0x7B..0x8F,
+                in 0xB0..0xCF -> 1
+                0x02,
+                0x05,
+                0x08,
+                0x13,
+                0x15,
+                0x16,
+                0x19,
+                0x1A,
+                0x1C,
+                in 0x1F..0x23,
+                in 0x2D..0x3D,
+                in 0x44..0x6D,
+                in 0x90..0xAF,
+                in 0xD0..0xE2 -> 2
+                0x03,
+                0x06,
+                0x09,
+                0x14,
+                0x17,
+                0x1B,
+                in 0x24..0x26,
+                in 0x29..0x2C,
+                in 0x6E..0x72,
+                in 0x74..0x78 -> 3
+                0x18 -> 5
+                in 0xFA..0xFB -> 4
+                0xFC -> 5
+                else -> 1
+            }
         }
 
         private fun isViewMarginSetMargins(methodIdx: Int): Boolean {

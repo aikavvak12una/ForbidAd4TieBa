@@ -4659,7 +4659,7 @@ internal object HookSymbolResolver {
             scanErrors,
             HomeNativeGlassHostDarkModeSwitchSymbols(),
         ) {
-            HomeNativeGlassSymbolScanner.scanHostDarkModeSwitch(cl, logger)
+            HomeNativeGlassSymbolScanner.scanHostDarkModeSwitch(context, cl, logger)
         }
         homeNativeGlassHostDarkModeMoreActivityClass =
             homeNativeGlassHostDarkModeSwitchSymbols.moreActivityClass

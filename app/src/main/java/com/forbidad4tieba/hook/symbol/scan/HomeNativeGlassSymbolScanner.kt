@@ -32,7 +32,6 @@ internal object HomeNativeGlassSymbolScanner {
     private const val ENTER_FORUM_CAPSULE_MIN_SCORE_GAP = 24
     private const val MORE_ACTIVITY_CLASS = "com.baidu.tieba.setting.more.MoreActivity"
     private const val BD_SWITCH_VIEW_CLASS = "com.baidu.adp.widget.BdSwitchView.BdSwitchView"
-    private const val HOST_DARK_MODE_SWITCH_GETTER_METHOD_HINT = "R"
     private const val HOST_SWITCH_STATE_FIELD_HINT = "a"
     private const val HOST_SWITCH_SET_ON_METHOD_HINT = "j"
     private const val HOST_SWITCH_SET_OFF_METHOD_HINT = "g"
@@ -243,6 +242,7 @@ internal object HomeNativeGlassSymbolScanner {
     }
 
     fun scanHostDarkModeSwitch(
+        context: Context,
         cl: ClassLoader,
         logger: ScanLogger?,
     ): HomeNativeGlassHostDarkModeSwitchSymbols {
@@ -295,7 +295,7 @@ internal object HomeNativeGlassSymbolScanner {
             log(logger, "homeNativeGlassHostDarkModeSwitch: activity fields failed: ${t.message}")
             return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
-        val candidates = fields.mapNotNull { field ->
+        val controllerMethodGroups = fields.mapNotNull { field ->
             val methods = try {
                 collectInstanceMethods(field.type).filter { method ->
                     !Modifier.isStatic(method.modifiers) &&
@@ -310,12 +310,63 @@ internal object HomeNativeGlassSymbolScanner {
                 )
                 return@mapNotNull null
             }
-            val getter = selectHostDarkModeSwitchGetter(methods, logger) ?: return@mapNotNull null
-            HostDarkModeSwitchCandidate(
-                field = field,
-                getter = getter,
-                score = scoreHostDarkModeSwitchCandidate(field, getter, methods),
+            if (methods.size > 1) {
+                log(
+                    logger,
+                    "homeNativeGlassHostDarkModeSwitch: getter candidates for ${field.name}=" +
+                        methods.joinToString(",") { describeMethodShape(it) },
+                )
+            }
+            if (methods.isEmpty()) null else field to methods
+        }
+        val controllerFields = controllerMethodGroups
+            .filter { (field, methods) ->
+                !Modifier.isStatic(field.modifiers) &&
+                    field.type.name.startsWith("com.baidu.tieba.") &&
+                    methods.size >= 2
+            }
+            .associate { (field, _) -> field.name to field.type.name }
+
+        val sourcePaths = appSourcePaths(context)
+        val dexMatches = if (sourcePaths.isNotEmpty() && controllerFields.isNotEmpty()) {
+            DexShareIconScanner.scanHostDarkModeSwitch(
+                sourcePaths = sourcePaths,
+                controllerFields = controllerFields,
+                logger = logger,
             )
+        } else {
+            emptyList()
+        }
+        if (sourcePaths.isNotEmpty()) {
+            if (dexMatches.isNotEmpty()) {
+                log(
+                    logger,
+                    "homeNativeGlassHostDarkModeSwitch: dex matches=" +
+                        dexMatches.take(4).joinToString(",") {
+                            "${it.controllerFieldName}.${it.getterMethodName}" +
+                                "/score=${it.score}[${it.evidence}]"
+                        },
+                )
+            } else {
+                log(logger, "homeNativeGlassHostDarkModeSwitch: dex semantic match missing")
+            }
+        }
+        val dexMatchesByGetter = dexMatches
+            .groupBy { "${it.controllerFieldName}.${it.getterMethodName}" }
+            .mapValues { (_, matches) ->
+                matches.maxByOrNull { it.score }
+            }
+
+        val candidates = controllerMethodGroups.flatMap { (field, methods) ->
+            methods.map { getter ->
+                val dexMatch = dexMatchesByGetter["${field.name}.${getter.name}"]
+                HostDarkModeSwitchCandidate(
+                    field = field,
+                    getter = getter,
+                    score = scoreHostDarkModeSwitchCandidate(field, methods, dexMatch),
+                    dexMatch = dexMatch,
+                )
+            }
         }.sortedWith(
             compareByDescending<HostDarkModeSwitchCandidate> { it.score }
                 .thenBy { it.field.name }
@@ -356,7 +407,8 @@ internal object HomeNativeGlassSymbolScanner {
                 "controllerField=${best.field.name}, getter=${best.getter.name}, " +
                 "state=${stateField.name}, " +
                 "setOn=${setOnMethod.name}, setOff=${setOffMethod.name}, " +
-                "callback=${callbackMethod.name}",
+                "callback=${callbackMethod.name}" +
+                (best.dexMatch?.let { ", dex=${it.score}[${it.evidence}]" } ?: ""),
         )
         return HomeNativeGlassHostDarkModeSwitchSymbols(
             moreActivityClass = moreActivityClass.name,
@@ -738,22 +790,6 @@ internal object HomeNativeGlassSymbolScanner {
             method.returnType == Void.TYPE
     }
 
-    private fun selectHostDarkModeSwitchGetter(
-        methods: List<Method>,
-        logger: ScanLogger?,
-    ): Method? {
-        methods.singleOrNull { it.name == HOST_DARK_MODE_SWITCH_GETTER_METHOD_HINT }?.let { return it }
-        if (methods.size == 1) return methods.first()
-        if (methods.isNotEmpty()) {
-            log(
-                logger,
-                "homeNativeGlassHostDarkModeSwitch: getter ambiguous candidates=" +
-                    methods.joinToString(",") { describeMethodShape(it) },
-            )
-        }
-        return null
-    }
-
     private fun selectHostDarkModeSwitchCallbackMethod(
         methods: List<Method>,
         switchViewType: Class<*>,
@@ -821,15 +857,13 @@ internal object HomeNativeGlassSymbolScanner {
 
     private fun scoreHostDarkModeSwitchCandidate(
         field: Field,
-        getter: Method,
         methods: List<Method>,
+        dexMatch: DexHostDarkModeSwitchMatch?,
     ): Int {
         var score = 0
-        if (field.name == "a") score += 8
         if (field.type.name.startsWith("com.baidu.tieba.")) score += 6
-        if (getter.name == HOST_DARK_MODE_SWITCH_GETTER_METHOD_HINT) score += 48
-        if (methods.any { it.name == "T" }) score += 12
         score += methods.size.coerceAtMost(4)
+        if (dexMatch != null) score += 220 + dexMatch.score
         return score
     }
 
@@ -837,6 +871,7 @@ internal object HomeNativeGlassSymbolScanner {
         val field: Field,
         val getter: Method,
         val score: Int,
+        val dexMatch: DexHostDarkModeSwitchMatch?,
     )
 
     private fun resolveRIdField(
