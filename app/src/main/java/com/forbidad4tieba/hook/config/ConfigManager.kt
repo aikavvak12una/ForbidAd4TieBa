@@ -32,6 +32,12 @@ object ConfigManager {
     const val DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED = true
     const val DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED = true
     const val DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED = true
+    const val DEFAULT_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS = 10
+    const val MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS = 1
+    const val MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS = 30
+    const val DEFAULT_REPLY_VISIBILITY_PROBE_INTERVAL_MS = 1000
+    const val MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS = 500
+    const val MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS = 10000
     const val APPLE_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 0
     const val APPLE_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 72
     const val APPLE_HOME_NATIVE_GLASS_CARD_RADIUS_DP = 24
@@ -85,6 +91,9 @@ object ConfigManager {
     const val KEY_ENABLE_AUTO_LOAD_MORE = "enable_auto_load_more"
     const val KEY_ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
     const val KEY_PB_LIKE_AUTO_REPLY_TEXT = "pb_like_auto_reply_text"
+    const val KEY_VERIFY_REPLY_AFTER_POST = "verify_reply_after_post"
+    const val KEY_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS = "reply_visibility_probe_max_attempts"
+    const val KEY_REPLY_VISIBILITY_PROBE_INTERVAL_MS = "reply_visibility_probe_interval_ms"
     const val KEY_DEFAULT_NOTIFY_TAB = "default_notify_tab"
     const val KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE = "enable_default_original_image"
     const val KEY_ENABLE_AUTO_SIGN_IN = "enable_auto_sign_in"
@@ -169,6 +178,9 @@ object ConfigManager {
     val isAutoLoadMoreEnabled: Boolean get() = settingsSnapshot.isAutoLoadMoreEnabled
     val isPbLikeAutoReplyEnabled: Boolean get() = settingsSnapshot.isPbLikeAutoReplyEnabled
     val pbLikeAutoReplyText: String get() = settingsSnapshot.pbLikeAutoReplyText
+    val isReplyVisibilityProbeEnabled: Boolean get() = settingsSnapshot.isReplyVisibilityProbeEnabled
+    val replyVisibilityProbeMaxAttempts: Int get() = settingsSnapshot.replyVisibilityProbeMaxAttempts
+    val replyVisibilityProbeIntervalMs: Int get() = settingsSnapshot.replyVisibilityProbeIntervalMs
     val isPbScrollCoalesceEnabled: Boolean get() = settingsSnapshot.isPbScrollCoalesceEnabled
     val isDefaultNotifyTabEnabled: Boolean get() = settingsSnapshot.isDefaultNotifyTabEnabled
     val isDefaultOriginalImageEnabled: Boolean get() = settingsSnapshot.isDefaultOriginalImageEnabled
@@ -465,6 +477,21 @@ object ConfigManager {
             isAutoLoadMoreEnabled = featureBoolean(KEY_ENABLE_AUTO_LOAD_MORE),
             isPbLikeAutoReplyEnabled = restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY),
             pbLikeAutoReplyText = p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty(),
+            isReplyVisibilityProbeEnabled = restrictedBoolean(KEY_VERIFY_REPLY_AFTER_POST),
+            replyVisibilityProbeMaxAttempts = p.getInt(
+                KEY_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                DEFAULT_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+            ).coerceIn(
+                MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+            ),
+            replyVisibilityProbeIntervalMs = p.getInt(
+                KEY_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                DEFAULT_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+            ).coerceIn(
+                MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+            ),
             isPbScrollCoalesceEnabled = performanceChildBoolean(
                 KEY_ENABLE_PB_SCROLL_COALESCE,
                 performanceOptimizationEnabled,

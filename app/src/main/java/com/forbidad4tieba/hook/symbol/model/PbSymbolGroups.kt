@@ -109,6 +109,8 @@ data class PbLikeAutoReplyInputContainerSymbolsGroup(
 data class PbMiscSymbolsGroup(
     val commonLayoutPreloader: PbCommonLayoutPreloaderSymbolsGroup = PbCommonLayoutPreloaderSymbolsGroup(),
     val replyServerResponse: ReplyServerResponseSymbolsGroup = ReplyServerResponseSymbolsGroup(),
+    val agreeServerResponse: AgreeServerResponseSymbolsGroup = AgreeServerResponseSymbolsGroup(),
+    val replyVisibilityProbe: ReplyVisibilityProbeSymbolsGroup = ReplyVisibilityProbeSymbolsGroup(),
 )
 
 data class PbCommonLayoutPreloaderSymbolsGroup(
@@ -119,4 +121,48 @@ data class ReplyServerResponseSymbolsGroup(
     val replyServerResponseClass: String? = null,
     val replyServerResponseDecodeMethod: String? = null,
     val replyServerResponseResultJsonField: String? = null,
+)
+
+data class AgreeServerResponseSymbolsGroup(
+    val agreeServerResponseClass: String? = null,
+    val agreeServerResponseDecodeLogicMethod: String? = null,
+)
+
+data class ReplyVisibilityProbeSymbolsGroup(
+    val replyVisibilityProbeReplyResponseClass: String? = null,
+    val replyVisibilityProbeReplyDecodeMethod: String? = null,
+    val replyVisibilityProbeReplyResultJsonField: String? = null,
+    val replyVisibilityProbeAddPostRequestClass: String? = null,
+    val replyVisibilityProbeAddPostRequestDataField: String? = null,
+    val replyVisibilityProbeResponsedMessageClass: String? = null,
+    val replyVisibilityProbeGetOriginalMessageMethod: String? = null,
+    val replyVisibilityProbeMessageClass: String? = null,
+    val replyVisibilityProbeMessageGetExtraMethod: String? = null,
+    val replyVisibilityProbeMessageGetTagMethod: String? = null,
+    val replyVisibilityProbeMessageSetTagMethod: String? = null,
+    val replyVisibilityProbeHttpMessageClass: String? = null,
+    val replyVisibilityProbeHttpMessageConstructor: String? = null,
+    val replyVisibilityProbeHttpMessageAddParamMethod: String? = null,
+    val replyVisibilityProbeHttpMessageAddHeaderMethod: String? = null,
+    val replyVisibilityProbeMessageManagerClass: String? = null,
+    val replyVisibilityProbeMessageManagerGetInstanceMethod: String? = null,
+    val replyVisibilityProbeMessageManagerFindTaskMethod: String? = null,
+    val replyVisibilityProbeMessageManagerRegisterTaskMethod: String? = null,
+    val replyVisibilityProbeMessageManagerSendMethod: String? = null,
+    val replyVisibilityProbeTbHttpMessageTaskClass: String? = null,
+    val replyVisibilityProbeTbHttpMessageTaskConstructor: String? = null,
+    val replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod: String? = null,
+    val replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod: String? = null,
+    val replyVisibilityProbeBdUniqueIdClass: String? = null,
+    val replyVisibilityProbeBdUniqueIdGenMethod: String? = null,
+    val replyVisibilityProbeTbadkCoreApplicationClass: String? = null,
+    val replyVisibilityProbeTbadkCoreApplicationGetInstMethod: String? = null,
+    val replyVisibilityProbeTbadkCoreApplicationGetZidMethod: String? = null,
+    val replyVisibilityProbeTbConfigClass: String? = null,
+    val replyVisibilityProbeTbConfigServerAddressField: String? = null,
+    val replyVisibilityProbeTbConfigPbFloorAgreeUrlField: String? = null,
+    val replyVisibilityProbeCmdConfigHttpClass: String? = null,
+    val replyVisibilityProbeCmdPbFloorAgreeField: String? = null,
+    val replyVisibilityProbeAgreeResponseClass: String? = null,
+    val replyVisibilityProbeAgreeDecodeLogicMethod: String? = null,
 )

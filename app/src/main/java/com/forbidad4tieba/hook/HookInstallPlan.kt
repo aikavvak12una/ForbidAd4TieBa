@@ -14,7 +14,9 @@ import com.forbidad4tieba.hook.feature.ad.PbFallingAdHook
 import com.forbidad4tieba.hook.feature.ad.PostAdHook
 import com.forbidad4tieba.hook.feature.ad.SearchBoxTextAdHook
 import com.forbidad4tieba.hook.feature.ad.StrategyAdHook
+import com.forbidad4tieba.hook.feature.diagnostic.AgreeServerResponseLogHook
 import com.forbidad4tieba.hook.feature.diagnostic.ReplyServerResponseLogHook
+import com.forbidad4tieba.hook.feature.diagnostic.ReplyVisibilityProbeHook
 import com.forbidad4tieba.hook.feature.im.PrivateReadReceiptBlockHook
 import com.forbidad4tieba.hook.feature.perf.AdSdkInitBlockHook
 import com.forbidad4tieba.hook.feature.perf.AiComponentDisableHook
@@ -216,6 +218,12 @@ internal object HookInstallPlanner {
         fun canInstallShareTrackingCleaner(settings: SettingsSnapshot): Boolean {
             return settings.isCleanShareTrackingParamsEnabled &&
                 available(HookFeatureKey.CLEAN_SHARE_TRACKING_PARAMS)
+        }
+
+        fun canInstallReplyVisibilityProbe(settings: SettingsSnapshot): Boolean {
+            return isMain &&
+                settings.isReplyVisibilityProbeEnabled &&
+                available(HookFeatureKey.VERIFY_REPLY_AFTER_POST)
         }
     }
 
@@ -528,10 +536,22 @@ internal object HookInstallPlanner {
                 }
             }
         }
+        if (context.canInstallReplyVisibilityProbe(settings)) {
+            entries += HookInstallEntry("ReplyVisibilityProbeHook") { cl ->
+                HookSymbolResolver.resolveReplyVisibilityProbeSymbols(cl, symbols)?.let { targets ->
+                    ReplyVisibilityProbeHook.hook(targets)
+                }
+            }
+        }
         if (settings.isDetailedLoggingEnabled) {
             entries += HookInstallEntry("ReplyServerResponseLogHook") { cl ->
                 HookSymbolResolver.resolveReplyServerResponseLogSymbols(cl, symbols)?.let { targets ->
                     ReplyServerResponseLogHook.hook(targets)
+                }
+            }
+            entries += HookInstallEntry("AgreeServerResponseLogHook") { cl ->
+                HookSymbolResolver.resolveAgreeServerResponseLogSymbols(cl, symbols)?.let { targets ->
+                    AgreeServerResponseLogHook.hook(targets)
                 }
             }
             entries += HookInstallEntry("FeedInfoLogHook") { cl ->
