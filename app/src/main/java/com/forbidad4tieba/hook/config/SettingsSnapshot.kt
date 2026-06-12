@@ -39,6 +39,11 @@ data class SettingsSnapshot(
     val isAutoLoadMoreEnabled: Boolean = false,
     val isPbLikeAutoReplyEnabled: Boolean = false,
     val pbLikeAutoReplyText: String = "",
+    val isReplyVisibilityProbeEnabled: Boolean = false,
+    val replyVisibilityProbeMaxAttempts: Int =
+        ConfigManager.DEFAULT_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+    val replyVisibilityProbeIntervalMs: Int =
+        ConfigManager.DEFAULT_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
     val isPbScrollCoalesceEnabled: Boolean = false,
     val isDefaultNotifyTabEnabled: Boolean = true,
     val isDefaultOriginalImageEnabled: Boolean = false,

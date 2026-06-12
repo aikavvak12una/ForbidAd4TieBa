@@ -41,6 +41,50 @@ internal data class ReplyServerResponseLogScanSymbols(
     val resultJsonField: String? = null,
 )
 
+internal data class AgreeServerResponseLogScanSymbols(
+    val responseClass: String? = null,
+    val decodeLogicMethod: String? = null,
+)
+
+internal data class ReplyVisibilityProbeScanSymbols(
+    val replyResponseClass: String? = null,
+    val replyDecodeMethod: String? = null,
+    val replyResultJsonField: String? = null,
+    val addPostRequestClass: String? = null,
+    val addPostRequestDataField: String? = null,
+    val responsedMessageClass: String? = null,
+    val getOriginalMessageMethod: String? = null,
+    val messageClass: String? = null,
+    val messageGetExtraMethod: String? = null,
+    val messageGetTagMethod: String? = null,
+    val messageSetTagMethod: String? = null,
+    val httpMessageClass: String? = null,
+    val httpMessageConstructor: String? = null,
+    val httpMessageAddParamMethod: String? = null,
+    val httpMessageAddHeaderMethod: String? = null,
+    val messageManagerClass: String? = null,
+    val messageManagerGetInstanceMethod: String? = null,
+    val messageManagerFindTaskMethod: String? = null,
+    val messageManagerRegisterTaskMethod: String? = null,
+    val messageManagerSendMethod: String? = null,
+    val tbHttpMessageTaskClass: String? = null,
+    val tbHttpMessageTaskConstructor: String? = null,
+    val httpMessageTaskSetResponsedClassMethod: String? = null,
+    val tbHttpMessageTaskSetIsNeedTbsMethod: String? = null,
+    val bdUniqueIdClass: String? = null,
+    val bdUniqueIdGenMethod: String? = null,
+    val tbadkCoreApplicationClass: String? = null,
+    val tbadkCoreApplicationGetInstMethod: String? = null,
+    val tbadkCoreApplicationGetZidMethod: String? = null,
+    val tbConfigClass: String? = null,
+    val tbConfigServerAddressField: String? = null,
+    val tbConfigPbFloorAgreeUrlField: String? = null,
+    val cmdConfigHttpClass: String? = null,
+    val cmdPbFloorAgreeField: String? = null,
+    val agreeResponseClass: String? = null,
+    val agreeDecodeLogicMethod: String? = null,
+)
+
 internal data class RecommendCardNestedDataCandidate(
     val bindMethodName: String,
     val stateClassName: String,

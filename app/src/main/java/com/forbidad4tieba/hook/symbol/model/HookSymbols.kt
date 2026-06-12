@@ -491,6 +491,82 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.misc.replyServerResponse.replyServerResponseDecodeMethod
     val replyServerResponseResultJsonField: String?
         get() = hookPoints.primary.pb.misc.replyServerResponse.replyServerResponseResultJsonField
+    val agreeServerResponseClass: String?
+        get() = hookPoints.primary.pb.misc.agreeServerResponse.agreeServerResponseClass
+    val agreeServerResponseDecodeLogicMethod: String?
+        get() = hookPoints.primary.pb.misc.agreeServerResponse.agreeServerResponseDecodeLogicMethod
+    val replyVisibilityProbeReplyResponseClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeReplyResponseClass
+    val replyVisibilityProbeReplyDecodeMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeReplyDecodeMethod
+    val replyVisibilityProbeReplyResultJsonField: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeReplyResultJsonField
+    val replyVisibilityProbeAddPostRequestClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeAddPostRequestClass
+    val replyVisibilityProbeAddPostRequestDataField: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeAddPostRequestDataField
+    val replyVisibilityProbeResponsedMessageClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeResponsedMessageClass
+    val replyVisibilityProbeGetOriginalMessageMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeGetOriginalMessageMethod
+    val replyVisibilityProbeMessageClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageClass
+    val replyVisibilityProbeMessageGetExtraMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageGetExtraMethod
+    val replyVisibilityProbeMessageGetTagMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageGetTagMethod
+    val replyVisibilityProbeMessageSetTagMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageSetTagMethod
+    val replyVisibilityProbeHttpMessageClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeHttpMessageClass
+    val replyVisibilityProbeHttpMessageConstructor: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeHttpMessageConstructor
+    val replyVisibilityProbeHttpMessageAddParamMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeHttpMessageAddParamMethod
+    val replyVisibilityProbeHttpMessageAddHeaderMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeHttpMessageAddHeaderMethod
+    val replyVisibilityProbeMessageManagerClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageManagerClass
+    val replyVisibilityProbeMessageManagerGetInstanceMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageManagerGetInstanceMethod
+    val replyVisibilityProbeMessageManagerFindTaskMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageManagerFindTaskMethod
+    val replyVisibilityProbeMessageManagerRegisterTaskMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageManagerRegisterTaskMethod
+    val replyVisibilityProbeMessageManagerSendMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeMessageManagerSendMethod
+    val replyVisibilityProbeTbHttpMessageTaskClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbHttpMessageTaskClass
+    val replyVisibilityProbeTbHttpMessageTaskConstructor: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbHttpMessageTaskConstructor
+    val replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod
+    val replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod
+    val replyVisibilityProbeBdUniqueIdClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeBdUniqueIdClass
+    val replyVisibilityProbeBdUniqueIdGenMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeBdUniqueIdGenMethod
+    val replyVisibilityProbeTbadkCoreApplicationClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbadkCoreApplicationClass
+    val replyVisibilityProbeTbadkCoreApplicationGetInstMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbadkCoreApplicationGetInstMethod
+    val replyVisibilityProbeTbadkCoreApplicationGetZidMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbadkCoreApplicationGetZidMethod
+    val replyVisibilityProbeTbConfigClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbConfigClass
+    val replyVisibilityProbeTbConfigServerAddressField: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbConfigServerAddressField
+    val replyVisibilityProbeTbConfigPbFloorAgreeUrlField: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeTbConfigPbFloorAgreeUrlField
+    val replyVisibilityProbeCmdConfigHttpClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeCmdConfigHttpClass
+    val replyVisibilityProbeCmdPbFloorAgreeField: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeCmdPbFloorAgreeField
+    val replyVisibilityProbeAgreeResponseClass: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeAgreeResponseClass
+    val replyVisibilityProbeAgreeDecodeLogicMethod: String?
+        get() = hookPoints.primary.pb.misc.replyVisibilityProbe.replyVisibilityProbeAgreeDecodeLogicMethod
     val aiSpriteMemePanControllerClass: String?
         get() = hookPoints.media.ai.spriteMeme.aiSpriteMemePanControllerClass
     val aiSpriteMemeEnableMethod: String?
@@ -866,6 +942,62 @@ data class HookSymbols(
             put("replyServerResponseClass", replyServerResponseClass)
             put("replyServerResponseDecodeMethod", replyServerResponseDecodeMethod)
             put("replyServerResponseResultJsonField", replyServerResponseResultJsonField)
+            put("agreeServerResponseClass", agreeServerResponseClass)
+            put("agreeServerResponseDecodeLogicMethod", agreeServerResponseDecodeLogicMethod)
+            put("replyVisibilityProbeReplyResponseClass", replyVisibilityProbeReplyResponseClass)
+            put("replyVisibilityProbeReplyDecodeMethod", replyVisibilityProbeReplyDecodeMethod)
+            put("replyVisibilityProbeReplyResultJsonField", replyVisibilityProbeReplyResultJsonField)
+            put("replyVisibilityProbeAddPostRequestClass", replyVisibilityProbeAddPostRequestClass)
+            put("replyVisibilityProbeAddPostRequestDataField", replyVisibilityProbeAddPostRequestDataField)
+            put("replyVisibilityProbeResponsedMessageClass", replyVisibilityProbeResponsedMessageClass)
+            put("replyVisibilityProbeGetOriginalMessageMethod", replyVisibilityProbeGetOriginalMessageMethod)
+            put("replyVisibilityProbeMessageClass", replyVisibilityProbeMessageClass)
+            put("replyVisibilityProbeMessageGetExtraMethod", replyVisibilityProbeMessageGetExtraMethod)
+            put("replyVisibilityProbeMessageGetTagMethod", replyVisibilityProbeMessageGetTagMethod)
+            put("replyVisibilityProbeMessageSetTagMethod", replyVisibilityProbeMessageSetTagMethod)
+            put("replyVisibilityProbeHttpMessageClass", replyVisibilityProbeHttpMessageClass)
+            put("replyVisibilityProbeHttpMessageConstructor", replyVisibilityProbeHttpMessageConstructor)
+            put("replyVisibilityProbeHttpMessageAddParamMethod", replyVisibilityProbeHttpMessageAddParamMethod)
+            put("replyVisibilityProbeHttpMessageAddHeaderMethod", replyVisibilityProbeHttpMessageAddHeaderMethod)
+            put("replyVisibilityProbeMessageManagerClass", replyVisibilityProbeMessageManagerClass)
+            put(
+                "replyVisibilityProbeMessageManagerGetInstanceMethod",
+                replyVisibilityProbeMessageManagerGetInstanceMethod,
+            )
+            put("replyVisibilityProbeMessageManagerFindTaskMethod", replyVisibilityProbeMessageManagerFindTaskMethod)
+            put(
+                "replyVisibilityProbeMessageManagerRegisterTaskMethod",
+                replyVisibilityProbeMessageManagerRegisterTaskMethod,
+            )
+            put("replyVisibilityProbeMessageManagerSendMethod", replyVisibilityProbeMessageManagerSendMethod)
+            put("replyVisibilityProbeTbHttpMessageTaskClass", replyVisibilityProbeTbHttpMessageTaskClass)
+            put("replyVisibilityProbeTbHttpMessageTaskConstructor", replyVisibilityProbeTbHttpMessageTaskConstructor)
+            put(
+                "replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod",
+                replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod,
+            )
+            put(
+                "replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod",
+                replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod,
+            )
+            put("replyVisibilityProbeBdUniqueIdClass", replyVisibilityProbeBdUniqueIdClass)
+            put("replyVisibilityProbeBdUniqueIdGenMethod", replyVisibilityProbeBdUniqueIdGenMethod)
+            put("replyVisibilityProbeTbadkCoreApplicationClass", replyVisibilityProbeTbadkCoreApplicationClass)
+            put(
+                "replyVisibilityProbeTbadkCoreApplicationGetInstMethod",
+                replyVisibilityProbeTbadkCoreApplicationGetInstMethod,
+            )
+            put(
+                "replyVisibilityProbeTbadkCoreApplicationGetZidMethod",
+                replyVisibilityProbeTbadkCoreApplicationGetZidMethod,
+            )
+            put("replyVisibilityProbeTbConfigClass", replyVisibilityProbeTbConfigClass)
+            put("replyVisibilityProbeTbConfigServerAddressField", replyVisibilityProbeTbConfigServerAddressField)
+            put("replyVisibilityProbeTbConfigPbFloorAgreeUrlField", replyVisibilityProbeTbConfigPbFloorAgreeUrlField)
+            put("replyVisibilityProbeCmdConfigHttpClass", replyVisibilityProbeCmdConfigHttpClass)
+            put("replyVisibilityProbeCmdPbFloorAgreeField", replyVisibilityProbeCmdPbFloorAgreeField)
+            put("replyVisibilityProbeAgreeResponseClass", replyVisibilityProbeAgreeResponseClass)
+            put("replyVisibilityProbeAgreeDecodeLogicMethod", replyVisibilityProbeAgreeDecodeLogicMethod)
             put("aiSpriteMemePanControllerClass", aiSpriteMemePanControllerClass)
             put("aiSpriteMemeEnableMethod", aiSpriteMemeEnableMethod)
             put("aiPbNewInputContainerClass", aiPbNewInputContainerClass)
@@ -910,7 +1042,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 4
+        const val CACHE_SCHEMA_VERSION = 6
 
         fun unsupported(
             featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
@@ -1228,6 +1360,81 @@ data class HookSymbols(
                     replyServerResponseDecodeMethod = obj.optStringOrNull("replyServerResponseDecodeMethod")
                     replyServerResponseResultJsonField =
                         obj.optStringOrNull("replyServerResponseResultJsonField")
+                    agreeServerResponseClass = obj.optStringOrNull("agreeServerResponseClass")
+                    agreeServerResponseDecodeLogicMethod =
+                        obj.optStringOrNull("agreeServerResponseDecodeLogicMethod")
+                    replyVisibilityProbeReplyResponseClass =
+                        obj.optStringOrNull("replyVisibilityProbeReplyResponseClass")
+                    replyVisibilityProbeReplyDecodeMethod =
+                        obj.optStringOrNull("replyVisibilityProbeReplyDecodeMethod")
+                    replyVisibilityProbeReplyResultJsonField =
+                        obj.optStringOrNull("replyVisibilityProbeReplyResultJsonField")
+                    replyVisibilityProbeAddPostRequestClass =
+                        obj.optStringOrNull("replyVisibilityProbeAddPostRequestClass")
+                    replyVisibilityProbeAddPostRequestDataField =
+                        obj.optStringOrNull("replyVisibilityProbeAddPostRequestDataField")
+                    replyVisibilityProbeResponsedMessageClass =
+                        obj.optStringOrNull("replyVisibilityProbeResponsedMessageClass")
+                    replyVisibilityProbeGetOriginalMessageMethod =
+                        obj.optStringOrNull("replyVisibilityProbeGetOriginalMessageMethod")
+                    replyVisibilityProbeMessageClass =
+                        obj.optStringOrNull("replyVisibilityProbeMessageClass")
+                    replyVisibilityProbeMessageGetExtraMethod =
+                        obj.optStringOrNull("replyVisibilityProbeMessageGetExtraMethod")
+                    replyVisibilityProbeMessageGetTagMethod =
+                        obj.optStringOrNull("replyVisibilityProbeMessageGetTagMethod")
+                    replyVisibilityProbeMessageSetTagMethod =
+                        obj.optStringOrNull("replyVisibilityProbeMessageSetTagMethod")
+                    replyVisibilityProbeHttpMessageClass =
+                        obj.optStringOrNull("replyVisibilityProbeHttpMessageClass")
+                    replyVisibilityProbeHttpMessageConstructor =
+                        obj.optStringOrNull("replyVisibilityProbeHttpMessageConstructor")
+                    replyVisibilityProbeHttpMessageAddParamMethod =
+                        obj.optStringOrNull("replyVisibilityProbeHttpMessageAddParamMethod")
+                    replyVisibilityProbeHttpMessageAddHeaderMethod =
+                        obj.optStringOrNull("replyVisibilityProbeHttpMessageAddHeaderMethod")
+                    replyVisibilityProbeMessageManagerClass =
+                        obj.optStringOrNull("replyVisibilityProbeMessageManagerClass")
+                    replyVisibilityProbeMessageManagerGetInstanceMethod =
+                        obj.optStringOrNull("replyVisibilityProbeMessageManagerGetInstanceMethod")
+                    replyVisibilityProbeMessageManagerFindTaskMethod =
+                        obj.optStringOrNull("replyVisibilityProbeMessageManagerFindTaskMethod")
+                    replyVisibilityProbeMessageManagerRegisterTaskMethod =
+                        obj.optStringOrNull("replyVisibilityProbeMessageManagerRegisterTaskMethod")
+                    replyVisibilityProbeMessageManagerSendMethod =
+                        obj.optStringOrNull("replyVisibilityProbeMessageManagerSendMethod")
+                    replyVisibilityProbeTbHttpMessageTaskClass =
+                        obj.optStringOrNull("replyVisibilityProbeTbHttpMessageTaskClass")
+                    replyVisibilityProbeTbHttpMessageTaskConstructor =
+                        obj.optStringOrNull("replyVisibilityProbeTbHttpMessageTaskConstructor")
+                    replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod =
+                        obj.optStringOrNull("replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod")
+                    replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod =
+                        obj.optStringOrNull("replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod")
+                    replyVisibilityProbeBdUniqueIdClass =
+                        obj.optStringOrNull("replyVisibilityProbeBdUniqueIdClass")
+                    replyVisibilityProbeBdUniqueIdGenMethod =
+                        obj.optStringOrNull("replyVisibilityProbeBdUniqueIdGenMethod")
+                    replyVisibilityProbeTbadkCoreApplicationClass =
+                        obj.optStringOrNull("replyVisibilityProbeTbadkCoreApplicationClass")
+                    replyVisibilityProbeTbadkCoreApplicationGetInstMethod =
+                        obj.optStringOrNull("replyVisibilityProbeTbadkCoreApplicationGetInstMethod")
+                    replyVisibilityProbeTbadkCoreApplicationGetZidMethod =
+                        obj.optStringOrNull("replyVisibilityProbeTbadkCoreApplicationGetZidMethod")
+                    replyVisibilityProbeTbConfigClass =
+                        obj.optStringOrNull("replyVisibilityProbeTbConfigClass")
+                    replyVisibilityProbeTbConfigServerAddressField =
+                        obj.optStringOrNull("replyVisibilityProbeTbConfigServerAddressField")
+                    replyVisibilityProbeTbConfigPbFloorAgreeUrlField =
+                        obj.optStringOrNull("replyVisibilityProbeTbConfigPbFloorAgreeUrlField")
+                    replyVisibilityProbeCmdConfigHttpClass =
+                        obj.optStringOrNull("replyVisibilityProbeCmdConfigHttpClass")
+                    replyVisibilityProbeCmdPbFloorAgreeField =
+                        obj.optStringOrNull("replyVisibilityProbeCmdPbFloorAgreeField")
+                    replyVisibilityProbeAgreeResponseClass =
+                        obj.optStringOrNull("replyVisibilityProbeAgreeResponseClass")
+                    replyVisibilityProbeAgreeDecodeLogicMethod =
+                        obj.optStringOrNull("replyVisibilityProbeAgreeDecodeLogicMethod")
                     aiSpriteMemePanControllerClass = obj.optStringOrNull("aiSpriteMemePanControllerClass")
                     aiSpriteMemeEnableMethod = obj.optStringOrNull("aiSpriteMemeEnableMethod")
                     aiPbNewInputContainerClass = obj.optStringOrNull("aiPbNewInputContainerClass")

@@ -29,6 +29,7 @@ internal object HookFeatureStatusDeriver {
         HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE,
         HookFeatureKey.CLEAN_SHARE_TRACKING_PARAMS,
         HookFeatureKey.DISABLE_AI_COMPONENTS,
+        HookFeatureKey.VERIFY_REPLY_AFTER_POST,
     )
 
     fun derive(symbols: HookSymbols): Map<String, HookFeatureStatus> {
@@ -435,6 +436,124 @@ internal object HookFeatureStatusDeriver {
             HookFeatureStatus(
                 state = HookFeatureState.DISABLED,
                 missingCritical = pbLikeAutoReplyCritical,
+            )
+        }
+
+        val replyVisibilityProbeCritical = ArrayList<String>(36)
+        if (symbols.replyVisibilityProbeReplyResponseClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeReplyResponseClass")
+        }
+        if (symbols.replyVisibilityProbeReplyDecodeMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeReplyDecodeMethod")
+        }
+        if (symbols.replyVisibilityProbeReplyResultJsonField.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeReplyResultJsonField")
+        }
+        if (symbols.replyVisibilityProbeAddPostRequestClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeAddPostRequestClass")
+        }
+        if (symbols.replyVisibilityProbeAddPostRequestDataField.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeAddPostRequestDataField")
+        }
+        if (symbols.replyVisibilityProbeResponsedMessageClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeResponsedMessageClass")
+        }
+        if (symbols.replyVisibilityProbeGetOriginalMessageMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeGetOriginalMessageMethod")
+        }
+        if (symbols.replyVisibilityProbeMessageClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageClass")
+        }
+        if (symbols.replyVisibilityProbeMessageGetExtraMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageGetExtraMethod")
+        }
+        if (symbols.replyVisibilityProbeMessageGetTagMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageGetTagMethod")
+        }
+        if (symbols.replyVisibilityProbeMessageSetTagMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageSetTagMethod")
+        }
+        if (symbols.replyVisibilityProbeHttpMessageClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeHttpMessageClass")
+        }
+        if (symbols.replyVisibilityProbeHttpMessageConstructor.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeHttpMessageConstructor")
+        }
+        if (symbols.replyVisibilityProbeHttpMessageAddParamMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeHttpMessageAddParamMethod")
+        }
+        if (symbols.replyVisibilityProbeHttpMessageAddHeaderMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeHttpMessageAddHeaderMethod")
+        }
+        if (symbols.replyVisibilityProbeMessageManagerClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageManagerClass")
+        }
+        if (symbols.replyVisibilityProbeMessageManagerGetInstanceMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageManagerGetInstanceMethod")
+        }
+        if (symbols.replyVisibilityProbeMessageManagerFindTaskMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageManagerFindTaskMethod")
+        }
+        if (symbols.replyVisibilityProbeMessageManagerRegisterTaskMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageManagerRegisterTaskMethod")
+        }
+        if (symbols.replyVisibilityProbeMessageManagerSendMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeMessageManagerSendMethod")
+        }
+        if (symbols.replyVisibilityProbeTbHttpMessageTaskClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbHttpMessageTaskClass")
+        }
+        if (symbols.replyVisibilityProbeTbHttpMessageTaskConstructor.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbHttpMessageTaskConstructor")
+        }
+        if (symbols.replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod")
+        }
+        if (symbols.replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod")
+        }
+        if (symbols.replyVisibilityProbeBdUniqueIdClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeBdUniqueIdClass")
+        }
+        if (symbols.replyVisibilityProbeBdUniqueIdGenMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeBdUniqueIdGenMethod")
+        }
+        if (symbols.replyVisibilityProbeTbadkCoreApplicationClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbadkCoreApplicationClass")
+        }
+        if (symbols.replyVisibilityProbeTbadkCoreApplicationGetInstMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbadkCoreApplicationGetInstMethod")
+        }
+        if (symbols.replyVisibilityProbeTbadkCoreApplicationGetZidMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbadkCoreApplicationGetZidMethod")
+        }
+        if (symbols.replyVisibilityProbeTbConfigClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbConfigClass")
+        }
+        if (symbols.replyVisibilityProbeTbConfigServerAddressField.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbConfigServerAddressField")
+        }
+        if (symbols.replyVisibilityProbeTbConfigPbFloorAgreeUrlField.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeTbConfigPbFloorAgreeUrlField")
+        }
+        if (symbols.replyVisibilityProbeCmdConfigHttpClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeCmdConfigHttpClass")
+        }
+        if (symbols.replyVisibilityProbeCmdPbFloorAgreeField.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeCmdPbFloorAgreeField")
+        }
+        if (symbols.replyVisibilityProbeAgreeResponseClass.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeAgreeResponseClass")
+        }
+        if (symbols.replyVisibilityProbeAgreeDecodeLogicMethod.isNullOrBlank()) {
+            replyVisibilityProbeCritical.add("replyVisibilityProbeAgreeDecodeLogicMethod")
+        }
+        out[HookFeatureKey.VERIFY_REPLY_AFTER_POST] = if (replyVisibilityProbeCritical.isEmpty()) {
+            HookFeatureStatus(state = HookFeatureState.FULL)
+        } else {
+            HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = replyVisibilityProbeCritical,
             )
         }
 
