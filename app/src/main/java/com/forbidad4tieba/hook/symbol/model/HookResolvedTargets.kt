@@ -212,6 +212,39 @@ internal data class ReplyServerResponseLogSymbols(
     val resultJsonField: Field,
 )
 
+internal data class AgreeServerResponseLogSymbols(
+    val decodeLogicMethod: Method,
+)
+
+internal data class ReplyVisibilityProbeSymbols(
+    val replyDecodeMethod: Method,
+    val replyResultJsonField: Field,
+    val addPostRequestClass: Class<*>,
+    val addPostRequestDataField: Field,
+    val getOriginalMessageMethod: Method,
+    val messageGetExtraMethod: Method,
+    val messageGetTagMethod: Method,
+    val messageSetTagMethod: Method,
+    val httpMessageConstructor: Constructor<*>,
+    val httpMessageAddParamMethod: Method,
+    val httpMessageAddHeaderMethod: Method,
+    val messageManagerGetInstanceMethod: Method,
+    val messageManagerFindTaskMethod: Method,
+    val messageManagerRegisterTaskMethod: Method,
+    val messageManagerSendMethod: Method,
+    val tbHttpMessageTaskConstructor: Constructor<*>,
+    val httpMessageTaskSetResponsedClassMethod: Method,
+    val tbHttpMessageTaskSetIsNeedTbsMethod: Method,
+    val bdUniqueIdGenMethod: Method,
+    val tbadkCoreApplicationGetInstMethod: Method,
+    val tbadkCoreApplicationGetZidMethod: Method,
+    val tbConfigServerAddressField: Field,
+    val tbConfigPbFloorAgreeUrlField: Field,
+    val cmdPbFloorAgreeField: Field,
+    val agreeResponseClass: Class<*>,
+    val agreeDecodeLogicMethod: Method,
+)
+
 internal data class ConstantReturnMethodSymbols(
     val method: Method,
     val value: Any,

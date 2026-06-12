@@ -100,6 +100,41 @@ internal object HookSymbolResolver {
     private const val REPLY_SERVER_RESPONSE_CLASS = "com.baidu.tieba.write.message.AddPostHttpResponse"
     private const val REPLY_SERVER_RESPONSE_DECODE_METHOD = "decodeInBackGround"
     private const val REPLY_SERVER_RESPONSE_RESULT_JSON_FIELD = "resultJSON"
+    private const val JSON_HTTP_RESPONSED_MESSAGE_CLASS = "com.baidu.tbadk.message.http.JsonHttpResponsedMessage"
+    private const val AGREE_SERVER_RESPONSE_CLASS = "com.baidu.tieba.pb.data.PbFloorAgreeResponseMessage"
+    private const val AGREE_SERVER_RESPONSE_DECODE_LOGIC_METHOD = "decodeLogicInBackGround"
+    private const val ADD_POST_REQUEST_CLASS = "com.baidu.tieba.write.message.AddPostRequest"
+    private const val ADD_POST_REQUEST_DATA_FIELD = "requestData"
+    private const val RESPONSED_MESSAGE_CLASS = "com.baidu.adp.framework.message.ResponsedMessage"
+    private const val RESPONSED_MESSAGE_GET_ORIGINAL_METHOD = "getOrginalMessage"
+    private const val MESSAGE_CLASS = "com.baidu.adp.framework.message.Message"
+    private const val MESSAGE_GET_EXTRA_METHOD = "getExtra"
+    private const val MESSAGE_GET_TAG_METHOD = "getTag"
+    private const val MESSAGE_SET_TAG_METHOD = "setTag"
+    private const val HTTP_MESSAGE_CLASS = "com.baidu.adp.framework.message.HttpMessage"
+    private const val HTTP_MESSAGE_ADD_PARAM_METHOD = "addParam"
+    private const val HTTP_MESSAGE_ADD_HEADER_METHOD = "addHeader"
+    private const val MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
+    private const val MESSAGE_MANAGER_GET_INSTANCE_METHOD = "getInstance"
+    private const val MESSAGE_MANAGER_FIND_TASK_METHOD = "findTask"
+    private const val MESSAGE_MANAGER_REGISTER_TASK_METHOD = "registerTask"
+    private const val MESSAGE_MANAGER_SEND_MESSAGE_METHOD = "sendMessage"
+    private const val MESSAGE_TASK_CLASS = "com.baidu.adp.framework.task.MessageTask"
+    private const val HTTP_MESSAGE_TASK_CLASS = "com.baidu.adp.framework.task.HttpMessageTask"
+    private const val HTTP_RESPONSED_MESSAGE_CLASS = "com.baidu.adp.framework.message.HttpResponsedMessage"
+    private const val HTTP_MESSAGE_TASK_SET_RESPONSE_CLASS_METHOD = "setResponsedClass"
+    private const val TB_HTTP_MESSAGE_TASK_CLASS = "com.baidu.tbadk.task.TbHttpMessageTask"
+    private const val TB_HTTP_MESSAGE_TASK_SET_NEED_TBS_METHOD = "setIsNeedTbs"
+    private const val BD_UNIQUE_ID_CLASS = "com.baidu.adp.BdUniqueId"
+    private const val BD_UNIQUE_ID_GEN_METHOD = "gen"
+    private const val TBADK_CORE_APPLICATION_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
+    private const val TBADK_CORE_APPLICATION_GET_INST_METHOD = "getInst"
+    private const val TBADK_CORE_APPLICATION_GET_ZID_METHOD = "getZid"
+    private const val TB_CONFIG_CLASS = "com.baidu.tbadk.TbConfig"
+    private const val TB_CONFIG_SERVER_ADDRESS_FIELD = "SERVER_ADDRESS"
+    private const val TB_CONFIG_PB_FLOOR_AGREE_URL_FIELD = "PB_FLOOR_AGREE_URL"
+    private const val CMD_CONFIG_HTTP_CLASS = "com.baidu.tbadk.core.frameworkData.CmdConfigHttp"
+    private const val CMD_CONFIG_HTTP_PB_FLOOR_AGREE_FIELD = "CMD_PB_FLOOR_AGREE"
     private const val HOME_NATIVE_GLASS_SUB_PB_NEXT_PAGE_MORE_VIEW_RES_NAME = "pb_more_view"
     private const val HOME_NATIVE_GLASS_PB_REPLY_TITLE_DIVIDER_VIEW_RES_NAME = "divider_bottom"
     private const val HOME_NATIVE_GLASS_SORT_SWITCH_BACKGROUND_PAINT_FIELD = "o"
@@ -2394,6 +2429,423 @@ internal object HookSymbolResolver {
         }
     }
 
+    fun resolveAgreeServerResponseLogSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): AgreeServerResponseLogSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[AgreeServerResponseLogHook] skipped: scan symbols unavailable")
+                return null
+            }
+            val className = resolvedSymbols.agreeServerResponseClass?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.log("[AgreeServerResponseLogHook] skipped: response class missing")
+                return null
+            }
+            val decodeLogicMethodName =
+                resolvedSymbols.agreeServerResponseDecodeLogicMethod?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[AgreeServerResponseLogHook] skipped: decode logic method missing")
+                    return null
+                }
+            val responseClass = safeFindClass(className, cl) ?: run {
+                XposedCompat.log("[AgreeServerResponseLogHook] skipped: class not found: $className")
+                return null
+            }
+            val decodeLogicMethod = responseClass.declaredMethods.singleOrNull { method ->
+                isAgreeServerResponseDecodeLogicMethod(method, decodeLogicMethodName)
+            } ?: run {
+                XposedCompat.log(
+                    "[AgreeServerResponseLogHook] skipped: method not found: " +
+                        "$className.$decodeLogicMethodName(int,JSONObject)",
+                )
+                return null
+            }
+            decodeLogicMethod.isAccessible = true
+            AgreeServerResponseLogSymbols(decodeLogicMethod = decodeLogicMethod)
+        } catch (t: Throwable) {
+            XposedCompat.log("[AgreeServerResponseLogHook] symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
+    fun resolveReplyVisibilityProbeSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): ReplyVisibilityProbeSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[ReplyVisibilityProbeHook] skipped: scan symbols unavailable")
+                return null
+            }
+
+            fun requireSymbol(name: String, value: String?): String {
+                return value?.takeIf { it.isNotBlank() } ?: error("$name missing")
+            }
+
+            val replyResponseClassName = requireSymbol(
+                "replyVisibilityProbeReplyResponseClass",
+                resolvedSymbols.replyVisibilityProbeReplyResponseClass,
+            )
+            val replyDecodeMethodName = requireSymbol(
+                "replyVisibilityProbeReplyDecodeMethod",
+                resolvedSymbols.replyVisibilityProbeReplyDecodeMethod,
+            )
+            val replyResultJsonFieldName = requireSymbol(
+                "replyVisibilityProbeReplyResultJsonField",
+                resolvedSymbols.replyVisibilityProbeReplyResultJsonField,
+            )
+            val addPostRequestClassName = requireSymbol(
+                "replyVisibilityProbeAddPostRequestClass",
+                resolvedSymbols.replyVisibilityProbeAddPostRequestClass,
+            )
+            val addPostRequestDataFieldName = requireSymbol(
+                "replyVisibilityProbeAddPostRequestDataField",
+                resolvedSymbols.replyVisibilityProbeAddPostRequestDataField,
+            )
+            val responsedMessageClassName = requireSymbol(
+                "replyVisibilityProbeResponsedMessageClass",
+                resolvedSymbols.replyVisibilityProbeResponsedMessageClass,
+            )
+            val getOriginalMessageMethodName = requireSymbol(
+                "replyVisibilityProbeGetOriginalMessageMethod",
+                resolvedSymbols.replyVisibilityProbeGetOriginalMessageMethod,
+            )
+            val messageClassName = requireSymbol(
+                "replyVisibilityProbeMessageClass",
+                resolvedSymbols.replyVisibilityProbeMessageClass,
+            )
+            val messageGetExtraMethodName = requireSymbol(
+                "replyVisibilityProbeMessageGetExtraMethod",
+                resolvedSymbols.replyVisibilityProbeMessageGetExtraMethod,
+            )
+            val messageGetTagMethodName = requireSymbol(
+                "replyVisibilityProbeMessageGetTagMethod",
+                resolvedSymbols.replyVisibilityProbeMessageGetTagMethod,
+            )
+            val messageSetTagMethodName = requireSymbol(
+                "replyVisibilityProbeMessageSetTagMethod",
+                resolvedSymbols.replyVisibilityProbeMessageSetTagMethod,
+            )
+            val httpMessageClassName = requireSymbol(
+                "replyVisibilityProbeHttpMessageClass",
+                resolvedSymbols.replyVisibilityProbeHttpMessageClass,
+            )
+            requireSymbol(
+                "replyVisibilityProbeHttpMessageConstructor",
+                resolvedSymbols.replyVisibilityProbeHttpMessageConstructor,
+            )
+            val httpMessageAddParamMethodName = requireSymbol(
+                "replyVisibilityProbeHttpMessageAddParamMethod",
+                resolvedSymbols.replyVisibilityProbeHttpMessageAddParamMethod,
+            )
+            val httpMessageAddHeaderMethodName = requireSymbol(
+                "replyVisibilityProbeHttpMessageAddHeaderMethod",
+                resolvedSymbols.replyVisibilityProbeHttpMessageAddHeaderMethod,
+            )
+            val messageManagerClassName = requireSymbol(
+                "replyVisibilityProbeMessageManagerClass",
+                resolvedSymbols.replyVisibilityProbeMessageManagerClass,
+            )
+            val messageManagerGetInstanceMethodName = requireSymbol(
+                "replyVisibilityProbeMessageManagerGetInstanceMethod",
+                resolvedSymbols.replyVisibilityProbeMessageManagerGetInstanceMethod,
+            )
+            val messageManagerFindTaskMethodName = requireSymbol(
+                "replyVisibilityProbeMessageManagerFindTaskMethod",
+                resolvedSymbols.replyVisibilityProbeMessageManagerFindTaskMethod,
+            )
+            val messageManagerRegisterTaskMethodName = requireSymbol(
+                "replyVisibilityProbeMessageManagerRegisterTaskMethod",
+                resolvedSymbols.replyVisibilityProbeMessageManagerRegisterTaskMethod,
+            )
+            val messageManagerSendMethodName = requireSymbol(
+                "replyVisibilityProbeMessageManagerSendMethod",
+                resolvedSymbols.replyVisibilityProbeMessageManagerSendMethod,
+            )
+            val tbHttpMessageTaskClassName = requireSymbol(
+                "replyVisibilityProbeTbHttpMessageTaskClass",
+                resolvedSymbols.replyVisibilityProbeTbHttpMessageTaskClass,
+            )
+            requireSymbol(
+                "replyVisibilityProbeTbHttpMessageTaskConstructor",
+                resolvedSymbols.replyVisibilityProbeTbHttpMessageTaskConstructor,
+            )
+            val httpMessageTaskSetResponsedClassMethodName = requireSymbol(
+                "replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod",
+                resolvedSymbols.replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod,
+            )
+            val tbHttpMessageTaskSetIsNeedTbsMethodName = requireSymbol(
+                "replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod",
+                resolvedSymbols.replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod,
+            )
+            val bdUniqueIdClassName = requireSymbol(
+                "replyVisibilityProbeBdUniqueIdClass",
+                resolvedSymbols.replyVisibilityProbeBdUniqueIdClass,
+            )
+            val bdUniqueIdGenMethodName = requireSymbol(
+                "replyVisibilityProbeBdUniqueIdGenMethod",
+                resolvedSymbols.replyVisibilityProbeBdUniqueIdGenMethod,
+            )
+            val tbadkCoreApplicationClassName = requireSymbol(
+                "replyVisibilityProbeTbadkCoreApplicationClass",
+                resolvedSymbols.replyVisibilityProbeTbadkCoreApplicationClass,
+            )
+            val tbadkCoreApplicationGetInstMethodName = requireSymbol(
+                "replyVisibilityProbeTbadkCoreApplicationGetInstMethod",
+                resolvedSymbols.replyVisibilityProbeTbadkCoreApplicationGetInstMethod,
+            )
+            val tbadkCoreApplicationGetZidMethodName = requireSymbol(
+                "replyVisibilityProbeTbadkCoreApplicationGetZidMethod",
+                resolvedSymbols.replyVisibilityProbeTbadkCoreApplicationGetZidMethod,
+            )
+            val tbConfigClassName = requireSymbol(
+                "replyVisibilityProbeTbConfigClass",
+                resolvedSymbols.replyVisibilityProbeTbConfigClass,
+            )
+            val tbConfigServerAddressFieldName = requireSymbol(
+                "replyVisibilityProbeTbConfigServerAddressField",
+                resolvedSymbols.replyVisibilityProbeTbConfigServerAddressField,
+            )
+            val tbConfigPbFloorAgreeUrlFieldName = requireSymbol(
+                "replyVisibilityProbeTbConfigPbFloorAgreeUrlField",
+                resolvedSymbols.replyVisibilityProbeTbConfigPbFloorAgreeUrlField,
+            )
+            val cmdConfigHttpClassName = requireSymbol(
+                "replyVisibilityProbeCmdConfigHttpClass",
+                resolvedSymbols.replyVisibilityProbeCmdConfigHttpClass,
+            )
+            val cmdPbFloorAgreeFieldName = requireSymbol(
+                "replyVisibilityProbeCmdPbFloorAgreeField",
+                resolvedSymbols.replyVisibilityProbeCmdPbFloorAgreeField,
+            )
+            val agreeResponseClassName = requireSymbol(
+                "replyVisibilityProbeAgreeResponseClass",
+                resolvedSymbols.replyVisibilityProbeAgreeResponseClass,
+            )
+            val agreeDecodeLogicMethodName = requireSymbol(
+                "replyVisibilityProbeAgreeDecodeLogicMethod",
+                resolvedSymbols.replyVisibilityProbeAgreeDecodeLogicMethod,
+            )
+
+            val replyResponseClass = safeFindClass(replyResponseClassName, cl) ?: error("class not found: $replyResponseClassName")
+            val addPostRequestClass =
+                safeFindClass(addPostRequestClassName, cl) ?: error("class not found: $addPostRequestClassName")
+            val responsedMessageClass =
+                safeFindClass(responsedMessageClassName, cl) ?: error("class not found: $responsedMessageClassName")
+            val messageClass = safeFindClass(messageClassName, cl) ?: error("class not found: $messageClassName")
+            val httpMessageClass =
+                safeFindClass(httpMessageClassName, cl) ?: error("class not found: $httpMessageClassName")
+            val messageManagerClass =
+                safeFindClass(messageManagerClassName, cl) ?: error("class not found: $messageManagerClassName")
+            val messageTaskClass = safeFindClass(MESSAGE_TASK_CLASS, cl) ?: error("class not found: $MESSAGE_TASK_CLASS")
+            val httpMessageTaskClass =
+                safeFindClass(HTTP_MESSAGE_TASK_CLASS, cl) ?: error("class not found: $HTTP_MESSAGE_TASK_CLASS")
+            val httpResponsedMessageClass =
+                safeFindClass(HTTP_RESPONSED_MESSAGE_CLASS, cl) ?: error("class not found: $HTTP_RESPONSED_MESSAGE_CLASS")
+            val tbHttpMessageTaskClass =
+                safeFindClass(tbHttpMessageTaskClassName, cl) ?: error("class not found: $tbHttpMessageTaskClassName")
+            val bdUniqueIdClass =
+                safeFindClass(bdUniqueIdClassName, cl) ?: error("class not found: $bdUniqueIdClassName")
+            val tbadkCoreApplicationClass = safeFindClass(tbadkCoreApplicationClassName, cl)
+                ?: error("class not found: $tbadkCoreApplicationClassName")
+            val tbConfigClass = safeFindClass(tbConfigClassName, cl) ?: error("class not found: $tbConfigClassName")
+            val cmdConfigHttpClass =
+                safeFindClass(cmdConfigHttpClassName, cl) ?: error("class not found: $cmdConfigHttpClassName")
+            val agreeResponseClass =
+                safeFindClass(agreeResponseClassName, cl) ?: error("class not found: $agreeResponseClassName")
+            if (!httpResponsedMessageClass.isAssignableFrom(agreeResponseClass)) {
+                error("$agreeResponseClassName is not a HttpResponsedMessage")
+            }
+
+            val replyDecodeMethod = replyResponseClass.declaredMethods.singleOrNull { method ->
+                isReplyServerResponseDecodeMethod(method, replyDecodeMethodName)
+            } ?: error("method not found: $replyResponseClassName.$replyDecodeMethodName(int,byte[])")
+            val replyResultJsonField = replyResponseClass.declaredFields.singleOrNull { field ->
+                field.name == replyResultJsonFieldName && JSONObject::class.java.isAssignableFrom(field.type)
+            } ?: error("field not found: $replyResponseClassName.$replyResultJsonFieldName")
+            val addPostRequestDataField = addPostRequestClass.declaredFields.singleOrNull { field ->
+                field.name == addPostRequestDataFieldName && isStringMapField(field)
+            } ?: error("field not found: $addPostRequestClassName.$addPostRequestDataFieldName")
+            val getOriginalMessageMethod = responsedMessageClass.declaredMethods.singleOrNull { method ->
+                method.name == getOriginalMessageMethodName &&
+                    method.parameterTypes.isEmpty() &&
+                    messageClass.isAssignableFrom(method.returnType)
+            } ?: error("method not found: $responsedMessageClassName.$getOriginalMessageMethodName()")
+            val messageGetExtraMethod = messageClass.declaredMethods.singleOrNull { method ->
+                method.name == messageGetExtraMethodName &&
+                    method.parameterTypes.isEmpty() &&
+                    method.returnType == Any::class.java
+            } ?: error("method not found: $messageClassName.$messageGetExtraMethodName()")
+            val messageGetTagMethod = messageClass.declaredMethods.singleOrNull { method ->
+                method.name == messageGetTagMethodName &&
+                    method.parameterTypes.isEmpty() &&
+                    bdUniqueIdClass.isAssignableFrom(method.returnType)
+            } ?: error("method not found: $messageClassName.$messageGetTagMethodName()")
+            val messageSetTagMethod = messageClass.declaredMethods.singleOrNull { method ->
+                method.name == messageSetTagMethodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == bdUniqueIdClass
+            } ?: error("method not found: $messageClassName.$messageSetTagMethodName(BdUniqueId)")
+            val httpMessageConstructor = httpMessageClass.declaredConstructors.singleOrNull { constructor ->
+                constructor.parameterTypes.size == 1 && isIntType(constructor.parameterTypes[0])
+            } ?: error("constructor not found: $httpMessageClassName(int)")
+            val httpMessageAddParamMethod = httpMessageClass.declaredMethods.singleOrNull { method ->
+                method.name == httpMessageAddParamMethodName &&
+                    method.parameterTypes.size == 2 &&
+                    method.parameterTypes[0] == String::class.java &&
+                    method.parameterTypes[1] == Any::class.java
+            } ?: error("method not found: $httpMessageClassName.$httpMessageAddParamMethodName(String,Object)")
+            val httpMessageAddHeaderMethod = httpMessageClass.declaredMethods.singleOrNull { method ->
+                method.name == httpMessageAddHeaderMethodName &&
+                    method.returnType == String::class.java &&
+                    method.parameterTypes.contentEquals(arrayOf(String::class.java, String::class.java))
+            } ?: error("method not found: $httpMessageClassName.$httpMessageAddHeaderMethodName(String,String)")
+            val messageManagerGetInstanceMethod = messageManagerClass.declaredMethods.singleOrNull { method ->
+                method.name == messageManagerGetInstanceMethodName &&
+                    Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.isEmpty() &&
+                    messageManagerClass.isAssignableFrom(method.returnType)
+            } ?: error("method not found: $messageManagerClassName.$messageManagerGetInstanceMethodName()")
+            val messageManagerFindTaskMethod = messageManagerClass.declaredMethods.singleOrNull { method ->
+                method.name == messageManagerFindTaskMethodName &&
+                    method.parameterTypes.size == 1 &&
+                    isIntType(method.parameterTypes[0]) &&
+                    messageTaskClass.isAssignableFrom(method.returnType)
+            } ?: error("method not found: $messageManagerClassName.$messageManagerFindTaskMethodName(int)")
+            val messageManagerRegisterTaskMethod = messageManagerClass.declaredMethods.singleOrNull { method ->
+                method.name == messageManagerRegisterTaskMethodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == messageTaskClass
+            } ?: error("method not found: $messageManagerClassName.$messageManagerRegisterTaskMethodName(MessageTask)")
+            val messageManagerSendMethod = messageManagerClass.declaredMethods.singleOrNull { method ->
+                method.name == messageManagerSendMethodName &&
+                    method.returnType == Boolean::class.javaPrimitiveType &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == messageClass
+            } ?: error("method not found: $messageManagerClassName.$messageManagerSendMethodName(Message)")
+            val tbHttpMessageTaskConstructor = tbHttpMessageTaskClass.declaredConstructors.singleOrNull { constructor ->
+                constructor.parameterTypes.size == 2 &&
+                    isIntType(constructor.parameterTypes[0]) &&
+                    constructor.parameterTypes[1] == String::class.java
+            } ?: error("constructor not found: $tbHttpMessageTaskClassName(int,String)")
+            val httpMessageTaskSetResponsedClassMethod = httpMessageTaskClass.declaredMethods.singleOrNull { method ->
+                method.name == httpMessageTaskSetResponsedClassMethodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == Class::class.java
+            } ?: error("method not found: $HTTP_MESSAGE_TASK_CLASS.$httpMessageTaskSetResponsedClassMethodName(Class)")
+            val tbHttpMessageTaskSetIsNeedTbsMethod = tbHttpMessageTaskClass.declaredMethods.singleOrNull { method ->
+                method.name == tbHttpMessageTaskSetIsNeedTbsMethodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == Boolean::class.javaPrimitiveType
+            } ?: error("method not found: $tbHttpMessageTaskClassName.$tbHttpMessageTaskSetIsNeedTbsMethodName(boolean)")
+            val bdUniqueIdGenMethod = bdUniqueIdClass.declaredMethods.singleOrNull { method ->
+                method.name == bdUniqueIdGenMethodName &&
+                    Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.isEmpty() &&
+                    bdUniqueIdClass.isAssignableFrom(method.returnType)
+            } ?: error("method not found: $bdUniqueIdClassName.$bdUniqueIdGenMethodName()")
+            val tbadkCoreApplicationGetInstMethod =
+                tbadkCoreApplicationClass.declaredMethods.singleOrNull { method ->
+                    method.name == tbadkCoreApplicationGetInstMethodName &&
+                        Modifier.isStatic(method.modifiers) &&
+                        method.parameterTypes.isEmpty() &&
+                        tbadkCoreApplicationClass.isAssignableFrom(method.returnType)
+                } ?: error("method not found: $tbadkCoreApplicationClassName.$tbadkCoreApplicationGetInstMethodName()")
+            val tbadkCoreApplicationGetZidMethod =
+                tbadkCoreApplicationClass.declaredMethods.singleOrNull { method ->
+                    method.name == tbadkCoreApplicationGetZidMethodName &&
+                        !Modifier.isStatic(method.modifiers) &&
+                        method.parameterTypes.isEmpty() &&
+                        method.returnType == String::class.java
+                } ?: error("method not found: $tbadkCoreApplicationClassName.$tbadkCoreApplicationGetZidMethodName()")
+            val tbConfigServerAddressField = tbConfigClass.declaredFields.singleOrNull { field ->
+                field.name == tbConfigServerAddressFieldName &&
+                    Modifier.isStatic(field.modifiers) &&
+                    field.type == String::class.java
+            } ?: error("field not found: $tbConfigClassName.$tbConfigServerAddressFieldName")
+            val tbConfigPbFloorAgreeUrlField = tbConfigClass.declaredFields.singleOrNull { field ->
+                field.name == tbConfigPbFloorAgreeUrlFieldName &&
+                    Modifier.isStatic(field.modifiers) &&
+                    field.type == String::class.java
+            } ?: error("field not found: $tbConfigClassName.$tbConfigPbFloorAgreeUrlFieldName")
+            val cmdPbFloorAgreeField = cmdConfigHttpClass.declaredFields.singleOrNull { field ->
+                field.name == cmdPbFloorAgreeFieldName &&
+                    Modifier.isStatic(field.modifiers) &&
+                    isIntType(field.type)
+            } ?: error("field not found: $cmdConfigHttpClassName.$cmdPbFloorAgreeFieldName")
+            val agreeDecodeLogicMethod = agreeResponseClass.declaredMethods.singleOrNull { method ->
+                isAgreeServerResponseDecodeLogicMethod(method, agreeDecodeLogicMethodName)
+            } ?: error("method not found: $agreeResponseClassName.$agreeDecodeLogicMethodName(int,JSONObject)")
+
+            listOf(
+                replyDecodeMethod,
+                getOriginalMessageMethod,
+                messageGetExtraMethod,
+                messageGetTagMethod,
+                messageSetTagMethod,
+                httpMessageAddParamMethod,
+                httpMessageAddHeaderMethod,
+                messageManagerGetInstanceMethod,
+                messageManagerFindTaskMethod,
+                messageManagerRegisterTaskMethod,
+                messageManagerSendMethod,
+                httpMessageTaskSetResponsedClassMethod,
+                tbHttpMessageTaskSetIsNeedTbsMethod,
+                bdUniqueIdGenMethod,
+                tbadkCoreApplicationGetInstMethod,
+                tbadkCoreApplicationGetZidMethod,
+                agreeDecodeLogicMethod,
+            ).forEach { it.isAccessible = true }
+            listOf(
+                replyResultJsonField,
+                addPostRequestDataField,
+                tbConfigServerAddressField,
+                tbConfigPbFloorAgreeUrlField,
+                cmdPbFloorAgreeField,
+            ).forEach { it.isAccessible = true }
+            httpMessageConstructor.isAccessible = true
+            tbHttpMessageTaskConstructor.isAccessible = true
+
+            ReplyVisibilityProbeSymbols(
+                replyDecodeMethod = replyDecodeMethod,
+                replyResultJsonField = replyResultJsonField,
+                addPostRequestClass = addPostRequestClass,
+                addPostRequestDataField = addPostRequestDataField,
+                getOriginalMessageMethod = getOriginalMessageMethod,
+                messageGetExtraMethod = messageGetExtraMethod,
+                messageGetTagMethod = messageGetTagMethod,
+                messageSetTagMethod = messageSetTagMethod,
+                httpMessageConstructor = httpMessageConstructor,
+                httpMessageAddParamMethod = httpMessageAddParamMethod,
+                httpMessageAddHeaderMethod = httpMessageAddHeaderMethod,
+                messageManagerGetInstanceMethod = messageManagerGetInstanceMethod,
+                messageManagerFindTaskMethod = messageManagerFindTaskMethod,
+                messageManagerRegisterTaskMethod = messageManagerRegisterTaskMethod,
+                messageManagerSendMethod = messageManagerSendMethod,
+                tbHttpMessageTaskConstructor = tbHttpMessageTaskConstructor,
+                httpMessageTaskSetResponsedClassMethod = httpMessageTaskSetResponsedClassMethod,
+                tbHttpMessageTaskSetIsNeedTbsMethod = tbHttpMessageTaskSetIsNeedTbsMethod,
+                bdUniqueIdGenMethod = bdUniqueIdGenMethod,
+                tbadkCoreApplicationGetInstMethod = tbadkCoreApplicationGetInstMethod,
+                tbadkCoreApplicationGetZidMethod = tbadkCoreApplicationGetZidMethod,
+                tbConfigServerAddressField = tbConfigServerAddressField,
+                tbConfigPbFloorAgreeUrlField = tbConfigPbFloorAgreeUrlField,
+                cmdPbFloorAgreeField = cmdPbFloorAgreeField,
+                agreeResponseClass = agreeResponseClass,
+                agreeDecodeLogicMethod = agreeDecodeLogicMethod,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[ReplyVisibilityProbeHook] symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
     private fun resolveFeedLoadMoreMethod(cl: ClassLoader, symbols: HookSymbols): Method? {
         val methodName = symbols.feedTemplateLoadMoreMethod?.takeIf { it.isNotBlank() } ?: run {
             XposedCompat.log("[FeedAdHook] FeedTemplateAdapter loadMore skipped: scan symbol missing")
@@ -3858,6 +4310,9 @@ internal object HookSymbolResolver {
         var replyServerResponseClass: String? = null
         var replyServerResponseDecodeMethod: String? = null
         var replyServerResponseResultJsonField: String? = null
+        var agreeServerResponseClass: String? = null
+        var agreeServerResponseDecodeLogicMethod: String? = null
+        var replyVisibilityProbeScan = ReplyVisibilityProbeScanSymbols()
         var splashAdHelperClass: String? = null
         var splashAdHelperMethod: String? = null
         var closeAdDataClass: String? = null
@@ -4131,6 +4586,20 @@ internal object HookSymbolResolver {
                 replyServerResponseDecodeMethod = scan.decodeMethod
                 replyServerResponseResultJsonField = scan.resultJsonField
             }
+        }
+        runScanStep("AgreeServerResponseLogHook", logger, scanErrors, Unit) {
+            scanAgreeServerResponseLogSymbols(cl, logger)?.let { scan ->
+                agreeServerResponseClass = scan.responseClass
+                agreeServerResponseDecodeLogicMethod = scan.decodeLogicMethod
+            }
+        }
+        replyVisibilityProbeScan = runScanStep(
+            "ReplyVisibilityProbeHook",
+            logger,
+            scanErrors,
+            ReplyVisibilityProbeScanSymbols(),
+        ) {
+            scanReplyVisibilityProbeSymbols(cl, logger)
         }
 
         val feedHeadParamsMatch = runRules(
@@ -4820,6 +5289,55 @@ internal object HookSymbolResolver {
             this.replyServerResponseClass = replyServerResponseClass
             this.replyServerResponseDecodeMethod = replyServerResponseDecodeMethod
             this.replyServerResponseResultJsonField = replyServerResponseResultJsonField
+            this.agreeServerResponseClass = agreeServerResponseClass
+            this.agreeServerResponseDecodeLogicMethod = agreeServerResponseDecodeLogicMethod
+            this.replyVisibilityProbeReplyResponseClass = replyVisibilityProbeScan.replyResponseClass
+            this.replyVisibilityProbeReplyDecodeMethod = replyVisibilityProbeScan.replyDecodeMethod
+            this.replyVisibilityProbeReplyResultJsonField = replyVisibilityProbeScan.replyResultJsonField
+            this.replyVisibilityProbeAddPostRequestClass = replyVisibilityProbeScan.addPostRequestClass
+            this.replyVisibilityProbeAddPostRequestDataField = replyVisibilityProbeScan.addPostRequestDataField
+            this.replyVisibilityProbeResponsedMessageClass = replyVisibilityProbeScan.responsedMessageClass
+            this.replyVisibilityProbeGetOriginalMessageMethod = replyVisibilityProbeScan.getOriginalMessageMethod
+            this.replyVisibilityProbeMessageClass = replyVisibilityProbeScan.messageClass
+            this.replyVisibilityProbeMessageGetExtraMethod = replyVisibilityProbeScan.messageGetExtraMethod
+            this.replyVisibilityProbeMessageGetTagMethod = replyVisibilityProbeScan.messageGetTagMethod
+            this.replyVisibilityProbeMessageSetTagMethod = replyVisibilityProbeScan.messageSetTagMethod
+            this.replyVisibilityProbeHttpMessageClass = replyVisibilityProbeScan.httpMessageClass
+            this.replyVisibilityProbeHttpMessageConstructor = replyVisibilityProbeScan.httpMessageConstructor
+            this.replyVisibilityProbeHttpMessageAddParamMethod = replyVisibilityProbeScan.httpMessageAddParamMethod
+            this.replyVisibilityProbeHttpMessageAddHeaderMethod = replyVisibilityProbeScan.httpMessageAddHeaderMethod
+            this.replyVisibilityProbeMessageManagerClass = replyVisibilityProbeScan.messageManagerClass
+            this.replyVisibilityProbeMessageManagerGetInstanceMethod =
+                replyVisibilityProbeScan.messageManagerGetInstanceMethod
+            this.replyVisibilityProbeMessageManagerFindTaskMethod =
+                replyVisibilityProbeScan.messageManagerFindTaskMethod
+            this.replyVisibilityProbeMessageManagerRegisterTaskMethod =
+                replyVisibilityProbeScan.messageManagerRegisterTaskMethod
+            this.replyVisibilityProbeMessageManagerSendMethod = replyVisibilityProbeScan.messageManagerSendMethod
+            this.replyVisibilityProbeTbHttpMessageTaskClass = replyVisibilityProbeScan.tbHttpMessageTaskClass
+            this.replyVisibilityProbeTbHttpMessageTaskConstructor =
+                replyVisibilityProbeScan.tbHttpMessageTaskConstructor
+            this.replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod =
+                replyVisibilityProbeScan.httpMessageTaskSetResponsedClassMethod
+            this.replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod =
+                replyVisibilityProbeScan.tbHttpMessageTaskSetIsNeedTbsMethod
+            this.replyVisibilityProbeBdUniqueIdClass = replyVisibilityProbeScan.bdUniqueIdClass
+            this.replyVisibilityProbeBdUniqueIdGenMethod = replyVisibilityProbeScan.bdUniqueIdGenMethod
+            this.replyVisibilityProbeTbadkCoreApplicationClass =
+                replyVisibilityProbeScan.tbadkCoreApplicationClass
+            this.replyVisibilityProbeTbadkCoreApplicationGetInstMethod =
+                replyVisibilityProbeScan.tbadkCoreApplicationGetInstMethod
+            this.replyVisibilityProbeTbadkCoreApplicationGetZidMethod =
+                replyVisibilityProbeScan.tbadkCoreApplicationGetZidMethod
+            this.replyVisibilityProbeTbConfigClass = replyVisibilityProbeScan.tbConfigClass
+            this.replyVisibilityProbeTbConfigServerAddressField =
+                replyVisibilityProbeScan.tbConfigServerAddressField
+            this.replyVisibilityProbeTbConfigPbFloorAgreeUrlField =
+                replyVisibilityProbeScan.tbConfigPbFloorAgreeUrlField
+            this.replyVisibilityProbeCmdConfigHttpClass = replyVisibilityProbeScan.cmdConfigHttpClass
+            this.replyVisibilityProbeCmdPbFloorAgreeField = replyVisibilityProbeScan.cmdPbFloorAgreeField
+            this.replyVisibilityProbeAgreeResponseClass = replyVisibilityProbeScan.agreeResponseClass
+            this.replyVisibilityProbeAgreeDecodeLogicMethod = replyVisibilityProbeScan.agreeDecodeLogicMethod
             this.splashAdHelperClass = splashAdHelperClass
             this.splashAdHelperMethod = splashAdHelperMethod
             this.closeAdDataClass = closeAdDataClass
@@ -5113,6 +5631,394 @@ internal object HookSymbolResolver {
             method.parameterTypes.size == 2 &&
             isIntType(method.parameterTypes[0]) &&
             method.parameterTypes[1] == ByteArray::class.java
+    }
+
+    private fun scanAgreeServerResponseLogSymbols(
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): AgreeServerResponseLogScanSymbols? {
+        val responseClass = safeFindClass(AGREE_SERVER_RESPONSE_CLASS, cl) ?: run {
+            log(logger, "agreeServerResponseLog: class missing $AGREE_SERVER_RESPONSE_CLASS")
+            return null
+        }
+        val jsonResponseClass = safeFindClass(JSON_HTTP_RESPONSED_MESSAGE_CLASS, cl) ?: run {
+            log(logger, "agreeServerResponseLog: base class missing $JSON_HTTP_RESPONSED_MESSAGE_CLASS")
+            return null
+        }
+        if (!jsonResponseClass.isAssignableFrom(responseClass)) {
+            log(
+                logger,
+                "agreeServerResponseLog: $AGREE_SERVER_RESPONSE_CLASS is not a JsonHttpResponsedMessage",
+            )
+            return null
+        }
+        val decodeCandidates = try {
+            responseClass.declaredMethods.filter { method ->
+                isAgreeServerResponseDecodeLogicMethod(method, AGREE_SERVER_RESPONSE_DECODE_LOGIC_METHOD)
+            }
+        } catch (t: Throwable) {
+            log(logger, "agreeServerResponseLog: declaredMethods failed: ${t.message}")
+            return null
+        }
+        val decodeLogicMethod = decodeCandidates.singleOrNull() ?: run {
+            log(
+                logger,
+                "agreeServerResponseLog: decode logic method candidates=" +
+                    decodeCandidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
+            )
+            return null
+        }
+        log(
+            logger,
+            "agreeServerResponseLog matched: ${responseClass.name}.${decodeLogicMethod.name}",
+        )
+        return AgreeServerResponseLogScanSymbols(
+            responseClass = responseClass.name,
+            decodeLogicMethod = decodeLogicMethod.name,
+        )
+    }
+
+    private fun isAgreeServerResponseDecodeLogicMethod(method: Method, methodName: String): Boolean {
+        return method.name == methodName &&
+            method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 2 &&
+            isIntType(method.parameterTypes[0]) &&
+            JSONObject::class.java.isAssignableFrom(method.parameterTypes[1])
+    }
+
+    private fun scanReplyVisibilityProbeSymbols(
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): ReplyVisibilityProbeScanSymbols {
+        fun findClass(label: String, className: String): Class<*>? {
+            return safeFindClass(className, cl) ?: run {
+                log(logger, "replyVisibilityProbe: $label class missing $className")
+                null
+            }
+        }
+
+        fun logMissing(label: String, candidates: List<Method> = emptyList()) {
+            val suffix = if (candidates.isEmpty()) {
+                ""
+            } else {
+                " candidates=${candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" }}"
+            }
+            log(logger, "replyVisibilityProbe: $label missing$suffix")
+        }
+
+        val replyResponseClass = findClass("reply response", REPLY_SERVER_RESPONSE_CLASS)
+        val addPostRequestClass = findClass("add post request", ADD_POST_REQUEST_CLASS)
+        val responsedMessageClass = findClass("responsed message", RESPONSED_MESSAGE_CLASS)
+        val messageClass = findClass("message", MESSAGE_CLASS)
+        val httpMessageClass = findClass("http message", HTTP_MESSAGE_CLASS)
+        val messageManagerClass = findClass("message manager", MESSAGE_MANAGER_CLASS)
+        val messageTaskClass = findClass("message task", MESSAGE_TASK_CLASS)
+        val httpMessageTaskClass = findClass("http message task", HTTP_MESSAGE_TASK_CLASS)
+        val tbHttpMessageTaskClass = findClass("tb http message task", TB_HTTP_MESSAGE_TASK_CLASS)
+        val bdUniqueIdClass = findClass("bd unique id", BD_UNIQUE_ID_CLASS)
+        val tbadkCoreApplicationClass = findClass("tbadk core application", TBADK_CORE_APPLICATION_CLASS)
+        val tbConfigClass = findClass("tb config", TB_CONFIG_CLASS)
+        val cmdConfigHttpClass = findClass("cmd config http", CMD_CONFIG_HTTP_CLASS)
+        val agreeResponseClass = findClass("agree response", AGREE_SERVER_RESPONSE_CLASS)
+        val jsonResponseClass = findClass("json response", JSON_HTTP_RESPONSED_MESSAGE_CLASS)
+
+        val replyDecodeMethod = replyResponseClass?.declaredMethods
+            ?.filter { method -> isReplyServerResponseDecodeMethod(method, REPLY_SERVER_RESPONSE_DECODE_METHOD) }
+            ?.singleOrNull()
+            ?: run {
+                val candidates = replyResponseClass?.declaredMethods
+                    ?.filter { it.name == REPLY_SERVER_RESPONSE_DECODE_METHOD }
+                    .orEmpty()
+                if (replyResponseClass != null) logMissing("reply decode method", candidates)
+                null
+            }
+        val replyResultJsonField = replyResponseClass?.declaredFields?.singleOrNull { field ->
+            field.name == REPLY_SERVER_RESPONSE_RESULT_JSON_FIELD &&
+                JSONObject::class.java.isAssignableFrom(field.type)
+        } ?: run {
+            if (replyResponseClass != null) log(logger, "replyVisibilityProbe: reply result JSON field missing")
+            null
+        }
+        val addPostRequestDataField = addPostRequestClass?.declaredFields?.singleOrNull { field ->
+            field.name == ADD_POST_REQUEST_DATA_FIELD && isStringMapField(field)
+        } ?: run {
+            if (addPostRequestClass != null) log(logger, "replyVisibilityProbe: add post requestData field missing")
+            null
+        }
+        val getOriginalMessageMethod = if (responsedMessageClass != null && messageClass != null) {
+            responsedMessageClass.declaredMethods.singleOrNull { method ->
+                method.name == RESPONSED_MESSAGE_GET_ORIGINAL_METHOD &&
+                    method.parameterTypes.isEmpty() &&
+                    messageClass.isAssignableFrom(method.returnType)
+            } ?: run {
+                logMissing("get original message method")
+                null
+            }
+        } else {
+            null
+        }
+        val messageGetExtraMethod = messageClass?.declaredMethods?.singleOrNull { method ->
+            method.name == MESSAGE_GET_EXTRA_METHOD &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == Any::class.java
+        } ?: run {
+            if (messageClass != null) logMissing("message getExtra method")
+            null
+        }
+        val messageGetTagMethod = if (messageClass != null && bdUniqueIdClass != null) {
+            messageClass.declaredMethods.singleOrNull { method ->
+                method.name == MESSAGE_GET_TAG_METHOD &&
+                    method.parameterTypes.isEmpty() &&
+                    bdUniqueIdClass.isAssignableFrom(method.returnType)
+            } ?: run {
+                logMissing("message getTag method")
+                null
+            }
+        } else {
+            null
+        }
+        val messageSetTagMethod = if (messageClass != null && bdUniqueIdClass != null) {
+            messageClass.declaredMethods.singleOrNull { method ->
+                method.name == MESSAGE_SET_TAG_METHOD &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == bdUniqueIdClass
+            } ?: run {
+                logMissing("message setTag method")
+                null
+            }
+        } else {
+            null
+        }
+        val httpMessageConstructor = httpMessageClass?.declaredConstructors?.singleOrNull { constructor ->
+            constructor.parameterTypes.size == 1 && isIntType(constructor.parameterTypes[0])
+        } ?: run {
+            if (httpMessageClass != null) log(logger, "replyVisibilityProbe: HttpMessage(int) constructor missing")
+            null
+        }
+        val httpMessageAddParamMethod = httpMessageClass?.declaredMethods?.singleOrNull { method ->
+            method.name == HTTP_MESSAGE_ADD_PARAM_METHOD &&
+                method.parameterTypes.size == 2 &&
+                method.parameterTypes[0] == String::class.java &&
+                method.parameterTypes[1] == Any::class.java
+        } ?: run {
+            if (httpMessageClass != null) logMissing("HttpMessage addParam(String,Object) method")
+            null
+        }
+        val httpMessageAddHeaderMethod = httpMessageClass?.declaredMethods?.singleOrNull { method ->
+            method.name == HTTP_MESSAGE_ADD_HEADER_METHOD &&
+                method.returnType == String::class.java &&
+                method.parameterTypes.contentEquals(arrayOf(String::class.java, String::class.java))
+        } ?: run {
+            if (httpMessageClass != null) logMissing("HttpMessage addHeader(String,String) method")
+            null
+        }
+        val messageManagerGetInstanceMethod = messageManagerClass?.declaredMethods?.singleOrNull { method ->
+            method.name == MESSAGE_MANAGER_GET_INSTANCE_METHOD &&
+                Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                messageManagerClass.isAssignableFrom(method.returnType)
+        } ?: run {
+            if (messageManagerClass != null) logMissing("MessageManager getInstance method")
+            null
+        }
+        val messageManagerFindTaskMethod = if (messageManagerClass != null && messageTaskClass != null) {
+            messageManagerClass.declaredMethods.singleOrNull { method ->
+                method.name == MESSAGE_MANAGER_FIND_TASK_METHOD &&
+                    method.parameterTypes.size == 1 &&
+                    isIntType(method.parameterTypes[0]) &&
+                    messageTaskClass.isAssignableFrom(method.returnType)
+            } ?: run {
+                logMissing("MessageManager findTask method")
+                null
+            }
+        } else {
+            null
+        }
+        val messageManagerRegisterTaskMethod = if (messageManagerClass != null && messageTaskClass != null) {
+            messageManagerClass.declaredMethods.singleOrNull { method ->
+                method.name == MESSAGE_MANAGER_REGISTER_TASK_METHOD &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == messageTaskClass
+            } ?: run {
+                logMissing("MessageManager registerTask method")
+                null
+            }
+        } else {
+            null
+        }
+        val messageManagerSendMethod = if (messageManagerClass != null && messageClass != null) {
+            messageManagerClass.declaredMethods.singleOrNull { method ->
+                method.name == MESSAGE_MANAGER_SEND_MESSAGE_METHOD &&
+                    method.returnType == Boolean::class.javaPrimitiveType &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == messageClass
+            } ?: run {
+                logMissing("MessageManager sendMessage(Message) method")
+                null
+            }
+        } else {
+            null
+        }
+        val tbHttpMessageTaskConstructor = tbHttpMessageTaskClass?.declaredConstructors?.singleOrNull { constructor ->
+            constructor.parameterTypes.size == 2 &&
+                isIntType(constructor.parameterTypes[0]) &&
+                constructor.parameterTypes[1] == String::class.java
+        } ?: run {
+            if (tbHttpMessageTaskClass != null) {
+                log(logger, "replyVisibilityProbe: TbHttpMessageTask(int,String) constructor missing")
+            }
+            null
+        }
+        val httpMessageTaskSetResponsedClassMethod = httpMessageTaskClass?.declaredMethods?.singleOrNull { method ->
+            method.name == HTTP_MESSAGE_TASK_SET_RESPONSE_CLASS_METHOD &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0] == Class::class.java
+        } ?: run {
+            if (httpMessageTaskClass != null) logMissing("HttpMessageTask setResponsedClass method")
+            null
+        }
+        val tbHttpMessageTaskSetIsNeedTbsMethod = tbHttpMessageTaskClass?.declaredMethods?.singleOrNull { method ->
+            method.name == TB_HTTP_MESSAGE_TASK_SET_NEED_TBS_METHOD &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0] == Boolean::class.javaPrimitiveType
+        } ?: run {
+            if (tbHttpMessageTaskClass != null) logMissing("TbHttpMessageTask setIsNeedTbs method")
+            null
+        }
+        val bdUniqueIdGenMethod = bdUniqueIdClass?.declaredMethods?.singleOrNull { method ->
+            method.name == BD_UNIQUE_ID_GEN_METHOD &&
+                Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                bdUniqueIdClass.isAssignableFrom(method.returnType)
+        } ?: run {
+            if (bdUniqueIdClass != null) logMissing("BdUniqueId gen method")
+            null
+        }
+        val tbadkCoreApplicationGetInstMethod = tbadkCoreApplicationClass?.declaredMethods?.singleOrNull { method ->
+            method.name == TBADK_CORE_APPLICATION_GET_INST_METHOD &&
+                Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                tbadkCoreApplicationClass.isAssignableFrom(method.returnType)
+        } ?: run {
+            if (tbadkCoreApplicationClass != null) logMissing("TbadkCoreApplication getInst method")
+            null
+        }
+        val tbadkCoreApplicationGetZidMethod = tbadkCoreApplicationClass?.declaredMethods?.singleOrNull { method ->
+            method.name == TBADK_CORE_APPLICATION_GET_ZID_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == String::class.java
+        } ?: run {
+            if (tbadkCoreApplicationClass != null) logMissing("TbadkCoreApplication getZid method")
+            null
+        }
+        val tbConfigServerAddressField = tbConfigClass?.declaredFields?.singleOrNull { field ->
+            field.name == TB_CONFIG_SERVER_ADDRESS_FIELD &&
+                Modifier.isStatic(field.modifiers) &&
+                field.type == String::class.java
+        } ?: run {
+            if (tbConfigClass != null) log(logger, "replyVisibilityProbe: TbConfig SERVER_ADDRESS field missing")
+            null
+        }
+        val tbConfigPbFloorAgreeUrlField = tbConfigClass?.declaredFields?.singleOrNull { field ->
+            field.name == TB_CONFIG_PB_FLOOR_AGREE_URL_FIELD &&
+                Modifier.isStatic(field.modifiers) &&
+                field.type == String::class.java
+        } ?: run {
+            if (tbConfigClass != null) log(logger, "replyVisibilityProbe: TbConfig PB_FLOOR_AGREE_URL field missing")
+            null
+        }
+        val cmdPbFloorAgreeField = cmdConfigHttpClass?.declaredFields?.singleOrNull { field ->
+            field.name == CMD_CONFIG_HTTP_PB_FLOOR_AGREE_FIELD &&
+                Modifier.isStatic(field.modifiers) &&
+                isIntType(field.type)
+        } ?: run {
+            if (cmdConfigHttpClass != null) {
+                log(logger, "replyVisibilityProbe: CmdConfigHttp CMD_PB_FLOOR_AGREE field missing")
+            }
+            null
+        }
+        val agreeDecodeLogicMethod = if (agreeResponseClass != null) {
+            if (jsonResponseClass != null && !jsonResponseClass.isAssignableFrom(agreeResponseClass)) {
+                log(logger, "replyVisibilityProbe: agree response is not JsonHttpResponsedMessage")
+                null
+            } else {
+                val candidates = agreeResponseClass.declaredMethods.filter { method ->
+                    isAgreeServerResponseDecodeLogicMethod(method, AGREE_SERVER_RESPONSE_DECODE_LOGIC_METHOD)
+                }
+                candidates.singleOrNull() ?: run {
+                    logMissing("agree decode logic method", candidates)
+                    null
+                }
+            }
+        } else {
+            null
+        }
+
+        log(
+            logger,
+            "replyVisibilityProbe matched: " +
+                "${replyResponseClass?.name}.${replyDecodeMethod?.name} -> " +
+                "${httpMessageClass?.name} / ${agreeResponseClass?.name}.${agreeDecodeLogicMethod?.name}",
+        )
+        return ReplyVisibilityProbeScanSymbols(
+            replyResponseClass = replyResponseClass?.name,
+            replyDecodeMethod = replyDecodeMethod?.name,
+            replyResultJsonField = replyResultJsonField?.name,
+            addPostRequestClass = addPostRequestClass?.name,
+            addPostRequestDataField = addPostRequestDataField?.name,
+            responsedMessageClass = responsedMessageClass?.name,
+            getOriginalMessageMethod = getOriginalMessageMethod?.name,
+            messageClass = messageClass?.name,
+            messageGetExtraMethod = messageGetExtraMethod?.name,
+            messageGetTagMethod = messageGetTagMethod?.name,
+            messageSetTagMethod = messageSetTagMethod?.name,
+            httpMessageClass = httpMessageClass?.name,
+            httpMessageConstructor = httpMessageConstructor?.let { "<init>(int)" },
+            httpMessageAddParamMethod = httpMessageAddParamMethod?.name,
+            httpMessageAddHeaderMethod = httpMessageAddHeaderMethod?.name,
+            messageManagerClass = messageManagerClass?.name,
+            messageManagerGetInstanceMethod = messageManagerGetInstanceMethod?.name,
+            messageManagerFindTaskMethod = messageManagerFindTaskMethod?.name,
+            messageManagerRegisterTaskMethod = messageManagerRegisterTaskMethod?.name,
+            messageManagerSendMethod = messageManagerSendMethod?.name,
+            tbHttpMessageTaskClass = tbHttpMessageTaskClass?.name,
+            tbHttpMessageTaskConstructor = tbHttpMessageTaskConstructor?.let { "<init>(int,String)" },
+            httpMessageTaskSetResponsedClassMethod = httpMessageTaskSetResponsedClassMethod?.name,
+            tbHttpMessageTaskSetIsNeedTbsMethod = tbHttpMessageTaskSetIsNeedTbsMethod?.name,
+            bdUniqueIdClass = bdUniqueIdClass?.name,
+            bdUniqueIdGenMethod = bdUniqueIdGenMethod?.name,
+            tbadkCoreApplicationClass = tbadkCoreApplicationClass?.name,
+            tbadkCoreApplicationGetInstMethod = tbadkCoreApplicationGetInstMethod?.name,
+            tbadkCoreApplicationGetZidMethod = tbadkCoreApplicationGetZidMethod?.name,
+            tbConfigClass = tbConfigClass?.name,
+            tbConfigServerAddressField = tbConfigServerAddressField?.name,
+            tbConfigPbFloorAgreeUrlField = tbConfigPbFloorAgreeUrlField?.name,
+            cmdConfigHttpClass = cmdConfigHttpClass?.name,
+            cmdPbFloorAgreeField = cmdPbFloorAgreeField?.name,
+            agreeResponseClass = agreeResponseClass?.name,
+            agreeDecodeLogicMethod = agreeDecodeLogicMethod?.name,
+        )
+    }
+
+    private fun isStringMapField(field: Field): Boolean {
+        if (!Map::class.java.isAssignableFrom(field.type)) return false
+        val type = field.genericType
+        if (type !is ParameterizedType) return true
+        val args = type.actualTypeArguments
+        return args.size == 2 && args.all(::isStringTypeArgument)
+    }
+
+    private fun isStringTypeArgument(type: Type): Boolean {
+        return when (type) {
+            String::class.java -> true
+            is WildcardType -> type.upperBounds.any { it == String::class.java }
+            else -> false
+        }
     }
 
     private fun scanAiComponentSymbols(

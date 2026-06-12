@@ -230,6 +230,44 @@ internal class HookSymbolsBuilder {
     var replyServerResponseClass: String? = null
     var replyServerResponseDecodeMethod: String? = null
     var replyServerResponseResultJsonField: String? = null
+    var agreeServerResponseClass: String? = null
+    var agreeServerResponseDecodeLogicMethod: String? = null
+    var replyVisibilityProbeReplyResponseClass: String? = null
+    var replyVisibilityProbeReplyDecodeMethod: String? = null
+    var replyVisibilityProbeReplyResultJsonField: String? = null
+    var replyVisibilityProbeAddPostRequestClass: String? = null
+    var replyVisibilityProbeAddPostRequestDataField: String? = null
+    var replyVisibilityProbeResponsedMessageClass: String? = null
+    var replyVisibilityProbeGetOriginalMessageMethod: String? = null
+    var replyVisibilityProbeMessageClass: String? = null
+    var replyVisibilityProbeMessageGetExtraMethod: String? = null
+    var replyVisibilityProbeMessageGetTagMethod: String? = null
+    var replyVisibilityProbeMessageSetTagMethod: String? = null
+    var replyVisibilityProbeHttpMessageClass: String? = null
+    var replyVisibilityProbeHttpMessageConstructor: String? = null
+    var replyVisibilityProbeHttpMessageAddParamMethod: String? = null
+    var replyVisibilityProbeHttpMessageAddHeaderMethod: String? = null
+    var replyVisibilityProbeMessageManagerClass: String? = null
+    var replyVisibilityProbeMessageManagerGetInstanceMethod: String? = null
+    var replyVisibilityProbeMessageManagerFindTaskMethod: String? = null
+    var replyVisibilityProbeMessageManagerRegisterTaskMethod: String? = null
+    var replyVisibilityProbeMessageManagerSendMethod: String? = null
+    var replyVisibilityProbeTbHttpMessageTaskClass: String? = null
+    var replyVisibilityProbeTbHttpMessageTaskConstructor: String? = null
+    var replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod: String? = null
+    var replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod: String? = null
+    var replyVisibilityProbeBdUniqueIdClass: String? = null
+    var replyVisibilityProbeBdUniqueIdGenMethod: String? = null
+    var replyVisibilityProbeTbadkCoreApplicationClass: String? = null
+    var replyVisibilityProbeTbadkCoreApplicationGetInstMethod: String? = null
+    var replyVisibilityProbeTbadkCoreApplicationGetZidMethod: String? = null
+    var replyVisibilityProbeTbConfigClass: String? = null
+    var replyVisibilityProbeTbConfigServerAddressField: String? = null
+    var replyVisibilityProbeTbConfigPbFloorAgreeUrlField: String? = null
+    var replyVisibilityProbeCmdConfigHttpClass: String? = null
+    var replyVisibilityProbeCmdPbFloorAgreeField: String? = null
+    var replyVisibilityProbeAgreeResponseClass: String? = null
+    var replyVisibilityProbeAgreeDecodeLogicMethod: String? = null
     var aiSpriteMemePanControllerClass: String? = null
     var aiSpriteMemeEnableMethod: String? = null
     var aiPbNewInputContainerClass: String? = null
@@ -427,6 +465,48 @@ internal class HookSymbolsBuilder {
                     replyServerResponseClass,
                     replyServerResponseDecodeMethod,
                     replyServerResponseResultJsonField,
+                ),
+                agreeServerResponse = AgreeServerResponseSymbolsGroup(
+                    agreeServerResponseClass,
+                    agreeServerResponseDecodeLogicMethod,
+                ),
+                replyVisibilityProbe = ReplyVisibilityProbeSymbolsGroup(
+                    replyVisibilityProbeReplyResponseClass,
+                    replyVisibilityProbeReplyDecodeMethod,
+                    replyVisibilityProbeReplyResultJsonField,
+                    replyVisibilityProbeAddPostRequestClass,
+                    replyVisibilityProbeAddPostRequestDataField,
+                    replyVisibilityProbeResponsedMessageClass,
+                    replyVisibilityProbeGetOriginalMessageMethod,
+                    replyVisibilityProbeMessageClass,
+                    replyVisibilityProbeMessageGetExtraMethod,
+                    replyVisibilityProbeMessageGetTagMethod,
+                    replyVisibilityProbeMessageSetTagMethod,
+                    replyVisibilityProbeHttpMessageClass,
+                    replyVisibilityProbeHttpMessageConstructor,
+                    replyVisibilityProbeHttpMessageAddParamMethod,
+                    replyVisibilityProbeHttpMessageAddHeaderMethod,
+                    replyVisibilityProbeMessageManagerClass,
+                    replyVisibilityProbeMessageManagerGetInstanceMethod,
+                    replyVisibilityProbeMessageManagerFindTaskMethod,
+                    replyVisibilityProbeMessageManagerRegisterTaskMethod,
+                    replyVisibilityProbeMessageManagerSendMethod,
+                    replyVisibilityProbeTbHttpMessageTaskClass,
+                    replyVisibilityProbeTbHttpMessageTaskConstructor,
+                    replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod,
+                    replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod,
+                    replyVisibilityProbeBdUniqueIdClass,
+                    replyVisibilityProbeBdUniqueIdGenMethod,
+                    replyVisibilityProbeTbadkCoreApplicationClass,
+                    replyVisibilityProbeTbadkCoreApplicationGetInstMethod,
+                    replyVisibilityProbeTbadkCoreApplicationGetZidMethod,
+                    replyVisibilityProbeTbConfigClass,
+                    replyVisibilityProbeTbConfigServerAddressField,
+                    replyVisibilityProbeTbConfigPbFloorAgreeUrlField,
+                    replyVisibilityProbeCmdConfigHttpClass,
+                    replyVisibilityProbeCmdPbFloorAgreeField,
+                    replyVisibilityProbeAgreeResponseClass,
+                    replyVisibilityProbeAgreeDecodeLogicMethod,
                 ),
             ),
         )

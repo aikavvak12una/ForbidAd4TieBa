@@ -41,6 +41,7 @@ object HookFeatureKey {
     const val PRIVATE_READ_RECEIPT_INVISIBLE = "private_read_receipt_invisible"
     const val CLEAN_SHARE_TRACKING_PARAMS = "clean_share_tracking_params"
     const val DISABLE_AI_COMPONENTS = "disable_ai_components"
+    const val VERIFY_REPLY_AFTER_POST = "verify_reply_after_post"
 }
 
 data class HookFeatureStatus(

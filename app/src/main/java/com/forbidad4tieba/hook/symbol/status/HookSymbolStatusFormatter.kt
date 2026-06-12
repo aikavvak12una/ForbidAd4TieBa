@@ -149,6 +149,96 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "AgreeServerResponseLogHook",
+            "${symbols.agreeServerResponseClass}.${symbols.agreeServerResponseDecodeLogicMethod}",
+            listOf(
+                "agreeServerResponseClass" to has(symbols.agreeServerResponseClass),
+                "agreeServerResponseDecodeLogicMethod" to has(symbols.agreeServerResponseDecodeLogicMethod),
+            ),
+        )
+        add(
+            "ReplyVisibilityProbeHook",
+            "${symbols.replyVisibilityProbeReplyResponseClass}.${symbols.replyVisibilityProbeReplyDecodeMethod}" +
+                " -> ${symbols.replyVisibilityProbeHttpMessageClass} / " +
+                "${symbols.replyVisibilityProbeAgreeResponseClass}.${symbols.replyVisibilityProbeAgreeDecodeLogicMethod}",
+            listOf(
+                "replyVisibilityProbeReplyResponseClass" to has(symbols.replyVisibilityProbeReplyResponseClass),
+                "replyVisibilityProbeReplyDecodeMethod" to has(symbols.replyVisibilityProbeReplyDecodeMethod),
+                "replyVisibilityProbeReplyResultJsonField" to has(symbols.replyVisibilityProbeReplyResultJsonField),
+                "replyVisibilityProbeAddPostRequestClass" to has(symbols.replyVisibilityProbeAddPostRequestClass),
+                "replyVisibilityProbeAddPostRequestDataField" to has(
+                    symbols.replyVisibilityProbeAddPostRequestDataField,
+                ),
+                "replyVisibilityProbeResponsedMessageClass" to has(symbols.replyVisibilityProbeResponsedMessageClass),
+                "replyVisibilityProbeGetOriginalMessageMethod" to has(
+                    symbols.replyVisibilityProbeGetOriginalMessageMethod,
+                ),
+                "replyVisibilityProbeMessageClass" to has(symbols.replyVisibilityProbeMessageClass),
+                "replyVisibilityProbeMessageGetExtraMethod" to has(symbols.replyVisibilityProbeMessageGetExtraMethod),
+                "replyVisibilityProbeMessageGetTagMethod" to has(symbols.replyVisibilityProbeMessageGetTagMethod),
+                "replyVisibilityProbeMessageSetTagMethod" to has(symbols.replyVisibilityProbeMessageSetTagMethod),
+                "replyVisibilityProbeHttpMessageClass" to has(symbols.replyVisibilityProbeHttpMessageClass),
+                "replyVisibilityProbeHttpMessageConstructor" to has(
+                    symbols.replyVisibilityProbeHttpMessageConstructor,
+                ),
+                "replyVisibilityProbeHttpMessageAddParamMethod" to has(
+                    symbols.replyVisibilityProbeHttpMessageAddParamMethod,
+                ),
+                "replyVisibilityProbeHttpMessageAddHeaderMethod" to has(
+                    symbols.replyVisibilityProbeHttpMessageAddHeaderMethod,
+                ),
+                "replyVisibilityProbeMessageManagerClass" to has(symbols.replyVisibilityProbeMessageManagerClass),
+                "replyVisibilityProbeMessageManagerGetInstanceMethod" to has(
+                    symbols.replyVisibilityProbeMessageManagerGetInstanceMethod,
+                ),
+                "replyVisibilityProbeMessageManagerFindTaskMethod" to has(
+                    symbols.replyVisibilityProbeMessageManagerFindTaskMethod,
+                ),
+                "replyVisibilityProbeMessageManagerRegisterTaskMethod" to has(
+                    symbols.replyVisibilityProbeMessageManagerRegisterTaskMethod,
+                ),
+                "replyVisibilityProbeMessageManagerSendMethod" to has(
+                    symbols.replyVisibilityProbeMessageManagerSendMethod,
+                ),
+                "replyVisibilityProbeTbHttpMessageTaskClass" to has(
+                    symbols.replyVisibilityProbeTbHttpMessageTaskClass,
+                ),
+                "replyVisibilityProbeTbHttpMessageTaskConstructor" to has(
+                    symbols.replyVisibilityProbeTbHttpMessageTaskConstructor,
+                ),
+                "replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod" to has(
+                    symbols.replyVisibilityProbeHttpMessageTaskSetResponsedClassMethod,
+                ),
+                "replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod" to has(
+                    symbols.replyVisibilityProbeTbHttpMessageTaskSetIsNeedTbsMethod,
+                ),
+                "replyVisibilityProbeBdUniqueIdClass" to has(symbols.replyVisibilityProbeBdUniqueIdClass),
+                "replyVisibilityProbeBdUniqueIdGenMethod" to has(symbols.replyVisibilityProbeBdUniqueIdGenMethod),
+                "replyVisibilityProbeTbadkCoreApplicationClass" to has(
+                    symbols.replyVisibilityProbeTbadkCoreApplicationClass,
+                ),
+                "replyVisibilityProbeTbadkCoreApplicationGetInstMethod" to has(
+                    symbols.replyVisibilityProbeTbadkCoreApplicationGetInstMethod,
+                ),
+                "replyVisibilityProbeTbadkCoreApplicationGetZidMethod" to has(
+                    symbols.replyVisibilityProbeTbadkCoreApplicationGetZidMethod,
+                ),
+                "replyVisibilityProbeTbConfigClass" to has(symbols.replyVisibilityProbeTbConfigClass),
+                "replyVisibilityProbeTbConfigServerAddressField" to has(
+                    symbols.replyVisibilityProbeTbConfigServerAddressField,
+                ),
+                "replyVisibilityProbeTbConfigPbFloorAgreeUrlField" to has(
+                    symbols.replyVisibilityProbeTbConfigPbFloorAgreeUrlField,
+                ),
+                "replyVisibilityProbeCmdConfigHttpClass" to has(symbols.replyVisibilityProbeCmdConfigHttpClass),
+                "replyVisibilityProbeCmdPbFloorAgreeField" to has(symbols.replyVisibilityProbeCmdPbFloorAgreeField),
+                "replyVisibilityProbeAgreeResponseClass" to has(symbols.replyVisibilityProbeAgreeResponseClass),
+                "replyVisibilityProbeAgreeDecodeLogicMethod" to has(
+                    symbols.replyVisibilityProbeAgreeDecodeLogicMethod,
+                ),
+            ),
+        )
+        add(
             "HomeNativeGlassHook",
             "${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.<init> / " +
                 "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.${symbols.feedCardBindMethod}",

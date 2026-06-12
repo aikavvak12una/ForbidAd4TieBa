@@ -148,6 +148,29 @@ object UiText {
         const val PB_LIKE_AUTO_REPLY_CONTENT_HINT = "输入点赞帖子后自动发送的回复"
         const val PB_LIKE_AUTO_REPLY_CONTENT_EMPTY = "回复内容不能为空"
         const val PB_LIKE_AUTO_REPLY_CONTENT_SAVED = "自动回复内容已保存"
+        const val REPLY_VISIBILITY_PROBE_LABEL = "评论检测"
+        const val REPLY_VISIBILITY_PROBE_DESC = "发送评论后 Toast 输出评论状态"
+        const val REPLY_VISIBILITY_PROBE_DIALOG_TITLE = REPLY_VISIBILITY_PROBE_LABEL
+        const val REPLY_VISIBILITY_PROBE_GUIDE =
+            "通过点赞获取评论发布后检测时间内的评论状态"
+        const val REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS_LABEL = "最大检测次数"
+        const val REPLY_VISIBILITY_PROBE_INTERVAL_LABEL = "检测间隔"
+        const val REPLY_VISIBILITY_PROBE_INTERVAL_UNIT = "ms"
+        const val REPLY_VISIBILITY_PROBE_CONFIG_SAVED = "评论检测配置已保存"
+        const val REPLY_VISIBILITY_PROBE_CONFIG_INVALID = "评论检测配置无效"
+        const val REPLY_VISIBILITY_PROBE_CODE_SEND_FAILED = "send_failed"
+        const val REPLY_VISIBILITY_PROBE_CODE_EMPTY_RESPONSE = "empty_response"
+        const val REPLY_VISIBILITY_PROBE_CODE_MISSING_RESULT = "missing_result"
+        const val REPLY_VISIBILITY_PROBE_CODE_TIMEOUT = "timeout"
+        const val REPLY_VISIBILITY_PROBE_SEND_FAILED = "评论发送验证请求发送失败。"
+        const val REPLY_VISIBILITY_PROBE_EMPTY_RESPONSE = "评论发送验证响应为空。"
+        const val REPLY_VISIBILITY_PROBE_TIMEOUT = "评论发送验证响应超时。"
+        const val REPLY_VISIBILITY_PROBE_MISSING_RESULT =
+            "无法获取点赞响应 error_code/error_msg。"
+        fun replyVisibilityProbeMaxAttemptsDesc(min: Int, max: Int, defaultValue: Int): String =
+            "返回成功前最大检测的次数，范围 $min-$max"
+        fun replyVisibilityProbeIntervalDesc(min: Int, max: Int, defaultValue: Int): String =
+            "每次检测间隔，范围 $min-$max ms"
         const val DISABLE_AUTO_REFRESH_LABEL = "禁止自动刷新"
         const val DISABLE_AUTO_REFRESH_DESC = "避免首页被强制重置刷新列表"
         const val DISABLE_PB_GESTURE_FONT_SCALE_LABEL = "禁用调整字号手势"
@@ -265,7 +288,7 @@ object UiText {
         const val SCAN_MODULE_LABEL = "模块"
         const val SCAN_LOG_COPIED = "扫描日志已复制"
         const val INITIAL_SCAN_ENVIRONMENT_WARNING_TITLE = "警告"
-        const val INITIAL_SCAN_ENVIRONMENT_WARNING_MESSAGE = "本模块仅供个人学习与技术研究使用，请勿在任何平台二次分发、售卖。\n\n在安装使用本模块前应仔细审查源代码，确保已知模块功能、行为并符合预期，开发者不对使用本模块造成的任何后果承担责任。\n\n点击确认代表您已知悉并承担可能带来的后果"
+        const val INITIAL_SCAN_ENVIRONMENT_WARNING_MESSAGE = "本模块仅供个人学习与技术研究使用，请勿在任何平台二次分发、售卖。\n\n在安装使用本模块前应仔细审查源代码，确保已知模块功能、行为并符合预期，开发者不对使用本模块造成的任何后果承担责任。\n\n点击确认代表您已知悉并承担可能带来的后果。"
         const val RESTRICTED_FEATURE_WARNING_TITLE = "注意"
         const val RESTRICTED_FEATURE_WARNING_MESSAGE = "使用隐藏功能可能导致应用出现卡顿、崩溃、账号被封禁等异常，点击确认代表您已知悉并承担可能带来的后果"
         const val RESTRICTED_FEATURE_CONFIRM = "确认"
