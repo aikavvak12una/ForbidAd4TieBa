@@ -1127,6 +1127,13 @@ object SettingsMenuHook {
                     true,
                     true,
                 ),
+                SwitchItem(
+                    UiText.Settings.FILTER_ENTER_FORUM_WEB_LABEL,
+                    UiText.Settings.FILTER_ENTER_FORUM_WEB_DESC,
+                    ConfigManager.KEY_FILTER_ENTER_FORUM_WEB,
+                    true,
+                    false,
+                ),
             )
             val customPostFilterItems = mutableListOf(
                 SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_VOTE_LABEL, UiText.Settings.CUSTOM_POST_FILTER_VOTE_DESC, ConfigManager.KEY_FILTER_POST_VOTE, true, false),
@@ -1338,8 +1345,7 @@ object SettingsMenuHook {
                         UiText.Settings.ACTION_ICON_SETTINGS
                     ) {
                         showBottomTabDialog(context, prefs)
-                    },
-                    SwitchItem(UiText.Settings.FILTER_ENTER_FORUM_WEB_LABEL, UiText.Settings.FILTER_ENTER_FORUM_WEB_DESC, ConfigManager.KEY_FILTER_ENTER_FORUM_WEB, true, false)
+                    }
                 )),
             )
             groups.add(SettingGroup(UiText.Settings.GROUP_EXTENSION, extensionItems))
@@ -2314,6 +2320,14 @@ object SettingsMenuHook {
         return "$base\n$note"
     }
 
+    private fun resolveAdBlockDialogItemSupported(item: SwitchItem): Boolean {
+        val featureKey = when (item.prefKey) {
+            ConfigManager.KEY_FILTER_ENTER_FORUM_WEB -> item.prefKey
+            else -> ConfigManager.KEY_BLOCK_AD
+        }
+        return item.supported && ConfigManager.isScanFeatureAvailable(featureKey)
+    }
+
     private fun showAdBlockDialog(
         context: Context,
         prefs: android.content.SharedPreferences,
@@ -2331,9 +2345,9 @@ object SettingsMenuHook {
                 )
             }
 
-            val supported = ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_BLOCK_AD)
             val views = ArrayList<Pair<SwitchItem, Switch>>(items.size)
             for (item in items) {
+                val supported = resolveAdBlockDialogItemSupported(item)
                 val row = createSwitchRow(
                     context = context,
                     prefs = prefs,
