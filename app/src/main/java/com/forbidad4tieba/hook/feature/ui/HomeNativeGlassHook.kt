@@ -43,6 +43,7 @@ import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -117,6 +118,9 @@ object HomeNativeGlassHook {
     private val chromeGlassOriginalStates = Collections.synchronizedMap(WeakHashMap<View, ChromeGlassOriginalState>())
     private val imageContainerRadiusStates = Collections.synchronizedMap(WeakHashMap<View, Float>())
     private val scrollInvalidateScheduled = AtomicBoolean(false)
+    private val homeNativeGlassModeReapplyScheduled = AtomicBoolean(false)
+    @Volatile private var runtimeStyle: HomeNativeGlassRuntimeStyle = HomeNativeGlassRuntimeStyle.EMPTY
+    @Volatile private var runtimeStyleSnapshotVersion: Long = -1L
     private val chromeDynamicTintBackgroundWriteDepth = object : ThreadLocal<Int>() {
         override fun initialValue(): Int = 0
     }
@@ -131,8 +135,7 @@ object HomeNativeGlassHook {
         Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
 
     @Volatile private var recyclerViewClass: Class<*>? = null
-    @Volatile private var cachedBackgroundBitmap: CachedBackgroundBitmap? = null
-    @Volatile private var cachedBackgroundMetadataCheckedAt: Long = 0L
+    private val cachedBackgroundBitmaps = LinkedHashMap<String, CachedBackgroundBitmap>(4, 0.75f, true)
     private val backgroundDecodeKeys = Collections.synchronizedSet(mutableSetOf<String>())
     private val backgroundDecodeExecutor by lazy {
         Executors.newSingleThreadExecutor { runnable ->
@@ -148,7 +151,24 @@ object HomeNativeGlassHook {
     @Volatile private var pbEnterForumCapsuleViewField: Field? = null
     @Volatile private var pbEnterForumCapsuleTitleField: Field? = null
 
+    private data class BackgroundRequest(
+        val path: String,
+        val blurCachePath: String,
+        val blurPercent: Int,
+        val targetWidth: Int,
+        val targetHeight: Int,
+    ) {
+        val cacheKey: String = listOf(
+            path,
+            blurCachePath,
+            blurPercent.toString(),
+            targetWidth.toString(),
+            targetHeight.toString(),
+        ).joinToString("|")
+    }
+
     private data class CachedBackgroundBitmap(
+        val cacheKey: String,
         val path: String,
         val lastModified: Long,
         val length: Long,
@@ -160,12 +180,44 @@ object HomeNativeGlassHook {
         val targetHeight: Int,
         val bitmap: Bitmap?,
         val blurredBitmap: Bitmap?,
+        val memoryBytes: Long,
+        var metadataCheckedAt: Long,
     )
 
     private data class BackgroundFileMetadata(
         val lastModified: Long,
         val length: Long,
     )
+
+    private data class HomeNativeGlassRuntimeStyle(
+        val darkMode: Boolean,
+        val backgroundImagePath: String,
+        val blurCacheImagePath: String,
+        val tintColor: Int,
+        val autoTintColor: Int,
+        val tintAlphaPercent: Int,
+        val cardBlurPercent: Int,
+        val cardRadiusDp: Int,
+        val strokeEnabled: Boolean,
+        val shadowStrengthPercent: Int,
+    ) {
+        val hasBackgroundImage: Boolean get() = backgroundImagePath.isNotBlank()
+
+        companion object {
+            val EMPTY = HomeNativeGlassRuntimeStyle(
+                darkMode = false,
+                backgroundImagePath = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
+                blurCacheImagePath = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
+                tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
+                autoTintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
+                tintAlphaPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                cardBlurPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                cardRadiusDp = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                strokeEnabled = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
+                shadowStrengthPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            )
+        }
+    }
 
     private data class RuntimeTargets(
         val homeTabItemTypeField: String?,
@@ -203,7 +255,7 @@ object HomeNativeGlassHook {
         val cardBlurPercent: Int,
         val cardRadiusDp: Int,
         val strokeEnabled: Boolean,
-        val shadowEnabled: Boolean,
+        val shadowStrengthPercent: Int,
     )
 
     private data class ChromeGlassOriginalState(
@@ -259,7 +311,7 @@ object HomeNativeGlassHook {
         val cardBlurPercent: Int,
         val cardRadiusDp: Int,
         val strokeEnabled: Boolean,
-        val shadowEnabled: Boolean,
+        val shadowStrengthPercent: Int,
     )
 
     private data class PbSubPbLayoutPaddingState(
@@ -307,11 +359,13 @@ object HomeNativeGlassHook {
     }
 
     fun hook(cl: ClassLoader, symbols: HookSymbols) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.isHomeNativeGlassEnabled || !ConfigManager.hasAnyHomeNativeGlassBackgroundImage) return
         val mod = XposedCompat.module ?: return
         val bindMethodName = symbols.feedCardBindMethod?.takeIf { it.isNotBlank() }
         val hasHomeFeedTargets = hasHomeNativeGlassFeedTargets(symbols, bindMethodName)
         if (!installed.compareAndSet(false, true)) return
+        HomeNativeGlassHostDarkModeBridge.addDarkModeChangeListener(::onHostDarkModeChanged)
+        refreshHomeNativeGlassRuntimeStyle(forceHostRead = true, scheduleReapply = false)
 
         try {
             recyclerViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
@@ -325,6 +379,7 @@ object HomeNativeGlassHook {
                 }
             }
             val pageConstructors = if (hasHomeFeedTargets) installPageConstructors(cl) else 0
+            val hostSkinTypeHooks = installHostSkinTypeChangeHooks(cl)
             val bindHooks = if (hasHomeFeedTargets && bindMethodName != null) {
                 installFeedCardBind(cl, bindMethodName)
             } else {
@@ -379,6 +434,7 @@ object HomeNativeGlassHook {
                     "components=$componentHooks, pbComments=$pbCommentHooks, " +
                     "dynamicColors=$dynamicColorHooks, sortSwitch=$sortSwitchHooks, " +
                     "enterForumCapsule=$enterForumCapsuleHooks, " +
+                    "hostSkinType=$hostSkinTypeHooks, " +
                     "topTabObservers=$topTabObservers, " +
                     "bottomTabDynamicTint=$bottomTabDynamicTintHooks, " +
                     "chromeDirectBackgroundBlock=$chromeDirectBackgroundBlock, searchBox=$searchBoxHooks, " +
@@ -430,6 +486,27 @@ object HomeNativeGlassHook {
             pbCommonLayoutPreloaderGetOrDefaultMethod =
                 symbols.pbCommonLayoutPreloaderGetOrDefaultMethod?.takeIf { it.isNotBlank() },
         )
+    }
+
+    private fun installHostSkinTypeChangeHooks(cl: ClassLoader): Int {
+        val mod = XposedCompat.module ?: return 0
+        val appClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.TBADK_CORE_APPLICATION_CLASS, cl)
+            ?: return 0
+        var installedCount = 0
+        for (methodName in HOST_SKIN_TYPE_CHANGE_METHODS) {
+            val method = XposedCompat.findMethodOrNull(appClass, methodName, java.lang.Integer.TYPE)
+                ?: continue
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                HomeNativeGlassHostDarkModeBridge.onHostSkinTypeChanged(
+                    (chain.args.getOrNull(0) as? Number)?.toInt()
+                )
+                result
+            }
+            installedCount++
+        }
+        return installedCount
     }
 
     private fun installPageConstructors(cl: ClassLoader): Int {
@@ -1880,11 +1957,12 @@ object HomeNativeGlassHook {
 
     private fun applyPageStyleSafely(page: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
+        val style = currentHomeNativeGlassRuntimeStyle()
         try {
             SystemBarCompatHook.applyIfNeeded(ReflectionUtils.findActivityFromContext(page.context))
             val backgroundDrawable = createBackgroundDrawable(
                 page,
-                ConfigManager.homeNativeGlassBackgroundImagePath,
+                style,
             )
             val hasPageBackground = backgroundDrawable != null
             if (!hasPageBackground && !hasPageBackgroundOverride()) {
@@ -1947,24 +2025,30 @@ object HomeNativeGlassHook {
     }
 
     private fun homeFeedCardStyleState(card: View, page: View?): HomeFeedCardStyleState {
-        val cached = cachedBackgroundBitmap
+        val style = currentHomeNativeGlassRuntimeStyle()
+        val request = backgroundRequestForStyle(
+            style,
+            BACKGROUND_CACHE_SAMPLE_EDGE,
+            BACKGROUND_CACHE_SAMPLE_EDGE,
+        )
+        val cached = request?.let { findCachedBackgroundEntry(it) }
         val group = card as? ViewGroup
         return HomeFeedCardStyleState(
             page = page,
             width = card.width,
             height = card.height,
             childCount = group?.childCount ?: 0,
-            sourcePath = ConfigManager.homeNativeGlassBackgroundImagePath.trim(),
-            blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim(),
+            sourcePath = style.backgroundImagePath,
+            blurCachePath = style.blurCacheImagePath,
             sourceLastModified = cached?.lastModified ?: 0L,
             sourceLength = cached?.length ?: 0L,
             blurCacheLastModified = cached?.blurCacheLastModified ?: 0L,
             blurCacheLength = cached?.blurCacheLength ?: 0L,
-            tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent,
-            cardBlurPercent = ConfigManager.homeNativeGlassCardBlurPercent,
-            cardRadiusDp = ConfigManager.homeNativeGlassCardRadiusDp,
-            strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled,
-            shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled,
+            tintAlphaPercent = style.tintAlphaPercent,
+            cardBlurPercent = style.cardBlurPercent,
+            cardRadiusDp = style.cardRadiusDp,
+            strokeEnabled = style.strokeEnabled,
+            shadowStrengthPercent = style.shadowStrengthPercent,
         )
     }
 
@@ -1984,7 +2068,12 @@ object HomeNativeGlassHook {
     private fun isHomeFeedCardStyleApplied(card: View, page: View?): Boolean {
         if (hasHomeFeedCardGlassState(card)) return true
         if (page == null) return true
-        return cachedBackgroundBitmap?.blurredBitmap == null
+        val request = backgroundRequestForStyle(
+            currentHomeNativeGlassRuntimeStyle(),
+            BACKGROUND_CACHE_SAMPLE_EDGE,
+            BACKGROUND_CACHE_SAMPLE_EDGE,
+        )
+        return request?.let { findCachedBackgroundEntry(it) }?.blurredBitmap == null
     }
 
     private fun clearHomeNativeDefaultBackgrounds(page: View) {
@@ -2910,10 +2999,11 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbCommentBackgroundHost(host: View) {
+        val style = currentHomeNativeGlassRuntimeStyle()
         val state = PbCommentBackgroundState(
-            blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim(),
-            sourcePath = ConfigManager.homeNativeGlassBackgroundImagePath.trim(),
-            tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent,
+            blurCachePath = style.blurCacheImagePath,
+            sourcePath = style.backgroundImagePath,
+            tintAlphaPercent = style.tintAlphaPercent,
         )
         if (
             pbCommentBackgroundHostStates[host] == state &&
@@ -2921,19 +3011,17 @@ object HomeNativeGlassHook {
         ) {
             return
         }
-        val cachedEntry = findCachedBackgroundEntry(
-            ConfigManager.homeNativeGlassBackgroundImagePath,
+        val request = backgroundRequestForStyle(
+            style,
             BACKGROUND_CACHE_SAMPLE_EDGE,
             BACKGROUND_CACHE_SAMPLE_EDGE,
         )
+        val cachedEntry = request?.let { findCachedBackgroundEntry(it) }
         if (cachedEntry == null) {
             applyPbCommentFallbackBackgroundHost(host, state)
-            scheduleBackgroundDecode(
-                ConfigManager.homeNativeGlassBackgroundImagePath,
-                BACKGROUND_CACHE_SAMPLE_EDGE,
-                BACKGROUND_CACHE_SAMPLE_EDGE,
-                host,
-            ) { target -> applyPbCommentBackgroundHost(target) }
+            request?.let {
+                scheduleBackgroundDecode(it, host) { target -> applyPbCommentBackgroundHost(target) }
+            }
             return
         }
         val bitmap = cachedEntry.blurredBitmap ?: run {
@@ -2967,16 +3055,17 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbSubPbLayoutCard(subPbLayout: View, host: View) {
+        val style = currentHomeNativeGlassRuntimeStyle()
         val radiusDp = effectiveCardRadiusDp()
         val state = PbSubPbLayoutCardState(
             host = host,
-            blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim(),
-            sourcePath = ConfigManager.homeNativeGlassBackgroundImagePath.trim(),
-            tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent,
-            cardBlurPercent = ConfigManager.homeNativeGlassCardBlurPercent,
+            blurCachePath = style.blurCacheImagePath,
+            sourcePath = style.backgroundImagePath,
+            tintAlphaPercent = style.tintAlphaPercent,
+            cardBlurPercent = style.cardBlurPercent,
             cardRadiusDp = radiusDp,
-            strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled,
-            shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled,
+            strokeEnabled = style.strokeEnabled,
+            shadowStrengthPercent = style.shadowStrengthPercent,
         )
         val shouldUpdateBackground = pbSubPbLayoutCardStates[subPbLayout] != state ||
             subPbLayout.background !is CardGlassDrawable
@@ -3080,7 +3169,11 @@ object HomeNativeGlassHook {
     private fun applyPbSubPbLayoutShadow(subPbLayout: View, radius: Float) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
         val density = subPbLayout.resources.displayMetrics.density
-        if (ConfigManager.isHomeNativeGlassShadowEnabled) {
+        val shadowStrength = currentHomeNativeGlassRuntimeStyle().shadowStrengthPercent.coerceIn(
+            ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+        )
+        if (shadowStrength > 0) {
             allowPbSubPbLayoutShadowOverflow(subPbLayout)
         }
         subPbLayout.outlineProvider = object : ViewOutlineProvider() {
@@ -3091,9 +3184,10 @@ object HomeNativeGlassHook {
         }
         subPbLayout.clipToOutline = true
         subPbLayout.stateListAnimator = null
-        if (ConfigManager.isHomeNativeGlassShadowEnabled) {
-            subPbLayout.elevation = density * PB_SUB_PB_SHADOW_ELEVATION_DP
-            subPbLayout.translationZ = density * PB_SUB_PB_SHADOW_TRANSLATION_Z_DP
+        if (shadowStrength > 0) {
+            val shadowScale = shadowStrength / 100f
+            subPbLayout.elevation = density * PB_SUB_PB_SHADOW_ELEVATION_DP * shadowScale
+            subPbLayout.translationZ = density * PB_SUB_PB_SHADOW_TRANSLATION_Z_DP * shadowScale
         } else {
             subPbLayout.elevation = 0f
             subPbLayout.translationZ = 0f
@@ -4067,16 +4161,17 @@ object HomeNativeGlassHook {
     }
 
     private fun resolvePbSortSwitchTintState(view: View): PbSortSwitchTintState? {
+        val style = currentHomeNativeGlassRuntimeStyle()
         synchronized(pbSortSwitchTintStates) {
             pbSortSwitchTintStates[view]?.let { cached ->
                 if (cached.matchesPbSortSwitchTintState(view)) return cached
             }
         }
-        val sourcePath = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
-        val blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
-        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        val tintColor = ConfigManager.homeNativeGlassTintColor
-        val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
+        val sourcePath = style.backgroundImagePath
+        val blurCachePath = style.blurCacheImagePath
+        val blurPercent = style.cardBlurPercent
+        val tintColor = style.tintColor
+        val autoTintColor = style.autoTintColor
         val pinnedReplyTitle = isPbSortSwitchPinnedReplyTitle(view)
         val canApply = isPbSortSwitchDynamicTintHost(view)
         if (!canApply) {
@@ -4118,11 +4213,12 @@ object HomeNativeGlassHook {
     }
 
     private fun PbSortSwitchTintState.matchesPbSortSwitchTintState(view: View): Boolean {
-        return sourcePath == ConfigManager.homeNativeGlassBackgroundImagePath.trim() &&
-            blurCachePath == ConfigManager.homeNativeGlassBlurCacheImagePath.trim() &&
-            blurPercent == ConfigManager.homeNativeGlassCardBlurPercent &&
-            tintColor == ConfigManager.homeNativeGlassTintColor &&
-            autoTintColor == ConfigManager.homeNativeGlassAutoTintColor &&
+        val style = currentHomeNativeGlassRuntimeStyle()
+        return sourcePath == style.backgroundImagePath &&
+            blurCachePath == style.blurCacheImagePath &&
+            blurPercent == style.cardBlurPercent &&
+            tintColor == style.tintColor &&
+            autoTintColor == style.autoTintColor &&
             pinnedReplyTitle == isPbSortSwitchPinnedReplyTitle(view)
     }
 
@@ -4734,8 +4830,9 @@ object HomeNativeGlassHook {
     }
 
     private fun resolveCachedPbCommentDynamicTintColorOrNull(): Int? {
-        val tintColor = ConfigManager.homeNativeGlassTintColor
-        val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
+        val style = currentHomeNativeGlassRuntimeStyle()
+        val tintColor = style.tintColor
+        val autoTintColor = style.autoTintColor
         val cached = pbCommentDynamicTintState
         if (
             cached != null &&
@@ -4763,9 +4860,10 @@ object HomeNativeGlassHook {
     }
 
     private fun configuredPbCommentTintColor(): Int? {
-        val tintColor = ConfigManager.homeNativeGlassTintColor
+        val style = currentHomeNativeGlassRuntimeStyle()
+        val tintColor = style.tintColor
         if (tintColor != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR) return tintColor
-        val autoTintColor = ConfigManager.homeNativeGlassAutoTintColor
+        val autoTintColor = style.autoTintColor
         return autoTintColor.takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
     }
 
@@ -5392,10 +5490,7 @@ object HomeNativeGlassHook {
     }
 
     private fun effectiveCardRadiusDp(): Int {
-        return ConfigManager.homeNativeGlassCardRadiusDp.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-        )
+        return currentHomeNativeGlassRuntimeStyle().cardRadiusDp
     }
 
     private fun rememberChromeGlassOriginalState(view: View) {
@@ -5656,26 +5751,28 @@ object HomeNativeGlassHook {
         radius: Float,
         tintAlphaExtra: Int = 0,
     ) {
-        val imagePath = ConfigManager.homeNativeGlassBackgroundImagePath
-        val cachedEntry = page?.let {
-            findCachedBackgroundEntry(imagePath, BACKGROUND_CACHE_SAMPLE_EDGE, BACKGROUND_CACHE_SAMPLE_EDGE)
+        val style = currentHomeNativeGlassRuntimeStyle()
+        val request = backgroundRequestForStyle(
+            style,
+            BACKGROUND_CACHE_SAMPLE_EDGE,
+            BACKGROUND_CACHE_SAMPLE_EDGE,
+        )
+        val cachedEntry = if (page != null && request != null) {
+            findCachedBackgroundEntry(request)
+        } else {
+            null
         }
-        if (page != null && cachedEntry == null) {
+        if (page != null && cachedEntry == null && request != null) {
             val pageRef = WeakReference(page)
-            scheduleBackgroundDecode(
-                imagePath,
-                BACKGROUND_CACHE_SAMPLE_EDGE,
-                BACKGROUND_CACHE_SAMPLE_EDGE,
-                view,
-            ) { target ->
+            scheduleBackgroundDecode(request, view) { target ->
                 setGlassBackground(target, pageRef.get(), radius, tintAlphaExtra)
             }
         }
         val blurredBitmap = cachedEntry?.blurredBitmap
-        val tintAlphaPercent = ConfigManager.homeNativeGlassTintAlphaPercent
-        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        val strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled
-        val shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled
+        val tintAlphaPercent = style.tintAlphaPercent
+        val blurPercent = style.cardBlurPercent
+        val strokeEnabled = style.strokeEnabled
+        val shadowStrengthPercent = style.shadowStrengthPercent
         val background = if (page != null && blurredBitmap != null) {
             val current = view.background as? CardGlassDrawable
             if (
@@ -5688,7 +5785,7 @@ object HomeNativeGlassHook {
                     tintAlphaExtra = tintAlphaExtra,
                     blurPercent = blurPercent,
                     strokeEnabled = strokeEnabled,
-                    shadowEnabled = shadowEnabled,
+                    shadowStrengthPercent = shadowStrengthPercent,
                 )
             ) {
                 glassBackgroundViews[view] = true
@@ -5704,7 +5801,7 @@ object HomeNativeGlassHook {
                 tintAlphaExtra = tintAlphaExtra,
                 blurPercent = blurPercent,
                 strokeEnabled = strokeEnabled,
-                shadowEnabled = shadowEnabled,
+                shadowStrengthPercent = shadowStrengthPercent,
             )
         } else {
             GradientDrawable().apply {
@@ -5761,28 +5858,186 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun hasPageBackgroundOverride(): Boolean {
-        return ConfigManager.homeNativeGlassBackgroundImagePath.isNotBlank()
+    private fun currentHomeNativeGlassRuntimeStyle(): HomeNativeGlassRuntimeStyle {
+        refreshHomeNativeGlassRuntimeStyle()
+        return runtimeStyle
     }
 
-    private fun createBackgroundDrawable(view: View, imagePath: String): Drawable? {
-        val path = imagePath.trim()
-        if (path.isEmpty()) return null
-        val metrics = view.resources.displayMetrics
-        val targetWidth = if (view.width > 0) view.width else metrics.widthPixels
-        val targetHeight = if (view.height > 0) view.height else metrics.heightPixels
-        val cachedEntry = findCachedBackgroundEntry(
-            path,
-            targetWidth.coerceAtLeast(1),
-            targetHeight.coerceAtLeast(1),
+    private fun onHostDarkModeChanged(@Suppress("UNUSED_PARAMETER") darkMode: Boolean) {
+        if (refreshHomeNativeGlassRuntimeStyle(scheduleReapply = false)) {
+            scheduleHomeNativeGlassModeReapply()
+        }
+    }
+
+    private fun refreshHomeNativeGlassRuntimeStyle(
+        forceHostRead: Boolean = false,
+        scheduleReapply: Boolean = true,
+    ): Boolean {
+        val snapshotVersion = ConfigManager.snapshotVersion()
+        if (!ConfigManager.isHomeNativeGlassEnabled) {
+            val changed = updateHomeNativeGlassRuntimeStyle(HomeNativeGlassRuntimeStyle.EMPTY, scheduleReapply)
+            runtimeStyleSnapshotVersion = snapshotVersion
+            return changed
+        }
+        val darkMode = if (forceHostRead) {
+            HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled()
+        } else {
+            HomeNativeGlassHostDarkModeBridge.currentKnownDarkMode()
+        }
+        if (darkMode == null) {
+            val changed = updateHomeNativeGlassRuntimeStyle(HomeNativeGlassRuntimeStyle.EMPTY, scheduleReapply)
+            runtimeStyleSnapshotVersion = -1L
+            return changed
+        }
+        ConfigManager.setHomeNativeGlassDarkModeActive(darkMode)
+        if (
+            !forceHostRead &&
+            runtimeStyleSnapshotVersion == snapshotVersion &&
+            runtimeStyle.darkMode == darkMode
+        ) {
+            return false
+        }
+        val activeStyle = ConfigManager.activeHomeNativeGlassStyle()
+        val next = HomeNativeGlassRuntimeStyle(
+            darkMode = darkMode,
+            backgroundImagePath = activeStyle.backgroundImagePath.trim(),
+            blurCacheImagePath = activeStyle.blurCacheImagePath.trim(),
+            tintColor = activeStyle.tintColor,
+            autoTintColor = activeStyle.autoTintColor,
+            tintAlphaPercent = activeStyle.tintAlphaPercent.coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ),
+            cardBlurPercent = activeStyle.cardBlurPercent.coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            ),
+            cardRadiusDp = activeStyle.cardRadiusDp.coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+            ),
+            strokeEnabled = activeStyle.strokeEnabled,
+            shadowStrengthPercent = activeStyle.shadowStrengthPercent.coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            ),
         )
+        val changed = updateHomeNativeGlassRuntimeStyle(next, scheduleReapply)
+        runtimeStyleSnapshotVersion = snapshotVersion
+        return changed
+    }
+
+    private fun updateHomeNativeGlassRuntimeStyle(
+        next: HomeNativeGlassRuntimeStyle,
+        scheduleReapply: Boolean,
+    ): Boolean {
+        if (runtimeStyle == next) return false
+        runtimeStyle = next
+        if (scheduleReapply) {
+            scheduleHomeNativeGlassModeReapply()
+        }
+        return true
+    }
+
+    private fun scheduleHomeNativeGlassModeReapply() {
+        if (!homeNativeGlassModeReapplyScheduled.compareAndSet(false, true)) return
+        val anchor = synchronized(glassBackgroundViews) {
+            glassBackgroundViews.keys.firstOrNull { it.isAttachedToWindow }
+        } ?: synchronized(homeRecyclerViews) {
+            homeRecyclerViews.keys.firstOrNull { it.isAttachedToWindow }
+        }
+        val reapply = Runnable {
+            homeNativeGlassModeReapplyScheduled.set(false)
+            reapplyHomeNativeGlassForModeChange()
+        }
+        if (anchor != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                anchor.postOnAnimation(reapply)
+            } else {
+                anchor.post(reapply)
+            }
+        } else {
+            reapply.run()
+        }
+    }
+
+    private fun reapplyHomeNativeGlassForModeChange() {
+        val cards = ArrayList<View>()
+        val pages = ArrayList<View>()
+        fun rememberCard(card: View?) {
+            if (card != null && !cards.contains(card)) {
+                cards.add(card)
+            }
+        }
+        fun rememberPage(page: View?) {
+            if (page != null && !pages.contains(page)) {
+                pages.add(page)
+            }
+        }
+        synchronized(homeFeedCardStyleStates) {
+            homeFeedCardStyleStates.keys.forEach(::rememberCard)
+            homeFeedCardStyleStates.clear()
+        }
+        synchronized(homeFeedCardGlassTargets) {
+            homeFeedCardGlassTargets.keys.forEach { view ->
+                rememberCard(findHomeFeedCardAncestor(view))
+            }
+        }
+        val recyclers = synchronized(homeRecyclerViews) {
+            homeRecyclerViews.keys.toList()
+        }
+        val componentViews = synchronized(homeCardComponentViews) {
+            homeCardComponentViews.keys.toList()
+        }
+        pbCommentBackgroundHostStates.clear()
+        pbSubPbLayoutCardStates.clear()
+        pbSortSwitchTintStates.clear()
+        pbCommentDynamicTintState = null
+
+        for (recycler in recyclers) {
+            if (!recycler.isAttachedToWindow) continue
+            refreshHomeNativeBackgroundLayers(recycler)
+            rememberPage(findHomeNativePageFromChild(recycler))
+        }
+        for (page in pages) {
+            if (page.isAttachedToWindow) {
+                applyPageStyleSafely(page)
+            }
+        }
+        for (card in cards) {
+            if (card.isAttachedToWindow) {
+                applyCardStyleSafely(card, force = true)
+            }
+        }
+        for (componentView in componentViews) {
+            if (componentView.isAttachedToWindow) {
+                ensureCardComponentGlassSafely(componentView)
+            }
+        }
+        invalidateGlassBackgroundViews()
+    }
+
+    private fun hasPageBackgroundOverride(): Boolean {
+        return currentHomeNativeGlassRuntimeStyle().hasBackgroundImage
+    }
+
+    private fun createBackgroundDrawable(view: View, style: HomeNativeGlassRuntimeStyle): Drawable? {
+        val metrics = view.resources.displayMetrics
+        val rawTargetWidth = if (view.width > 0) view.width else metrics.widthPixels
+        val rawTargetHeight = if (view.height > 0) view.height else metrics.heightPixels
+        val targetSize = backgroundDecodeSizeForMaxEdge(
+            rawTargetWidth.coerceAtLeast(1),
+            rawTargetHeight.coerceAtLeast(1),
+            PAGE_BACKGROUND_MAX_DECODE_EDGE,
+        )
+        val request = backgroundRequestForStyle(
+            style,
+            targetSize.first,
+            targetSize.second,
+        ) ?: return null
+        val cachedEntry = findCachedBackgroundEntry(request)
         if (cachedEntry == null) {
-            scheduleBackgroundDecode(
-                path,
-                targetWidth.coerceAtLeast(1),
-                targetHeight.coerceAtLeast(1),
-                view,
-            ) { target ->
+            scheduleBackgroundDecode(request, view) { target ->
                 applyPageStyleSafely(target)
             }
             return null
@@ -5791,25 +6046,40 @@ object HomeNativeGlassHook {
         return CenterCropBitmapDrawable(bitmap)
     }
 
+    private fun backgroundDecodeSizeForMaxEdge(width: Int, height: Int, maxEdge: Int): Pair<Int, Int> {
+        val normalizedWidth = width.coerceAtLeast(1)
+        val normalizedHeight = height.coerceAtLeast(1)
+        val maxDimension = max(normalizedWidth, normalizedHeight)
+        if (maxDimension <= maxEdge) return normalizedWidth to normalizedHeight
+        return (
+            normalizedWidth.toLong() * maxEdge / maxDimension
+            ).toInt().coerceAtLeast(1) to (
+            normalizedHeight.toLong() * maxEdge / maxDimension
+            ).toInt().coerceAtLeast(1)
+    }
+
     private fun prewarmBackgroundCacheIfNeeded() {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
-        val path = ConfigManager.homeNativeGlassBackgroundImagePath.trim()
-        if (path.isEmpty()) return
+        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        val style = currentHomeNativeGlassRuntimeStyle()
+        if (!style.hasBackgroundImage) return
         val context = ConfigManager.getAppContext() ?: return
         val metrics = context.resources.displayMetrics
-        val targetWidth = metrics.widthPixels.coerceAtLeast(1)
-        val targetHeight = metrics.heightPixels.coerceAtLeast(1)
-        if (findCachedBackgroundEntry(path, targetWidth, targetHeight) != null) return
-        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        val key = "prewarm|" + backgroundDecodeKey(path, targetWidth, targetHeight)
+        val targetSize = backgroundDecodeSizeForMaxEdge(
+            metrics.widthPixels.coerceAtLeast(1),
+            metrics.heightPixels.coerceAtLeast(1),
+            PAGE_BACKGROUND_MAX_DECODE_EDGE,
+        )
+        val request = backgroundRequestForStyle(style, targetSize.first, targetSize.second) ?: return
+        if (findCachedBackgroundEntry(request) != null) return
+        val key = "prewarm|" + request.cacheKey
         if (!backgroundDecodeKeys.add(key)) return
         backgroundDecodeExecutor.execute {
             try {
                 if (
-                    isBackgroundDecodeRequestCurrent(path, blurPercent) &&
-                    findCachedBackgroundEntry(path, targetWidth, targetHeight) == null
+                    isBackgroundDecodeRequestCurrent(request) &&
+                    findCachedBackgroundEntry(request) == null
                 ) {
-                    decodeBackgroundEntry(path, targetWidth, targetHeight)
+                    decodeBackgroundEntry(request)
                 }
             } catch (t: Throwable) {
                 if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
@@ -5821,34 +6091,47 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun findCachedBackgroundEntry(path: String, targetWidth: Int, targetHeight: Int): CachedBackgroundBitmap? {
-        val trimmedPath = path.trim()
-        if (trimmedPath.isEmpty()) return null
-        val blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
-        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        val cached = cachedBackgroundBitmap ?: return null
-        if (!cached.matchesBackground(trimmedPath, blurCachePath, blurPercent, targetWidth, targetHeight)) {
-            return null
-        }
+    private fun backgroundRequestForStyle(
+        style: HomeNativeGlassRuntimeStyle,
+        targetWidth: Int,
+        targetHeight: Int,
+    ): BackgroundRequest? {
+        if (!style.hasBackgroundImage) return null
+        return BackgroundRequest(
+            path = style.backgroundImagePath,
+            blurCachePath = style.blurCacheImagePath,
+            blurPercent = style.cardBlurPercent,
+            targetWidth = targetWidth.coerceAtLeast(1),
+            targetHeight = targetHeight.coerceAtLeast(1),
+        )
+    }
+
+    private fun findCachedBackgroundEntry(request: BackgroundRequest): CachedBackgroundBitmap? {
+        val cached = synchronized(cachedBackgroundBitmaps) {
+            cachedBackgroundBitmaps[request.cacheKey]
+                ?: cachedBackgroundBitmaps.values.firstOrNull { it.matchesBackground(request) }?.also {
+                    cachedBackgroundBitmaps[it.cacheKey]
+                }
+        } ?: return null
         return cached.takeIf { isCachedBackgroundMetadataCurrent(it) }
     }
 
     private fun isCachedBackgroundMetadataCurrent(cached: CachedBackgroundBitmap): Boolean {
         val now = SystemClock.uptimeMillis()
-        if (now - cachedBackgroundMetadataCheckedAt < BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS) {
+        if (now - cached.metadataCheckedAt < BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS) {
             return true
         }
-        return synchronized(this) {
-            if (cachedBackgroundBitmap !== cached) return@synchronized false
+        return synchronized(cachedBackgroundBitmaps) {
+            if (cachedBackgroundBitmaps[cached.cacheKey] !== cached) return@synchronized false
             val source = readBackgroundFileMetadata(cached.path)
             val blurCache = readBackgroundFileMetadata(cached.blurCachePath)
-            cachedBackgroundMetadataCheckedAt = now
+            cached.metadataCheckedAt = now
             val fresh = cached.lastModified == source.lastModified &&
                 cached.length == source.length &&
                 cached.blurCacheLastModified == blurCache.lastModified &&
                 cached.blurCacheLength == blurCache.length
             if (!fresh) {
-                cachedBackgroundBitmap = null
+                cachedBackgroundBitmaps.remove(cached.cacheKey)
             }
             fresh
         }
@@ -5868,25 +6151,20 @@ object HomeNativeGlassHook {
     }
 
     private fun scheduleBackgroundDecode(
-        path: String,
-        targetWidth: Int,
-        targetHeight: Int,
+        request: BackgroundRequest,
         anchor: View,
         onReady: (View) -> Unit,
     ) {
-        val trimmedPath = path.trim()
-        if (trimmedPath.isEmpty()) return
-        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        val key = backgroundDecodeKey(trimmedPath, targetWidth, targetHeight)
+        val key = request.cacheKey
         if (!backgroundDecodeKeys.add(key)) return
         val anchorRef = WeakReference(anchor)
         backgroundDecodeExecutor.execute {
             try {
                 if (
-                    isBackgroundDecodeRequestCurrent(trimmedPath, blurPercent) &&
-                    findCachedBackgroundEntry(trimmedPath, targetWidth, targetHeight) == null
+                    isBackgroundDecodeRequestCurrent(request) &&
+                    findCachedBackgroundEntry(request) == null
                 ) {
-                    decodeBackgroundEntry(trimmedPath, targetWidth, targetHeight)
+                    decodeBackgroundEntry(request)
                 }
             } catch (t: Throwable) {
                 if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
@@ -5899,7 +6177,7 @@ object HomeNativeGlassHook {
             if (target != null) {
                 target.post {
                     if (!target.isAttachedToWindow) return@post
-                    if (!isBackgroundDecodeRequestCurrent(trimmedPath, blurPercent)) return@post
+                    if (!isBackgroundDecodeRequestCurrent(request)) return@post
                     onReady(target)
                     invalidateGlassBackgroundViews()
                 }
@@ -5907,115 +6185,132 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun isBackgroundDecodeRequestCurrent(path: String, blurPercent: Int): Boolean {
+    private fun isBackgroundDecodeRequestCurrent(request: BackgroundRequest): Boolean {
+        val style = currentHomeNativeGlassRuntimeStyle()
         return ConfigManager.isHomeNativeGlassEnabled &&
-            ConfigManager.homeNativeGlassBackgroundImagePath.trim() == path &&
-            ConfigManager.homeNativeGlassCardBlurPercent == blurPercent
+            style.backgroundImagePath == request.path &&
+            style.blurCacheImagePath == request.blurCachePath &&
+            style.cardBlurPercent == request.blurPercent
     }
 
-    private fun backgroundDecodeKey(path: String, targetWidth: Int, targetHeight: Int): String {
-        val blurCachePath = ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
-        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        return listOf(
-            path,
-            blurCachePath,
-            blurPercent.toString(),
-            targetWidth.coerceAtLeast(1).toString(),
-            targetHeight.coerceAtLeast(1).toString(),
-        ).joinToString("|")
-    }
-
-    private fun decodeBackgroundEntry(path: String, targetWidth: Int, targetHeight: Int): CachedBackgroundBitmap? {
-        val trimmedPath = path.trim()
-        val file = java.io.File(trimmedPath)
+    private fun decodeBackgroundEntry(request: BackgroundRequest): CachedBackgroundBitmap? {
+        val file = java.io.File(request.path)
         val lastModified = runCatching { file.lastModified() }.getOrDefault(0L)
         val length = runCatching { file.length() }.getOrDefault(0L)
-        val blurPercent = ConfigManager.homeNativeGlassCardBlurPercent
-        val blurCachePath = resolveUsableBlurCachePath()
-        val blurCacheFile = java.io.File(blurCachePath)
+        val blurCacheFile = java.io.File(request.blurCachePath)
         val blurCacheLastModified = runCatching { blurCacheFile.lastModified() }.getOrDefault(0L)
         val blurCacheLength = runCatching { blurCacheFile.length() }.getOrDefault(0L)
-        cachedBackgroundBitmap?.let { cached ->
-            if (
-                cached.path == trimmedPath &&
-                cached.lastModified == lastModified &&
-                cached.length == length &&
-                cached.blurCachePath == blurCachePath &&
-                cached.blurCacheLastModified == blurCacheLastModified &&
-                cached.blurCacheLength == blurCacheLength &&
-                cached.blurPercent == blurPercent &&
-                cached.targetWidth >= targetWidth &&
-                cached.targetHeight >= targetHeight
-            ) {
-                return cached
-            }
+        findCachedBackgroundEntry(request)?.let { cached ->
+            if (cached.lastModified == lastModified && cached.length == length) return cached
         }
 
         val canDecode = runCatching { file.isFile && length > 0L }.getOrDefault(false)
         val bitmap = if (canDecode) {
             runCatching {
-                HomeNativeGlassImageCache.decodeSampledBitmap(trimmedPath, targetWidth, targetHeight)
+                HomeNativeGlassImageCache.decodeSampledBitmap(
+                    request.path,
+                    request.targetWidth,
+                    request.targetHeight,
+                )
             }.getOrNull()
         } else {
             null
         }
         val blurredBitmap = if (
-            blurCachePath.isNotBlank() &&
+            request.blurCachePath.isNotBlank() &&
             runCatching { blurCacheFile.isFile && blurCacheLength > 0L }.getOrDefault(false)
         ) {
-            HomeNativeGlassImageCache.decodeBitmap(blurCachePath)
+            HomeNativeGlassImageCache.decodeBitmap(request.blurCachePath)
         } else {
             null
         }
         val entry = CachedBackgroundBitmap(
-            path = trimmedPath,
+            cacheKey = request.cacheKey,
+            path = request.path,
             lastModified = lastModified,
             length = length,
-            blurCachePath = blurCachePath,
+            blurCachePath = request.blurCachePath,
             blurCacheLastModified = blurCacheLastModified,
             blurCacheLength = blurCacheLength,
-            blurPercent = blurPercent,
-            targetWidth = targetWidth,
-            targetHeight = targetHeight,
+            blurPercent = request.blurPercent,
+            targetWidth = request.targetWidth,
+            targetHeight = request.targetHeight,
             bitmap = bitmap,
             blurredBitmap = blurredBitmap,
+            memoryBytes = backgroundEntryMemoryBytes(bitmap, blurredBitmap),
+            metadataCheckedAt = SystemClock.uptimeMillis(),
         )
-        cachedBackgroundBitmap?.let { cached ->
-            if (
-                cached.path == entry.path &&
-                cached.lastModified == entry.lastModified &&
-                cached.length == entry.length &&
-                cached.blurCachePath == entry.blurCachePath &&
-                cached.blurCacheLastModified == entry.blurCacheLastModified &&
-                cached.blurCacheLength == entry.blurCacheLength &&
-                cached.blurPercent == entry.blurPercent &&
-                cached.targetWidth >= entry.targetWidth &&
-                cached.targetHeight >= entry.targetHeight
-            ) {
-                recycleBackgroundEntryBitmaps(entry)
-                return cached
-            }
-        }
-        cachedBackgroundBitmap = entry
-        cachedBackgroundMetadataCheckedAt = SystemClock.uptimeMillis()
+        val cachedEntry = storeCachedBackgroundEntry(entry)
         if (bitmap == null && firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
-            XposedCompat.logD { "$TAG background image unavailable: $path" }
+            XposedCompat.logD { "$TAG background image unavailable: ${request.path}" }
         }
-        return entry
+        return cachedEntry
     }
 
-    private fun CachedBackgroundBitmap.matchesBackground(
-        path: String,
-        blurCachePath: String,
-        blurPercent: Int,
-        targetWidth: Int,
-        targetHeight: Int,
-    ): Boolean {
-        return this.path == path &&
-            this.blurCachePath == blurCachePath &&
-            this.blurPercent == blurPercent &&
-            this.targetWidth >= targetWidth &&
-            this.targetHeight >= targetHeight
+    private fun storeCachedBackgroundEntry(entry: CachedBackgroundBitmap): CachedBackgroundBitmap {
+        return synchronized(cachedBackgroundBitmaps) {
+            val existing = cachedBackgroundBitmaps.values.firstOrNull { cached ->
+                cached.path == entry.path &&
+                    cached.lastModified == entry.lastModified &&
+                    cached.length == entry.length &&
+                    cached.blurCachePath == entry.blurCachePath &&
+                    cached.blurCacheLastModified == entry.blurCacheLastModified &&
+                    cached.blurCacheLength == entry.blurCacheLength &&
+                    cached.blurPercent == entry.blurPercent &&
+                    cached.targetWidth >= entry.targetWidth &&
+                    cached.targetHeight >= entry.targetHeight
+            }
+            if (existing != null) {
+                cachedBackgroundBitmaps[existing.cacheKey]
+                recycleBackgroundEntryBitmaps(entry)
+                return@synchronized existing
+            }
+            cachedBackgroundBitmaps[entry.cacheKey] = entry
+            trimCachedBackgroundEntriesLocked()
+            entry
+        }
+    }
+
+    private fun trimCachedBackgroundEntriesLocked() {
+        var totalBytes = 0L
+        cachedBackgroundBitmaps.values.forEach { entry ->
+            totalBytes += entry.memoryBytes
+        }
+        val iterator = cachedBackgroundBitmaps.entries.iterator()
+        while (
+            totalBytes > MAX_CACHED_BACKGROUND_BITMAP_BYTES &&
+            cachedBackgroundBitmaps.size > 1 &&
+            iterator.hasNext()
+        ) {
+            val entry = iterator.next()
+            totalBytes -= entry.value.memoryBytes
+            iterator.remove()
+        }
+    }
+
+    private fun backgroundEntryMemoryBytes(bitmap: Bitmap?, blurredBitmap: Bitmap?): Long {
+        val bitmapBytes = bitmapMemoryBytes(bitmap)
+        val blurredBytes = if (blurredBitmap === bitmap) 0L else bitmapMemoryBytes(blurredBitmap)
+        return bitmapBytes + blurredBytes
+    }
+
+    private fun bitmapMemoryBytes(bitmap: Bitmap?): Long {
+        if (bitmap == null) return 0L
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                bitmap.allocationByteCount.toLong()
+            } else {
+                bitmap.byteCount.toLong()
+            }
+        }.getOrDefault(0L)
+    }
+
+    private fun CachedBackgroundBitmap.matchesBackground(request: BackgroundRequest): Boolean {
+        return path == request.path &&
+            blurCachePath == request.blurCachePath &&
+            blurPercent == request.blurPercent &&
+            targetWidth >= request.targetWidth &&
+            targetHeight >= request.targetHeight
     }
 
     private fun recycleBackgroundEntryBitmaps(entry: CachedBackgroundBitmap) {
@@ -6023,10 +6318,6 @@ object HomeNativeGlassHook {
         if (entry.blurredBitmap !== entry.bitmap) {
             runCatching { entry.blurredBitmap?.recycle() }
         }
-    }
-
-    private fun resolveUsableBlurCachePath(): String {
-        return ConfigManager.homeNativeGlassBlurCacheImagePath.trim()
     }
 
     private fun installScrollInvalidation(recycler: View) {
@@ -6153,13 +6444,34 @@ object HomeNativeGlassHook {
     }
 
     private fun invalidateGlassBackgroundViews(anchor: View) {
+        val root = anchor.rootView ?: anchor
+        val anchorPage = findHomeNativePageFromChild(anchor)
         val views = synchronized(glassBackgroundViews) {
             glassBackgroundViews.keys.toList()
         }
         for (view in views) {
-            if (view.isAttachedToWindow && isViewWithinAncestor(view, anchor)) {
+            if (view.isAttachedToWindow && shouldInvalidateGlassBackgroundView(view, anchor, root, anchorPage)) {
                 view.invalidate()
             }
+        }
+    }
+
+    private fun shouldInvalidateGlassBackgroundView(
+        view: View,
+        anchor: View,
+        root: View,
+        anchorPage: View?,
+    ): Boolean {
+        if (isViewWithinAncestor(view, anchor)) return true
+        if (anchorPage == null) return false
+        if (view.rootView !== root && view !== root) return false
+        if (!isTrackedHomeSearchBox(view)) return false
+        return findHomeNativePageForSearchBox(view, root, anchorPage) === anchorPage
+    }
+
+    private fun isTrackedHomeSearchBox(view: View): Boolean {
+        return synchronized(homeSearchBoxes) {
+            homeSearchBoxes.containsKey(view)
         }
     }
 
@@ -6226,6 +6538,10 @@ object HomeNativeGlassHook {
     private val HOME_BOTTOM_TAB_HOST_CLASSES = arrayOf(
         StableTiebaHookPoints.FRAGMENT_TAB_HOST_CLASS,
         StableTiebaHookPoints.FRAGMENT_TAB_WIDGET_CLASS,
+    )
+    private val HOST_SKIN_TYPE_CHANGE_METHODS = arrayOf(
+        "setSkinType",
+        "setSkinTypeValue",
     )
     private const val HOME_RECOMMEND_CONTROL_FRAGMENT_CLASS =
         "com.baidu.tieba.homepage.framework.RecommendFrsControlFragment"
@@ -6295,6 +6611,8 @@ object HomeNativeGlassHook {
     private const val PB_COMMENT_LIST_ITEM_CLEAR_DEPTH = 4
     private const val SHARE_DIALOG_MARKER_SCAN_DEPTH = 8
     private const val BACKGROUND_CACHE_SAMPLE_EDGE = 48
+    private const val PAGE_BACKGROUND_MAX_DECODE_EDGE = 1440
+    private const val MAX_CACHED_BACKGROUND_BITMAP_BYTES = 18L * 1024L * 1024L
     private const val BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS = 1500L
     private const val GLASS_INVALIDATE_PARENT_SCAN_DEPTH = 24
     private const val PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA = 28
@@ -6465,7 +6783,7 @@ object HomeNativeGlassHook {
         private val tintAlphaExtra: Int,
         blurPercent: Int,
         private val strokeEnabled: Boolean,
-        private val shadowEnabled: Boolean,
+        shadowStrengthPercent: Int,
     ) : Drawable() {
         private val targetRef = WeakReference(target)
         private val pageRef = WeakReference(page)
@@ -6480,6 +6798,10 @@ object HomeNativeGlassHook {
         private val cardBlurPercent = blurPercent.coerceIn(
             ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+        )
+        private val shadowStrengthPercent = shadowStrengthPercent.coerceIn(
+            ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
         )
         private val materialIntensity = cardBlurPercent / 100f
         private val materialOverlayRgb = Color.WHITE
@@ -6540,7 +6862,7 @@ object HomeNativeGlassHook {
                 canvas.drawRoundRect(rect, radius, radius, bitmapPaint)
                 drawMaterialOverlay(canvas)
                 drawNoise(canvas)
-                if (shadowEnabled) {
+                if (this@CardGlassDrawable.shadowStrengthPercent > 0) {
                     drawSoftShadow(canvas)
                     drawAmbientShadow(canvas)
                 }
@@ -6580,7 +6902,7 @@ object HomeNativeGlassHook {
             tintAlphaExtra: Int,
             blurPercent: Int,
             strokeEnabled: Boolean,
-            shadowEnabled: Boolean,
+            shadowStrengthPercent: Int,
         ): Boolean {
             return pageRef.get() === page &&
                 this.bitmap === bitmap &&
@@ -6595,7 +6917,10 @@ object HomeNativeGlassHook {
                     ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 ) &&
                 this.strokeEnabled == strokeEnabled &&
-                this.shadowEnabled == shadowEnabled
+                this.shadowStrengthPercent == shadowStrengthPercent.coerceIn(
+                    ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                    ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                )
         }
 
         private fun updateBitmapShader(target: View, page: View) {
@@ -6642,14 +6967,14 @@ object HomeNativeGlassHook {
         }
 
         private fun drawSoftShadow(canvas: Canvas) {
-            val alpha = materialAlpha(APPLE_INNER_SHADOW_ALPHA)
+            val alpha = shadowAlpha(APPLE_INNER_SHADOW_ALPHA)
             if (alpha <= 0) return
             shadowPaint.shader = softShadowShader(alpha)
             canvas.drawRoundRect(rect, radius, radius, shadowPaint)
         }
 
         private fun drawAmbientShadow(canvas: Canvas) {
-            val alpha = materialAlpha(APPLE_AMBIENT_SHADOW_ALPHA)
+            val alpha = shadowAlpha(APPLE_AMBIENT_SHADOW_ALPHA)
             if (alpha <= 0) return
             val strokeWidth = ambientShadowStrokeWidthPx
             insetRect.set(rect)
@@ -6712,6 +7037,12 @@ object HomeNativeGlassHook {
 
         private fun materialAlpha(appleAlpha: Int): Int {
             return (appleAlpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
+        }
+
+        private fun shadowAlpha(appleAlpha: Int): Int {
+            return (appleAlpha * shadowStrengthPercent / 100f * drawableAlpha / 255f)
+                .toInt()
+                .coerceIn(0, 255)
         }
 
         private fun strokeWidth(): Float {

@@ -1,16 +1,21 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import android.app.Activity
+import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.HomeNativeGlassHostDarkModeSwitchTargets
 import java.lang.reflect.Method
 import java.lang.ref.WeakReference
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal object HomeNativeGlassHostDarkModeBridge {
+    private const val LEGACY_DARK_SKIN_TYPE = 1
     private const val DARK_SKIN_TYPE = 4
     private const val LIGHT_SKIN_TYPE = 0
+    private const val HOST_SKIN_TYPE_PREF_KEY = "skin_"
     private const val FOLLOW_SYSTEM_MODE_PREF_KEY = "key_is_follow_system_mode"
+    private const val HOST_TBADK_SETTINGS_CLASS = "com.baidu.tbadk.TbadkSettings"
     private const val HOST_TBADK_CORE_APPLICATION_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
     private const val HOST_SHARED_PREF_HELPER_CLASS = "com.baidu.tbadk.core.sharedPref.SharedPrefHelper"
     private const val HOST_SKIN_MANAGER_CLASS = "com.baidu.tbadk.core.util.SkinManager"
@@ -27,6 +32,7 @@ internal object HomeNativeGlassHostDarkModeBridge {
     private val firstCacheErrorLogged = AtomicBoolean(false)
     private val firstSwitchErrorLogged = AtomicBoolean(false)
     private val firstHostSkinApiErrorLogged = AtomicBoolean(false)
+    private val darkModeChangeListeners = CopyOnWriteArrayList<(Boolean) -> Unit>()
 
     fun configure(targets: HomeNativeGlassHostDarkModeSwitchTargets) {
         this.targets = targets
@@ -71,7 +77,7 @@ internal object HomeNativeGlassHostDarkModeBridge {
                 controller = controller,
                 knownSwitch = expectedSwitch,
             )
-            stateToDarkMode(state)?.let { lastKnownDarkMode = it }
+            stateToDarkMode(state)?.let(::rememberDarkMode)
         } catch (t: Throwable) {
             logCacheErrorOnce(t)
         }
@@ -82,19 +88,30 @@ internal object HomeNativeGlassHostDarkModeBridge {
         return currentSwitch(resolved) != null || resolveHostSkinApi(resolved) != null
     }
 
-    fun isDarkModeEnabled(): Boolean? {
-        val resolved = targets ?: return lastKnownDarkMode
-        readHostDarkModeEnabled(resolved)?.let { enabled ->
-            lastKnownDarkMode = enabled
-            return enabled
+    fun addDarkModeChangeListener(listener: (Boolean) -> Unit) {
+        if (!darkModeChangeListeners.contains(listener)) {
+            darkModeChangeListeners.add(listener)
         }
-        val switchView = currentSwitch(resolved) ?: return lastKnownDarkMode
+    }
+
+    fun currentKnownDarkMode(): Boolean? = lastKnownDarkMode
+
+    fun onHostSkinTypeChanged(skinType: Int?) {
+        rememberDarkMode(skinTypeToDarkMode(skinType))
+    }
+
+    fun isDarkModeEnabled(): Boolean? {
+        val resolved = targets ?: return rememberDarkMode(lastKnownDarkMode)
+        readHostDarkModeEnabled(resolved)?.let { enabled ->
+            return rememberDarkMode(enabled)
+        }
+        val switchView = currentSwitch(resolved) ?: return rememberDarkMode(lastKnownDarkMode)
         return try {
-            readDarkModeEnabled(resolved, switchView)?.also { lastKnownDarkMode = it }
-                ?: lastKnownDarkMode
+            readDarkModeEnabled(resolved, switchView)?.let(::rememberDarkMode)
+                ?: rememberDarkMode(lastKnownDarkMode)
         } catch (t: Throwable) {
             logSwitchErrorOnce(t)
-            lastKnownDarkMode
+            rememberDarkMode(lastKnownDarkMode)
         }
     }
 
@@ -119,9 +136,11 @@ internal object HomeNativeGlassHostDarkModeBridge {
                 val method = if (enabled) resolved.switchSetOnMethod else resolved.switchSetOffMethod
                 method.invoke(switchView)
             }
-            lastKnownDarkMode = readHostDarkModeEnabled(resolved)
+            rememberDarkMode(
+                readHostDarkModeEnabled(resolved)
                 ?: readDarkModeEnabled(resolved, switchView)
                     ?: enabled
+            )
             lastKnownDarkMode == enabled
         } catch (t: Throwable) {
             logSwitchErrorOnce(t)
@@ -145,7 +164,7 @@ internal object HomeNativeGlassHostDarkModeBridge {
                 }
             }
             api.clearBitmapCache()
-            lastKnownDarkMode = api.getSkinType() == DARK_SKIN_TYPE
+            rememberDarkMode(skinTypeToDarkMode(api.getSkinType()))
             XposedCompat.logD {
                 "[HomeNativeGlassHostDarkModeBridge] host skin api applied: " +
                     "enabled=$enabled, skinType=${api.getSkinType()}"
@@ -192,7 +211,20 @@ internal object HomeNativeGlassHostDarkModeBridge {
         }
         controllerRef = WeakReference(controller)
         switchRef = WeakReference(switchView)
-        readDarkModeEnabled(resolved, switchView)?.let { lastKnownDarkMode = it }
+        readDarkModeEnabled(resolved, switchView)?.let(::rememberDarkMode)
+    }
+
+    private fun rememberDarkMode(enabled: Boolean?): Boolean? {
+        if (enabled == null) return lastKnownDarkMode
+        val previous = lastKnownDarkMode
+        lastKnownDarkMode = enabled
+        val changed = ConfigManager.setHomeNativeGlassDarkModeActive(enabled) || previous != enabled
+        if (changed) {
+            darkModeChangeListeners.forEach { listener ->
+                runCatching { listener(enabled) }
+            }
+        }
+        return enabled
     }
 
     private fun readDarkModeEnabled(
@@ -218,10 +250,30 @@ internal object HomeNativeGlassHostDarkModeBridge {
 
     private fun readHostDarkModeEnabled(resolved: HomeNativeGlassHostDarkModeSwitchTargets): Boolean? {
         return try {
-            resolveHostSkinApi(resolved)?.getSkinType()?.let { it == DARK_SKIN_TYPE }
+            val api = resolveHostSkinApi(resolved) ?: return null
+            val skinType = api.getSkinType()
+            val runningDarkMode = skinTypeToDarkMode(skinType)
+            runningDarkMode ?: readHostStartupDarkMode(api)
         } catch (t: Throwable) {
             logSwitchErrorOnce(t)
             null
+        }
+    }
+
+    private fun readHostStartupDarkMode(api: HostSkinApi): Boolean? {
+        val followSystem = api.getFollowSystemMode() ?: return null
+        if (followSystem) {
+            return api.isCurrentSystemDarkMode()
+        }
+        return skinTypeToDarkMode(api.loadSkinType())
+    }
+
+    private fun skinTypeToDarkMode(skinType: Int?): Boolean? {
+        return when (skinType) {
+            null -> null
+            LEGACY_DARK_SKIN_TYPE, DARK_SKIN_TYPE -> true
+            LIGHT_SKIN_TYPE -> false
+            else -> false
         }
     }
 
@@ -235,6 +287,7 @@ internal object HomeNativeGlassHostDarkModeBridge {
             return try {
                 val cl = resolved.moreActivityClass.classLoader
                     ?: error("host classloader unavailable")
+                val settingsClass = XposedCompat.findClassOrNull(HOST_TBADK_SETTINGS_CLASS, cl)
                 val appClass = XposedCompat.findClassOrNull(HOST_TBADK_CORE_APPLICATION_CLASS, cl)
                     ?: error("class missing: $HOST_TBADK_CORE_APPLICATION_CLASS")
                 val sharedPrefClass = XposedCompat.findClassOrNull(HOST_SHARED_PREF_HELPER_CLASS, cl)
@@ -246,14 +299,19 @@ internal object HomeNativeGlassHostDarkModeBridge {
 
                 val appInstance = appClass.staticNoArgMethod("getInst").invoke(null)
                     ?: error("TbadkCoreApplication.getInst() returned null")
+                val settingsInstance = settingsClass?.staticNoArgMethod("getInst")?.invoke(null)
                 val sharedPrefInstance = sharedPrefClass.staticNoArgMethod("getInstance").invoke(null)
                     ?: error("SharedPrefHelper.getInstance() returned null")
                 HostSkinApi(
                     appInstance = appInstance,
                     getSkinTypeMethod = appClass.instanceNoArgMethod("getSkinType"),
                     setSkinTypeMethod = appClass.instanceIntMethod("setSkinType"),
+                    settingsInstance = settingsInstance,
+                    loadIntMethod = settingsClass?.instanceStringIntMethod("loadInt"),
                     sharedPrefInstance = sharedPrefInstance,
+                    getBooleanMethod = sharedPrefClass.instanceStringBooleanMethod("getBoolean"),
                     putBooleanMethod = sharedPrefClass.instanceStringBooleanMethod("putBoolean"),
+                    isCurrentSystemDarkModeMethod = skinManagerClass.staticNoArgMethod("isCurrentSystemDarkMode"),
                     setDayOrDarkSkinTypeWithSystemModeMethod =
                         skinManagerClass.staticBooleanBooleanMethod("setDayOrDarkSkinTypeWithSystemMode"),
                     clearBitmapCacheMethod = bitmapHelperClass.staticNoArgMethod("clearCashBitmap"),
@@ -278,6 +336,14 @@ internal object HomeNativeGlassHostDarkModeBridge {
 
     private fun Class<*>.instanceIntMethod(name: String): Method {
         return getDeclaredMethod(name, Int::class.javaPrimitiveType).apply { isAccessible = true }
+    }
+
+    private fun Class<*>.instanceStringIntMethod(name: String): Method {
+        return getDeclaredMethod(
+            name,
+            String::class.java,
+            Int::class.javaPrimitiveType,
+        ).apply { isAccessible = true }
     }
 
     private fun Class<*>.instanceStringBooleanMethod(name: String): Method {
@@ -318,13 +384,31 @@ internal object HomeNativeGlassHostDarkModeBridge {
         private val appInstance: Any,
         private val getSkinTypeMethod: Method,
         private val setSkinTypeMethod: Method,
+        private val settingsInstance: Any?,
+        private val loadIntMethod: Method?,
         private val sharedPrefInstance: Any,
+        private val getBooleanMethod: Method,
         private val putBooleanMethod: Method,
+        private val isCurrentSystemDarkModeMethod: Method,
         private val setDayOrDarkSkinTypeWithSystemModeMethod: Method,
         private val clearBitmapCacheMethod: Method,
     ) {
         fun getSkinType(): Int? {
             return getSkinTypeMethod.invoke(appInstance) as? Int
+        }
+
+        fun loadSkinType(): Int? {
+            val settings = settingsInstance ?: return null
+            val method = loadIntMethod ?: return null
+            return method.invoke(settings, HOST_SKIN_TYPE_PREF_KEY, LIGHT_SKIN_TYPE) as? Int
+        }
+
+        fun getFollowSystemMode(): Boolean? {
+            return getBooleanMethod.invoke(sharedPrefInstance, FOLLOW_SYSTEM_MODE_PREF_KEY, false) as? Boolean
+        }
+
+        fun isCurrentSystemDarkMode(): Boolean? {
+            return isCurrentSystemDarkModeMethod.invoke(null) as? Boolean
         }
 
         fun setSkinType(skinType: Int) {

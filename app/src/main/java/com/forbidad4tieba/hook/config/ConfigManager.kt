@@ -32,6 +32,7 @@ object ConfigManager {
     const val DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED = true
     const val DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED = true
     const val DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED = true
+    const val DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT = 100
     const val DEFAULT_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS = 10
     const val MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS = 1
     const val MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS = 30
@@ -43,10 +44,12 @@ object ConfigManager {
     const val APPLE_HOME_NATIVE_GLASS_CARD_RADIUS_DP = 24
     const val MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = -50
     const val MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT = 50
-    const val MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 0
+    const val MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 10
     const val MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT = 100
     const val MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP = 0
     const val MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP = 32
+    const val MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT = 0
+    const val MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT = 100
     val SUPPORTED_MODEL_SCORE_AUTO_PERCENTILES = intArrayOf(5, 10, 15, 20)
     private const val MODEL_SCORE_THRESHOLD_SCALE = 6
     private const val KEY_USER_SETTINGS_VERSION_CODE = "user_settings_version_code"
@@ -87,6 +90,42 @@ object ConfigManager {
     const val KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP = "home_native_glass_card_radius_dp"
     const val KEY_HOME_NATIVE_GLASS_STROKE_ENABLED = "home_native_glass_stroke_enabled"
     const val KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED = "home_native_glass_shadow_enabled"
+    const val KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT =
+        "home_native_glass_shadow_strength_percent"
+    const val KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH_LIGHT =
+        "home_native_glass_background_image_path_light"
+    const val KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH_LIGHT =
+        "home_native_glass_blur_cache_image_path_light"
+    const val KEY_HOME_NATIVE_GLASS_TINT_COLOR_LIGHT = "home_native_glass_tint_color_light"
+    const val KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR_LIGHT = "home_native_glass_auto_tint_color_light"
+    const val KEY_HOME_NATIVE_GLASS_TINT_PALETTE_LIGHT = "home_native_glass_tint_palette_light"
+    const val KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT_LIGHT =
+        "home_native_glass_tint_alpha_percent_light"
+    const val KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT_LIGHT =
+        "home_native_glass_card_blur_percent_light"
+    const val KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP_LIGHT =
+        "home_native_glass_card_radius_dp_light"
+    const val KEY_HOME_NATIVE_GLASS_STROKE_ENABLED_LIGHT = "home_native_glass_stroke_enabled_light"
+    const val KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED_LIGHT = "home_native_glass_shadow_enabled_light"
+    const val KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT_LIGHT =
+        "home_native_glass_shadow_strength_percent_light"
+    const val KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH_DARK =
+        "home_native_glass_background_image_path_dark"
+    const val KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH_DARK =
+        "home_native_glass_blur_cache_image_path_dark"
+    const val KEY_HOME_NATIVE_GLASS_TINT_COLOR_DARK = "home_native_glass_tint_color_dark"
+    const val KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR_DARK = "home_native_glass_auto_tint_color_dark"
+    const val KEY_HOME_NATIVE_GLASS_TINT_PALETTE_DARK = "home_native_glass_tint_palette_dark"
+    const val KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT_DARK =
+        "home_native_glass_tint_alpha_percent_dark"
+    const val KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT_DARK =
+        "home_native_glass_card_blur_percent_dark"
+    const val KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP_DARK =
+        "home_native_glass_card_radius_dp_dark"
+    const val KEY_HOME_NATIVE_GLASS_STROKE_ENABLED_DARK = "home_native_glass_stroke_enabled_dark"
+    const val KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED_DARK = "home_native_glass_shadow_enabled_dark"
+    const val KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT_DARK =
+        "home_native_glass_shadow_strength_percent_dark"
     const val KEY_DISABLE_AUTO_REFRESH = "disable_auto_refresh"
     const val KEY_ENABLE_AUTO_LOAD_MORE = "enable_auto_load_more"
     const val KEY_ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
@@ -137,10 +176,83 @@ object ConfigManager {
     @Volatile private var appContext: Context? = null
     @Volatile private var scanFeatureAvailability: Map<String, Boolean> = emptyMap()
     @Volatile private var settingsSnapshot: SettingsSnapshot = SettingsSnapshot()
+    @Volatile private var settingsSnapshotVersion: Long = 0L
     @Volatile private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    @Volatile private var homeNativeGlassDarkModeActive: Boolean = false
 
     @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
     @Volatile private var environmentWarningDialogActive: Boolean = false
+
+    data class HomeNativeGlassStyleConfig(
+        val backgroundImagePath: String = DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
+        val blurCacheImagePath: String = DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
+        val tintColor: Int = DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
+        val autoTintColor: Int = DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
+        val tintPalette: String = DEFAULT_HOME_NATIVE_GLASS_TINT_PALETTE,
+        val tintAlphaPercent: Int = DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        val cardBlurPercent: Int = DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+        val cardRadiusDp: Int = DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+        val strokeEnabled: Boolean = DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
+        val shadowStrengthPercent: Int = DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+    ) {
+        fun hasBackgroundImage(): Boolean = backgroundImagePath.isNotBlank()
+    }
+
+    data class HomeNativeGlassStyleKeys(
+        val backgroundImagePath: String,
+        val blurCacheImagePath: String,
+        val tintColor: String,
+        val autoTintColor: String,
+        val tintPalette: String,
+        val tintAlphaPercent: String,
+        val cardBlurPercent: String,
+        val cardRadiusDp: String,
+        val strokeEnabled: String,
+        val shadowStrengthPercent: String,
+        val legacyShadowEnabled: String,
+    ) {
+        fun all(): Array<String> = arrayOf(
+            backgroundImagePath,
+            blurCacheImagePath,
+            tintColor,
+            autoTintColor,
+            tintPalette,
+            tintAlphaPercent,
+            cardBlurPercent,
+            cardRadiusDp,
+            strokeEnabled,
+            shadowStrengthPercent,
+            legacyShadowEnabled,
+        )
+    }
+
+    val HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS = HomeNativeGlassStyleKeys(
+        backgroundImagePath = KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH_LIGHT,
+        blurCacheImagePath = KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH_LIGHT,
+        tintColor = KEY_HOME_NATIVE_GLASS_TINT_COLOR_LIGHT,
+        autoTintColor = KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR_LIGHT,
+        tintPalette = KEY_HOME_NATIVE_GLASS_TINT_PALETTE_LIGHT,
+        tintAlphaPercent = KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT_LIGHT,
+        cardBlurPercent = KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT_LIGHT,
+        cardRadiusDp = KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP_LIGHT,
+        strokeEnabled = KEY_HOME_NATIVE_GLASS_STROKE_ENABLED_LIGHT,
+        shadowStrengthPercent = KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT_LIGHT,
+        legacyShadowEnabled = KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED_LIGHT,
+    )
+
+    val HOME_NATIVE_GLASS_DARK_STYLE_KEYS = HomeNativeGlassStyleKeys(
+        backgroundImagePath = KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH_DARK,
+        blurCacheImagePath = KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH_DARK,
+        tintColor = KEY_HOME_NATIVE_GLASS_TINT_COLOR_DARK,
+        autoTintColor = KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR_DARK,
+        tintPalette = KEY_HOME_NATIVE_GLASS_TINT_PALETTE_DARK,
+        tintAlphaPercent = KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT_DARK,
+        cardBlurPercent = KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT_DARK,
+        cardRadiusDp = KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP_DARK,
+        strokeEnabled = KEY_HOME_NATIVE_GLASS_STROKE_ENABLED_DARK,
+        shadowStrengthPercent = KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT_DARK,
+        legacyShadowEnabled = KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED_DARK,
+    )
     val areRestrictedFeaturesUnlocked: Boolean get() = settingsSnapshot.areRestrictedFeaturesUnlocked
     val isAdBlockEnabled: Boolean get() = settingsSnapshot.isAdBlockEnabled
     val isHomeTopTabsCustomEnabled: Boolean get() = settingsSnapshot.isHomeTopTabsCustomEnabled
@@ -160,20 +272,12 @@ object ConfigManager {
         get() = settingsSnapshot.isOpenWebLinkInSystemBrowserEnabled
     val isHomeNativeGlassEnabled: Boolean get() = settingsSnapshot.isHomeNativeGlassEnabled
     val isHomeTabDynamicTintEnabled: Boolean get() = settingsSnapshot.isHomeTabDynamicTintEnabled
-    val homeNativeGlassBackgroundImagePath: String
-        get() = settingsSnapshot.homeNativeGlassBackgroundImagePath
-    var homeNativeGlassBlurCacheImagePath: String
-        get() = settingsSnapshot.homeNativeGlassBlurCacheImagePath
-        set(value) {
-            replaceSettingsSnapshot(settingsSnapshot.copy(homeNativeGlassBlurCacheImagePath = value))
-        }
-    val homeNativeGlassTintColor: Int get() = settingsSnapshot.homeNativeGlassTintColor
-    val homeNativeGlassAutoTintColor: Int get() = settingsSnapshot.homeNativeGlassAutoTintColor
-    val homeNativeGlassTintAlphaPercent: Int get() = settingsSnapshot.homeNativeGlassTintAlphaPercent
-    val homeNativeGlassCardBlurPercent: Int get() = settingsSnapshot.homeNativeGlassCardBlurPercent
-    val homeNativeGlassCardRadiusDp: Int get() = settingsSnapshot.homeNativeGlassCardRadiusDp
-    val isHomeNativeGlassStrokeEnabled: Boolean get() = settingsSnapshot.isHomeNativeGlassStrokeEnabled
-    val isHomeNativeGlassShadowEnabled: Boolean get() = settingsSnapshot.isHomeNativeGlassShadowEnabled
+    val hasAnyHomeNativeGlassBackgroundImage: Boolean
+        get() = settingsSnapshot.hasAnyHomeNativeGlassBackgroundImage()
+    val homeNativeGlassTintColor: Int get() = activeHomeNativeGlassStyle().tintColor
+    val homeNativeGlassAutoTintColor: Int get() = activeHomeNativeGlassStyle().autoTintColor
+    val homeNativeGlassCardRadiusDp: Int get() = activeHomeNativeGlassStyle().cardRadiusDp
+    val isHomeNativeGlassStrokeEnabled: Boolean get() = activeHomeNativeGlassStyle().strokeEnabled
     val isAutoRefreshDisabled: Boolean get() = settingsSnapshot.isAutoRefreshDisabled
     val isAutoLoadMoreEnabled: Boolean get() = settingsSnapshot.isAutoLoadMoreEnabled
     val isPbLikeAutoReplyEnabled: Boolean get() = settingsSnapshot.isPbLikeAutoReplyEnabled
@@ -248,9 +352,32 @@ object ConfigManager {
     }
 
     fun snapshot(): SettingsSnapshot = settingsSnapshot
+    fun snapshotVersion(): Long = settingsSnapshotVersion
+
+    fun refreshRuntimeSettings(context: Context? = null) {
+        val p = prefs ?: context?.let { getPrefs(it) } ?: return
+        synchronized(this) {
+            refreshUserSettingsSnapshot(p)
+        }
+    }
+
+    val isHomeNativeGlassDarkModeActive: Boolean
+        get() = homeNativeGlassDarkModeActive
+
+    fun setHomeNativeGlassDarkModeActive(enabled: Boolean?): Boolean {
+        val next = enabled ?: return false
+        if (homeNativeGlassDarkModeActive == next) return false
+        homeNativeGlassDarkModeActive = next
+        return true
+    }
+
+    fun activeHomeNativeGlassStyle(): HomeNativeGlassStyleConfig {
+        return settingsSnapshot.homeNativeGlassStyleForDarkMode(homeNativeGlassDarkModeActive)
+    }
 
     private fun replaceSettingsSnapshot(snapshot: SettingsSnapshot) {
         settingsSnapshot = snapshot
+        settingsSnapshotVersion++
     }
 
     private fun ensurePrefsListener(p: SharedPreferences) {
@@ -313,6 +440,8 @@ object ConfigManager {
             prefs = null
             appContext = null
             settingsSnapshot = SettingsSnapshot()
+            settingsSnapshotVersion++
+            homeNativeGlassDarkModeActive = false
         }
         init(context.applicationContext ?: context)
     }
@@ -426,7 +555,10 @@ object ConfigManager {
         }
 
         val performanceOptimizationEnabled = restrictedBoolean(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)
-        val homeNativeGlassStyle = readHomeNativeGlassStyle(p)
+        val homeNativeGlassLightStyle = readHomeNativeGlassStyle(p, HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS)
+        val homeNativeGlassDarkStyle = readHomeNativeGlassStyle(p, HOME_NATIVE_GLASS_DARK_STYLE_KEYS)
+        val hasHomeNativeGlassStyle = homeNativeGlassLightStyle.hasBackgroundImage() ||
+            homeNativeGlassDarkStyle.hasBackgroundImage()
         val homeNativeGlassEnabled = featureBoolean(KEY_ENABLE_HOME_NATIVE_GLASS)
         val bottomTabsCustomEnabled = featureBoolean(KEY_CUSTOM_BOTTOM_TABS)
         val bottomTabSelection = loadBottomTabSelectionFromPrefs(
@@ -438,7 +570,7 @@ object ConfigManager {
         val forceFeedUiOptRuntimeEnabled = homeFeedUiOptEnabled ||
             (
                 homeNativeGlassEnabled &&
-                    homeNativeGlassStyle.backgroundImagePath.isNotBlank() &&
+                    hasHomeNativeGlassStyle &&
                     isScanFeatureAvailable(KEY_FORCE_FEED_UI_OPT)
                 )
 
@@ -464,15 +596,8 @@ object ConfigManager {
                 KEY_ENABLE_HOME_TAB_DYNAMIC_TINT,
                 DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED,
             ),
-            homeNativeGlassBackgroundImagePath = homeNativeGlassStyle.backgroundImagePath,
-            homeNativeGlassBlurCacheImagePath = homeNativeGlassStyle.blurCacheImagePath,
-            homeNativeGlassTintColor = homeNativeGlassStyle.tintColor,
-            homeNativeGlassAutoTintColor = homeNativeGlassStyle.autoTintColor,
-            homeNativeGlassTintAlphaPercent = homeNativeGlassStyle.tintAlphaPercent,
-            homeNativeGlassCardBlurPercent = homeNativeGlassStyle.cardBlurPercent,
-            homeNativeGlassCardRadiusDp = homeNativeGlassStyle.cardRadiusDp,
-            isHomeNativeGlassStrokeEnabled = homeNativeGlassStyle.strokeEnabled,
-            isHomeNativeGlassShadowEnabled = homeNativeGlassStyle.shadowEnabled,
+            homeNativeGlassLightStyle = homeNativeGlassLightStyle,
+            homeNativeGlassDarkStyle = homeNativeGlassDarkStyle,
             isAutoRefreshDisabled = featureBoolean(KEY_DISABLE_AUTO_REFRESH),
             isAutoLoadMoreEnabled = featureBoolean(KEY_ENABLE_AUTO_LOAD_MORE),
             isPbLikeAutoReplyEnabled = restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY),
@@ -579,63 +704,134 @@ object ConfigManager {
         )
     }
 
-    private data class HomeNativeGlassStyle(
-        val backgroundImagePath: String,
-        val blurCacheImagePath: String,
-        val tintColor: Int,
-        val autoTintColor: Int,
-        val tintAlphaPercent: Int,
-        val cardBlurPercent: Int,
-        val cardRadiusDp: Int,
-        val strokeEnabled: Boolean,
-        val shadowEnabled: Boolean,
-    )
+    fun readHomeNativeGlassStyle(
+        p: SharedPreferences,
+        keys: HomeNativeGlassStyleKeys,
+    ): HomeNativeGlassStyleConfig {
+        val hasModeStyle = keys.all().any { p.contains(it) }
+        val allowLegacyFallback = !hasModeStyle &&
+            keys.backgroundImagePath == KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH_LIGHT
 
-    private fun readHomeNativeGlassStyle(p: SharedPreferences): HomeNativeGlassStyle {
-        return HomeNativeGlassStyle(
-            backgroundImagePath = p.getString(
+        fun readString(key: String, legacyKey: String, defaultValue: String): String {
+            return when {
+                p.contains(key) -> p.getString(key, defaultValue)
+                allowLegacyFallback -> p.getString(legacyKey, defaultValue)
+                else -> defaultValue
+            }?.trim().orEmpty()
+        }
+
+        fun readInt(key: String, legacyKey: String, defaultValue: Int): Int {
+            return when {
+                p.contains(key) -> p.getInt(key, defaultValue)
+                allowLegacyFallback -> p.getInt(legacyKey, defaultValue)
+                else -> defaultValue
+            }
+        }
+
+        fun readBoolean(key: String, legacyKey: String, defaultValue: Boolean): Boolean {
+            return when {
+                p.contains(key) -> p.getBoolean(key, defaultValue)
+                allowLegacyFallback -> p.getBoolean(legacyKey, defaultValue)
+                else -> defaultValue
+            }
+        }
+
+        fun readShadowStrengthPercent(): Int {
+            return when {
+                p.contains(keys.shadowStrengthPercent) -> p.getInt(
+                    keys.shadowStrengthPercent,
+                    DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                )
+                p.contains(keys.legacyShadowEnabled) -> {
+                    if (p.getBoolean(keys.legacyShadowEnabled, DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED)) {
+                        DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+                    } else {
+                        MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+                    }
+                }
+                allowLegacyFallback && p.contains(KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT) -> p.getInt(
+                    KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                    DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                )
+                allowLegacyFallback && p.contains(KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED) -> {
+                    if (p.getBoolean(KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED, DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED)) {
+                        DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+                    } else {
+                        MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+                    }
+                }
+                else -> DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+            }.coerceIn(
+                MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            )
+        }
+
+        val tintAlphaPercent = when {
+            p.contains(keys.tintAlphaPercent) -> p.getInt(
+                keys.tintAlphaPercent,
+                DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ).coerceIn(
+                MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            )
+            allowLegacyFallback -> readHomeNativeGlassTintAlphaPercent(p)
+            else -> DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
+        }
+
+        return HomeNativeGlassStyleConfig(
+            backgroundImagePath = readString(
+                keys.backgroundImagePath,
                 KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
                 DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-            )?.trim().orEmpty(),
-            blurCacheImagePath = p.getString(
+            ),
+            blurCacheImagePath = readString(
+                keys.blurCacheImagePath,
                 KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
                 DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-            )?.trim().orEmpty(),
+            ),
             tintColor = normalizeHomeNativeGlassTintColor(
-                p.getInt(
+                readInt(
+                    keys.tintColor,
                     KEY_HOME_NATIVE_GLASS_TINT_COLOR,
                     DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
                 )
             ),
             autoTintColor = normalizeHomeNativeGlassTintColor(
-                p.getInt(
+                readInt(
+                    keys.autoTintColor,
                     KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
                     DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
                 )
             ),
-            tintAlphaPercent = readHomeNativeGlassTintAlphaPercent(p),
-            cardBlurPercent = p.getInt(
+            tintPalette = readString(
+                keys.tintPalette,
+                KEY_HOME_NATIVE_GLASS_TINT_PALETTE,
+                DEFAULT_HOME_NATIVE_GLASS_TINT_PALETTE,
+            ),
+            tintAlphaPercent = tintAlphaPercent,
+            cardBlurPercent = readInt(
+                keys.cardBlurPercent,
                 KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
             ).coerceIn(
                 MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
             ),
-            cardRadiusDp = p.getInt(
+            cardRadiusDp = readInt(
+                keys.cardRadiusDp,
                 KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
                 DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
             ).coerceIn(
                 MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
                 MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
             ),
-            strokeEnabled = p.getBoolean(
+            strokeEnabled = readBoolean(
+                keys.strokeEnabled,
                 KEY_HOME_NATIVE_GLASS_STROKE_ENABLED,
                 DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
             ),
-            shadowEnabled = p.getBoolean(
-                KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED,
-                DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED,
-            ),
+            shadowStrengthPercent = readShadowStrengthPercent(),
         )
     }
 

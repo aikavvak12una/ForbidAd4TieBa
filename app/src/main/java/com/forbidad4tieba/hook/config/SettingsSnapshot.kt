@@ -19,22 +19,10 @@ data class SettingsSnapshot(
     val isOpenWebLinkInSystemBrowserEnabled: Boolean = false,
     val isHomeNativeGlassEnabled: Boolean = false,
     val isHomeTabDynamicTintEnabled: Boolean = ConfigManager.DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED,
-    val homeNativeGlassBackgroundImagePath: String =
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-    val homeNativeGlassBlurCacheImagePath: String =
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-    val homeNativeGlassTintColor: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
-    val homeNativeGlassAutoTintColor: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
-    val homeNativeGlassTintAlphaPercent: Int =
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-    val homeNativeGlassCardBlurPercent: Int =
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-    val homeNativeGlassCardRadiusDp: Int =
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-    val isHomeNativeGlassStrokeEnabled: Boolean =
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
-    val isHomeNativeGlassShadowEnabled: Boolean =
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_ENABLED,
+    val homeNativeGlassLightStyle: ConfigManager.HomeNativeGlassStyleConfig =
+        ConfigManager.HomeNativeGlassStyleConfig(),
+    val homeNativeGlassDarkStyle: ConfigManager.HomeNativeGlassStyleConfig =
+        ConfigManager.HomeNativeGlassStyleConfig(),
     val isAutoRefreshDisabled: Boolean = false,
     val isAutoLoadMoreEnabled: Boolean = false,
     val isPbLikeAutoReplyEnabled: Boolean = false,
@@ -83,7 +71,16 @@ data class SettingsSnapshot(
     val isDetailedLoggingEnabled: Boolean = false,
 ) {
     fun isHomeNativeGlassRuntimeActive(): Boolean {
-        return isHomeNativeGlassEnabled && homeNativeGlassBackgroundImagePath.isNotBlank()
+        return isHomeNativeGlassEnabled && hasAnyHomeNativeGlassBackgroundImage()
+    }
+
+    fun hasAnyHomeNativeGlassBackgroundImage(): Boolean {
+        return homeNativeGlassLightStyle.hasBackgroundImage() ||
+            homeNativeGlassDarkStyle.hasBackgroundImage()
+    }
+
+    fun homeNativeGlassStyleForDarkMode(darkMode: Boolean): ConfigManager.HomeNativeGlassStyleConfig {
+        return if (darkMode) homeNativeGlassDarkStyle else homeNativeGlassLightStyle
     }
 
     fun shouldStabilizeHomeChrome(): Boolean {

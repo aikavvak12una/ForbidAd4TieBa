@@ -140,7 +140,7 @@ internal object HookInstallPlanner {
 
         fun canInstallHomeNativeGlass(settings: SettingsSnapshot): Boolean {
             return settings.isHomeNativeGlassEnabled &&
-                settings.homeNativeGlassBackgroundImagePath.isNotBlank() &&
+                settings.hasAnyHomeNativeGlassBackgroundImage() &&
                 available(HookFeatureKey.HOME_NATIVE_GLASS)
         }
 
