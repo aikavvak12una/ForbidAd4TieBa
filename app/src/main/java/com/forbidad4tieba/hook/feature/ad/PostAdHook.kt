@@ -39,7 +39,7 @@ object PostAdHook {
             )
 
             mod.hook(setDataMethod).intercept { chain ->
-                if (!ConfigManager.isAdBlockEnabled) {
+                if (!ConfigManager.isPostAdBlockEnabled) {
                     return@intercept chain.proceed()
                 }
                 val list = chain.args.firstOrNull() as? List<*> ?: return@intercept chain.proceed()

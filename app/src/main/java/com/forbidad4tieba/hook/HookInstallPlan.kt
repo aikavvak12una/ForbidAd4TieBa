@@ -130,8 +130,40 @@ internal object HookInstallPlanner {
                 featureSymbols.performance.isImageViewerJumpButtonComplete()
         }
 
-        fun canInstallAdBlockHooks(settings: SettingsSnapshot): Boolean {
-            return settings.isAdBlockEnabled && available(HookFeatureKey.BLOCK_AD)
+        private fun canInstallAdBlockSubFeature(enabled: Boolean): Boolean {
+            return enabled && available(HookFeatureKey.BLOCK_AD)
+        }
+
+        fun canInstallFeedAdBlock(settings: SettingsSnapshot): Boolean {
+            return canInstallAdBlockSubFeature(settings.isFeedAdBlockEnabled)
+        }
+
+        fun canInstallPostAdBlock(settings: SettingsSnapshot): Boolean {
+            return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
+        }
+
+        fun canInstallStrategyAdBlock(settings: SettingsSnapshot): Boolean {
+            return canInstallAdBlockSubFeature(settings.isStrategyAdBlockEnabled)
+        }
+
+        fun canInstallPbEarlyAdBlock(settings: SettingsSnapshot): Boolean {
+            return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
+        }
+
+        fun canInstallPbAdRequestBlock(settings: SettingsSnapshot): Boolean {
+            return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
+        }
+
+        fun canInstallPbFallingAdBlock(settings: SettingsSnapshot): Boolean {
+            return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
+        }
+
+        fun canInstallSearchBoxTextAdBlock(settings: SettingsSnapshot): Boolean {
+            return canInstallAdBlockSubFeature(settings.isSearchBoxTextAdBlockEnabled)
+        }
+
+        fun canInstallHomeTopBarAdBlock(settings: SettingsSnapshot): Boolean {
+            return canInstallAdBlockSubFeature(settings.isHomeTopBarAdBlockEnabled)
         }
 
         fun canInstallCustomPostFilter(settings: SettingsSnapshot): Boolean {
@@ -170,11 +202,11 @@ internal object HookInstallPlanner {
         }
 
         fun canInstallMineTabWebBlock(settings: SettingsSnapshot): Boolean {
-            return settings.isAdBlockEnabled && available(HookFeatureKey.BLOCK_AD)
+            return canInstallAdBlockSubFeature(settings.isMineTabWebAdBlockEnabled)
         }
 
         fun canInstallHomeSideBarWebBlock(settings: SettingsSnapshot): Boolean {
-            return settings.isAdBlockEnabled && available(HookFeatureKey.BLOCK_AD)
+            return canInstallAdBlockSubFeature(settings.isHomeSideBarWebAdBlockEnabled)
         }
 
         fun canInstallForumNativeTopShift(): Boolean = available(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
@@ -262,14 +294,14 @@ internal object HookInstallPlanner {
         }
         if (context.isMain) {
             val enableSwitchManager =
-                settings.isAdBlockEnabled ||
+                settings.isStrategyAdBlockEnabled ||
                     settings.isAdSdkComponentsDisabled ||
                     settings.isApsarasScheduleDisabled
             if (enableSwitchManager) {
                 entries += HookInstallEntry("StrategyAdHook.static") { cl ->
                     StrategyAdHook.hookStatic(
                         cl = cl,
-                        enableAccountData = settings.isAdBlockEnabled,
+                        enableAccountData = settings.isStrategyAdBlockEnabled,
                         enableSwitchManager = enableSwitchManager,
                     )
                 }
@@ -337,10 +369,17 @@ internal object HookInstallPlanner {
             return HookInstallPlan(processName, "symbol", emptyList())
         }
 
-        val adBlockHooks = context.canInstallAdBlockHooks(settings)
+        val feedAdBlockHook = context.canInstallFeedAdBlock(settings)
+        val postAdBlockHook = context.canInstallPostAdBlock(settings)
+        val strategyAdBlockHook = context.canInstallStrategyAdBlock(settings)
+        val pbEarlyAdBlockHook = context.canInstallPbEarlyAdBlock(settings)
+        val pbAdRequestBlockHook = context.canInstallPbAdRequestBlock(settings)
+        val pbFallingAdBlockHook = context.canInstallPbFallingAdBlock(settings)
+        val searchBoxTextAdBlockHook = context.canInstallSearchBoxTextAdBlock(settings)
+        val homeTopBarAdBlockHook = context.canInstallHomeTopBarAdBlock(settings)
         val customPostFilterHook = context.canInstallCustomPostFilter(settings)
         val homeNativeGlassHook = context.canInstallHomeNativeGlass(settings)
-        val feedListHook = adBlockHooks || customPostFilterHook
+        val feedListHook = feedAdBlockHook || customPostFilterHook
 
         entries += HookInstallEntry("SettingsMenuHook") { cl -> SettingsMenuHook.hook(cl, symbols) }
         entries += HookInstallEntry("HomeSideBarSettingsEntryHook") { cl -> HomeSideBarSettingsEntryHook.hook(cl) }
@@ -356,27 +395,35 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (adBlockHooks) {
+        if (postAdBlockHook) {
             entries += HookInstallEntry("PostAdHook") { cl ->
                 HookSymbolResolver.resolvePostAdDataFilterSymbols(cl, symbols)?.let { targets ->
                     PostAdHook.hook(targets)
                 }
             }
+        }
+        if (strategyAdBlockHook) {
             entries += HookInstallEntry("StrategyAdHook.symbols") { cl ->
                 HookSymbolResolver.resolveStrategyAdSymbols(cl, symbols)?.let { targets ->
                     StrategyAdHook.hookWithSymbols(targets)
                 }
             }
+        }
+        if (pbEarlyAdBlockHook) {
             entries += HookInstallEntry("PbEarlyAdBlockHook") { cl ->
                 HookSymbolResolver.resolvePbEarlyAdBlockSymbols(cl, symbols)?.let { targets ->
                     PbEarlyAdBlockHook.hook(targets)
                 }
             }
+        }
+        if (pbAdRequestBlockHook) {
             entries += HookInstallEntry("PbAdRequestBlockHook") { cl ->
                 HookSymbolResolver.resolvePbAdRequestBlockSymbols(cl, symbols)?.let { targets ->
                     PbAdRequestBlockHook.hook(targets)
                 }
             }
+        }
+        if (pbFallingAdBlockHook) {
             entries += HookInstallEntry("PbFallingAdHook") { cl ->
                 HookSymbolResolver.resolvePbFallingAdSymbols(cl, symbols)?.let { targets ->
                     PbFallingAdHook.hook(targets)
@@ -414,12 +461,14 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (adBlockHooks) {
+        if (searchBoxTextAdBlockHook) {
             entries += HookInstallEntry("SearchBoxTextAdHook") { cl ->
                 HookSymbolResolver.resolveSearchBoxTextAdSymbols(cl, symbols)?.let { targets ->
                     SearchBoxTextAdHook.hook(targets)
                 }
             }
+        }
+        if (homeTopBarAdBlockHook) {
             entries += HookInstallEntry("HomeTopBarRightSlotHook") { cl ->
                 HookSymbolResolver.resolveHomeTopBarRightSlotSymbols(cl, symbols)?.let { targets ->
                     HomeTopBarRightSlotHook.hook(targets)
@@ -566,7 +615,7 @@ internal object HookInstallPlanner {
 
     private fun performanceEntries(settings: SettingsSnapshot): List<HookInstallEntry> {
         val entries = ArrayList<HookInstallEntry>()
-        if (settings.isPbPerformanceModeEnabled || settings.isAdBlockEnabled) {
+        if (settings.isPbPerformanceModeEnabled || settings.isPostPageAdBlockEnabled) {
             entries += HookInstallEntry("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(cl) }
         }
         if (settings.shouldForceFeedUiOpt()) {
