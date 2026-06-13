@@ -9,6 +9,7 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import com.forbidad4tieba.hook.config.ConfigManager
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
 import kotlin.math.max
@@ -33,6 +34,7 @@ object HomeNativeGlassImageCache {
         blurPercent: Int,
         tintOffset: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         appleMaterial: Boolean = true,
+        cacheNamespace: String = "",
     ): String {
         val path = sourcePath.trim()
         if (path.isEmpty()) return ""
@@ -41,7 +43,7 @@ object HomeNativeGlassImageCache {
         if (!runCatching { sourceFile.isFile && sourceLength > 0L }.getOrDefault(false)) return ""
 
         val appContext = context.applicationContext ?: context
-        val cacheDir = persistentCacheDir(appContext)
+        val cacheDir = persistentCacheDir(appContext, cacheNamespace)
         if (!runCatching { cacheDir.exists() || cacheDir.mkdirs() }.getOrDefault(false)) return ""
 
         val normalizedBlur = blurPercent.coerceIn(
@@ -101,6 +103,46 @@ object HomeNativeGlassImageCache {
         }
     }
 
+    fun createBlurPreviewBitmap(
+        sourcePath: String,
+        blurPercent: Int,
+        tintOffset: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        appleMaterial: Boolean = true,
+    ): Bitmap? {
+        val path = sourcePath.trim()
+        if (path.isEmpty()) return null
+        val sourceFile = File(path)
+        val sourceLength = runCatching { sourceFile.length() }.getOrDefault(0L)
+        if (!runCatching { sourceFile.isFile && sourceLength > 0L }.getOrDefault(false)) return null
+
+        val bitmap = decodeSampledBitmapForMaxEdge(path, BLUR_CACHE_MAX_EDGE) ?: return null
+        var previewBitmap: Bitmap? = null
+        var resultBitmap: Bitmap? = null
+        try {
+            previewBitmap = createBlurredBitmap(
+                source = bitmap,
+                blurPercent = blurPercent.coerceIn(
+                    ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                    ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                ),
+                tintOffset = tintOffset.coerceIn(
+                    ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ),
+                appleMaterial = appleMaterial,
+            )
+            resultBitmap = previewBitmap?.let { encodePreviewPngBitmap(it) ?: it }
+            return resultBitmap
+        } finally {
+            if (previewBitmap !== resultBitmap) {
+                runCatching { previewBitmap?.recycle() }
+            }
+            if (bitmap !== resultBitmap) {
+                runCatching { bitmap.recycle() }
+            }
+        }
+    }
+
     fun decodeSampledBitmap(path: String, targetWidth: Int, targetHeight: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
@@ -156,7 +198,7 @@ object HomeNativeGlassImageCache {
         val mutable = runCatching {
             source.copy(Bitmap.Config.ARGB_8888, true)
         }.getOrNull() ?: return null
-        val blurred = if (blurPercent <= ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT) {
+        val blurred = if (blurPercent <= 0) {
             mutable
         } else {
             runCatching {
@@ -176,6 +218,22 @@ object HomeNativeGlassImageCache {
             blurred
         }
         return applyTintOffset(materialBitmap, tintOffset)
+    }
+
+    private fun encodePreviewPngBitmap(bitmap: Bitmap): Bitmap? {
+        val pngBytes = runCatching {
+            ByteArrayOutputStream().use { output ->
+                if (bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                    output.toByteArray()
+                } else {
+                    null
+                }
+            }
+        }.getOrNull() ?: return null
+        if (pngBytes.isEmpty()) return null
+        return runCatching {
+            BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.size)
+        }.getOrNull()
     }
 
     private fun applyTintOffset(bitmap: Bitmap, tintOffset: Int): Bitmap {
@@ -351,8 +409,12 @@ object HomeNativeGlassImageCache {
         return digest.joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xFF) }
     }
 
-    private fun persistentCacheDir(context: Context): File {
-        return File(File(context.filesDir, CACHE_ROOT_DIR_NAME), CACHE_EFFECT_DIR_NAME)
+    private fun persistentCacheDir(context: Context, namespace: String): File {
+        val root = File(File(context.filesDir, CACHE_ROOT_DIR_NAME), CACHE_EFFECT_DIR_NAME)
+        val safeNamespace = namespace.trim()
+            .filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+            .take(32)
+        return if (safeNamespace.isBlank()) root else File(root, safeNamespace)
     }
 
     private fun cleanupOldCaches(cacheDir: File, keepName: String) {
