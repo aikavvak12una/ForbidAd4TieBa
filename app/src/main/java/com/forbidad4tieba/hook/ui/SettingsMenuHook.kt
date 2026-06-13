@@ -1077,6 +1077,57 @@ object SettingsMenuHook {
             }
 
             val restrictedFeaturesUnlocked = ConfigManager.isRestrictedFeaturesUnlocked(context)
+            val adBlockItems = listOf(
+                SwitchItem(
+                    UiText.Settings.BLOCK_AD_FEED_LABEL,
+                    UiText.Settings.BLOCK_AD_FEED_DESC,
+                    ConfigManager.KEY_BLOCK_AD_FEED,
+                    true,
+                    true,
+                ),
+                SwitchItem(
+                    UiText.Settings.BLOCK_AD_POST_PAGE_LABEL,
+                    UiText.Settings.BLOCK_AD_POST_PAGE_DESC,
+                    ConfigManager.KEY_BLOCK_AD_POST_PAGE,
+                    true,
+                    true,
+                ),
+                SwitchItem(
+                    UiText.Settings.BLOCK_AD_STRATEGY_LABEL,
+                    UiText.Settings.BLOCK_AD_STRATEGY_DESC,
+                    ConfigManager.KEY_BLOCK_AD_STRATEGY,
+                    true,
+                    true,
+                ),
+                SwitchItem(
+                    UiText.Settings.BLOCK_AD_SEARCH_BOX_TEXT_LABEL,
+                    UiText.Settings.BLOCK_AD_SEARCH_BOX_TEXT_DESC,
+                    ConfigManager.KEY_BLOCK_AD_SEARCH_BOX_TEXT,
+                    true,
+                    true,
+                ),
+                SwitchItem(
+                    UiText.Settings.BLOCK_AD_HOME_TOP_BAR_LABEL,
+                    UiText.Settings.BLOCK_AD_HOME_TOP_BAR_DESC,
+                    ConfigManager.KEY_BLOCK_AD_HOME_TOP_BAR,
+                    true,
+                    true,
+                ),
+                SwitchItem(
+                    UiText.Settings.BLOCK_AD_MINE_TAB_WEB_LABEL,
+                    UiText.Settings.BLOCK_AD_MINE_TAB_WEB_DESC,
+                    ConfigManager.KEY_BLOCK_AD_MINE_TAB_WEB,
+                    true,
+                    true,
+                ),
+                SwitchItem(
+                    UiText.Settings.BLOCK_AD_HOME_SIDE_BAR_WEB_LABEL,
+                    UiText.Settings.BLOCK_AD_HOME_SIDE_BAR_WEB_DESC,
+                    ConfigManager.KEY_BLOCK_AD_HOME_SIDE_BAR_WEB,
+                    true,
+                    true,
+                ),
+            )
             val customPostFilterItems = mutableListOf(
                 SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_VOTE_LABEL, UiText.Settings.CUSTOM_POST_FILTER_VOTE_DESC, ConfigManager.KEY_FILTER_POST_VOTE, true, false),
                 SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_VIDEO_LABEL, UiText.Settings.CUSTOM_POST_FILTER_VIDEO_DESC, ConfigManager.KEY_FILTER_POST_VIDEO, true, false),
@@ -1125,8 +1176,11 @@ object SettingsMenuHook {
                         UiText.Settings.BLOCK_AD_DESC,
                         ConfigManager.KEY_BLOCK_AD,
                         true,
-                        false
-                    )
+                        false,
+                        UiText.Settings.ACTION_ICON_SETTINGS,
+                    ) {
+                        showAdBlockDialog(context, prefs, adBlockItems)
+                    }
                 )
             }
             contentBlockItems.add(
@@ -2258,6 +2312,81 @@ object SettingsMenuHook {
         if (base.isNullOrBlank()) return note
         if (note.isNullOrBlank()) return base
         return "$base\n$note"
+    }
+
+    private fun showAdBlockDialog(
+        context: Context,
+        prefs: android.content.SharedPreferences,
+        items: List<SwitchItem>,
+    ) {
+        try {
+            val density = context.resources.displayMetrics.density
+            val padding = settingsDialogPadding(density)
+            val root = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                )
+            }
+
+            val supported = ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_BLOCK_AD)
+            val views = ArrayList<Pair<SwitchItem, Switch>>(items.size)
+            for (item in items) {
+                val row = createSwitchRow(
+                    context = context,
+                    prefs = prefs,
+                    label = item.label,
+                    description = item.description,
+                    prefKey = null,
+                    padding = padding,
+                    enabled = supported,
+                    defaultValue = if (supported) {
+                        prefs.getBoolean(item.prefKey, item.defaultValue)
+                    } else {
+                        false
+                    },
+                    actionIcon = item.actionIcon,
+                    onActionClick = item.onActionClick,
+                )
+                val switchView = findSwitchView(row)
+                if (switchView == null) {
+                    XposedCompat.logW("[SettingsMenuHook] showAdBlockDialog failed: switch view missing for ${item.prefKey}")
+                    return
+                }
+                views.add(item to switchView)
+                root.addView(row)
+            }
+
+            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
+                .setSettingsTitle(context, UiText.Settings.BLOCK_AD_DIALOG_TITLE)
+                .setView(createDialogScrollContainer(context, root))
+                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
+                .setPositiveButton(UiText.Settings.SAVE, null)
+                .create()
+            dialog.setOnShowListener {
+                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                    val editor = prefs.edit()
+                    for ((item, switchView) in views) {
+                        if (switchView.isEnabled) {
+                            editor.putBoolean(item.prefKey, switchView.isChecked)
+                        }
+                    }
+                    editor.apply()
+                    Toast.makeText(
+                        context,
+                        UiText.Settings.withRestartHint(UiText.Settings.BLOCK_AD_SAVED),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    dialog.dismiss()
+                }
+            }
+            dialog.show()
+        } catch (t: Throwable) {
+            XposedCompat.logW("[SettingsMenuHook] showAdBlockDialog failed: ${t.message}")
+        }
     }
 
     private fun showPerformanceOptimizationDialog(

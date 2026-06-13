@@ -67,7 +67,7 @@ object StrategyAdHook {
         val mod = XposedCompat.module ?: return
         try {
             mod.hook(method).intercept { chain ->
-                if (ConfigManager.isAdBlockEnabled) {
+                if (ConfigManager.isStrategyAdBlockEnabled) {
                     return@intercept value
                 }
                 chain.proceed()
@@ -85,7 +85,7 @@ object StrategyAdHook {
         }
         try {
             mod.hook(method).intercept { chain ->
-                if (ConfigManager.isAdBlockEnabled) {
+                if (ConfigManager.isStrategyAdBlockEnabled) {
                     return@intercept value
                 }
                 chain.proceed()
@@ -127,7 +127,7 @@ object StrategyAdHook {
             mod.hook(method).intercept { chain ->
                 val key = chain.args.firstOrNull() as? String
                 val shouldBlock = when {
-                    ConfigManager.isAdBlockEnabled && key in adContentBlockedKeys -> true
+                    ConfigManager.isStrategyAdBlockEnabled && key in adContentBlockedKeys -> true
                     ConfigManager.isAdSdkComponentsDisabled && key in adRuntimeBlockedKeys -> true
                     ConfigManager.isApsarasScheduleDisabled && key in apsarasBlockedKeys -> true
                     else -> false
@@ -151,7 +151,7 @@ object StrategyAdHook {
         for (method in methods.distinct()) {
             try {
                 mod.hook(method).intercept { chain ->
-                    if (!ConfigManager.isAdBlockEnabled) return@intercept chain.proceed()
+                    if (!ConfigManager.isStrategyAdBlockEnabled) return@intercept chain.proceed()
                     ""
                 }
                 installed++
