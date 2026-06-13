@@ -75,6 +75,16 @@ internal object UiStyle {
         return base
     }
 
+    internal fun homeNativeGlassPreviewTokens(
+        context: Context,
+        style: ConfigManager.HomeNativeGlassStyleConfig,
+        darkMode: Boolean,
+    ): Tokens {
+        val density = context.resources.displayMetrics.density
+        val base = if (darkMode) darkTokens(density) else lightTokens(density)
+        return base.withHomeNativeGlassOverrides(density, style)
+    }
+
     private fun isNight(context: Context): Boolean {
         val mode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         return mode == Configuration.UI_MODE_NIGHT_YES
@@ -158,12 +168,16 @@ internal object UiStyle {
         window.setBackgroundDrawable(InsetDrawable(bg, tokens.dialogInsetPx))
     }
 
-    private fun Tokens.withHomeNativeGlassOverrides(density: Float): Tokens {
-        val radiusDp = ConfigManager.homeNativeGlassCardRadiusDp.coerceIn(
+    private fun Tokens.withHomeNativeGlassOverrides(
+        density: Float,
+        style: ConfigManager.HomeNativeGlassStyleConfig? = null,
+    ): Tokens {
+        val radiusDp = (style?.cardRadiusDp ?: ConfigManager.homeNativeGlassCardRadiusDp).coerceIn(
             ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
             ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
         )
-        val dynamicAccent = homeNativeGlassDynamicAccent() ?: accent
+        val styleAccent = style?.let { homeNativeGlassStyleAccent(it) }
+        val dynamicAccent = styleAccent ?: homeNativeGlassDynamicAccent() ?: accent
         val accentSoftColor = if (night) {
             withAlpha(dynamicAccent, 0x33)
         } else {
@@ -205,6 +219,14 @@ internal object UiStyle {
 
     private fun homeNativeGlassDynamicAccent(): Int? {
         return HomeNativeGlassDynamicTintCache.resolveAccentColor()
+    }
+
+    private fun homeNativeGlassStyleAccent(style: ConfigManager.HomeNativeGlassStyleConfig): Int? {
+        ConfigManager.normalizeHomeNativeGlassTintColor(style.tintColor)
+            .takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR }
+            ?.let { return it }
+        return ConfigManager.normalizeHomeNativeGlassTintColor(style.autoTintColor)
+            .takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
     }
 
     private fun withAlpha(color: Int, alpha: Int): Int {

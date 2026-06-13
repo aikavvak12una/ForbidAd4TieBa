@@ -210,7 +210,7 @@ object SystemBarCompatHook {
 
     private fun isHomeNativeGlassRuntimeActive(): Boolean {
         return ConfigManager.isHomeNativeGlassEnabled &&
-            ConfigManager.homeNativeGlassBackgroundImagePath.isNotBlank()
+            ConfigManager.hasAnyHomeNativeGlassBackgroundImage
     }
 
     @Suppress("DEPRECATION")

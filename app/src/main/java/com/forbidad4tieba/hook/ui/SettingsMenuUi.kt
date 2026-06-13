@@ -61,6 +61,12 @@ internal const val SETTINGS_DESC_RIGHT_PADDING_DP = 14f
 
 private val firstSettingsDialogBackgroundErrorLogged = AtomicBoolean(false)
 
+internal data class HomeNativeGlassDialogPreviewStyle(
+    val style: ConfigManager.HomeNativeGlassStyleConfig,
+    val darkMode: Boolean,
+    val previewBitmap: Bitmap? = null,
+)
+
 internal fun settingsDialogPadding(density: Float): Int {
     return (SETTINGS_DIALOG_PADDING_DP * density).toInt()
 }
@@ -165,6 +171,7 @@ internal fun createSettingsDialogTitleView(context: Context, title: String): Tex
     val padding = settingsDialogPadding(density)
     val tokens = UiStyle.tokens(context)
     return TextView(context).apply {
+        id = android.R.id.title
         text = title
         applySettingsDialogTitleStyle(tokens, density)
         setPadding(padding, padding, padding, settingsDialogTitleBottomPadding(padding))
@@ -182,17 +189,34 @@ internal fun applyUnifiedDialogCardStyle(
     window: Window,
     density: Float,
     useCustomBackground: Boolean = true,
+    homeNativeGlassPreviewStyle: HomeNativeGlassDialogPreviewStyle? = null,
 ) {
-    val tokens = UiStyle.tokens(window.context)
-    val homeNativeGlassEnabled = ConfigManager.isHomeNativeGlassEnabled
+    val activeStyle = homeNativeGlassPreviewStyle?.style
+        ?: if (ConfigManager.isHomeNativeGlassEnabled) ConfigManager.activeHomeNativeGlassStyle() else null
+    val tokens = if (homeNativeGlassPreviewStyle != null) {
+        UiStyle.homeNativeGlassPreviewTokens(
+            window.context,
+            homeNativeGlassPreviewStyle.style,
+            homeNativeGlassPreviewStyle.darkMode,
+        )
+    } else {
+        UiStyle.tokens(window.context)
+    }
     applySettingsDialogShadow(
         window = window,
         density = density,
-        enabled = homeNativeGlassEnabled && ConfigManager.isHomeNativeGlassShadowEnabled,
+        shadowStrengthPercent = activeStyle?.shadowStrengthPercent
+            ?: ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
     )
+    refreshSettingsDialogTitle(window, tokens, density)
     tintSettingsDialogActionButtons(window, tokens.accent)
     val background = if (useCustomBackground) {
-        createSettingsDialogCustomBackground(window.context, tokens, density)
+        createSettingsDialogCustomBackground(
+            window = window,
+            tokens = tokens,
+            density = density,
+            previewStyle = homeNativeGlassPreviewStyle,
+        )
     } else {
         null
     }
@@ -203,6 +227,15 @@ internal fun applyUnifiedDialogCardStyle(
     }
     clearSystemDialogCustomPanelPadding(window)
     applyStableDialogWindowLayout(window, density)
+}
+
+private fun refreshSettingsDialogTitle(
+    window: Window,
+    tokens: UiStyle.Tokens,
+    density: Float,
+) {
+    (window.decorView.findViewById<View>(android.R.id.title) as? TextView)
+        ?.applySettingsDialogTitleStyle(tokens, density)
 }
 
 private fun clearSystemDialogCustomPanelPadding(window: Window) {
@@ -241,9 +274,9 @@ private fun applyStableDialogWindowLayout(window: Window, density: Float) {
 }
 
 private class NoIntrinsicInsetDrawable(
-    drawable: Drawable,
+    val contentDrawable: Drawable,
     inset: Int,
-) : InsetDrawable(drawable, inset) {
+) : InsetDrawable(contentDrawable, inset) {
     override fun getIntrinsicWidth(): Int = -1
 
     override fun getIntrinsicHeight(): Int = -1
@@ -273,72 +306,146 @@ private fun tintSettingsDialogActionButtons(window: Window, color: Int) {
     }
 }
 
-private fun applySettingsDialogShadow(window: Window, density: Float, enabled: Boolean) {
-    if (!ConfigManager.isHomeNativeGlassEnabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
+private fun applySettingsDialogShadow(window: Window, density: Float, shadowStrengthPercent: Int) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
     val decor = window.decorView
-    decor.elevation = if (enabled) 10f * density else 0f
-    decor.translationZ = if (enabled) 2f * density else 0f
+    val shadowScale = shadowStrengthPercent.coerceIn(
+        ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+        ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+    ) / 100f
+    decor.elevation = 10f * density * shadowScale
+    decor.translationZ = 2f * density * shadowScale
 }
 
 private fun createSettingsDialogCustomBackground(
-    context: Context,
+    window: Window,
     tokens: UiStyle.Tokens,
     density: Float,
+    previewStyle: HomeNativeGlassDialogPreviewStyle? = null,
 ): Drawable? {
-    val path = resolveSettingsDialogBackgroundImagePath(context)
-    if (path.isBlank()) return null
+    val context = window.context
+    val style = previewStyle?.style
+        ?: if (ConfigManager.isHomeNativeGlassEnabled) ConfigManager.activeHomeNativeGlassStyle() else null
+    val source = resolveSettingsDialogBackgroundImageSource(
+        style = style,
+        realtimePreviewEnabled = previewStyle != null,
+        previewBitmap = previewStyle?.previewBitmap,
+    ) ?: return null
+    val overlayColor = settingsDialogOverlayColor(tokens, previewStyle)
+    val cornerRadiusPx = previewStyle?.style?.cardRadiusDp?.coerceIn(
+        ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+        ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+    )?.let { it * density } ?: tokens.cardCornerPx
+    val strokeEnabled = style?.strokeEnabled ?: ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
+    val shadowStrengthPercent = style?.shadowStrengthPercent
+        ?: ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+
+    findSettingsDialogCustomBackgroundDrawable(window)?.let { existing ->
+        if (existing.updateIfSameImage(
+                imagePath = source.path,
+                tokens = tokens,
+                overlayColor = overlayColor,
+                cornerRadiusPx = cornerRadiusPx,
+                strokeEnabled = strokeEnabled,
+                shadowStrengthPercent = shadowStrengthPercent,
+                previewBitmap = source.previewBitmap,
+            )
+        ) {
+            return existing
+        }
+    }
+
     val metrics = context.resources.displayMetrics
     val targetWidth = (metrics.widthPixels - tokens.dialogInsetPx * 2).coerceAtLeast(1)
     val targetHeight = (metrics.heightPixels - tokens.dialogInsetPx * 2).coerceAtLeast(1)
     val bitmap = runCatching {
-        HomeNativeGlassImageCache.decodeSampledBitmap(path, targetWidth, targetHeight)
+        HomeNativeGlassImageCache.decodeSampledBitmap(source.path, targetWidth, targetHeight)
     }.getOrNull()
     if (bitmap == null) {
         if (firstSettingsDialogBackgroundErrorLogged.compareAndSet(false, true)) {
-            XposedCompat.logD { "[SettingsMenuHook] settings dialog background unavailable: $path" }
+            XposedCompat.logD { "[SettingsMenuHook] settings dialog background unavailable: ${source.path}" }
         }
         return null
     }
     return SettingsDialogCustomBackgroundDrawable(
+        imagePath = source.path,
         bitmap = bitmap,
+        previewBitmap = source.previewBitmap,
         tokens = tokens,
-        overlayColor = settingsDialogOverlayColor(tokens),
+        overlayColor = overlayColor,
         density = density,
-        strokeEnabled = ConfigManager.isHomeNativeGlassStrokeEnabled,
-        shadowEnabled = ConfigManager.isHomeNativeGlassShadowEnabled,
+        cornerRadiusPx = cornerRadiusPx,
+        strokeEnabled = strokeEnabled,
+        shadowStrengthPercent = shadowStrengthPercent,
     )
 }
 
-private fun resolveSettingsDialogBackgroundImagePath(context: Context): String {
-    val prefs = ConfigManager.getPrefs(context)
-    if (!prefs.getBoolean(ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS, false)) return ""
-    val sourcePath = prefs.getString(
-        ConfigManager.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-    )?.trim().orEmpty()
-    if (sourcePath.isBlank()) return ""
-    val blurCachePath = prefs.getString(
-        ConfigManager.KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-        ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-    )?.trim().orEmpty()
+private fun findSettingsDialogCustomBackgroundDrawable(window: Window): SettingsDialogCustomBackgroundDrawable? {
+    return (window.decorView.background as? NoIntrinsicInsetDrawable)
+        ?.contentDrawable as? SettingsDialogCustomBackgroundDrawable
+}
+
+private data class SettingsDialogBackgroundImageSource(
+    val path: String,
+    val previewBitmap: Bitmap?,
+)
+
+private fun resolveSettingsDialogBackgroundImageSource(
+    style: ConfigManager.HomeNativeGlassStyleConfig?,
+    realtimePreviewEnabled: Boolean,
+    previewBitmap: Bitmap?,
+): SettingsDialogBackgroundImageSource? {
+    if (style == null) return null
+    val sourcePath = style.backgroundImagePath.trim()
+    if (sourcePath.isBlank()) return null
+    if (realtimePreviewEnabled) {
+        if (!runCatching { File(sourcePath).isFile }.getOrDefault(false)) return null
+        return SettingsDialogBackgroundImageSource(
+            path = sourcePath,
+            previewBitmap = previewBitmap,
+        )
+    }
+    val blurCachePath = style.blurCacheImagePath.trim()
     if (
         blurCachePath.isNotBlank() &&
         runCatching { File(blurCachePath).isFile }.getOrDefault(false)
     ) {
-        return blurCachePath
+        return SettingsDialogBackgroundImageSource(
+            path = blurCachePath,
+            previewBitmap = null,
+        )
     }
-    return if (runCatching { File(sourcePath).isFile }.getOrDefault(false)) sourcePath else ""
+    if (!runCatching { File(sourcePath).isFile }.getOrDefault(false)) return null
+    return SettingsDialogBackgroundImageSource(
+        path = sourcePath,
+        previewBitmap = null,
+    )
 }
 
-private fun settingsDialogOverlayColor(tokens: UiStyle.Tokens): Int {
-    val tintColor = HomeNativeGlassDynamicTintCache.resolveAccentColor()
+private fun settingsDialogOverlayColor(
+    tokens: UiStyle.Tokens,
+    previewStyle: HomeNativeGlassDialogPreviewStyle? = null,
+): Int {
+    val tintColor = previewStyle?.style?.let { style ->
+        ConfigManager.normalizeHomeNativeGlassTintColor(style.tintColor)
+            .takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR }
+            ?: ConfigManager.normalizeHomeNativeGlassTintColor(style.autoTintColor)
+                .takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
+    }
+        ?: HomeNativeGlassDynamicTintCache.resolveAccentColor()
     val surface = tokens.surface
     val baseColor = if (tintColor == null) {
         surface
     } else {
         blendRgb(surface, tintColor, 0.35f)
     }
-    val overlayAlpha = if (tokens.night) 126 else 142
+    val overlayAlpha = if (previewStyle != null) {
+        if (previewStyle.darkMode) 126 else 142
+    } else if (tokens.night) {
+        126
+    } else {
+        142
+    }
     return Color.argb(
         overlayAlpha,
         Color.red(baseColor),
@@ -374,12 +481,15 @@ private fun blendRgb(base: Int, overlay: Int, overlayRatio: Float): Int {
 }
 
 private class SettingsDialogCustomBackgroundDrawable(
+    private val imagePath: String,
     private val bitmap: Bitmap,
-    private val tokens: UiStyle.Tokens,
-    private val overlayColor: Int,
+    private var previewBitmap: Bitmap?,
+    private var tokens: UiStyle.Tokens,
+    private var overlayColor: Int,
     density: Float,
-    private val strokeEnabled: Boolean,
-    private val shadowEnabled: Boolean,
+    private var cornerRadiusPx: Float,
+    private var strokeEnabled: Boolean,
+    shadowStrengthPercent: Int,
 ) : Drawable() {
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
     private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -388,6 +498,10 @@ private class SettingsDialogCustomBackgroundDrawable(
         style = Paint.Style.STROKE
     }
     private val strokeWidth = max(1f, density)
+    private var shadowStrengthPercent = shadowStrengthPercent.coerceIn(
+        ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+        ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+    )
     private val src = Rect()
     private val dst = Rect()
     private val rect = RectF()
@@ -395,35 +509,48 @@ private class SettingsDialogCustomBackgroundDrawable(
     private val clipPath = Path()
     private var drawableAlpha = 255
 
+    fun updateIfSameImage(
+        imagePath: String,
+        tokens: UiStyle.Tokens,
+        overlayColor: Int,
+        cornerRadiusPx: Float,
+        strokeEnabled: Boolean,
+        shadowStrengthPercent: Int,
+        previewBitmap: Bitmap?,
+    ): Boolean {
+        if (this.imagePath != imagePath) return false
+        this.tokens = tokens
+        this.overlayColor = overlayColor
+        this.cornerRadiusPx = cornerRadiusPx
+        this.strokeEnabled = strokeEnabled
+        this.previewBitmap = previewBitmap
+        this.shadowStrengthPercent = shadowStrengthPercent.coerceIn(
+            ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+        )
+        invalidateSelf()
+        return true
+    }
+
     override fun draw(canvas: Canvas) {
         dst.set(bounds)
         val width = dst.width()
         val height = dst.height()
-        val bitmapWidth = bitmap.width
-        val bitmapHeight = bitmap.height
+        val activeBitmap = previewBitmap ?: bitmap
+        val bitmapWidth = activeBitmap.width
+        val bitmapHeight = activeBitmap.height
         if (width <= 0 || height <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return
 
         rect.set(dst)
         clipPath.reset()
-        clipPath.addRoundRect(rect, tokens.cardCornerPx, tokens.cardCornerPx, Path.Direction.CW)
+        clipPath.addRoundRect(rect, cornerRadiusPx, cornerRadiusPx, Path.Direction.CW)
         val save = canvas.save()
         canvas.clipPath(clipPath)
 
-        if (bitmapWidth.toLong() * height > width.toLong() * bitmapHeight) {
-            val srcWidth = (bitmapHeight.toLong() * width / height).toInt().coerceIn(1, bitmapWidth)
-            val left = (bitmapWidth - srcWidth) / 2
-            src.set(left, 0, left + srcWidth, bitmapHeight)
-        } else {
-            val srcHeight = (bitmapWidth.toLong() * height / width).toInt().coerceIn(1, bitmapHeight)
-            val top = (bitmapHeight - srcHeight) / 2
-            src.set(0, top, bitmapWidth, top + srcHeight)
-        }
-
-        bitmapPaint.alpha = drawableAlpha
-        canvas.drawBitmap(bitmap, src, dst, bitmapPaint)
+        drawBitmapCover(canvas, activeBitmap, drawableAlpha)
         overlayPaint.color = scaleAlpha(overlayColor, drawableAlpha)
         canvas.drawRect(rect, overlayPaint)
-        if (shadowEnabled) {
+        if (shadowStrengthPercent > 0) {
             drawSoftShadow(canvas)
         }
         canvas.restoreToCount(save)
@@ -459,7 +586,7 @@ private class SettingsDialogCustomBackgroundDrawable(
     }
 
     private fun drawSoftShadow(canvas: Canvas) {
-        val alpha = (24 * drawableAlpha / 255f).toInt().coerceIn(0, 255)
+        val alpha = (24 * shadowStrengthPercent / 100f * drawableAlpha / 255f).toInt().coerceIn(0, 255)
         if (alpha <= 0) return
         shadowPaint.shader = LinearGradient(
             0f,
@@ -474,7 +601,7 @@ private class SettingsDialogCustomBackgroundDrawable(
             floatArrayOf(0f, 0.58f, 1f),
             Shader.TileMode.CLAMP,
         )
-        canvas.drawRoundRect(rect, tokens.cardCornerPx, tokens.cardCornerPx, shadowPaint)
+        canvas.drawRoundRect(rect, cornerRadiusPx, cornerRadiusPx, shadowPaint)
         shadowPaint.shader = null
     }
 
@@ -482,10 +609,29 @@ private class SettingsDialogCustomBackgroundDrawable(
         insetRect.set(rect)
         val inset = strokeWidth * 0.5f
         insetRect.inset(inset, inset)
-        val radius = (tokens.cardCornerPx - inset).coerceAtLeast(0f)
+        val radius = (cornerRadiusPx - inset).coerceAtLeast(0f)
         strokePaint.strokeWidth = strokeWidth
         strokePaint.color = scaleAlpha(settingsDialogStrokeColor(tokens), drawableAlpha)
         canvas.drawRoundRect(insetRect, radius, radius, strokePaint)
+    }
+
+    private fun drawBitmapCover(canvas: Canvas, source: Bitmap, alpha: Int) {
+        val bitmapWidth = source.width
+        val bitmapHeight = source.height
+        if (bitmapWidth <= 0 || bitmapHeight <= 0 || alpha <= 0) return
+        if (bitmapWidth.toLong() * dst.height() > dst.width().toLong() * bitmapHeight) {
+            val srcWidth = (bitmapHeight.toLong() * dst.width() / dst.height()).toInt()
+                .coerceIn(1, bitmapWidth)
+            val left = (bitmapWidth - srcWidth) / 2
+            src.set(left, 0, left + srcWidth, bitmapHeight)
+        } else {
+            val srcHeight = (bitmapWidth.toLong() * dst.height() / dst.width()).toInt()
+                .coerceIn(1, bitmapHeight)
+            val top = (bitmapHeight - srcHeight) / 2
+            src.set(0, top, bitmapWidth, top + srcHeight)
+        }
+        bitmapPaint.alpha = alpha
+        canvas.drawBitmap(source, src, dst, bitmapPaint)
     }
 }
 
