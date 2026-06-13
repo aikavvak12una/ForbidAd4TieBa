@@ -10,10 +10,10 @@ object PbPerformanceModeHook {
         UbsAbTestBooleanOverride("imagePerfLog", false) { ConfigManager.isPbPerformanceModeEnabled },
         UbsAbTestBooleanOverride("isEnableHybridScrollLog", false) { ConfigManager.isPbPerformanceModeEnabled },
         UbsAbTestBooleanOverride("isPbCommentFunAdABTest", false) {
-            ConfigManager.isPbPerformanceModeEnabled || ConfigManager.isAdBlockEnabled
+            ConfigManager.isPbPerformanceModeEnabled || ConfigManager.isPbAdExperimentBlockEnabled
         },
         UbsAbTestBooleanOverride("isPbPageBannerFunAdSdkTest", false) {
-            ConfigManager.isPbPerformanceModeEnabled || ConfigManager.isAdBlockEnabled
+            ConfigManager.isPbPerformanceModeEnabled || ConfigManager.isPbAdExperimentBlockEnabled
         },
     )
 

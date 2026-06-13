@@ -217,7 +217,7 @@ object MineTabWebBlockHook {
     }
 
     private fun isFeatureEnabledFor(context: Context?): Boolean {
-        return ConfigManager.isAdBlockEnabled && isTargetVersionEligible(context)
+        return ConfigManager.isMineTabWebAdBlockEnabled && isTargetVersionEligible(context)
     }
 
     private fun isTargetVersionEligible(context: Context?): Boolean {

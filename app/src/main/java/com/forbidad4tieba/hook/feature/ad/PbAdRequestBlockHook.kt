@@ -13,7 +13,7 @@ object PbAdRequestBlockHook {
     private val commonNotifyWarned = AtomicBoolean(false)
 
     internal fun hook(targets: PbAdRequestBlockSymbols) {
-        if (!ConfigManager.isAdBlockEnabled) {
+        if (!ConfigManager.isPbAdRequestBlockEnabled) {
             XposedCompat.log("[PbAdRequestBlockHook] skipped: config disabled")
             return
         }
@@ -49,7 +49,7 @@ object PbAdRequestBlockHook {
         }
 
         mod.hook(encodeMethod).intercept { chain ->
-            if (ConfigManager.isAdBlockEnabled) {
+            if (ConfigManager.isPbAdRequestBlockEnabled) {
                 clearPbPageAdRequestFields(chain.thisObject, patches)
             }
             chain.proceed()
@@ -62,7 +62,7 @@ object PbAdRequestBlockHook {
         val addAdMethod = targets.pageBrowserAddAdMethod ?: return 0
 
         mod.hook(addAdMethod).intercept { chain ->
-            if (ConfigManager.isAdBlockEnabled) {
+            if (ConfigManager.isPbAdRequestBlockEnabled) {
                 return@intercept null
             }
             chain.proceed()
@@ -79,7 +79,7 @@ object PbAdRequestBlockHook {
         for (startMethod in targets.commonAdBidStartMethods.distinctBy { it.name }) {
             mod.hook(startMethod).intercept { chain ->
                 val model = chain.thisObject
-                if (!ConfigManager.isAdBlockEnabled || model == null || !targetModelClass.isInstance(model)) {
+                if (!ConfigManager.isPbAdRequestBlockEnabled || model == null || !targetModelClass.isInstance(model)) {
                     return@intercept chain.proceed()
                 }
                 notifyCommonAdBidFailure(model, notifyMethod)
@@ -97,7 +97,7 @@ object PbAdRequestBlockHook {
 
         mod.hook(requestDataMethod).intercept { chain ->
             val model = chain.thisObject
-            if (!ConfigManager.isAdBlockEnabled || model == null || !targetModelClass.isInstance(model)) {
+            if (!ConfigManager.isPbAdRequestBlockEnabled || model == null || !targetModelClass.isInstance(model)) {
                 return@intercept chain.proceed()
             }
             null

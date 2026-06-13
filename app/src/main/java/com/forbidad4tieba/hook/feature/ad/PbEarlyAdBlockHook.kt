@@ -8,7 +8,7 @@ object PbEarlyAdBlockHook {
     @Volatile private var hooked = false
 
     internal fun hook(targets: PbEarlyAdBlockSymbols) {
-        if (!ConfigManager.isAdBlockEnabled) {
+        if (!ConfigManager.isPbEarlyAdBlockEnabled) {
             XposedCompat.log("[PbEarlyAdBlockHook] skipped: config disabled")
             return
         }
@@ -19,7 +19,7 @@ object PbEarlyAdBlockHook {
             var installed = 0
             for (target in targets.methods.distinctBy { it.method }) {
                 mod.hook(target.method).intercept { chain ->
-                    if (ConfigManager.isAdBlockEnabled) {
+                    if (ConfigManager.isPbEarlyAdBlockEnabled) {
                         return@intercept blockedReturnValue(target.returnsSparseArray)
                     }
                     chain.proceed()

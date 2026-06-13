@@ -126,7 +126,7 @@ object HomeSideBarWebBlockHook {
                     val target = chain.thisObject
                     val url = chain.args.firstOrNull() as? String
                     val result = chain.proceed()
-                    if (target != null && ConfigManager.isAdBlockEnabled && isSideBarUrl(url)) {
+                    if (target != null && ConfigManager.isHomeSideBarWebAdBlockEnabled && isSideBarUrl(url)) {
                         scheduleInjection(target, url.orEmpty())
                     }
                     result
@@ -178,7 +178,7 @@ object HomeSideBarWebBlockHook {
 
         for (delay in INJECT_DELAYS_MS) {
             hostView.postDelayed({
-                if (!ConfigManager.isAdBlockEnabled) {
+                if (!ConfigManager.isHomeSideBarWebAdBlockEnabled) {
                     clearState(target)
                     return@postDelayed
                 }

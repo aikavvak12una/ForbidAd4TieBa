@@ -51,7 +51,7 @@ object PbFallingAdHook {
 
     private fun hookInitMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
-            if (!ConfigManager.isAdBlockEnabled) return@intercept chain.proceed()
+            if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
             Unit
         }
@@ -60,7 +60,7 @@ object PbFallingAdHook {
 
     private fun hookShowMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
-            if (!ConfigManager.isAdBlockEnabled) return@intercept chain.proceed()
+            if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
             Unit
         }
@@ -69,7 +69,7 @@ object PbFallingAdHook {
 
     private fun hookClearMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
-            if (!ConfigManager.isAdBlockEnabled) return@intercept chain.proceed()
+            if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
             Unit
         }

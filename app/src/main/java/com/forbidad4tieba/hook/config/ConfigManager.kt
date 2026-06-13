@@ -60,6 +60,13 @@ object ConfigManager {
         "pending_post_scan_environment_warning"
 
     const val KEY_BLOCK_AD = "block_ad"
+    const val KEY_BLOCK_AD_FEED = "block_ad_feed"
+    const val KEY_BLOCK_AD_POST_PAGE = "block_ad_post_page"
+    const val KEY_BLOCK_AD_STRATEGY = "block_ad_strategy"
+    const val KEY_BLOCK_AD_SEARCH_BOX_TEXT = "block_ad_search_box_text"
+    const val KEY_BLOCK_AD_HOME_TOP_BAR = "block_ad_home_top_bar"
+    const val KEY_BLOCK_AD_MINE_TAB_WEB = "block_ad_mine_tab_web"
+    const val KEY_BLOCK_AD_HOME_SIDE_BAR_WEB = "block_ad_home_side_bar_web"
     const val KEY_SIMPLIFY_HOME_TABS = "simplify_home_tabs"
     const val KEY_CUSTOM_HOME_TOP_TABS = KEY_SIMPLIFY_HOME_TABS
     const val KEY_HOME_TOP_TAB_MATERIAL = "home_top_tab_material"
@@ -255,6 +262,18 @@ object ConfigManager {
     )
     val areRestrictedFeaturesUnlocked: Boolean get() = settingsSnapshot.areRestrictedFeaturesUnlocked
     val isAdBlockEnabled: Boolean get() = settingsSnapshot.isAdBlockEnabled
+    val isFeedAdBlockEnabled: Boolean get() = settingsSnapshot.isFeedAdBlockEnabled
+    val isPostPageAdBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
+    val isPostAdBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
+    val isStrategyAdBlockEnabled: Boolean get() = settingsSnapshot.isStrategyAdBlockEnabled
+    val isPbEarlyAdBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
+    val isPbAdRequestBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
+    val isPbFallingAdBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
+    val isSearchBoxTextAdBlockEnabled: Boolean get() = settingsSnapshot.isSearchBoxTextAdBlockEnabled
+    val isHomeTopBarAdBlockEnabled: Boolean get() = settingsSnapshot.isHomeTopBarAdBlockEnabled
+    val isMineTabWebAdBlockEnabled: Boolean get() = settingsSnapshot.isMineTabWebAdBlockEnabled
+    val isHomeSideBarWebAdBlockEnabled: Boolean get() = settingsSnapshot.isHomeSideBarWebAdBlockEnabled
+    val isPbAdExperimentBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
     val isHomeTopTabsCustomEnabled: Boolean get() = settingsSnapshot.isHomeTopTabsCustomEnabled
     val isHomeTopTabMaterialEnabled: Boolean get() = settingsSnapshot.isHomeTopTabMaterialEnabled
     val isHomeTopTabRecommendEnabled: Boolean get() = settingsSnapshot.isHomeTopTabRecommendEnabled
@@ -554,6 +573,12 @@ object ConfigManager {
             }
         }
 
+        val adBlockEnabled = restrictedBoolean(KEY_BLOCK_AD)
+        fun adBlockChildBoolean(key: String): Boolean {
+            if (!adBlockEnabled) return false
+            return if (p.contains(key)) p.getBoolean(key, true) else true
+        }
+
         val performanceOptimizationEnabled = restrictedBoolean(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)
         val homeNativeGlassLightStyle = readHomeNativeGlassStyle(p, HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS)
         val homeNativeGlassDarkStyle = readHomeNativeGlassStyle(p, HOME_NATIVE_GLASS_DARK_STYLE_KEYS)
@@ -576,7 +601,14 @@ object ConfigManager {
 
         return SettingsSnapshot(
             areRestrictedFeaturesUnlocked = restrictedUnlocked,
-            isAdBlockEnabled = restrictedBoolean(KEY_BLOCK_AD),
+            isAdBlockEnabled = adBlockEnabled,
+            isFeedAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_FEED),
+            isPostPageAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_POST_PAGE),
+            isStrategyAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_STRATEGY),
+            isSearchBoxTextAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_SEARCH_BOX_TEXT),
+            isHomeTopBarAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_HOME_TOP_BAR),
+            isMineTabWebAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_MINE_TAB_WEB),
+            isHomeSideBarWebAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_HOME_SIDE_BAR_WEB),
             isHomeTopTabsCustomEnabled = featureBoolean(KEY_CUSTOM_HOME_TOP_TABS),
             isHomeTopTabMaterialEnabled = p.getBoolean(KEY_HOME_TOP_TAB_MATERIAL, true),
             isHomeTopTabRecommendEnabled = p.getBoolean(KEY_HOME_TOP_TAB_RECOMMEND, true),

@@ -25,7 +25,7 @@ object SearchBoxTextAdHook {
 
             installHomeSearchBoxMarker(mod, targets)
             mod.hook(targets.setHintMethod).intercept { chain ->
-                if (!ConfigManager.isAdBlockEnabled) return@intercept chain.proceed()
+                if (!ConfigManager.isSearchBoxTextAdBlockEnabled) return@intercept chain.proceed()
 
                 if (!isHomeSearchBox(chain.thisObject)) return@intercept chain.proceed()
 

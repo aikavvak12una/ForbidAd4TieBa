@@ -48,7 +48,7 @@ object FeedAdHook {
                             list = current,
                             runtimeFilter = customPostFilter,
                             methodName = methodName,
-                            templateKeyBlockReason = if (ConfigManager.isAdBlockEnabled) {
+                            templateKeyBlockReason = if (ConfigManager.isFeedAdBlockEnabled) {
                                 ::adBlockReason
                             } else {
                                 null
@@ -58,7 +58,7 @@ object FeedAdHook {
                             current = filtered
                             changed = true
                         }
-                    } else if (ConfigManager.isAdBlockEnabled) {
+                    } else if (ConfigManager.isFeedAdBlockEnabled) {
                         val filtered = filterItems(
                             list = current,
                             templateKeyMethodName = templateKeyMethodName,

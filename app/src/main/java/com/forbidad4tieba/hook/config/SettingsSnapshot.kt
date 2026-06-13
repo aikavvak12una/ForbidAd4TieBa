@@ -3,6 +3,13 @@ package com.forbidad4tieba.hook.config
 data class SettingsSnapshot(
     val areRestrictedFeaturesUnlocked: Boolean = false,
     val isAdBlockEnabled: Boolean = false,
+    val isFeedAdBlockEnabled: Boolean = false,
+    val isPostPageAdBlockEnabled: Boolean = false,
+    val isStrategyAdBlockEnabled: Boolean = false,
+    val isSearchBoxTextAdBlockEnabled: Boolean = false,
+    val isHomeTopBarAdBlockEnabled: Boolean = false,
+    val isMineTabWebAdBlockEnabled: Boolean = false,
+    val isHomeSideBarWebAdBlockEnabled: Boolean = false,
     val isHomeTopTabsCustomEnabled: Boolean = false,
     val isHomeTopTabMaterialEnabled: Boolean = true,
     val isHomeTopTabRecommendEnabled: Boolean = true,
@@ -84,7 +91,7 @@ data class SettingsSnapshot(
     }
 
     fun shouldStabilizeHomeChrome(): Boolean {
-        return isAdBlockEnabled || isHomeNativeGlassRuntimeActive()
+        return isHomeTopBarAdBlockEnabled || isHomeNativeGlassRuntimeActive()
     }
 
     fun shouldForceFeedUiOpt(): Boolean = isForceFeedUiOptRuntimeEnabled

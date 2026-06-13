@@ -121,7 +121,7 @@ class MainHook : XposedModule() {
                         val isMainProcess = processName == Constants.TARGET_PACKAGE
                         if (isMainProcess) {
                             val startupSettings = ConfigManager.snapshot()
-                            if (startupSettings.isAdBlockEnabled) {
+                            if (startupSettings.isMineTabWebAdBlockEnabled) {
                                 MineTabWebBlockHook.onAppContextReady(app)
                             }
                             runStartupTask("apply cached runtime controls") {
