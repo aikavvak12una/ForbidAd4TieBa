@@ -1,7 +1,6 @@
 package com.forbidad4tieba.hook.ui
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -18,9 +17,11 @@ import java.io.File
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.Calendar
+import java.util.ArrayDeque
 import java.util.Locale
-import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipFile
 import kotlin.concurrent.thread
 
@@ -29,8 +30,12 @@ object AboutInfoManager {
     private const val READ_TIMEOUT_MS = 5000
     private const val CACHE_DIR_NAME = "tbhook"
     private const val CACHE_FILE_NAME = "about_info_cache.json"
-    private const val KEY_TELEMETRY_UUID = "about_telemetry_uuid"
     private const val KEY_TELEMETRY_LAST_SUCCESS_DATE = "about_telemetry_last_success_date"
+    private const val KEY_REMOTE_CUSTOM_DIALOG_ACK_PREFIX = "remote_custom_dialog_ack:"
+    private const val TELEMETRY_ACCOUNT_ID_SALT = "forbidad4tieba.telemetry.account_id.v1"
+    private const val TELEMETRY_ACCOUNT_ID_FIRST_DELAY_MS = 5000L
+    private const val TELEMETRY_ACCOUNT_ID_RETRY_COUNT = 2
+    private const val TELEMETRY_ACCOUNT_ID_RETRY_DELAY_MS = 5000L
     private const val PATCH_CONFIG_ASSET_PATH = "assets/npatch/config.json"
     private const val PATCH_MANIFEST_META_KEY = "npatch"
     private const val PATCH_EMBEDDED_MODULE_PREFIX = "assets/npatch/modules/"
@@ -52,6 +57,12 @@ object AboutInfoManager {
     private var cachedRemoteItems: List<AboutItem> = emptyList()
     @Volatile
     private var startupFetchTriggered = false
+    private val remoteCustomDialogLock = Any()
+    private val pendingRemoteCustomDialogs = ArrayDeque<RemoteCustomDialog>()
+    private val seenRemoteCustomDialogKeys = LinkedHashSet<String>()
+    private val telemetryAccountRetryRunning = AtomicBoolean(false)
+    @Volatile private var pendingTelemetryConfigs: List<TelemetryConfig> = emptyList()
+    @Volatile private var runtimeEnvironmentCache: RuntimeEnvironment? = null
 
     data class AboutItem(
         val title: String,
@@ -74,6 +85,7 @@ object AboutInfoManager {
 
     private data class RemoteControls(
         val environmentLevels: Map<Int, EnvironmentLevelControls>,
+        val rules: List<RemoteRule> = emptyList(),
     ) {
         fun forLevel(level: Int): EnvironmentLevelControls {
             return environmentLevels[level] ?: DEFAULT_ENVIRONMENT_CONTROLS[level] ?: EnvironmentLevelControls()
@@ -84,6 +96,63 @@ object AboutInfoManager {
         val showWarningDialog: Boolean = false,
         val lockHiddenFeatures: Boolean = false,
     )
+
+    private data class RemoteRule(
+        val id: String,
+        val enabled: Boolean,
+        val condition: JSONObject?,
+        val actions: List<RemoteAction>,
+    )
+
+    private sealed class RemoteAction {
+        object ShowWarningDialog : RemoteAction()
+        object LockHiddenFeatures : RemoteAction()
+        data class CustomDialog(val dialog: RemoteCustomDialog) : RemoteAction()
+    }
+
+    data class RemoteCustomDialog(
+        val id: String,
+        val revision: Int,
+        val title: String,
+        val message: String,
+        val urlButton: RemoteCustomDialogUrlButton?,
+    ) {
+        val ackKey: String
+            get() = "$id:$revision"
+    }
+
+    data class RemoteCustomDialogUrlButton(
+        val text: String,
+        val url: String,
+    )
+
+    private data class EvaluatedRemoteControls(
+        val showWarningDialog: Boolean,
+        val lockHiddenFeatures: Boolean,
+        val customDialogs: List<RemoteCustomDialog>,
+        val matchedRuleCount: Int,
+    )
+
+    private data class RemoteConditionContext(
+        val environment: RuntimeEnvironment,
+        val accountId: String?,
+    )
+
+    private data class RemoteConditionValue(
+        val text: String,
+        val number: Long?,
+    )
+
+    private data class RemoteFieldLookup(
+        val known: Boolean,
+        val value: RemoteConditionValue?,
+    )
+
+    private enum class RemoteConditionResult {
+        MATCH,
+        NO_MATCH,
+        IGNORED,
+    }
 
     private data class FetchedPayload(
         val raw: String,
@@ -186,6 +255,24 @@ object AboutInfoManager {
         return RemoteControls(DEFAULT_ENVIRONMENT_CONTROLS)
     }
 
+    internal fun hasPendingRemoteCustomDialogs(): Boolean {
+        return synchronized(remoteCustomDialogLock) {
+            pendingRemoteCustomDialogs.isNotEmpty()
+        }
+    }
+
+    internal fun pollPendingRemoteCustomDialog(): RemoteCustomDialog? {
+        return synchronized(remoteCustomDialogLock) {
+            pendingRemoteCustomDialogs.pollFirst()
+        }
+    }
+
+    internal fun markRemoteCustomDialogAcknowledged(context: Context, dialog: RemoteCustomDialog) {
+        ConfigManager.getModuleStatePrefs(context).edit()
+            .putBoolean("$KEY_REMOTE_CUSTOM_DIALOG_ACK_PREFIX${dialog.ackKey}", true)
+            .apply()
+    }
+
     fun loadCachedItemsForSettings(): List<AboutItem> {
         return cachedRemoteItems
     }
@@ -262,7 +349,15 @@ object AboutInfoManager {
                         elapsedMs = remotePayload.elapsedMs,
                     )
                     parseAndValidatePayload(remotePayload.raw)?.let { parsedRemote ->
-                        applyRemoteControls(appContext, parsedRemote.controls)
+                        applyParsedPayload(
+                            context = appContext,
+                            rawPayload = remotePayload.raw,
+                            parsedPayload = parsedRemote,
+                            source = "remote",
+                            url = remotePayload.url,
+                            elapsedMs = remotePayload.elapsedMs,
+                            cacheAgeMs = -1L,
+                        )
                     }
                 }
             }.onFailure { t ->
@@ -340,6 +435,8 @@ object AboutInfoManager {
         context: Context,
         rawPayload: String,
         parsedPayload: JsonPayload,
+        source: String = "cache",
+        url: String = "cache",
         elapsedMs: Long,
         cacheAgeMs: Long,
     ) {
@@ -352,9 +449,10 @@ object AboutInfoManager {
         }
         cachedRemoteItems = items
         val bytes = rawPayload.toByteArray(Charsets.UTF_8).size
+        val cacheAgeText = cacheAgeMs.takeIf { it >= 0L }?.toString() ?: "-"
         XposedCompat.log(
-            "[AboutInfo] payload accepted: source=cache url=cache " +
-                "bytes=$bytes elapsedMs=$elapsedMs cacheAgeMs=$cacheAgeMs itemCount=${items.size}"
+            "[AboutInfo] payload accepted: source=$source url=$url " +
+                "bytes=$bytes elapsedMs=$elapsedMs cacheAgeMs=$cacheAgeText itemCount=${items.size}"
         )
         applyRemoteControls(context, parsedPayload.controls)
         reportTelemetryIfNeeded(context, parsedPayload.telemetry)
@@ -496,9 +594,10 @@ object AboutInfoManager {
 
     private fun parseRemoteControls(root: JSONObject): RemoteControls {
         val defaultControls = defaultRemoteControls()
-        val levels = root.optJSONObject("controls")
-            ?.optJSONObject("environmentLevels")
-            ?: return defaultControls
+        val controls = root.optJSONObject("controls") ?: return defaultControls
+        val rules = parseRemoteRules(controls)
+        val levels = controls.optJSONObject("environmentLevels")
+            ?: return defaultControls.copy(rules = rules)
 
         val parsedLevels = LinkedHashMap<Int, EnvironmentLevelControls>()
         for (level in ENVIRONMENT_RATING_LEVELS) {
@@ -521,7 +620,98 @@ object AboutInfoManager {
                 )
             }
         }
-        return RemoteControls(parsedLevels)
+        return RemoteControls(parsedLevels, rules)
+    }
+
+    private fun parseRemoteRules(controls: JSONObject): List<RemoteRule> {
+        val rules = controls.optJSONArray("rules") ?: return emptyList()
+        val out = ArrayList<RemoteRule>(rules.length())
+        for (i in 0 until rules.length()) {
+            val rule = rules.optJSONObject(i)
+            if (rule == null) {
+                XposedCompat.logD("[AboutInfo] controls.rules[$i] ignored: not object")
+                continue
+            }
+            parseRemoteRule(rule, i)?.let(out::add)
+        }
+        return out
+    }
+
+    private fun parseRemoteRule(rule: JSONObject, index: Int): RemoteRule? {
+        return try {
+            val enabled = optRemoteBoolean(rule, "enabled", true)
+            val id = rule.optString("id", "rule_${index + 1}").trim().ifEmpty { "rule_${index + 1}" }
+            val condition = rule.optJSONObject("when")
+            val actions = parseRemoteActions(rule.optJSONArray("actions"), id)
+            if (actions.isEmpty()) {
+                XposedCompat.logD("[AboutInfo] controls.rules[$index] ignored: actions empty id=$id")
+                return null
+            }
+            RemoteRule(
+                id = id,
+                enabled = enabled,
+                condition = condition,
+                actions = actions,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.logW("[AboutInfo] controls.rules[$index] ignored: ${t.message}")
+            null
+        }
+    }
+
+    private fun parseRemoteActions(actions: JSONArray?, ruleId: String): List<RemoteAction> {
+        if (actions == null) return emptyList()
+        val out = ArrayList<RemoteAction>(actions.length())
+        for (i in 0 until actions.length()) {
+            val action = actions.optJSONObject(i)
+            if (action == null) {
+                XposedCompat.logD("[AboutInfo] controls.rules[$ruleId].actions[$i] ignored: not object")
+                continue
+            }
+            when (action.optString("type", "").trim()) {
+                "showWarningDialog" -> out.add(RemoteAction.ShowWarningDialog)
+                "lockHiddenFeatures" -> out.add(RemoteAction.LockHiddenFeatures)
+                "customDialog" -> parseRemoteCustomDialog(action, ruleId)?.let {
+                    out.add(RemoteAction.CustomDialog(it))
+                }
+                else -> {
+                    XposedCompat.logD(
+                        "[AboutInfo] controls.rules[$ruleId].actions[$i] ignored: unknown type"
+                    )
+                }
+            }
+        }
+        return out
+    }
+
+    private fun parseRemoteCustomDialog(action: JSONObject, ruleId: String): RemoteCustomDialog? {
+        val id = action.optString("id", "").trim()
+        val revision = action.optInt("revision", 0)
+        val title = action.optString("title", "").trim()
+        val message = action.optString("message", "").trim()
+        if (id.isEmpty() || revision <= 0 || title.isEmpty() || message.isEmpty()) {
+            XposedCompat.logD("[AboutInfo] controls.rules[$ruleId].customDialog ignored: required field missing")
+            return null
+        }
+
+        val urlButton = action.optJSONObject("urlButton")?.let { button ->
+            val text = button.optString("text", "").trim()
+            val url = button.optString("url", "").trim()
+            if (text.isNotEmpty() && isHttpOrHttpsUrl(url)) {
+                RemoteCustomDialogUrlButton(text = text, url = url)
+            } else {
+                XposedCompat.logD("[AboutInfo] controls.rules[$ruleId].customDialog urlButton ignored")
+                null
+            }
+        }
+
+        return RemoteCustomDialog(
+            id = id,
+            revision = revision,
+            title = title,
+            message = message,
+            urlButton = urlButton,
+        )
     }
 
     private fun optRemoteBoolean(
@@ -543,19 +733,269 @@ object AboutInfoManager {
     }
 
     private fun applyRemoteControls(context: Context, controls: RemoteControls) {
-        val level = collectRuntimeEnvironment(context).environmentRatingLevel
+        val environment = collectRuntimeEnvironment(context)
+        val level = environment.environmentRatingLevel
         val levelControls = controls.forLevel(level)
+        val evaluatedRules = evaluateRemoteRules(
+            context = context,
+            rules = controls.rules,
+            conditionContext = RemoteConditionContext(
+                environment = environment,
+                accountId = TiebaAccountIdentity.currentAccountId(context),
+            ),
+        )
         ConfigManager.applyRemoteEnvironmentControls(
             context = context,
-            showWarningDialog = levelControls.showWarningDialog,
-            lockHiddenFeatures = levelControls.lockHiddenFeatures,
+            showWarningDialog = levelControls.showWarningDialog || evaluatedRules.showWarningDialog,
+            lockHiddenFeatures = levelControls.lockHiddenFeatures || evaluatedRules.lockHiddenFeatures,
         )
+        enqueueRemoteCustomDialogs(context, evaluatedRules.customDialogs)
         XposedCompat.logD(
             "[AboutInfo] remote controls applied: " +
                 "environmentRatingLevel=$level " +
-                "showWarningDialog=${levelControls.showWarningDialog} " +
-                "lockHiddenFeatures=${levelControls.lockHiddenFeatures}"
+                "showWarningDialog=${levelControls.showWarningDialog || evaluatedRules.showWarningDialog} " +
+                "lockHiddenFeatures=${levelControls.lockHiddenFeatures || evaluatedRules.lockHiddenFeatures} " +
+                "matchedRules=${evaluatedRules.matchedRuleCount} " +
+                "customDialogs=${evaluatedRules.customDialogs.size}"
         )
+    }
+
+    private fun evaluateRemoteRules(
+        context: Context,
+        rules: List<RemoteRule>,
+        conditionContext: RemoteConditionContext,
+    ): EvaluatedRemoteControls {
+        var showWarningDialog = false
+        var lockHiddenFeatures = false
+        val customDialogs = ArrayList<RemoteCustomDialog>()
+        var matchedRuleCount = 0
+
+        for (rule in rules) {
+            if (!rule.enabled) continue
+            if (evaluateRemoteCondition(rule.condition, conditionContext) != RemoteConditionResult.MATCH) {
+                continue
+            }
+            matchedRuleCount += 1
+            for (action in rule.actions) {
+                when (action) {
+                    RemoteAction.ShowWarningDialog -> showWarningDialog = true
+                    RemoteAction.LockHiddenFeatures -> lockHiddenFeatures = true
+                    is RemoteAction.CustomDialog -> {
+                        if (!isRemoteCustomDialogAcknowledged(context, action.dialog)) {
+                            customDialogs.add(action.dialog)
+                        }
+                    }
+                }
+            }
+        }
+
+        return EvaluatedRemoteControls(
+            showWarningDialog = showWarningDialog,
+            lockHiddenFeatures = lockHiddenFeatures,
+            customDialogs = customDialogs,
+            matchedRuleCount = matchedRuleCount,
+        )
+    }
+
+    private fun evaluateRemoteCondition(
+        condition: JSONObject?,
+        context: RemoteConditionContext,
+    ): RemoteConditionResult {
+        if (condition == null) return RemoteConditionResult.NO_MATCH
+
+        condition.optJSONArray("all")?.let { conditions ->
+            var hasRecognizedCondition = false
+            for (i in 0 until conditions.length()) {
+                when (evaluateRemoteCondition(conditions.optJSONObject(i), context)) {
+                    RemoteConditionResult.NO_MATCH -> return RemoteConditionResult.NO_MATCH
+                    RemoteConditionResult.MATCH -> hasRecognizedCondition = true
+                    RemoteConditionResult.IGNORED -> Unit
+                }
+            }
+            return if (hasRecognizedCondition) {
+                RemoteConditionResult.MATCH
+            } else {
+                RemoteConditionResult.IGNORED
+            }
+        }
+
+        condition.optJSONArray("any")?.let { conditions ->
+            var hasRecognizedCondition = false
+            for (i in 0 until conditions.length()) {
+                when (evaluateRemoteCondition(conditions.optJSONObject(i), context)) {
+                    RemoteConditionResult.MATCH -> return RemoteConditionResult.MATCH
+                    RemoteConditionResult.NO_MATCH -> hasRecognizedCondition = true
+                    RemoteConditionResult.IGNORED -> Unit
+                }
+            }
+            return if (hasRecognizedCondition) {
+                RemoteConditionResult.NO_MATCH
+            } else {
+                RemoteConditionResult.IGNORED
+            }
+        }
+
+        condition.optJSONObject("not")?.let { nested ->
+            return when (evaluateRemoteCondition(nested, context)) {
+                RemoteConditionResult.MATCH -> RemoteConditionResult.NO_MATCH
+                RemoteConditionResult.NO_MATCH -> RemoteConditionResult.MATCH
+                RemoteConditionResult.IGNORED -> RemoteConditionResult.IGNORED
+            }
+        }
+
+        return evaluateRemoteConditionLeaf(condition, context)
+    }
+
+    private fun evaluateRemoteConditionLeaf(
+        condition: JSONObject,
+        context: RemoteConditionContext,
+    ): RemoteConditionResult {
+        val field = condition.optString("field", "").trim()
+        val op = condition.optString("op", "").trim()
+        if (field.isEmpty() || op.isEmpty() || !condition.has("value")) {
+            return RemoteConditionResult.IGNORED
+        }
+
+        val lookup = remoteFieldValue(field, context)
+        if (!lookup.known) return RemoteConditionResult.IGNORED
+        val actual = lookup.value ?: return RemoteConditionResult.NO_MATCH
+        val expected = condition.opt("value")
+
+        val matched = when (op) {
+            "eq" -> remoteValueEquals(actual, expected)
+            "neq" -> !remoteValueEquals(actual, expected)
+            "in" -> remoteValueList(expected).any { remoteValueEquals(actual, it) }
+            "not_in" -> remoteValueList(expected).none { remoteValueEquals(actual, it) }
+            "lt" -> compareRemoteNumber(actual, expected) { a, b -> a < b }
+            "lte" -> compareRemoteNumber(actual, expected) { a, b -> a <= b }
+            "gt" -> compareRemoteNumber(actual, expected) { a, b -> a > b }
+            "gte" -> compareRemoteNumber(actual, expected) { a, b -> a >= b }
+            "matches" -> remoteValueMatches(actual, expected)
+            else -> return RemoteConditionResult.IGNORED
+        }
+        return if (matched) RemoteConditionResult.MATCH else RemoteConditionResult.NO_MATCH
+    }
+
+    private fun remoteFieldValue(
+        field: String,
+        context: RemoteConditionContext,
+    ): RemoteFieldLookup {
+        val environment = context.environment
+        return when (field) {
+            "module_version_code" -> RemoteFieldLookup(
+                known = true,
+                value = remoteNumberValue(BuildConfig.VERSION_CODE.toLong()),
+            )
+            "account_id" -> RemoteFieldLookup(
+                known = true,
+                value = context.accountId?.let(::remoteStringValue),
+            )
+            "environment_level" -> RemoteFieldLookup(
+                known = true,
+                value = remoteNumberValue(environment.environmentRatingLevel.toLong()),
+            )
+            "xposed_framework_name" -> RemoteFieldLookup(
+                known = true,
+                value = remoteStringValue(environment.xposedFrameworkName),
+            )
+            "patch_mode" -> RemoteFieldLookup(
+                known = true,
+                value = remoteStringValue(environment.patchMode),
+            )
+            "runtime_kind" -> RemoteFieldLookup(
+                known = true,
+                value = remoteStringValue(environment.runtimeKind),
+            )
+            "xposed_framework_version_code" -> RemoteFieldLookup(
+                known = true,
+                value = remoteStringValue(environment.xposedFrameworkVersionCode),
+            )
+            else -> RemoteFieldLookup(known = false, value = null)
+        }
+    }
+
+    private fun remoteStringValue(value: String): RemoteConditionValue {
+        return RemoteConditionValue(
+            text = value,
+            number = value.toLongOrNull(),
+        )
+    }
+
+    private fun remoteNumberValue(value: Long): RemoteConditionValue {
+        return RemoteConditionValue(
+            text = value.toString(),
+            number = value,
+        )
+    }
+
+    private fun remoteValueEquals(actual: RemoteConditionValue, expected: Any?): Boolean {
+        val expectedNumber = expected?.remoteLongOrNull()
+        if (actual.number != null && expectedNumber != null) {
+            return actual.number == expectedNumber
+        }
+        return actual.text == expected?.toString().orEmpty()
+    }
+
+    private fun remoteValueList(value: Any?): List<Any?> {
+        if (value == null || value == JSONObject.NULL) return emptyList()
+        if (value !is JSONArray) return listOf(value)
+        val out = ArrayList<Any?>(value.length())
+        for (i in 0 until value.length()) {
+            out.add(value.opt(i))
+        }
+        return out
+    }
+
+    private fun compareRemoteNumber(
+        actual: RemoteConditionValue,
+        expected: Any?,
+        predicate: (Long, Long) -> Boolean,
+    ): Boolean {
+        val actualNumber = actual.number ?: return false
+        val expectedNumber = expected.remoteLongOrNull() ?: return false
+        return predicate(actualNumber, expectedNumber)
+    }
+
+    private fun remoteValueMatches(actual: RemoteConditionValue, expected: Any?): Boolean {
+        val pattern = expected?.toString()?.takeIf { it.isNotBlank() } ?: return false
+        return try {
+            Regex(pattern).containsMatchIn(actual.text)
+        } catch (t: Throwable) {
+            XposedCompat.logD("[AboutInfo] remote condition regex ignored: ${t.message}")
+            false
+        }
+    }
+
+    private fun Any?.remoteLongOrNull(): Long? {
+        return when (this) {
+            is Number -> toLong()
+            is String -> trim().toLongOrNull()
+            else -> null
+        }
+    }
+
+    private fun isRemoteCustomDialogAcknowledged(
+        context: Context,
+        dialog: RemoteCustomDialog,
+    ): Boolean {
+        return ConfigManager.getModuleStatePrefs(context)
+            .getBoolean("$KEY_REMOTE_CUSTOM_DIALOG_ACK_PREFIX${dialog.ackKey}", false)
+    }
+
+    private fun enqueueRemoteCustomDialogs(context: Context, dialogs: List<RemoteCustomDialog>) {
+        if (dialogs.isEmpty()) return
+        var added = false
+        synchronized(remoteCustomDialogLock) {
+            for (dialog in dialogs) {
+                if (isRemoteCustomDialogAcknowledged(context, dialog)) continue
+                if (!seenRemoteCustomDialogKeys.add(dialog.ackKey)) continue
+                pendingRemoteCustomDialogs.addLast(dialog)
+                added = true
+            }
+        }
+        if (added) {
+            RemoteCustomDialogInstaller.ensureInstalled()
+        }
     }
 
     private fun parseTelemetryConfig(root: JSONObject): List<TelemetryConfig> {
@@ -678,15 +1118,26 @@ object AboutInfoManager {
     }
 
     private fun reportTelemetryIfNeeded(context: Context, configs: List<TelemetryConfig>) {
+        pendingTelemetryConfigs = configs.toList()
         if (configs.isEmpty()) {
             XposedCompat.logD("[AboutInfo] telemetry skipped: no config")
             return
         }
+        scheduleTelemetryAccountRetry(context)
+    }
+
+    private fun uploadTelemetryIfAccountReady(
+        context: Context,
+        configs: List<TelemetryConfig>,
+    ): Boolean {
+        if (configs.isEmpty()) {
+            XposedCompat.logD("[AboutInfo] telemetry skipped: no config")
+            return true
+        }
 
         val statePrefs = ConfigManager.getModuleStatePrefs(context)
-        val userPrefs = ConfigManager.getPrefs(context)
         val today = todayDateString()
-        val uuid = getOrCreateTelemetryUuid(userPrefs) ?: return
+        val uuid = telemetryUuidForAccount(context) ?: return false
         val variables = TelemetryVariables(
             uuid = uuid,
             moduleVersion = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
@@ -695,7 +1146,7 @@ object AboutInfoManager {
 
         for (config in configs) {
             val successDateKey = telemetrySuccessDateKey(config.name)
-            val successSignature = telemetrySuccessSignature(today, variables.moduleVersion)
+            val successSignature = telemetrySuccessSignature(today, variables.moduleVersion, variables.uuid)
             if (config.successOncePerDay && statePrefs.getString(successDateKey, null) == successSignature) {
                 XposedCompat.logD(
                     "[AboutInfo] telemetry[${config.name}] skipped: already uploaded " +
@@ -720,31 +1171,69 @@ object AboutInfoManager {
                 XposedCompat.logD("[AboutInfo] telemetry[${config.name}] failed")
             }
         }
+        return true
+    }
+
+    private fun scheduleTelemetryAccountRetry(context: Context) {
+        if (!telemetryAccountRetryRunning.compareAndSet(false, true)) {
+            XposedCompat.logD("[AboutInfo] telemetry account retry already scheduled")
+            return
+        }
+        val appContext = context.applicationContext ?: context
+        thread(name = "tbhook-telemetry-account-retry", isDaemon = true) {
+            try {
+                Thread.sleep(TELEMETRY_ACCOUNT_ID_FIRST_DELAY_MS)
+                for (attempt in 0..TELEMETRY_ACCOUNT_ID_RETRY_COUNT) {
+                    val uploadConfigs = pendingTelemetryConfigs
+                    if (uploadConfigs.isEmpty()) {
+                        XposedCompat.logD("[AboutInfo] telemetry skipped: no config")
+                        return@thread
+                    }
+                    if (uploadTelemetryIfAccountReady(appContext, uploadConfigs)) {
+                        XposedCompat.logD("[AboutInfo] telemetry account id ready at attempt=${attempt + 1}")
+                        return@thread
+                    }
+                    if (attempt < TELEMETRY_ACCOUNT_ID_RETRY_COUNT) {
+                        Thread.sleep(TELEMETRY_ACCOUNT_ID_RETRY_DELAY_MS)
+                    }
+                }
+                XposedCompat.logD("[AboutInfo] telemetry skipped: account id unavailable after retry")
+            } catch (t: Throwable) {
+                XposedCompat.logD("[AboutInfo] telemetry account retry stopped: ${t.message}")
+            } finally {
+                telemetryAccountRetryRunning.set(false)
+            }
+        }
     }
 
     private fun telemetrySuccessDateKey(name: String): String {
         return "$KEY_TELEMETRY_LAST_SUCCESS_DATE:$name"
     }
 
-    private fun telemetrySuccessSignature(date: String, moduleVersion: String): String {
-        return "$date|$moduleVersion"
+    private fun telemetrySuccessSignature(date: String, moduleVersion: String, uuid: String): String {
+        return "$date|$moduleVersion|$uuid"
     }
 
-    private fun getOrCreateTelemetryUuid(prefs: SharedPreferences): String? {
-        val existing = prefs.getString(KEY_TELEMETRY_UUID, null)?.trim()
-        if (!existing.isNullOrEmpty() && isValidUuid(existing)) {
-            return existing
-        }
+    private fun telemetryUuidForAccount(context: Context): String? {
+        val accountId = TiebaAccountIdentity.currentAccountId(context) ?: return null
+        val hash = MessageDigest.getInstance("SHA-256")
+            .digest("$TELEMETRY_ACCOUNT_ID_SALT:$accountId".toByteArray(Charsets.UTF_8))
+        hash[6] = ((hash[6].toInt() and 0x0f) or 0x50).toByte()
+        hash[8] = ((hash[8].toInt() and 0x3f) or 0x80).toByte()
+        return uuidStringFromHash(hash)
+    }
 
-        val generated = UUID.randomUUID().toString()
-        val saved = prefs.edit()
-            .putString(KEY_TELEMETRY_UUID, generated)
-            .commit()
-        if (!saved) {
-            XposedCompat.logD("[AboutInfo] telemetry skipped: uuid persist failed")
-            return null
+    private fun uuidStringFromHash(hash: ByteArray): String {
+        val hex = buildString(32) {
+            for (i in 0 until 16) {
+                append(((hash[i].toInt() and 0xff) + 0x100).toString(16).substring(1))
+            }
         }
-        return generated
+        return hex.substring(0, 8) +
+            "-" + hex.substring(8, 12) +
+            "-" + hex.substring(12, 16) +
+            "-" + hex.substring(16, 20) +
+            "-" + hex.substring(20, 32)
     }
 
     private fun uploadTelemetry(config: TelemetryConfig, variables: TelemetryVariables): Boolean {
@@ -841,6 +1330,14 @@ object AboutInfoManager {
     }
 
     private fun collectRuntimeEnvironment(context: Context): RuntimeEnvironment {
+        runtimeEnvironmentCache?.let { return it }
+        return synchronized(this) {
+            runtimeEnvironmentCache ?: buildRuntimeEnvironment(context)
+                .also { runtimeEnvironmentCache = it }
+        }
+    }
+
+    private fun buildRuntimeEnvironment(context: Context): RuntimeEnvironment {
         val module = XposedCompat.module
         val frameworkProperties = runCatching { module?.frameworkProperties }.getOrNull()
         val frameworkName = runCatching { module?.frameworkName }.getOrNull().orUnknown()
@@ -1060,14 +1557,6 @@ object AboutInfoManager {
 
     private fun String?.orUnknown(): String {
         return this?.takeIf { it.isNotBlank() } ?: UNKNOWN_VALUE
-    }
-
-    private fun isValidUuid(value: String): Boolean {
-        return try {
-            UUID.fromString(value).toString().equals(value, ignoreCase = true)
-        } catch (_: Throwable) {
-            false
-        }
     }
 
     private fun todayDateString(): String {

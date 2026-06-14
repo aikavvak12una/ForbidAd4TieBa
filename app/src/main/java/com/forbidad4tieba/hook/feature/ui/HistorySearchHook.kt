@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.feature.ui
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.InsetDrawable
 import android.os.Build
 import android.text.InputType
 import android.view.View
@@ -19,6 +17,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import com.forbidad4tieba.hook.ui.UiText
+import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
 import com.forbidad4tieba.hook.utils.ClearableInputRow
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -328,7 +327,7 @@ object HistorySearchHook {
             .create()
 
         dialog.setOnShowListener {
-            dialog.window?.let { window -> applySearchDialogCardStyle(window, density) }
+            dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
                 isAllCaps = false
                 setTextColor(0xFF4C87F7.toInt())
@@ -339,14 +338,6 @@ object HistorySearchHook {
             }
         }
         dialog.show()
-    }
-
-    private fun applySearchDialogCardStyle(window: android.view.Window, density: Float) {
-        val bg = GradientDrawable().apply {
-            setColor(0xFFFFFFFF.toInt())
-            cornerRadius = 18f * density
-        }
-        window.setBackgroundDrawable(InsetDrawable(bg, (10 * density).toInt()))
     }
 
     private fun applyFilter(activity: Activity, query: String, fromUser: Boolean) {

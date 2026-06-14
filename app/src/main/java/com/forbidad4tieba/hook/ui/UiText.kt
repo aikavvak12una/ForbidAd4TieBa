@@ -284,6 +284,7 @@ object UiText {
         const val SCAN_CLEARING = "清理模块数据"
         const val BUTTON_OK = "确认"
         const val BUTTON_CANCEL = "取消"
+        const val REMOTE_DIALOG_NEVER_SHOW_AGAIN = "不再提示"
         const val BUTTON_RESTART = "重启"
         const val BUTTON_COPY_SCAN_LOG = "复制日志"
         const val DIALOG_SCAN_TITLE = "反混淆扫描"

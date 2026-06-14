@@ -4,8 +4,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.InsetDrawable
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
@@ -27,6 +25,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import com.forbidad4tieba.hook.ui.UiText
+import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
 import com.forbidad4tieba.hook.utils.ClearableInputRow
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -1318,7 +1317,7 @@ object CollectionSearchHook {
             .create()
 
         dialog.setOnShowListener {
-            dialog.window?.let { window -> applySearchDialogCardStyle(window, density) }
+            dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
             val positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             val neutral = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
             val negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
@@ -1330,14 +1329,6 @@ object CollectionSearchHook {
             negative?.setTextColor(0xFF6B7280.toInt())
         }
         dialog.show()
-    }
-
-    private fun applySearchDialogCardStyle(window: android.view.Window, density: Float) {
-        val bg = GradientDrawable().apply {
-            setColor(0xFFFFFFFF.toInt())
-            cornerRadius = 18f * density
-        }
-        window.setBackgroundDrawable(InsetDrawable(bg, (10 * density).toInt()))
     }
 
     private fun applyFilter(fragment: Any, query: String, fromUser: Boolean) {
