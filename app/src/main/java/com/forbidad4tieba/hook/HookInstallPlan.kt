@@ -54,6 +54,7 @@ import com.forbidad4tieba.hook.feature.ui.PbScrollCoalesceHook
 import com.forbidad4tieba.hook.feature.ui.UpgradePopWindowBlockHook
 import com.forbidad4tieba.hook.feature.web.EnterForumWebHook
 import com.forbidad4tieba.hook.feature.web.FollowedTabWebHook
+import com.forbidad4tieba.hook.feature.web.HelpCenterFooterBlockHook
 import com.forbidad4tieba.hook.feature.web.HomeSideBarWebBlockHook
 import com.forbidad4tieba.hook.feature.web.MineTabWebBlockHook
 import com.forbidad4tieba.hook.feature.web.PlainUrlDirectBrowserHook
@@ -327,6 +328,7 @@ internal object HookInstallPlanner {
         }
         if (context.isMain) {
             entries += performanceEntries(settings)
+            entries += HookInstallEntry("HelpCenterFooterBlockHook") { cl -> HelpCenterFooterBlockHook.hook(cl) }
             if (context.canInstallMineTabWebBlock(settings)) {
                 entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl) }
             }
