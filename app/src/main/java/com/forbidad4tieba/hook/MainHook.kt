@@ -11,6 +11,7 @@ import com.forbidad4tieba.hook.feature.perf.ComponentDisableHook
 import com.forbidad4tieba.hook.feature.perf.TitanPatchBlockHook
 import com.forbidad4tieba.hook.feature.web.MineTabWebBlockHook
 import com.forbidad4tieba.hook.ui.AboutInfoManager
+import com.forbidad4tieba.hook.ui.ModuleForegroundActivityTracker
 import com.forbidad4tieba.hook.ui.SettingsMenuHook
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import io.github.libxposed.api.XposedModule
@@ -120,6 +121,7 @@ class MainHook : XposedModule() {
                         XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
                         val isMainProcess = processName == Constants.TARGET_PACKAGE
                         if (isMainProcess) {
+                            ModuleForegroundActivityTracker.register(app)
                             val startupSettings = ConfigManager.snapshot()
                             if (startupSettings.isMineTabWebAdBlockEnabled) {
                                 MineTabWebBlockHook.onAppContextReady(app)

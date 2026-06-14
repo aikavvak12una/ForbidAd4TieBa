@@ -912,8 +912,20 @@ object SettingsMenuHook {
 
     fun ensurePostScanEnvironmentWarningHook() {
         PostScanEnvironmentWarningInstaller.ensureInstalled { activity ->
-            if (ConfigManager.consumePendingPostScanEnvironmentWarning(activity)) {
-                showEnvironmentWarningDialog(activity) {}
+            if (ConfigManager.hasPendingPostScanEnvironmentWarning(activity)) {
+                ModuleDialogQueue.enqueue {
+                    if (
+                        activity.isFinishing ||
+                        activity.isDestroyed ||
+                        !ConfigManager.consumePendingPostScanEnvironmentWarning(activity)
+                    ) {
+                        ModuleDialogQueue.finishCurrent()
+                        return@enqueue
+                    }
+                    showEnvironmentWarningDialog(activity) {
+                        ModuleDialogQueue.finishCurrent()
+                    }
+                }
             }
         }
     }
@@ -987,13 +999,11 @@ object SettingsMenuHook {
                 }
                 handler.postDelayed(countdownRunnable!!, 1000L)
 
-                confirmButton.setOnClickListener {
-                    dialog.dismiss()
-                    onConfirmed()
-                }
+                confirmButton.setOnClickListener { dialog.dismiss() }
             }
             dialog.setOnDismissListener {
                 countdownRunnable?.let { handler.removeCallbacks(it) }
+                onConfirmed()
             }
             dialog.show()
         } catch (t: Throwable) {

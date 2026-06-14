@@ -190,6 +190,7 @@ internal fun applyUnifiedDialogCardStyle(
     density: Float,
     useCustomBackground: Boolean = true,
     homeNativeGlassPreviewStyle: HomeNativeGlassDialogPreviewStyle? = null,
+    accountWatermark: Boolean = true,
 ) {
     val activeStyle = homeNativeGlassPreviewStyle?.style
         ?: if (ConfigManager.isHomeNativeGlassEnabled) ConfigManager.activeHomeNativeGlassStyle() else null
@@ -220,13 +221,33 @@ internal fun applyUnifiedDialogCardStyle(
     } else {
         null
     }
-    if (background != null) {
-        window.setBackgroundDrawable(NoIntrinsicInsetDrawable(background, tokens.dialogInsetPx))
+    val cardBackground = background ?: createSettingsDialogCardBackground(tokens, density)
+    val finalBackground = if (accountWatermark) {
+        createAccountIdWatermarkedBackground(
+            context = window.context,
+            sourceBackground = cardBackground,
+            density = density,
+            cornerRadiusPx = tokens.cardCornerPx,
+        )
     } else {
-        UiStyle.applyDialogCard(window, tokens)
+        cardBackground
     }
+    window.setBackgroundDrawable(NoIntrinsicInsetDrawable(finalBackground, tokens.dialogInsetPx))
     clearSystemDialogCustomPanelPadding(window)
     applyStableDialogWindowLayout(window, density)
+}
+
+private fun createSettingsDialogCardBackground(
+    tokens: UiStyle.Tokens,
+    density: Float,
+): Drawable {
+    return GradientDrawable().apply {
+        setColor(tokens.surface)
+        cornerRadius = tokens.cardCornerPx
+        if (ConfigManager.isHomeNativeGlassEnabled && ConfigManager.isHomeNativeGlassStrokeEnabled) {
+            setStroke((1 * density).toInt().coerceAtLeast(1), tokens.inputStroke)
+        }
+    }
 }
 
 private fun refreshSettingsDialogTitle(
@@ -381,8 +402,15 @@ private fun createSettingsDialogCustomBackground(
 }
 
 private fun findSettingsDialogCustomBackgroundDrawable(window: Window): SettingsDialogCustomBackgroundDrawable? {
-    return (window.decorView.background as? NoIntrinsicInsetDrawable)
-        ?.contentDrawable as? SettingsDialogCustomBackgroundDrawable
+    val contentDrawable = (window.decorView.background as? NoIntrinsicInsetDrawable)
+        ?.contentDrawable
+    return when (contentDrawable) {
+        is SettingsDialogCustomBackgroundDrawable -> contentDrawable
+        is SettingsAccountIdWatermarkDrawable -> {
+            contentDrawable.baseDrawable as? SettingsDialogCustomBackgroundDrawable
+        }
+        else -> null
+    }
 }
 
 private data class SettingsDialogBackgroundImageSource(
@@ -611,6 +639,122 @@ internal fun dialogThemeFor(context: Context): Int {
         android.R.style.Theme_DeviceDefault_Dialog_Alert
     } else {
         android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
+    }
+}
+
+private fun createAccountIdWatermarkedBackground(
+    context: Context,
+    sourceBackground: Drawable,
+    density: Float,
+    cornerRadiusPx: Float,
+): Drawable {
+    val accountId = TiebaAccountIdentity.currentAccountId(context) ?: return sourceBackground
+    if (
+        sourceBackground is SettingsAccountIdWatermarkDrawable &&
+        sourceBackground.watermarkText == accountId
+    ) {
+        return sourceBackground
+    }
+    val baseBackground = (sourceBackground as? SettingsAccountIdWatermarkDrawable)?.baseDrawable
+        ?: sourceBackground
+    return SettingsAccountIdWatermarkDrawable(
+        baseDrawable = baseBackground,
+        watermarkText = accountId,
+        density = density,
+        cornerRadiusPx = cornerRadiusPx,
+    )
+}
+
+private class SettingsAccountIdWatermarkDrawable(
+    val baseDrawable: Drawable?,
+    val watermarkText: String,
+    density: Float,
+    private val cornerRadiusPx: Float,
+) : Drawable() {
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        textAlign = Paint.Align.CENTER
+        textSize = 9f * density
+        typeface = Typeface.MONOSPACE
+    }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = max(0.7f * density, 0.7f)
+        textAlign = Paint.Align.CENTER
+        textSize = 9f * density
+        typeface = Typeface.MONOSPACE
+    }
+    private val horizontalGapPx = 64f * density
+    private val minHorizontalStepPx = 180f * density
+    private val verticalStepPx = 72f * density
+    private val clipPath = Path()
+    private val rectF = RectF()
+    private var drawableAlpha = 255
+    private var drawableColorFilter: ColorFilter? = null
+
+    override fun draw(canvas: Canvas) {
+        val rect = bounds
+        if (rect.width() <= 0 || rect.height() <= 0) return
+
+        baseDrawable?.let { base ->
+            base.setBounds(rect)
+            base.alpha = drawableAlpha
+            base.colorFilter = drawableColorFilter
+            base.draw(canvas)
+        }
+
+        val text = watermarkText.takeIf { it.isNotBlank() } ?: return
+        val textWidth = fillPaint.measureText(text).coerceAtLeast(1f)
+        val horizontalStep = max(textWidth + horizontalGapPx, minHorizontalStepPx)
+        val diagonalSpan = rect.width() + rect.height().toFloat()
+        val leftLimit = rect.left - diagonalSpan
+        val rightLimit = rect.right + diagonalSpan
+        val topLimit = rect.top - diagonalSpan
+        val bottomLimit = rect.bottom + diagonalSpan
+
+        strokePaint.color = Color.argb(scaleAlpha(112), 0, 0, 0)
+        fillPaint.color = Color.argb(scaleAlpha(96), 255, 255, 255)
+
+        val save = canvas.save()
+        rectF.set(rect)
+        clipPath.reset()
+        clipPath.addRoundRect(rectF, cornerRadiusPx, cornerRadiusPx, Path.Direction.CW)
+        canvas.clipPath(clipPath)
+        canvas.rotate(-40f, rect.exactCenterX(), rect.exactCenterY())
+        var rowIndex = 0
+        var y = topLimit
+        while (y <= bottomLimit) {
+            var x = leftLimit + if (rowIndex % 2 == 0) 0f else horizontalStep * 0.5f
+            while (x <= rightLimit) {
+                canvas.drawText(text, x, y, strokePaint)
+                canvas.drawText(text, x, y, fillPaint)
+                x += horizontalStep
+            }
+            rowIndex += 1
+            y += verticalStepPx
+        }
+        canvas.restoreToCount(save)
+    }
+
+    override fun setAlpha(alpha: Int) {
+        drawableAlpha = alpha.coerceIn(0, 255)
+        invalidateSelf()
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        drawableColorFilter = colorFilter
+        invalidateSelf()
+    }
+
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+
+    override fun getIntrinsicWidth(): Int = -1
+
+    override fun getIntrinsicHeight(): Int = -1
+
+    private fun scaleAlpha(alpha: Int): Int {
+        return (alpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
     }
 }
 
