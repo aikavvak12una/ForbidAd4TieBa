@@ -30,6 +30,32 @@ internal data class TypeAdapterDataFilterScanSymbols(
     val dataGetTypeMethod: String? = null,
 )
 
+internal data class ForumPageAdScanSymbols(
+    val responseDataClass: String? = null,
+    val responseParserMethod: String? = null,
+    val responseAdFields: List<String> = emptyList(),
+    val mapperClass: String? = null,
+    val bottomDataMapperMethod: String? = null,
+    val bottomDataClass: String? = null,
+    val businessPromotSetterMethod: String? = null,
+    val privatePopSetterMethod: String? = null,
+    val spriteBubbleSetterMethod: String? = null,
+    val maskPopSetterMethod: String? = null,
+    val bottomGameBarMapperMethod: String? = null,
+    val headerDataMapperMethod: String? = null,
+    val headerDataClass: String? = null,
+    val rainDataClass: String? = null,
+    val rainSetterMethod: String? = null,
+    val dialogControllerClass: String? = null,
+    val businessPromotShowMethod: String? = null,
+    val animationShowMethod: String? = null,
+    val gameFloatingBarControllerClass: String? = null,
+    val gameFloatingBarShowMethod: String? = null,
+    val gameFloatingBarField: String? = null,
+    val businessPromotBizClass: String? = null,
+    val businessPromotJumpMethod: String? = null,
+)
+
 internal data class RecommendCardNestedDataScanSymbols(
     val nestedDataMethod: String? = null,
     val nestedDataListField: String? = null,

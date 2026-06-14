@@ -439,6 +439,92 @@ internal object HookSymbolStatusFormatter {
                 "typeAdapterDataGetTypeMethod" to has(symbols.typeAdapterDataGetTypeMethod),
             ),
         )
+        run {
+            val readiness = ForumPageAdSymbolReadiness.evaluate(symbols)
+            val state = if (readiness.any) "FOUND" else "MISSING"
+            val missing = if (readiness.any) "-" else "forumPageAdPath"
+            out.add(
+                "HookPoint[ForumPageAdBlockHook] state=$state missing=$missing target=" +
+                    readiness.readyLabels.joinToString(",").ifBlank { "-" },
+            )
+        }
+        addOptional(
+            "ForumPageAdBlockHook.Response",
+            "${symbols.forumResponseDataClass}.${symbols.forumResponseParserMethod}" +
+                "[${listTarget(symbols.forumResponseAdFields)}]",
+            listOf(
+                "forumResponseDataClass" to has(symbols.forumResponseDataClass),
+                "forumResponseParserMethod" to has(symbols.forumResponseParserMethod),
+                "forumResponseAdFields" to (symbols.forumResponseAdFields.orEmpty().count { it.isNotBlank() } >= 4),
+            ),
+        )
+        addOptional(
+            "ForumPageAdBlockHook.BottomData",
+            "${symbols.forumPageMapperClass}.${symbols.forumBottomDataMapperMethod} -> " +
+                "${symbols.forumBottomDataClass}.{${symbols.forumBusinessPromotSetterMethod}," +
+                "${symbols.forumPrivatePopSetterMethod},${symbols.forumSpriteBubbleSetterMethod}," +
+                "${symbols.forumMaskPopSetterMethod}}",
+            listOf(
+                "forumPageMapperClass" to has(symbols.forumPageMapperClass),
+                "forumBottomDataMapperMethod" to has(symbols.forumBottomDataMapperMethod),
+                "forumBottomDataClass" to has(symbols.forumBottomDataClass),
+                "forumBottomSetterMethods" to (listOf(
+                    symbols.forumBusinessPromotSetterMethod,
+                    symbols.forumPrivatePopSetterMethod,
+                    symbols.forumSpriteBubbleSetterMethod,
+                    symbols.forumMaskPopSetterMethod,
+                ).count { has(it) } >= 3),
+            ),
+        )
+        addOptional(
+            "ForumPageAdBlockHook.GameBarMapper",
+            "${symbols.forumPageMapperClass}.${symbols.forumBottomGameBarMapperMethod}",
+            listOf(
+                "forumPageMapperClass" to has(symbols.forumPageMapperClass),
+                "forumBottomGameBarMapperMethod" to has(symbols.forumBottomGameBarMapperMethod),
+            ),
+        )
+        addOptional(
+            "ForumPageAdBlockHook.Rain",
+            "${symbols.forumPageMapperClass}.${symbols.forumHeaderDataMapperMethod} -> " +
+                "${symbols.forumHeaderDataClass}.${symbols.forumRainSetterMethod}(${symbols.forumRainDataClass})",
+            listOf(
+                "forumPageMapperClass" to has(symbols.forumPageMapperClass),
+                "forumHeaderDataMapperMethod" to has(symbols.forumHeaderDataMapperMethod),
+                "forumHeaderDataClass" to has(symbols.forumHeaderDataClass),
+                "forumRainDataClass" to has(symbols.forumRainDataClass),
+                "forumRainSetterMethod" to has(symbols.forumRainSetterMethod),
+            ),
+        )
+        addOptional(
+            "ForumPageAdBlockHook.Dialog",
+            "${symbols.forumDialogControllerClass}.{${symbols.forumBusinessPromotShowMethod}," +
+                "${symbols.forumAnimationShowMethod}}",
+            listOf(
+                "forumDialogControllerClass" to has(symbols.forumDialogControllerClass),
+                "forumDialogDisplayMethod" to (
+                    has(symbols.forumBusinessPromotShowMethod) ||
+                        has(symbols.forumAnimationShowMethod)
+                    ),
+            ),
+        )
+        addOptional(
+            "ForumPageAdBlockHook.FloatingBar",
+            "${symbols.forumGameFloatingBarControllerClass}.{${symbols.forumGameFloatingBarShowMethod}}" +
+                "[${symbols.forumGameFloatingBarField}]",
+            listOf(
+                "forumGameFloatingBarControllerClass" to has(symbols.forumGameFloatingBarControllerClass),
+                "forumGameFloatingBarShowMethod" to has(symbols.forumGameFloatingBarShowMethod),
+            ),
+        )
+        addOptional(
+            "ForumPageAdBlockHook.BusinessPromotBiz",
+            "${symbols.forumBusinessPromotBizClass}.${symbols.forumBusinessPromotJumpMethod}(String)",
+            listOf(
+                "forumBusinessPromotBizClass" to has(symbols.forumBusinessPromotBizClass),
+                "forumBusinessPromotJumpMethod" to has(symbols.forumBusinessPromotJumpMethod),
+            ),
+        )
         val enterForumInitInfoReady =
             has(symbols.enterForumInitInfoDataClass) &&
                 has(symbols.enterForumInitInfoGetUrlMethod)

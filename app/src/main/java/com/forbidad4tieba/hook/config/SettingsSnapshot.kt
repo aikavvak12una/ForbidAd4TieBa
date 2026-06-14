@@ -5,6 +5,7 @@ data class SettingsSnapshot(
     val isAdBlockEnabled: Boolean = false,
     val isFeedAdBlockEnabled: Boolean = false,
     val isPostPageAdBlockEnabled: Boolean = false,
+    val isForumPageAdBlockEnabled: Boolean = false,
     val isStrategyAdBlockEnabled: Boolean = false,
     val isSearchBoxTextAdBlockEnabled: Boolean = false,
     val isHomeTopBarAdBlockEnabled: Boolean = false,

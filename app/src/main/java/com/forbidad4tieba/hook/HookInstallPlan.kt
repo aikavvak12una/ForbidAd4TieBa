@@ -8,6 +8,7 @@ import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.FeedAdHook
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogHook
+import com.forbidad4tieba.hook.feature.ad.ForumPageAdBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbAdRequestBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbEarlyAdBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbFallingAdHook
@@ -142,6 +143,12 @@ internal object HookInstallPlanner {
             return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
         }
 
+        fun canInstallForumPageAdBlock(settings: SettingsSnapshot): Boolean {
+            return isMain &&
+                canInstallAdBlockSubFeature(settings.isForumPageAdBlockEnabled) &&
+                hasForumPageAdBlockPath(symbols)
+        }
+
         fun canInstallStrategyAdBlock(settings: SettingsSnapshot): Boolean {
             return canInstallAdBlockSubFeature(settings.isStrategyAdBlockEnabled)
         }
@@ -164,6 +171,10 @@ internal object HookInstallPlanner {
 
         fun canInstallHomeTopBarAdBlock(settings: SettingsSnapshot): Boolean {
             return canInstallAdBlockSubFeature(settings.isHomeTopBarAdBlockEnabled)
+        }
+
+        private fun hasForumPageAdBlockPath(symbols: HookSymbols): Boolean {
+            return ForumPageAdSymbolReadiness.evaluate(symbols).any
         }
 
         fun canInstallCustomPostFilter(settings: SettingsSnapshot): Boolean {
@@ -371,6 +382,7 @@ internal object HookInstallPlanner {
 
         val feedAdBlockHook = context.canInstallFeedAdBlock(settings)
         val postAdBlockHook = context.canInstallPostAdBlock(settings)
+        val forumPageAdBlockHook = context.canInstallForumPageAdBlock(settings)
         val strategyAdBlockHook = context.canInstallStrategyAdBlock(settings)
         val pbEarlyAdBlockHook = context.canInstallPbEarlyAdBlock(settings)
         val pbAdRequestBlockHook = context.canInstallPbAdRequestBlock(settings)
@@ -399,6 +411,13 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("PostAdHook") { cl ->
                 HookSymbolResolver.resolvePostAdDataFilterSymbols(cl, symbols)?.let { targets ->
                     PostAdHook.hook(targets)
+                }
+            }
+        }
+        if (forumPageAdBlockHook) {
+            entries += HookInstallEntry("ForumPageAdBlockHook") { cl ->
+                HookSymbolResolver.resolveForumPageAdBlockSymbols(cl, symbols)?.let { targets ->
+                    ForumPageAdBlockHook.hook(targets)
                 }
             }
         }

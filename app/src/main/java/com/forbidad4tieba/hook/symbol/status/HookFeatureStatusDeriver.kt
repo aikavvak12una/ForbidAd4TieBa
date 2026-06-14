@@ -788,6 +788,9 @@ internal object HookFeatureStatusDeriver {
         if (symbols.typeAdapterDataGetTypeMethod.isNullOrBlank()) {
             adOptional.add("typeAdapterDataGetTypeMethod")
         }
+        if (!ForumPageAdSymbolReadiness.evaluate(symbols).any) {
+            adOptional.add("forumPageAdBlock")
+        }
         out[HookFeatureKey.BLOCK_AD] = if (adOptional.isEmpty()) {
             HookFeatureStatus(state = HookFeatureState.FULL)
         } else {

@@ -7,6 +7,7 @@ data class AdSymbols(
     val zga: ZgaSymbolsGroup = ZgaSymbolsGroup(),
     val typeAdapter: TypeAdapterSymbolsGroup = TypeAdapterSymbolsGroup(),
     val feedCard: FeedCardSymbolsGroup = FeedCardSymbolsGroup(),
+    val forumPage: ForumPageAdSymbolsGroup = ForumPageAdSymbolsGroup(),
 )
 
 data class FeedTemplateSymbolsGroup(
@@ -43,4 +44,30 @@ data class FeedCardSymbolsGroup(
     val feedHeadParamsField: String? = null,
     val feedRecommendCardNestedDataMethod: String? = null,
     val feedRecommendCardNestedDataListField: String? = null,
+)
+
+data class ForumPageAdSymbolsGroup(
+    val forumResponseDataClass: String? = null,
+    val forumResponseParserMethod: String? = null,
+    val forumResponseAdFields: List<String>? = null,
+    val forumPageMapperClass: String? = null,
+    val forumBottomDataMapperMethod: String? = null,
+    val forumBottomDataClass: String? = null,
+    val forumBusinessPromotSetterMethod: String? = null,
+    val forumPrivatePopSetterMethod: String? = null,
+    val forumSpriteBubbleSetterMethod: String? = null,
+    val forumMaskPopSetterMethod: String? = null,
+    val forumBottomGameBarMapperMethod: String? = null,
+    val forumHeaderDataMapperMethod: String? = null,
+    val forumHeaderDataClass: String? = null,
+    val forumRainDataClass: String? = null,
+    val forumRainSetterMethod: String? = null,
+    val forumDialogControllerClass: String? = null,
+    val forumBusinessPromotShowMethod: String? = null,
+    val forumAnimationShowMethod: String? = null,
+    val forumGameFloatingBarControllerClass: String? = null,
+    val forumGameFloatingBarShowMethod: String? = null,
+    val forumGameFloatingBarField: String? = null,
+    val forumBusinessPromotBizClass: String? = null,
+    val forumBusinessPromotJumpMethod: String? = null,
 )

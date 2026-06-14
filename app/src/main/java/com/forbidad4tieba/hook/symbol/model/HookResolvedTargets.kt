@@ -207,6 +207,21 @@ internal data class FeedInfoLogSymbols(
     val templateKeyMethodName: String?,
 )
 
+internal data class ForumPageAdBlockSymbols(
+    val responseParserMethod: Method?,
+    val responseAdFields: List<Field>,
+    val bottomDataMapperMethod: Method?,
+    val bottomDataSetterMethods: List<Method>,
+    val bottomGameBarMapperMethod: Method?,
+    val headerDataMapperMethod: Method?,
+    val rainSetterMethod: Method?,
+    val businessPromotShowMethod: Method?,
+    val animationShowMethod: Method?,
+    val gameFloatingBarShowMethod: Method?,
+    val gameFloatingBarField: Field?,
+    val businessPromotJumpMethod: Method?,
+)
+
 internal data class ReplyServerResponseLogSymbols(
     val decodeMethod: Method,
     val resultJsonField: Field,
