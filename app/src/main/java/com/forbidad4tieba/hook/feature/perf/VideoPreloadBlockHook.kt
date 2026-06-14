@@ -6,10 +6,17 @@ import java.lang.reflect.Modifier
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 阻断信息流视频预加载，减少网络、内存和 CPU 开销�? *
- * 目标应用会通过这些入口预加载后续信息流视频�? * 1. PreLoadVideoSwitchManager.isOpen() 做开关判断�? * 2. PreLoadVideoHelper.load() 做调度�? * 3. DuMediaPrefetch.prefetch() �?preConnect() 发起网络预取�? *
- * 三层�?hook 后，不管哪条路径触发，都不会继续预取视频�? *
- * 由视频组件开关控制�? */
+ * 阻断信息流视频预加载，减少网络、内存和 CPU 开销。
+ *
+ * 目标应用会通过这些入口预加载后续信息流视频：
+ * 1. PreLoadVideoSwitchManager.isOpen() 做开关判断。
+ * 2. PreLoadVideoHelper.load() 做调度。
+ * 3. DuMediaPrefetch.prefetch() 和 preConnect() 发起网络预取。
+ *
+ * 三层 hook 后，不管哪条路径触发，都不会继续预取视频。
+ *
+ * 由视频组件开关控制。
+ */
 object VideoPreloadBlockHook {
     private const val TAG = "[VideoPreloadBlockHook]"
 

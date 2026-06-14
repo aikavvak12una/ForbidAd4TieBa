@@ -14,7 +14,12 @@ import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 在严格范围内移除关注页导航条�? * 1. 用户启用了自定义首页顶部 tab�? * 2. 用户启用了关�?tab�? * 3. URL 是关注页，并带有顶部 tab 标记 `tbhook_from_home_top_tab=1`�? */
+ * 在严格范围内移除关注页导航条。
+ *
+ * 1. 用户启用了自定义首页顶部 tab。
+ * 2. 用户启用了关注 tab。
+ * 3. URL 是关注页，并带有顶部 tab 标记 `tbhook_from_home_top_tab=1`。
+ */
 object FollowedTabWebHook {
     private const val FOLLOWED_PAGE_PATH = "/hybrid-usergrow-base/myfollowed/hybrid"
     private const val HOME_TOP_SCOPE_MARKER = "tbhook_from_home_top_tab=1"

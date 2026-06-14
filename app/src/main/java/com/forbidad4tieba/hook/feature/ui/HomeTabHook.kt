@@ -13,8 +13,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 object HomeTabHook {
     /**
-     * 集中定义 tab item 字段解析规则�?     * 第一次遇到某个类时一次性解析所有字段，
-     * 把缓存未命中次数�?4 次降�?1 次�?     */
+     * 集中定义 tab item 字段解析规则。
+     * 第一次遇到某个类时一次性解析所有字段，
+     * 把缓存未命中次数从 4 次降到 1 次。
+     */
     private data class TabItemFieldSchema(
         val typeField: Field? = null,
         val codeField: Field? = null,
@@ -708,5 +710,4 @@ object HomeTabHook {
         OTHER,
     }
 }
-
 

@@ -61,7 +61,8 @@ internal class SettingsLevel1Rule(private val navClass: Class<*>) : ScanRule() {
             }.getOrDefault(false)
         }
 
-        // 模式 B：void xxx(View)，我的页面写法，NavigationBar 在内部通过 findViewById 获取�?        // 类不能是 abstract，需要有 RelativeLayout 字段、ImageView 字段�?Context 构造函数，
+        // 模式 B：void xxx(View)，我的页面写法，NavigationBar 在内部通过 findViewById 获取。
+        // 类不能是 abstract，需要有 RelativeLayout 字段、ImageView 字段和 Context 构造函数。
         // Method cannot be onClick.
         val methodB = if (methodA == null) {
             if (Modifier.isAbstract(cls.modifiers)) null
@@ -1499,7 +1500,10 @@ internal class ImageViewerShareIconResourceRule : ScanRule() {
 }
 
 /**
- * 查找 FeedCardView 上的数据绑定方法�? * 签名�?void w(CardData)，CardData 也就�?y99，是一个数据类�? * 它包�?List、String、boolean 字段，toString() �?"CardData(" 开头�? */
+ * 查找 FeedCardView 上的数据绑定方法。
+ * 签名：void w(CardData)，CardData 也就是 y99，是一个数据类。
+ * 它包含 List、String、boolean 字段，toString() 以 "CardData(" 开头。
+ */
 internal class FeedCardBindRule : ScanRule() {
     override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
         if (cls.name != "com.baidu.tieba.feed.card.FeedCardView") return null
@@ -1533,10 +1537,11 @@ internal class FeedCardBindRule : ScanRule() {
     }
 
     /**
-     * 用这些特征识�?CardData 类，也就�?y99�?     * - �?List 字段 dataList
-     * - 有多�?String 字段，比�?schema、threadId、userId
-     * - �?boolean 字段，比�?isGreyMode、canMultiManage、supportLongClick
-     * - �?Map 字段 appendixMap
+     * 用这些特征识别 CardData 类，也就是 y99。
+     * - 有 List 字段 dataList
+     * - 有多个 String 字段，比如 schema、threadId、userId
+     * - 有 boolean 字段，比如 isGreyMode、canMultiManage、supportLongClick
+     * - 有 Map 字段 appendixMap
      */
     private fun isCardDataLike(cls: Class<*>): Boolean {
         val fields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
@@ -1549,7 +1554,9 @@ internal class FeedCardBindRule : ScanRule() {
 }
 
 /**
- * 解析 CardHeadUiState.businessInfoMap�? * 这里保存 feed_head 参数，比�?thread_id、thread_type �?card_type�? */
+ * 解析 CardHeadUiState.businessInfoMap。
+ * 这里保存 feed_head 参数，比如 thread_id、thread_type 和 card_type。
+ */
 internal class FeedHeadParamsFieldRule : ScanRule() {
     override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
         if (cls.name != "com.baidu.tieba.feed.component.uistate.CardHeadUiState") return null
