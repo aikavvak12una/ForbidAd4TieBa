@@ -227,6 +227,29 @@ internal class HookSymbolsBuilder {
     var feedHeadParamsField: String? = null
     var feedRecommendCardNestedDataMethod: String? = null
     var feedRecommendCardNestedDataListField: String? = null
+    var forumResponseDataClass: String? = null
+    var forumResponseParserMethod: String? = null
+    var forumResponseAdFields: List<String>? = null
+    var forumPageMapperClass: String? = null
+    var forumBottomDataMapperMethod: String? = null
+    var forumBottomDataClass: String? = null
+    var forumBusinessPromotSetterMethod: String? = null
+    var forumPrivatePopSetterMethod: String? = null
+    var forumSpriteBubbleSetterMethod: String? = null
+    var forumMaskPopSetterMethod: String? = null
+    var forumBottomGameBarMapperMethod: String? = null
+    var forumHeaderDataMapperMethod: String? = null
+    var forumHeaderDataClass: String? = null
+    var forumRainDataClass: String? = null
+    var forumRainSetterMethod: String? = null
+    var forumDialogControllerClass: String? = null
+    var forumBusinessPromotShowMethod: String? = null
+    var forumAnimationShowMethod: String? = null
+    var forumGameFloatingBarControllerClass: String? = null
+    var forumGameFloatingBarShowMethod: String? = null
+    var forumGameFloatingBarField: String? = null
+    var forumBusinessPromotBizClass: String? = null
+    var forumBusinessPromotJumpMethod: String? = null
     var replyServerResponseClass: String? = null
     var replyServerResponseDecodeMethod: String? = null
     var replyServerResponseResultJsonField: String? = null
@@ -391,6 +414,31 @@ internal class HookSymbolsBuilder {
                 feedHeadParamsField,
                 feedRecommendCardNestedDataMethod,
                 feedRecommendCardNestedDataListField,
+            ),
+            forumPage = ForumPageAdSymbolsGroup(
+                forumResponseDataClass,
+                forumResponseParserMethod,
+                forumResponseAdFields,
+                forumPageMapperClass,
+                forumBottomDataMapperMethod,
+                forumBottomDataClass,
+                forumBusinessPromotSetterMethod,
+                forumPrivatePopSetterMethod,
+                forumSpriteBubbleSetterMethod,
+                forumMaskPopSetterMethod,
+                forumBottomGameBarMapperMethod,
+                forumHeaderDataMapperMethod,
+                forumHeaderDataClass,
+                forumRainDataClass,
+                forumRainSetterMethod,
+                forumDialogControllerClass,
+                forumBusinessPromotShowMethod,
+                forumAnimationShowMethod,
+                forumGameFloatingBarControllerClass,
+                forumGameFloatingBarShowMethod,
+                forumGameFloatingBarField,
+                forumBusinessPromotBizClass,
+                forumBusinessPromotJumpMethod,
             ),
         )
     }

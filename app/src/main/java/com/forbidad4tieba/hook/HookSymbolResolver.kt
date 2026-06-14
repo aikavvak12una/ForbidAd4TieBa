@@ -221,7 +221,12 @@ internal object HookSymbolResolver {
 
     private val SCAN_WHITELIST_CLASSES = listOf(
         "com.baidu.tieba.zj9",
+        "com.baidu.tieba.cke",
+        "com.baidu.tieba.k1a",
         "com.baidu.tieba.feed.list.FeedTemplateAdapter",
+        "com.baidu.tieba.forum.controller.ForumDialogController",
+        "com.baidu.tieba.forum.controller.GameFloatingBarController",
+        "com.baidu.tieba.forum.hybrid.biz.BusinessPromotBiz",
         "com.baidu.tieba.ad.under.utils.SplashForbidAdHelperKt",
         "com.baidu.tbadk.data.CloseAdData",
         FREE_COPY_POPUP_MENU_CLASS,
@@ -2265,6 +2270,299 @@ internal object HookSymbolResolver {
             XposedCompat.log(t)
             null
         }
+    }
+
+    fun resolveForumPageAdBlockSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): ForumPageAdBlockSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[ForumPageAdBlockHook] skipped: scan symbols unavailable")
+                return null
+            }
+            val responseTargets = resolveForumPageResponseTargets(cl, resolvedSymbols)
+            val bottomTargets = resolveForumPageBottomTargets(cl, resolvedSymbols)
+            val bottomGameBarMapper = resolveForumPageMapperMethod(
+                cl = cl,
+                mapperClassName = resolvedSymbols.forumPageMapperClass,
+                methodName = resolvedSymbols.forumBottomGameBarMapperMethod,
+                returnClassName = null,
+                label = "bottom game bar mapper",
+            )
+            val headerTargets = resolveForumPageHeaderTargets(cl, resolvedSymbols)
+            val dialogTargets = resolveForumPageDialogTargets(cl, resolvedSymbols)
+            val floatingTargets = resolveForumPageFloatingTargets(cl, resolvedSymbols)
+            val businessPromotJumpMethod = resolveForumPageBusinessPromotJumpMethod(cl, resolvedSymbols)
+
+            if (
+                responseTargets == null &&
+                bottomTargets == null &&
+                bottomGameBarMapper == null &&
+                headerTargets == null &&
+                dialogTargets.first == null &&
+                dialogTargets.second == null &&
+                floatingTargets.first == null &&
+                businessPromotJumpMethod == null
+            ) {
+                XposedCompat.log("[ForumPageAdBlockHook] skipped: no resolved install targets")
+                return null
+            }
+
+            ForumPageAdBlockSymbols(
+                responseParserMethod = responseTargets?.first,
+                responseAdFields = responseTargets?.second.orEmpty(),
+                bottomDataMapperMethod = bottomTargets?.first,
+                bottomDataSetterMethods = bottomTargets?.second.orEmpty(),
+                bottomGameBarMapperMethod = bottomGameBarMapper,
+                headerDataMapperMethod = headerTargets?.first,
+                rainSetterMethod = headerTargets?.second,
+                businessPromotShowMethod = dialogTargets.first,
+                animationShowMethod = dialogTargets.second,
+                gameFloatingBarShowMethod = floatingTargets.first,
+                gameFloatingBarField = floatingTargets.second,
+                businessPromotJumpMethod = businessPromotJumpMethod,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[ForumPageAdBlockHook] symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
+    private fun resolveForumPageResponseTargets(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ): Pair<Method, List<Field>>? {
+        val className = symbols.forumResponseDataClass?.takeIf { it.isNotBlank() } ?: return null
+        val methodName = symbols.forumResponseParserMethod?.takeIf { it.isNotBlank() } ?: return null
+        val fieldNames = symbols.forumResponseAdFields.orEmpty()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+        if (fieldNames.size < 4) return null
+
+        val responseClass = safeFindClass(className, cl) ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] response class NOT FOUND: $className")
+            return null
+        }
+        val parser = collectInstanceMethods(responseClass).singleOrNull { method ->
+            method.name == methodName &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.size == 1
+        } ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] parser method NOT FOUND: $className.$methodName")
+            return null
+        }
+        val fields = fieldNames.mapNotNull { fieldName ->
+            findForumPageField(responseClass, fieldName)
+        }
+        if (fields.size < 4) {
+            XposedCompat.log("[ForumPageAdBlockHook] response ad fields not resolved on $className")
+            return null
+        }
+        parser.isAccessible = true
+        fields.forEach { it.isAccessible = true }
+        return parser to fields
+    }
+
+    private fun resolveForumPageBottomTargets(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ): Pair<Method, List<Method>>? {
+        val mapperMethod = resolveForumPageMapperMethod(
+            cl = cl,
+            mapperClassName = symbols.forumPageMapperClass,
+            methodName = symbols.forumBottomDataMapperMethod,
+            returnClassName = symbols.forumBottomDataClass,
+            label = "bottom data mapper",
+        ) ?: return null
+        val dataClassName = symbols.forumBottomDataClass?.takeIf { it.isNotBlank() } ?: return null
+        val dataClass = safeFindClass(dataClassName, cl) ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] bottom data class NOT FOUND: $dataClassName")
+            return null
+        }
+        val setters = listOf(
+            symbols.forumBusinessPromotSetterMethod,
+            symbols.forumPrivatePopSetterMethod,
+            symbols.forumSpriteBubbleSetterMethod,
+            symbols.forumMaskPopSetterMethod,
+        ).mapNotNull { methodName ->
+            resolveForumPageNullableSetter(dataClass, methodName)
+        }.distinct()
+        if (setters.size < 3) {
+            XposedCompat.log("[ForumPageAdBlockHook] bottom data setters not resolved on $dataClassName")
+            return null
+        }
+        return mapperMethod to setters
+    }
+
+    private fun resolveForumPageHeaderTargets(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ): Pair<Method, Method>? {
+        val mapperMethod = resolveForumPageMapperMethod(
+            cl = cl,
+            mapperClassName = symbols.forumPageMapperClass,
+            methodName = symbols.forumHeaderDataMapperMethod,
+            returnClassName = symbols.forumHeaderDataClass,
+            label = "header data mapper",
+        ) ?: return null
+        val headerClassName = symbols.forumHeaderDataClass?.takeIf { it.isNotBlank() } ?: return null
+        val rainClassName = symbols.forumRainDataClass?.takeIf { it.isNotBlank() } ?: return null
+        val setterName = symbols.forumRainSetterMethod?.takeIf { it.isNotBlank() } ?: return null
+        val headerClass = safeFindClass(headerClassName, cl) ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] header data class NOT FOUND: $headerClassName")
+            return null
+        }
+        val rainClass = safeFindClass(rainClassName, cl) ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] rain data class NOT FOUND: $rainClassName")
+            return null
+        }
+        val setter = collectInstanceMethods(headerClass).singleOrNull { method ->
+            method.name == setterName &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.contentEquals(arrayOf(rainClass))
+        } ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] rain setter NOT FOUND: $headerClassName.$setterName")
+            return null
+        }
+        setter.isAccessible = true
+        return mapperMethod to setter
+    }
+
+    private fun resolveForumPageMapperMethod(
+        cl: ClassLoader,
+        mapperClassName: String?,
+        methodName: String?,
+        returnClassName: String?,
+        label: String,
+    ): Method? {
+        val className = mapperClassName?.takeIf { it.isNotBlank() } ?: return null
+        val normalizedMethodName = methodName?.takeIf { it.isNotBlank() } ?: return null
+        val mapperClass = safeFindClass(className, cl) ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] mapper class NOT FOUND: $className")
+            return null
+        }
+        val expectedReturn = returnClassName
+            ?.takeIf { it.isNotBlank() }
+            ?.let {
+                safeFindClass(it, cl) ?: run {
+                    XposedCompat.log("[ForumPageAdBlockHook] $label return class NOT FOUND: $it")
+                    return null
+                }
+            }
+        val method = mapperClass.declaredMethods.singleOrNull { candidate ->
+            Modifier.isStatic(candidate.modifiers) &&
+                candidate.name == normalizedMethodName &&
+                candidate.parameterTypes.size == 1 &&
+                candidate.returnType != Void.TYPE &&
+                (expectedReturn == null || candidate.returnType == expectedReturn)
+        } ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] $label NOT FOUND: $className.$normalizedMethodName")
+            return null
+        }
+        method.isAccessible = true
+        return method
+    }
+
+    private fun resolveForumPageNullableSetter(
+        dataClass: Class<*>,
+        methodName: String?,
+    ): Method? {
+        val normalizedName = methodName?.takeIf { it.isNotBlank() } ?: return null
+        return collectInstanceMethods(dataClass).singleOrNull { method ->
+            method.name == normalizedName &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.size == 1 &&
+                !method.parameterTypes[0].isPrimitive
+        }?.apply { isAccessible = true }
+    }
+
+    private fun resolveForumPageDialogTargets(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ): Pair<Method?, Method?> {
+        val className = symbols.forumDialogControllerClass?.takeIf { it.isNotBlank() } ?: return null to null
+        val controllerClass = safeFindClass(className, cl) ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] dialog controller class NOT FOUND: $className")
+            return null to null
+        }
+        val businessShowName = symbols.forumBusinessPromotShowMethod?.takeIf { it.isNotBlank() }
+        val businessShow = businessShowName?.let { methodName ->
+            collectInstanceMethods(controllerClass).singleOrNull { method ->
+                method.name == methodName &&
+                    method.returnType == Boolean::class.javaPrimitiveType &&
+                    method.parameterTypes.size == 2 &&
+                    method.parameterTypes[0] == String::class.java &&
+                    !method.parameterTypes[1].isPrimitive
+            }?.apply { isAccessible = true }
+        }
+        val animationName = symbols.forumAnimationShowMethod?.takeIf { it.isNotBlank() }
+        val animationShow = animationName?.let { methodName ->
+            collectInstanceMethods(controllerClass).singleOrNull { method ->
+                method.name == methodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.isEmpty()
+            }?.apply { isAccessible = true }
+        }
+        return businessShow to animationShow
+    }
+
+    private fun resolveForumPageFloatingTargets(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ): Pair<Method?, Field?> {
+        val className = symbols.forumGameFloatingBarControllerClass?.takeIf { it.isNotBlank() } ?: return null to null
+        val controllerClass = safeFindClass(className, cl) ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] floating bar controller class NOT FOUND: $className")
+            return null to null
+        }
+        val showName = symbols.forumGameFloatingBarShowMethod?.takeIf { it.isNotBlank() }
+        val showMethod = showName?.let { methodName ->
+            collectInstanceMethods(controllerClass).singleOrNull { method ->
+                method.name == methodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.isEmpty()
+            }?.apply { isAccessible = true }
+        }
+        val fieldName = symbols.forumGameFloatingBarField?.takeIf { it.isNotBlank() }
+        val floatingBarField = fieldName?.let { findForumPageField(controllerClass, it) }
+            ?.apply { isAccessible = true }
+        return showMethod to floatingBarField
+    }
+
+    private fun resolveForumPageBusinessPromotJumpMethod(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ): Method? {
+        val className = symbols.forumBusinessPromotBizClass?.takeIf { it.isNotBlank() } ?: return null
+        val methodName = symbols.forumBusinessPromotJumpMethod?.takeIf { it.isNotBlank() } ?: return null
+        val bizClass = safeFindClass(className, cl) ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] business promot biz class NOT FOUND: $className")
+            return null
+        }
+        return collectInstanceMethods(bizClass).singleOrNull { method ->
+            method.name == methodName &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.contentEquals(arrayOf(String::class.java))
+        }?.apply { isAccessible = true } ?: run {
+            XposedCompat.log("[ForumPageAdBlockHook] business promot jump method NOT FOUND: $className.$methodName")
+            null
+        }
+    }
+
+    private fun findForumPageField(clazz: Class<*>, fieldName: String): Field? {
+        var current: Class<*>? = clazz
+        while (current != null && current != Any::class.java) {
+            try {
+                return current.getDeclaredField(fieldName)
+            } catch (_: NoSuchFieldException) {
+                current = current.superclass
+            }
+        }
+        XposedCompat.logD("[ForumPageAdBlockHook] field not resolved: ${clazz.name}.$fieldName")
+        return null
     }
 
     private fun resolvePostAdBlockedItemClasses(cl: ClassLoader): Array<Class<*>> {
@@ -4342,6 +4640,7 @@ internal object HookSymbolResolver {
         var typeAdapterSetDataMethod: String? = null
         var typeAdapterDataItemClass: String? = null
         var typeAdapterDataGetTypeMethod: String? = null
+        var forumPageAdScan = ForumPageAdScanSymbols()
         var enterForumWebControllerClass: String? = null
         var enterForumWebLoadMethod: String? = null
         var enterForumInitInfoDataClass: String? = null
@@ -4749,6 +5048,15 @@ internal object HookSymbolResolver {
         typeAdapterSetDataMethod = typeAdapterDataFilterScan.setDataMethod
         typeAdapterDataItemClass = typeAdapterDataFilterScan.dataItemClass
         typeAdapterDataGetTypeMethod = typeAdapterDataFilterScan.dataGetTypeMethod
+
+        forumPageAdScan = runScanStep(
+            "ForumPageAdBlockHook",
+            logger,
+            scanErrors,
+            ForumPageAdScanSymbols(),
+        ) {
+            ForumPageAdSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
+        }
 
         val tbWebViewClass = safeFindClass(TB_WEB_VIEW_CLASS, cl)
         if (tbWebViewClass == null) {
@@ -5367,6 +5675,29 @@ internal object HookSymbolResolver {
             this.typeAdapterSetDataMethod = typeAdapterSetDataMethod
             this.typeAdapterDataItemClass = typeAdapterDataItemClass
             this.typeAdapterDataGetTypeMethod = typeAdapterDataGetTypeMethod
+            this.forumResponseDataClass = forumPageAdScan.responseDataClass
+            this.forumResponseParserMethod = forumPageAdScan.responseParserMethod
+            this.forumResponseAdFields = forumPageAdScan.responseAdFields.takeIf { it.isNotEmpty() }
+            this.forumPageMapperClass = forumPageAdScan.mapperClass
+            this.forumBottomDataMapperMethod = forumPageAdScan.bottomDataMapperMethod
+            this.forumBottomDataClass = forumPageAdScan.bottomDataClass
+            this.forumBusinessPromotSetterMethod = forumPageAdScan.businessPromotSetterMethod
+            this.forumPrivatePopSetterMethod = forumPageAdScan.privatePopSetterMethod
+            this.forumSpriteBubbleSetterMethod = forumPageAdScan.spriteBubbleSetterMethod
+            this.forumMaskPopSetterMethod = forumPageAdScan.maskPopSetterMethod
+            this.forumBottomGameBarMapperMethod = forumPageAdScan.bottomGameBarMapperMethod
+            this.forumHeaderDataMapperMethod = forumPageAdScan.headerDataMapperMethod
+            this.forumHeaderDataClass = forumPageAdScan.headerDataClass
+            this.forumRainDataClass = forumPageAdScan.rainDataClass
+            this.forumRainSetterMethod = forumPageAdScan.rainSetterMethod
+            this.forumDialogControllerClass = forumPageAdScan.dialogControllerClass
+            this.forumBusinessPromotShowMethod = forumPageAdScan.businessPromotShowMethod
+            this.forumAnimationShowMethod = forumPageAdScan.animationShowMethod
+            this.forumGameFloatingBarControllerClass = forumPageAdScan.gameFloatingBarControllerClass
+            this.forumGameFloatingBarShowMethod = forumPageAdScan.gameFloatingBarShowMethod
+            this.forumGameFloatingBarField = forumPageAdScan.gameFloatingBarField
+            this.forumBusinessPromotBizClass = forumPageAdScan.businessPromotBizClass
+            this.forumBusinessPromotJumpMethod = forumPageAdScan.businessPromotJumpMethod
             this.enterForumWebControllerClass = enterForumWebControllerClass
             this.enterForumWebLoadMethod = enterForumWebLoadMethod
             this.enterForumInitInfoDataClass = enterForumInitInfoDataClass

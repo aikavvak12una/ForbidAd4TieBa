@@ -78,6 +78,31 @@ internal object HookSymbolValidator {
             symbols.typeAdapterDataItemClass != null ||
             symbols.typeAdapterDataGetTypeMethod != null
     if (hasTypeAdapterDataFilterSymbols && !isTypeAdapterDataFilterValid(symbols, cl)) return false
+    val hasForumPageAdSymbols =
+        symbols.forumResponseDataClass != null ||
+            symbols.forumResponseParserMethod != null ||
+            !symbols.forumResponseAdFields.isNullOrEmpty() ||
+            symbols.forumPageMapperClass != null ||
+            symbols.forumBottomDataMapperMethod != null ||
+            symbols.forumBottomDataClass != null ||
+            symbols.forumBusinessPromotSetterMethod != null ||
+            symbols.forumPrivatePopSetterMethod != null ||
+            symbols.forumSpriteBubbleSetterMethod != null ||
+            symbols.forumMaskPopSetterMethod != null ||
+            symbols.forumBottomGameBarMapperMethod != null ||
+            symbols.forumHeaderDataMapperMethod != null ||
+            symbols.forumHeaderDataClass != null ||
+            symbols.forumRainDataClass != null ||
+            symbols.forumRainSetterMethod != null ||
+            symbols.forumDialogControllerClass != null ||
+            symbols.forumBusinessPromotShowMethod != null ||
+            symbols.forumAnimationShowMethod != null ||
+            symbols.forumGameFloatingBarControllerClass != null ||
+            symbols.forumGameFloatingBarShowMethod != null ||
+            symbols.forumGameFloatingBarField != null ||
+            symbols.forumBusinessPromotBizClass != null ||
+            symbols.forumBusinessPromotJumpMethod != null
+    if (hasForumPageAdSymbols && !isForumPageAdValid(symbols, cl)) return false
     val hasEnterForumWebSymbols =
         symbols.enterForumWebControllerClass != null ||
             symbols.enterForumWebLoadMethod != null
@@ -1364,6 +1389,193 @@ private fun isMainTabBottomValid(symbols: HookSymbols, cl: ClassLoader): Boolean
     } catch (_: Throwable) {
         false
     }
+}
+
+private fun isForumPageAdValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    return try {
+        val readiness = ForumPageAdSymbolReadiness.evaluate(symbols)
+        if (readiness.response) {
+            if (!isForumPageResponsePathValid(symbols, cl)) return false
+        }
+
+        if (readiness.bottom) {
+            if (!isForumPageBottomPathValid(symbols, cl)) return false
+        }
+
+        if (readiness.gameBar) {
+            if (!isForumPageStaticMapperValid(symbols.forumPageMapperClass, symbols.forumBottomGameBarMapperMethod, null, cl)) {
+                return false
+            }
+        }
+
+        if (readiness.rain) {
+            if (!isForumPageRainPathValid(symbols, cl)) return false
+        }
+
+        if (readiness.dialog) {
+            if (!isForumPageDialogPathValid(symbols, cl)) return false
+        }
+
+        if (readiness.floating) {
+            if (!isForumPageFloatingPathValid(symbols, cl)) return false
+        }
+
+        if (readiness.biz) {
+            if (!isForumPageBusinessBizPathValid(symbols, cl)) return false
+        }
+
+        readiness.any
+    } catch (t: Throwable) {
+        XposedCompat.log("$TAG forumPageAd validation failed: ${sanitizeScanStatusText(formatScanException(t))}")
+        false
+    }
+}
+
+private fun isForumPageResponsePathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val className = symbols.forumResponseDataClass ?: return false
+    val methodName = symbols.forumResponseParserMethod ?: return false
+    val responseClass = safeFindClass(className, cl) ?: return false
+    val hasParser = collectInstanceMethods(responseClass).any { method ->
+        method.name == methodName &&
+            method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 1
+    }
+    if (!hasParser) return false
+    val fieldNames = symbols.forumResponseAdFields.orEmpty()
+        .filter { it.isNotBlank() }
+    if (fieldNames.size < 4) return false
+    return fieldNames.all { fieldName -> findForumPageField(responseClass, fieldName) != null }
+}
+
+private fun isForumPageBottomPathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    if (!isForumPageStaticMapperValid(
+            symbols.forumPageMapperClass,
+            symbols.forumBottomDataMapperMethod,
+            symbols.forumBottomDataClass,
+            cl,
+        )
+    ) {
+        return false
+    }
+    val dataClass = safeFindClass(symbols.forumBottomDataClass ?: return false, cl) ?: return false
+    val setterNames = listOf(
+        symbols.forumBusinessPromotSetterMethod,
+        symbols.forumPrivatePopSetterMethod,
+        symbols.forumSpriteBubbleSetterMethod,
+        symbols.forumMaskPopSetterMethod,
+    ).filterNot { it.isNullOrBlank() }
+    return setterNames.size >= 3 && setterNames.all { name ->
+        collectInstanceMethods(dataClass).any { method ->
+            method.name == name &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.size == 1 &&
+                !method.parameterTypes[0].isPrimitive
+        }
+    }
+}
+
+private fun isForumPageRainPathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    if (!isForumPageStaticMapperValid(
+            symbols.forumPageMapperClass,
+            symbols.forumHeaderDataMapperMethod,
+            symbols.forumHeaderDataClass,
+            cl,
+        )
+    ) {
+        return false
+    }
+    val headerClass = safeFindClass(symbols.forumHeaderDataClass ?: return false, cl) ?: return false
+    val rainClass = safeFindClass(symbols.forumRainDataClass ?: return false, cl) ?: return false
+    val setterName = symbols.forumRainSetterMethod ?: return false
+    return collectInstanceMethods(headerClass).any { method ->
+        method.name == setterName &&
+            method.returnType == Void.TYPE &&
+            method.parameterTypes.contentEquals(arrayOf(rainClass))
+    }
+}
+
+private fun isForumPageStaticMapperValid(
+    mapperClassName: String?,
+    methodName: String?,
+    returnClassName: String?,
+    cl: ClassLoader,
+): Boolean {
+    val mapperClass = safeFindClass(mapperClassName ?: return false, cl) ?: return false
+    val expectedReturn = returnClassName
+        ?.takeIf { it.isNotBlank() }
+        ?.let { safeFindClass(it, cl) ?: return false }
+    return mapperClass.declaredMethods.any { method ->
+        Modifier.isStatic(method.modifiers) &&
+            method.name == methodName &&
+            method.parameterTypes.size == 1 &&
+            method.returnType != Void.TYPE &&
+            (expectedReturn == null || method.returnType == expectedReturn)
+    }
+}
+
+private fun isForumPageDialogPathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val controllerClass = safeFindClass(symbols.forumDialogControllerClass ?: return false, cl) ?: return false
+    val businessName = symbols.forumBusinessPromotShowMethod
+    if (!businessName.isNullOrBlank()) {
+        val ok = collectInstanceMethods(controllerClass).any { method ->
+            method.name == businessName &&
+                method.returnType == Boolean::class.javaPrimitiveType &&
+                method.parameterTypes.size == 2 &&
+                method.parameterTypes[0] == String::class.java &&
+                !method.parameterTypes[1].isPrimitive
+        }
+        if (!ok) return false
+    }
+    val animationName = symbols.forumAnimationShowMethod
+    if (!animationName.isNullOrBlank()) {
+        val ok = collectInstanceMethods(controllerClass).any { method ->
+            method.name == animationName &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.isEmpty()
+        }
+        if (!ok) return false
+    }
+    return !businessName.isNullOrBlank() || !animationName.isNullOrBlank()
+}
+
+private fun isForumPageFloatingPathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val controllerClass = safeFindClass(symbols.forumGameFloatingBarControllerClass ?: return false, cl) ?: return false
+    val showName = symbols.forumGameFloatingBarShowMethod
+    if (!showName.isNullOrBlank()) {
+        val ok = collectInstanceMethods(controllerClass).any { method ->
+            method.name == showName &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.isEmpty()
+        }
+        if (!ok) return false
+    }
+    val fieldName = symbols.forumGameFloatingBarField
+    if (!fieldName.isNullOrBlank() && findForumPageField(controllerClass, fieldName) == null) {
+        return false
+    }
+    return !showName.isNullOrBlank() || !fieldName.isNullOrBlank()
+}
+
+private fun isForumPageBusinessBizPathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val bizClass = safeFindClass(symbols.forumBusinessPromotBizClass ?: return false, cl) ?: return false
+    val methodName = symbols.forumBusinessPromotJumpMethod ?: return false
+    return collectInstanceMethods(bizClass).any { method ->
+        method.name == methodName &&
+            method.returnType == Void.TYPE &&
+            method.parameterTypes.contentEquals(arrayOf(String::class.java))
+    }
+}
+
+private fun findForumPageField(clazz: Class<*>, fieldName: String): Field? {
+    var current: Class<*>? = clazz
+    while (current != null && current != Any::class.java) {
+        try {
+            return current.getDeclaredField(fieldName)
+        } catch (_: NoSuchFieldException) {
+            current = current.superclass
+        }
+    }
+    return null
 }
 
 private fun isShareTrackValid(symbols: HookSymbols, cl: ClassLoader): Boolean {

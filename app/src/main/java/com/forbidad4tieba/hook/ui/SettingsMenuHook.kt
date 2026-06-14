@@ -1093,6 +1093,13 @@ object SettingsMenuHook {
                     true,
                 ),
                 SwitchItem(
+                    UiText.Settings.BLOCK_AD_FORUM_PAGE_LABEL,
+                    UiText.Settings.BLOCK_AD_FORUM_PAGE_DESC,
+                    ConfigManager.KEY_BLOCK_AD_FORUM_PAGE,
+                    true,
+                    true,
+                ),
+                SwitchItem(
                     UiText.Settings.BLOCK_AD_STRATEGY_LABEL,
                     UiText.Settings.BLOCK_AD_STRATEGY_DESC,
                     ConfigManager.KEY_BLOCK_AD_STRATEGY,

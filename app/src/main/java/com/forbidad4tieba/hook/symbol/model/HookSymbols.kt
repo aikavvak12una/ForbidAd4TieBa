@@ -485,6 +485,52 @@ data class HookSymbols(
         get() = hookPoints.primary.ad.feedCard.feedRecommendCardNestedDataMethod
     val feedRecommendCardNestedDataListField: String?
         get() = hookPoints.primary.ad.feedCard.feedRecommendCardNestedDataListField
+    val forumResponseDataClass: String?
+        get() = hookPoints.primary.ad.forumPage.forumResponseDataClass
+    val forumResponseParserMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumResponseParserMethod
+    val forumResponseAdFields: List<String>?
+        get() = hookPoints.primary.ad.forumPage.forumResponseAdFields
+    val forumPageMapperClass: String?
+        get() = hookPoints.primary.ad.forumPage.forumPageMapperClass
+    val forumBottomDataMapperMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumBottomDataMapperMethod
+    val forumBottomDataClass: String?
+        get() = hookPoints.primary.ad.forumPage.forumBottomDataClass
+    val forumBusinessPromotSetterMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumBusinessPromotSetterMethod
+    val forumPrivatePopSetterMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumPrivatePopSetterMethod
+    val forumSpriteBubbleSetterMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumSpriteBubbleSetterMethod
+    val forumMaskPopSetterMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumMaskPopSetterMethod
+    val forumBottomGameBarMapperMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumBottomGameBarMapperMethod
+    val forumHeaderDataMapperMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumHeaderDataMapperMethod
+    val forumHeaderDataClass: String?
+        get() = hookPoints.primary.ad.forumPage.forumHeaderDataClass
+    val forumRainDataClass: String?
+        get() = hookPoints.primary.ad.forumPage.forumRainDataClass
+    val forumRainSetterMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumRainSetterMethod
+    val forumDialogControllerClass: String?
+        get() = hookPoints.primary.ad.forumPage.forumDialogControllerClass
+    val forumBusinessPromotShowMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumBusinessPromotShowMethod
+    val forumAnimationShowMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumAnimationShowMethod
+    val forumGameFloatingBarControllerClass: String?
+        get() = hookPoints.primary.ad.forumPage.forumGameFloatingBarControllerClass
+    val forumGameFloatingBarShowMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumGameFloatingBarShowMethod
+    val forumGameFloatingBarField: String?
+        get() = hookPoints.primary.ad.forumPage.forumGameFloatingBarField
+    val forumBusinessPromotBizClass: String?
+        get() = hookPoints.primary.ad.forumPage.forumBusinessPromotBizClass
+    val forumBusinessPromotJumpMethod: String?
+        get() = hookPoints.primary.ad.forumPage.forumBusinessPromotJumpMethod
     val replyServerResponseClass: String?
         get() = hookPoints.primary.pb.misc.replyServerResponse.replyServerResponseClass
     val replyServerResponseDecodeMethod: String?
@@ -939,6 +985,29 @@ data class HookSymbols(
             put("feedHeadParamsField", feedHeadParamsField)
             put("feedRecommendCardNestedDataMethod", feedRecommendCardNestedDataMethod)
             put("feedRecommendCardNestedDataListField", feedRecommendCardNestedDataListField)
+            put("forumResponseDataClass", forumResponseDataClass)
+            put("forumResponseParserMethod", forumResponseParserMethod)
+            putStringArray("forumResponseAdFields", forumResponseAdFields)
+            put("forumPageMapperClass", forumPageMapperClass)
+            put("forumBottomDataMapperMethod", forumBottomDataMapperMethod)
+            put("forumBottomDataClass", forumBottomDataClass)
+            put("forumBusinessPromotSetterMethod", forumBusinessPromotSetterMethod)
+            put("forumPrivatePopSetterMethod", forumPrivatePopSetterMethod)
+            put("forumSpriteBubbleSetterMethod", forumSpriteBubbleSetterMethod)
+            put("forumMaskPopSetterMethod", forumMaskPopSetterMethod)
+            put("forumBottomGameBarMapperMethod", forumBottomGameBarMapperMethod)
+            put("forumHeaderDataMapperMethod", forumHeaderDataMapperMethod)
+            put("forumHeaderDataClass", forumHeaderDataClass)
+            put("forumRainDataClass", forumRainDataClass)
+            put("forumRainSetterMethod", forumRainSetterMethod)
+            put("forumDialogControllerClass", forumDialogControllerClass)
+            put("forumBusinessPromotShowMethod", forumBusinessPromotShowMethod)
+            put("forumAnimationShowMethod", forumAnimationShowMethod)
+            put("forumGameFloatingBarControllerClass", forumGameFloatingBarControllerClass)
+            put("forumGameFloatingBarShowMethod", forumGameFloatingBarShowMethod)
+            put("forumGameFloatingBarField", forumGameFloatingBarField)
+            put("forumBusinessPromotBizClass", forumBusinessPromotBizClass)
+            put("forumBusinessPromotJumpMethod", forumBusinessPromotJumpMethod)
             put("replyServerResponseClass", replyServerResponseClass)
             put("replyServerResponseDecodeMethod", replyServerResponseDecodeMethod)
             put("replyServerResponseResultJsonField", replyServerResponseResultJsonField)
@@ -1042,7 +1111,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 6
+        const val CACHE_SCHEMA_VERSION = 7
 
         fun unsupported(
             featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
@@ -1356,6 +1425,31 @@ data class HookSymbols(
                     feedHeadParamsField = obj.optStringOrNull("feedHeadParamsField")
                     feedRecommendCardNestedDataMethod = obj.optStringOrNull("feedRecommendCardNestedDataMethod")
                     feedRecommendCardNestedDataListField = obj.optStringOrNull("feedRecommendCardNestedDataListField")
+                    forumResponseDataClass = obj.optStringOrNull("forumResponseDataClass")
+                    forumResponseParserMethod = obj.optStringOrNull("forumResponseParserMethod")
+                    forumResponseAdFields = obj.optStringArray("forumResponseAdFields")
+                        .takeIf { it.isNotEmpty() }
+                    forumPageMapperClass = obj.optStringOrNull("forumPageMapperClass")
+                    forumBottomDataMapperMethod = obj.optStringOrNull("forumBottomDataMapperMethod")
+                    forumBottomDataClass = obj.optStringOrNull("forumBottomDataClass")
+                    forumBusinessPromotSetterMethod = obj.optStringOrNull("forumBusinessPromotSetterMethod")
+                    forumPrivatePopSetterMethod = obj.optStringOrNull("forumPrivatePopSetterMethod")
+                    forumSpriteBubbleSetterMethod = obj.optStringOrNull("forumSpriteBubbleSetterMethod")
+                    forumMaskPopSetterMethod = obj.optStringOrNull("forumMaskPopSetterMethod")
+                    forumBottomGameBarMapperMethod = obj.optStringOrNull("forumBottomGameBarMapperMethod")
+                    forumHeaderDataMapperMethod = obj.optStringOrNull("forumHeaderDataMapperMethod")
+                    forumHeaderDataClass = obj.optStringOrNull("forumHeaderDataClass")
+                    forumRainDataClass = obj.optStringOrNull("forumRainDataClass")
+                    forumRainSetterMethod = obj.optStringOrNull("forumRainSetterMethod")
+                    forumDialogControllerClass = obj.optStringOrNull("forumDialogControllerClass")
+                    forumBusinessPromotShowMethod = obj.optStringOrNull("forumBusinessPromotShowMethod")
+                    forumAnimationShowMethod = obj.optStringOrNull("forumAnimationShowMethod")
+                    forumGameFloatingBarControllerClass =
+                        obj.optStringOrNull("forumGameFloatingBarControllerClass")
+                    forumGameFloatingBarShowMethod = obj.optStringOrNull("forumGameFloatingBarShowMethod")
+                    forumGameFloatingBarField = obj.optStringOrNull("forumGameFloatingBarField")
+                    forumBusinessPromotBizClass = obj.optStringOrNull("forumBusinessPromotBizClass")
+                    forumBusinessPromotJumpMethod = obj.optStringOrNull("forumBusinessPromotJumpMethod")
                     replyServerResponseClass = obj.optStringOrNull("replyServerResponseClass")
                     replyServerResponseDecodeMethod = obj.optStringOrNull("replyServerResponseDecodeMethod")
                     replyServerResponseResultJsonField =

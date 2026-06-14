@@ -62,6 +62,7 @@ object ConfigManager {
     const val KEY_BLOCK_AD = "block_ad"
     const val KEY_BLOCK_AD_FEED = "block_ad_feed"
     const val KEY_BLOCK_AD_POST_PAGE = "block_ad_post_page"
+    const val KEY_BLOCK_AD_FORUM_PAGE = "block_ad_forum_page"
     const val KEY_BLOCK_AD_STRATEGY = "block_ad_strategy"
     const val KEY_BLOCK_AD_SEARCH_BOX_TEXT = "block_ad_search_box_text"
     const val KEY_BLOCK_AD_HOME_TOP_BAR = "block_ad_home_top_bar"
@@ -264,6 +265,7 @@ object ConfigManager {
     val isAdBlockEnabled: Boolean get() = settingsSnapshot.isAdBlockEnabled
     val isFeedAdBlockEnabled: Boolean get() = settingsSnapshot.isFeedAdBlockEnabled
     val isPostPageAdBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
+    val isForumPageAdBlockEnabled: Boolean get() = settingsSnapshot.isForumPageAdBlockEnabled
     val isPostAdBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
     val isStrategyAdBlockEnabled: Boolean get() = settingsSnapshot.isStrategyAdBlockEnabled
     val isPbEarlyAdBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
@@ -604,6 +606,7 @@ object ConfigManager {
             isAdBlockEnabled = adBlockEnabled,
             isFeedAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_FEED),
             isPostPageAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_POST_PAGE),
+            isForumPageAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_FORUM_PAGE),
             isStrategyAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_STRATEGY),
             isSearchBoxTextAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_SEARCH_BOX_TEXT),
             isHomeTopBarAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_HOME_TOP_BAR),

@@ -17,6 +17,8 @@ object UiText {
         const val BLOCK_AD_FEED_DESC = "屏蔽首页信息流广告卡片和广告容器"
         const val BLOCK_AD_POST_PAGE_LABEL = "帖子页广告"
         const val BLOCK_AD_POST_PAGE_DESC = "屏蔽帖子详情页列表广告、广告请求、掉落广告和广告实验"
+        const val BLOCK_AD_FORUM_PAGE_LABEL = "吧页面广告"
+        const val BLOCK_AD_FORUM_PAGE_DESC = "屏蔽吧页面广告弹窗、动画浮层和底部游戏推广"
         const val BLOCK_AD_STRATEGY_LABEL = "开屏与广告策略"
         const val BLOCK_AD_STRATEGY_DESC = "关闭开屏广告、免广告状态和广告策略开关"
         const val BLOCK_AD_SEARCH_BOX_TEXT_LABEL = "搜索框文字广告"
