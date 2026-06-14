@@ -393,6 +393,10 @@ object UiText {
         const val TOAST_LOCKED_HIDDEN = "Tab 已锁定隐藏，返回键取消"
     }
 
+    object HelpCenter {
+        const val TOAST_MODULE_DISABLED_FEATURE = "启用模块时禁止联系官方客服"
+    }
+
     object ImageViewerNativeShare {
         const val BUTTON_LABEL = "分享"
         const val CHOOSER_TITLE = "分享"
