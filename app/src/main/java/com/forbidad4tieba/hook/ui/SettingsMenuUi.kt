@@ -331,7 +331,7 @@ private fun createSettingsDialogCustomBackground(
         realtimePreviewEnabled = previewStyle != null,
         previewBitmap = previewStyle?.previewBitmap,
     ) ?: return null
-    val overlayColor = settingsDialogOverlayColor(tokens, previewStyle)
+    val overlayColor = Color.TRANSPARENT
     val cornerRadiusPx = previewStyle?.style?.cardRadiusDp?.coerceIn(
         ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
         ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
@@ -419,38 +419,6 @@ private fun resolveSettingsDialogBackgroundImageSource(
     return SettingsDialogBackgroundImageSource(
         path = sourcePath,
         previewBitmap = null,
-    )
-}
-
-private fun settingsDialogOverlayColor(
-    tokens: UiStyle.Tokens,
-    previewStyle: HomeNativeGlassDialogPreviewStyle? = null,
-): Int {
-    val tintColor = previewStyle?.style?.let { style ->
-        ConfigManager.normalizeHomeNativeGlassTintColor(style.tintColor)
-            .takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR }
-            ?: ConfigManager.normalizeHomeNativeGlassTintColor(style.autoTintColor)
-                .takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
-    }
-        ?: HomeNativeGlassDynamicTintCache.resolveAccentColor()
-    val surface = tokens.surface
-    val baseColor = if (tintColor == null) {
-        surface
-    } else {
-        blendRgb(surface, tintColor, 0.35f)
-    }
-    val overlayAlpha = if (previewStyle != null) {
-        if (previewStyle.darkMode) 126 else 142
-    } else if (tokens.night) {
-        126
-    } else {
-        142
-    }
-    return Color.argb(
-        overlayAlpha,
-        Color.red(baseColor),
-        Color.green(baseColor),
-        Color.blue(baseColor),
     )
 }
 
@@ -548,8 +516,11 @@ private class SettingsDialogCustomBackgroundDrawable(
         canvas.clipPath(clipPath)
 
         drawBitmapCover(canvas, activeBitmap, drawableAlpha)
-        overlayPaint.color = scaleAlpha(overlayColor, drawableAlpha)
-        canvas.drawRect(rect, overlayPaint)
+        val scaledOverlayColor = scaleAlpha(overlayColor, drawableAlpha)
+        if (Color.alpha(scaledOverlayColor) > 0) {
+            overlayPaint.color = scaledOverlayColor
+            canvas.drawRect(rect, overlayPaint)
+        }
         if (shadowStrengthPercent > 0) {
             drawSoftShadow(canvas)
         }
