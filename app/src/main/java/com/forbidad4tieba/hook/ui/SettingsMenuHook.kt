@@ -1366,12 +1366,7 @@ object SettingsMenuHook {
 
             groups.forEachIndexed { index, group ->
                 if (index > 0) {
-                    val gap = View(context)
-                    gap.layoutParams = LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        (SETTINGS_ROOT_GROUP_GAP_DP * density).toInt(),
-                    )
-                    root.addView(gap)
+                    root.addView(createDivider(context, padding))
                 }
 
                 val tokens = UiStyle.tokens(context)
@@ -1413,12 +1408,7 @@ object SettingsMenuHook {
                 }
             }
 
-            val defaultEnabledGap = View(context)
-            defaultEnabledGap.layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                (SETTINGS_ROOT_GROUP_GAP_DP * density).toInt(),
-            )
-            root.addView(defaultEnabledGap)
+            root.addView(createDivider(context, padding))
             val tokensForDefault = UiStyle.tokens(context)
 
             val defaultEnabledContent = TextView(context).apply {
@@ -1809,7 +1799,7 @@ object SettingsMenuHook {
 
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(padding, settingsDialogContentTopPadding(padding), padding, padding)
+            setPadding(padding, padding, padding, padding)
         }
         val scanContentMaxHeight = (activity.resources.displayMetrics.heightPixels * 0.62f)
             .toInt()
@@ -2213,6 +2203,9 @@ object SettingsMenuHook {
         }
         lateinit var dialog: AlertDialog
         actions.forEachIndexed { index, action ->
+            if (index > 0) {
+                root.addView(createDivider(activity, padding))
+            }
             root.addView(
                 TextView(activity).apply {
                     text = action
@@ -2950,10 +2943,20 @@ object SettingsMenuHook {
             ReflectionUtils.findActivityFromContext(context)?.let { activity ->
                 HomeNativeGlassHostDarkModeBridge.cacheFromActivity(activity)
             }
+            val dialogRoot = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            val modeSelectorContainer = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
+            }
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(padding, settingsDialogContentTopPadding(padding), padding, padding)
+                setPadding(padding, 0, padding, padding)
             }
+            val scrollMaxHeight = (context.resources.displayMetrics.heightPixels * 0.62f)
+                .toInt()
+                .coerceAtLeast((220 * density).toInt())
 
             val lightModeState = createHomeNativeGlassModeConfigState(
                 ConfigManager.readHomeNativeGlassStyle(
@@ -3004,7 +3007,7 @@ object SettingsMenuHook {
             }
             fun applyHomeNativeGlassDialogPreview(previewStyle: HomeNativeGlassDialogPreviewStyle) {
                 refreshHomeNativeGlassStyledViews(
-                    root,
+                    dialogRoot,
                     UiStyle.homeNativeGlassPreviewTokens(
                         context,
                         previewStyle.style,
@@ -3154,17 +3157,6 @@ object SettingsMenuHook {
             )
             val radiusSeekBar = radiusRowAndSeekBar.second
 
-            val tabDynamicTintSwitch = createHomeNativeGlassSwitchRow(
-                context = context,
-                label = UiText.Settings.HOME_NATIVE_GLASS_TAB_DYNAMIC_TINT_LABEL,
-                description = UiText.Settings.HOME_NATIVE_GLASS_TAB_DYNAMIC_TINT_DESC,
-                checked = prefs.getBoolean(
-                    ConfigManager.KEY_ENABLE_HOME_TAB_DYNAMIC_TINT,
-                    ConfigManager.DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED,
-                ),
-                density = density,
-            )
-
             val strokeSwitch = createHomeNativeGlassSwitchRow(
                 context = context,
                 label = UiText.Settings.HOME_NATIVE_GLASS_STROKE_LABEL,
@@ -3282,19 +3274,38 @@ object SettingsMenuHook {
             )
             refreshModeSelector = modeSelectorRowAndRefresh.second
 
-            addHomeNativeGlassSettingRow(root, modeSelectorRowAndRefresh.first, density, topMarginDp = 0)
+            addHomeNativeGlassSettingRow(modeSelectorContainer, modeSelectorRowAndRefresh.first, density, topMarginDp = 0)
+            modeSelectorContainer.addView(createDivider(context, padding))
             addHomeNativeGlassSettingRow(root, backgroundImageRowAndDisplay.first, density)
             addHomeNativeGlassSettingRow(root, tintColorRowAndRefresh.first, density)
             addHomeNativeGlassSettingRow(root, tintAlphaRowAndSeekBar.first, density)
             addHomeNativeGlassSettingRow(root, blurRowAndSeekBar.first, density)
             addHomeNativeGlassSettingRow(root, radiusRowAndSeekBar.first, density)
             addHomeNativeGlassSettingRow(root, shadowRowAndSeekBar.first, density)
-            addHomeNativeGlassSettingRow(root, tabDynamicTintSwitch.first, density)
             addHomeNativeGlassSettingRow(root, strokeSwitch.first, density)
+            dialogRoot.addView(modeSelectorContainer)
+            dialogRoot.addView(
+                MaxHeightScrollView(context, scrollMaxHeight).apply {
+                    isFillViewport = false
+                    overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+                    clipToPadding = false
+                    addView(
+                        root,
+                        ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                        )
+                    )
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.HOME_NATIVE_GLASS_DIALOG_TITLE)
-                .setView(createDialogScrollContainer(context, root))
+                .setView(dialogRoot)
                 .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setNeutralButton(UiText.Settings.HOME_NATIVE_GLASS_RESTORE_DEFAULTS, null)
                 .setPositiveButton(UiText.Settings.SAVE, null)
@@ -3317,7 +3328,6 @@ object SettingsMenuHook {
                         visibleImageState.defaultTintColor = null
                         backgroundImageDisplay.text = homeNativeGlassImageDisplayText(visibleImageState.path)
                         tintColorRefresh()
-                        tabDynamicTintSwitch.second.isChecked = ConfigManager.DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED
                         strokeSwitch.second.isChecked = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
                         shadowSeekBar.progress = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT -
                             ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
@@ -3334,7 +3344,6 @@ object SettingsMenuHook {
                     captureVisibleModeState()
                     val lightStyle = homeNativeGlassStyleFromModeState(lightModeState, blurCacheImagePath = "")
                     val darkStyle = homeNativeGlassStyleFromModeState(darkModeState, blurCacheImagePath = "")
-                    val tabDynamicTintEnabled = tabDynamicTintSwitch.second.isChecked
                     thread(name = "tbhook-home-native-glass-blur-cache", isDaemon = true) {
                         fun ensureBlurCache(
                             modeName: String,
@@ -3388,13 +3397,10 @@ object SettingsMenuHook {
                                 .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_STROKE_ENABLED)
                                 .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED)
                                 .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT)
+                                .remove(ConfigManager.KEY_ENABLE_HOME_TAB_DYNAMIC_TINT)
                                 .putBoolean(
                                     ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED,
                                     true,
-                                )
-                                .putBoolean(
-                                    ConfigManager.KEY_ENABLE_HOME_TAB_DYNAMIC_TINT,
-                                    tabDynamicTintEnabled,
                                 )
                                 .apply()
                             Toast.makeText(

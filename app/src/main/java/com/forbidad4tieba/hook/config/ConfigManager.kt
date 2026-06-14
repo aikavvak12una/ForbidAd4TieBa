@@ -627,10 +627,7 @@ object ConfigManager {
             isEnterForumWebFilterEnabled = featureBoolean(KEY_FILTER_ENTER_FORUM_WEB),
             isOpenWebLinkInSystemBrowserEnabled = featureBoolean(KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER),
             isHomeNativeGlassEnabled = homeNativeGlassEnabled,
-            isHomeTabDynamicTintEnabled = featureBoolean(
-                KEY_ENABLE_HOME_TAB_DYNAMIC_TINT,
-                DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED,
-            ),
+            isHomeTabDynamicTintEnabled = DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED,
             homeNativeGlassLightStyle = homeNativeGlassLightStyle,
             homeNativeGlassDarkStyle = homeNativeGlassDarkStyle,
             isAutoRefreshDisabled = featureBoolean(KEY_DISABLE_AUTO_REFRESH),
