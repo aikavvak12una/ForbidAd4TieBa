@@ -301,7 +301,9 @@ internal object CustomPostModelScoreStats {
     }
 
     /**
-     * 读取 [modelKey] 的已存储值和待写入值�?     * 按帖子数量限制处理，只让最�?[ConfigManager.postModelScoreStatsPostLimit] 个帖子参与统计�?     */
+     * 读取 [modelKey] 的已存储值和待写入值。
+     * 按帖子数量限制处理，只让最新 [ConfigManager.postModelScoreStatsPostLimit] 个帖子参与统计。
+     */
     private fun readLimitedValues(modelKey: String): ArrayList<Double> {
         val limit = ConfigManager.postModelScoreStatsPostLimit
         val storedRecords = readStoredRecordsForKey(modelKey)

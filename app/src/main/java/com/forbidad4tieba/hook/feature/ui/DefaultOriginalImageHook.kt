@@ -14,9 +14,15 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 图片页成为当前页时，自动触发查看原图�? *
- * 处理方式�?hook ImagePagerAdapter.setPrimaryItem(ViewGroup, int, Object)�? * 同时�?UrlDragImageView 构造函数作为备用入口�? * 新页面成为当前页且查看原图按钮可用时，自动触发�? *
- * 这个 hook 需要安装到所有贴吧进程，不只主进程�? * 图片查看�?Activity ImageViewerActivity 运行在子进程�? */
+ * 图片页成为当前页时，自动触发查看原图。
+ *
+ * 处理方式：hook ImagePagerAdapter.setPrimaryItem(ViewGroup, int, Object)。
+ * 同时将 UrlDragImageView 构造函数作为备用入口。
+ * 新页面成为当前页且查看原图按钮可用时，自动触发。
+ *
+ * 这个 hook 需要安装到所有贴吧进程，不只主进程。
+ * 图片查看 Activity ImageViewerActivity 运行在子进程。
+ */
 object DefaultOriginalImageHook {
     private const val PREF_KEY_ORIGINAL_IMG_DOWN_TIP = "original_img_down_tip"
 
@@ -212,7 +218,7 @@ object DefaultOriginalImageHook {
         return true
     }
 
-    // 触发入口�?
+    // 触发入口。
     private fun tryAutoTriggerFromView(
         view: View,
         source: String,
@@ -227,7 +233,7 @@ object DefaultOriginalImageHook {
         scheduleAutoTrigger(view, retryCount = 0, source = source, requireCurrentItem = requireCurrentItem)
     }
 
-    // 方法解析�?
+    // 方法解析。
     private fun resolveSetPrimaryItemMethod(clazz: Class<*>): Method? {
         val methodName = runtimeTargets?.setPrimaryItemMethod ?: return null
         return XposedCompat.findMethodOrNull(
@@ -240,7 +246,9 @@ object DefaultOriginalImageHook {
     }
 
     /**
-     * 解析 UrlDragImageView 上的触发方法�?     * 这是启动原图下载的无�?void 方法�?     */
+     * 解析 UrlDragImageView 上的触发方法。
+     * 这是启动原图下载的无参 void 方法。
+     */
     private fun resolveTriggerMethod(item: Any): Method? {
         val clazz = item.javaClass
         triggerMethodCache[clazz]?.let { return it }
@@ -371,7 +379,7 @@ object DefaultOriginalImageHook {
         return null
     }
 
-    // 数据访问辅助�?
+    // 数据访问辅助。
     private fun resolveImageUrlDataField(clazz: Class<*>, fieldName: String): Field? {
         val fieldCache = imageUrlDataFieldCache.getOrPut(clazz) { FieldLookupCache() }
         fieldCache.fields[fieldName]?.let { return it }
@@ -416,7 +424,7 @@ object DefaultOriginalImageHook {
         return process >= 0
     }
 
-    // 自动触发调度�?
+    // 自动触发调度。
     private fun scheduleAutoTrigger(
         item: Any,
         retryCount: Int,
@@ -507,7 +515,7 @@ object DefaultOriginalImageHook {
         }, VERIFY_DELAY_MS)
     }
 
-    // 下载提示绕过和直接启动辅助�?
+    // 下载提示绕过和直接启动辅助。
     private fun ensureOriginalDownloadTipBypassed() {
         if (tipBypassApplied.get()) return
         val helperClass = sharedPrefHelperClass ?: return
@@ -554,7 +562,7 @@ object DefaultOriginalImageHook {
         return digest.joinToString(separator = "") { b -> "%02x".format(b) }
     }
 
-    // 场景和分发辅助�?
+    // 场景和分发辅助。
     private fun isImageViewerScene(item: Any): Boolean {
         val view = item as? View ?: return false
         val activity = ReflectionUtils.findActivityFromContext(view.context) ?: return false
