@@ -53,7 +53,7 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = moduleVersionCode
-        versionName = "26061401"
+        versionName = "26061501"
         buildConfigField(
             "int",
             "MIN_SUPPORTED_USER_SETTINGS_VERSION_CODE",

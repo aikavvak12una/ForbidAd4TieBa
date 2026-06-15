@@ -48,7 +48,9 @@ import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 object HomeNativeGlassHook {
     private const val TAG = "[HomeNativeGlassHook]"
@@ -3071,7 +3073,7 @@ object HomeNativeGlassHook {
             subPbLayout.background !is CardGlassDrawable
         val radius = subPbLayout.resources.displayMetrics.density * radiusDp
         if (shouldUpdateBackground) {
-            setGlassBackground(subPbLayout, host, radius, PB_SUB_PB_TINT_ALPHA_EXTRA)
+            setGlassBackground(subPbLayout, host, radius, extraTintEnabled = true)
             pbSubPbLayoutCardStates[subPbLayout] = state
             disablePbSubPbLayoutScrollCaches(subPbLayout)
             applyPbSubPbLayoutShadow(subPbLayout, radius)
@@ -5375,7 +5377,7 @@ object HomeNativeGlassHook {
             applyGlassToView(
                 target,
                 page,
-                CARD_COMPONENT_TINT_ALPHA_EXTRA,
+                extraTintEnabled = true,
             )
         }
     }
@@ -5480,12 +5482,12 @@ object HomeNativeGlassHook {
     private fun applyGlassToView(
         view: View,
         page: View,
-        tintAlphaExtra: Int = 0,
+        extraTintEnabled: Boolean = false,
     ) {
         rememberChromeGlassOriginalState(view)
         val radius = view.resources.displayMetrics.density *
             effectiveCardRadiusDp()
-        setGlassBackground(view, page, radius, tintAlphaExtra)
+        setGlassBackground(view, page, radius, extraTintEnabled)
         clearNativePressVisual(view)
     }
 
@@ -5749,7 +5751,7 @@ object HomeNativeGlassHook {
         view: View,
         page: View?,
         radius: Float,
-        tintAlphaExtra: Int = 0,
+        extraTintEnabled: Boolean = false,
     ) {
         val style = currentHomeNativeGlassRuntimeStyle()
         val request = backgroundRequestForStyle(
@@ -5765,11 +5767,12 @@ object HomeNativeGlassHook {
         if (page != null && cachedEntry == null && request != null) {
             val pageRef = WeakReference(page)
             scheduleBackgroundDecode(request, view) { target ->
-                setGlassBackground(target, pageRef.get(), radius, tintAlphaExtra)
+                setGlassBackground(target, pageRef.get(), radius, extraTintEnabled)
             }
         }
         val blurredBitmap = cachedEntry?.blurredBitmap
         val tintAlphaPercent = style.tintAlphaPercent
+        val darkMode = style.darkMode
         val blurPercent = style.cardBlurPercent
         val strokeEnabled = style.strokeEnabled
         val shadowStrengthPercent = style.shadowStrengthPercent
@@ -5782,7 +5785,8 @@ object HomeNativeGlassHook {
                     bitmap = blurredBitmap,
                     radius = radius,
                     tintAlphaPercent = tintAlphaPercent,
-                    tintAlphaExtra = tintAlphaExtra,
+                    extraTintEnabled = extraTintEnabled,
+                    darkMode = darkMode,
                     blurPercent = blurPercent,
                     strokeEnabled = strokeEnabled,
                     shadowStrengthPercent = shadowStrengthPercent,
@@ -5798,7 +5802,8 @@ object HomeNativeGlassHook {
                 bitmap = blurredBitmap,
                 radius = radius,
                 tintAlphaPercent = tintAlphaPercent,
-                tintAlphaExtra = tintAlphaExtra,
+                extraTintEnabled = extraTintEnabled,
+                darkMode = darkMode,
                 blurPercent = blurPercent,
                 strokeEnabled = strokeEnabled,
                 shadowStrengthPercent = shadowStrengthPercent,
@@ -6582,9 +6587,9 @@ object HomeNativeGlassHook {
     private const val HOME_BOTTOM_TAB_BOUNDARY_PARENT_DEPTH = 4
     private const val HOME_TOP_TAB_RECOMMEND_TYPE = 1
     private const val HOME_TOP_TAB_RECOMMEND_CODE = "recommend"
-    private const val CARD_COMPONENT_TINT_ALPHA_EXTRA = 25
-    private const val CARD_PRESS_TINT_ALPHA_EXTRA = 30
-    private const val PB_SUB_PB_TINT_ALPHA_EXTRA = 30
+    private const val CARD_RUNTIME_TINT_ALPHA_SCALE = 1.5f
+    private const val CARD_ZERO_TINT_DARK_MODE_PERCENT = -20
+    private const val CARD_ZERO_TINT_LIGHT_MODE_PERCENT = 20
     private const val PB_SUB_PB_SHADOW_ELEVATION_DP = 4.5f
     private const val PB_SUB_PB_SHADOW_TRANSLATION_Z_DP = 1.5f
     private const val PB_SUB_PB_SHADOW_PARENT_DEPTH = 3
@@ -6780,7 +6785,8 @@ object HomeNativeGlassHook {
         private val bitmap: Bitmap,
         private val radius: Float,
         tintAlphaPercent: Int,
-        private val tintAlphaExtra: Int,
+        private val extraTintEnabled: Boolean,
+        private val darkMode: Boolean,
         blurPercent: Int,
         private val strokeEnabled: Boolean,
         shadowStrengthPercent: Int,
@@ -6803,8 +6809,8 @@ object HomeNativeGlassHook {
             ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
         )
+        private val runtimeTintAlphaPercent = runtimeTintAlphaPercent(baseTintAlpha, darkMode)
         private val materialIntensity = cardBlurPercent / 100f
-        private val materialOverlayRgb = Color.WHITE
         private val strokeWidthPx = (1.0f + materialIntensity * 0.8f).coerceIn(1f, 1.8f)
         private val ambientShadowStrokeWidthPx = (2.2f + materialIntensity * 2.4f).coerceIn(2f, 4.6f)
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
@@ -6849,7 +6855,7 @@ object HomeNativeGlassHook {
         private var edgeHighlightAlpha = -1
         private var edgeHighlightStrokeWidth = Float.NaN
         private var drawableAlpha = 255
-        private var pressTintAlphaExtra = 0
+        private var pressTintEnabled = false
 
         override fun draw(canvas: Canvas) {
             rect.set(bounds)
@@ -6888,9 +6894,8 @@ object HomeNativeGlassHook {
         override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 
         fun setPressedTintEnabled(pressed: Boolean) {
-            val nextExtra = if (pressed) CARD_PRESS_TINT_ALPHA_EXTRA else 0
-            if (pressTintAlphaExtra == nextExtra) return
-            pressTintAlphaExtra = nextExtra
+            if (pressTintEnabled == pressed) return
+            pressTintEnabled = pressed
             invalidateSelf()
         }
 
@@ -6899,7 +6904,8 @@ object HomeNativeGlassHook {
             bitmap: Bitmap,
             radius: Float,
             tintAlphaPercent: Int,
-            tintAlphaExtra: Int,
+            extraTintEnabled: Boolean,
+            darkMode: Boolean,
             blurPercent: Int,
             strokeEnabled: Boolean,
             shadowStrengthPercent: Int,
@@ -6911,7 +6917,8 @@ object HomeNativeGlassHook {
                     ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                     ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                 ) &&
-                this.tintAlphaExtra == tintAlphaExtra &&
+                this.extraTintEnabled == extraTintEnabled &&
+                this.darkMode == darkMode &&
                 cardBlurPercent == blurPercent.coerceIn(
                     ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                     ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
@@ -6955,8 +6962,10 @@ object HomeNativeGlassHook {
         }
 
         private fun drawMaterialOverlay(canvas: Canvas) {
-            val overlayAlpha = overlayAlpha()
+            val overlayPercent = overlayTintAlphaPercent()
+            val overlayAlpha = overlayAlpha(overlayPercent)
             if (overlayAlpha <= 0) return
+            val materialOverlayRgb = if (overlayPercent < 0) Color.BLACK else Color.WHITE
             overlayPaint.color = Color.argb(
                 overlayAlpha,
                 Color.red(materialOverlayRgb),
@@ -7029,10 +7038,39 @@ object HomeNativeGlassHook {
             canvas.drawRoundRect(insetRect, insetRadius, insetRadius, edgeHighlightPaint)
         }
 
-        private fun overlayAlpha(): Int {
-            val alpha = (tintAlphaExtra + pressTintAlphaExtra)
-                .coerceIn(0, 255)
+        private fun overlayTintAlphaPercent(): Int {
+            var layerCount = 0
+            if (extraTintEnabled) layerCount++
+            if (pressTintEnabled) layerCount++
+            if (layerCount <= 0) return 0
+            return (runtimeTintAlphaPercent * layerCount).coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            )
+        }
+
+        private fun overlayAlpha(overlayPercent: Int): Int {
+            val alpha = abs(overlayPercent).coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ) * 255 / 100f
             return (alpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
+        }
+
+        private fun runtimeTintAlphaPercent(basePercent: Int, darkMode: Boolean): Int {
+            val normalized = basePercent.coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            )
+            val percent = if (normalized == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT) {
+                if (darkMode) CARD_ZERO_TINT_DARK_MODE_PERCENT else CARD_ZERO_TINT_LIGHT_MODE_PERCENT
+            } else {
+                (normalized * CARD_RUNTIME_TINT_ALPHA_SCALE).roundToInt()
+            }
+            return percent.coerceIn(
+                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            )
         }
 
         private fun materialAlpha(appleAlpha: Int): Int {
