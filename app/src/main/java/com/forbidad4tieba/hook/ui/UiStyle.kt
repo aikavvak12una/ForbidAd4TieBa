@@ -182,7 +182,10 @@ internal object UiStyle {
             ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
         )
         val styleAccent = style?.let { homeNativeGlassStyleAccent(it) }
-        val dynamicAccent = styleAccent ?: homeNativeGlassDynamicAccent() ?: accent
+        val dynamicAccent = settingsUiAccentForMode(
+            styleAccent ?: homeNativeGlassDynamicAccent() ?: accent,
+            night,
+        )
         val accentSoftColor = if (night) {
             withAlpha(dynamicAccent, 0x33)
         } else {
@@ -241,6 +244,34 @@ internal object UiStyle {
             Color.green(color),
             Color.blue(color),
         )
+    }
+
+    private fun settingsUiAccentForMode(color: Int, night: Boolean): Int {
+        val toned = blendRgb(
+            color,
+            if (night) Color.WHITE else Color.BLACK,
+            if (night) 0.22f else 0.20f,
+        )
+        val luma = relativeLuma(toned)
+        return when {
+            night && luma < 0.58f -> {
+                val ratio = ((0.58f - luma) / 0.58f * 0.30f).coerceIn(0f, 0.30f)
+                blendRgb(toned, Color.WHITE, ratio)
+            }
+            !night && luma > 0.48f -> {
+                val ratio = ((luma - 0.48f) / 0.52f * 0.32f).coerceIn(0f, 0.32f)
+                blendRgb(toned, Color.BLACK, ratio)
+            }
+            else -> toned
+        }
+    }
+
+    private fun relativeLuma(color: Int): Float {
+        return (
+            0.299f * Color.red(color) +
+                0.587f * Color.green(color) +
+                0.114f * Color.blue(color)
+            ) / 255f
     }
 
     private fun blendRgb(base: Int, overlay: Int, overlayRatio: Float): Int {

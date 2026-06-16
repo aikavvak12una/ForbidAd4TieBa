@@ -46,4 +46,29 @@ class HookFeatureStatusDeriverTest {
         assertTrue(status.missingCritical.isEmpty())
         assertTrue(status.missingOptional.contains("homeNativeGlassSubPbNextPageMoreViewId"))
     }
+
+    @Test
+    fun deriveDisablesSearchBoxAdChildWhenItsSymbolsAreMissing() {
+        val status = HookFeatureStatusDeriver.derive(buildHookSymbols {})
+            .getValue(HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT)
+
+        assertEquals(HookFeatureState.DISABLED, status.state)
+        assertTrue(status.missingCritical.contains("searchBoxViewClass"))
+    }
+
+    @Test
+    fun deriveKeepsAdParentPartialWhenOnlySomeAdChildrenAreAvailable() {
+        val statuses = HookFeatureStatusDeriver.derive(
+            buildHookSymbols {
+                feedTemplateKeyMethod = "getTemplateKey"
+            },
+        )
+
+        assertEquals(HookFeatureState.PARTIAL, statuses.getValue(HookFeatureKey.BLOCK_AD_FEED).state)
+        assertEquals(
+            HookFeatureState.DISABLED,
+            statuses.getValue(HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT).state,
+        )
+        assertEquals(HookFeatureState.PARTIAL, statuses.getValue(HookFeatureKey.BLOCK_AD).state)
+    }
 }

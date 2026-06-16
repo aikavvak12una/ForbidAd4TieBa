@@ -20,6 +20,14 @@ object ScanSupportState {
 
 object HookFeatureKey {
     const val BLOCK_AD = "block_ad"
+    const val BLOCK_AD_FEED = "block_ad_feed"
+    const val BLOCK_AD_POST_PAGE = "block_ad_post_page"
+    const val BLOCK_AD_FORUM_PAGE = "block_ad_forum_page"
+    const val BLOCK_AD_STRATEGY = "block_ad_strategy"
+    const val BLOCK_AD_SEARCH_BOX_TEXT = "block_ad_search_box_text"
+    const val BLOCK_AD_HOME_TOP_BAR = "block_ad_home_top_bar"
+    const val BLOCK_AD_MINE_TAB_WEB = "block_ad_mine_tab_web"
+    const val BLOCK_AD_HOME_SIDE_BAR_WEB = "block_ad_home_side_bar_web"
     const val ENABLE_CUSTOM_POST_FILTER = "enable_custom_post_filter"
 
     const val SIMPLIFY_HOME_TOP_TABS = "simplify_home_tabs"
@@ -45,6 +53,14 @@ object HookFeatureKey {
 
     val orderedKeys = listOf(
         BLOCK_AD,
+        BLOCK_AD_FEED,
+        BLOCK_AD_POST_PAGE,
+        BLOCK_AD_FORUM_PAGE,
+        BLOCK_AD_STRATEGY,
+        BLOCK_AD_SEARCH_BOX_TEXT,
+        BLOCK_AD_HOME_TOP_BAR,
+        BLOCK_AD_MINE_TAB_WEB,
+        BLOCK_AD_HOME_SIDE_BAR_WEB,
         ENABLE_CUSTOM_POST_FILTER,
         SIMPLIFY_HOME_TOP_TABS,
         SIMPLIFY_BOTTOM_TABS,

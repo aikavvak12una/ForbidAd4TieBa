@@ -53,6 +53,7 @@ data class SettingsSnapshot(
     val isPbPerformanceModeEnabled: Boolean = false,
     val isFeedUiOptForced: Boolean = false,
     val isForceFeedUiOptRuntimeEnabled: Boolean = false,
+    val isPerformanceOptimizationEnabled: Boolean = false,
     val isHostPerformanceFlagsForced: Boolean = false,
     val isApsarasScheduleDisabled: Boolean = false,
     val isFlutterPreinitDisabled: Boolean = false,

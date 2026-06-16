@@ -1049,7 +1049,7 @@ object SettingsMenuHook {
                 ConfigManager.applyScanAvailability(
                     activity,
                     HookSymbolResolver.featureStatusMap(symbols),
-                    refreshRuntime = false,
+                    refreshRuntime = true,
                 )
                 if (symbols.source != "unsupported") {
                     ConfigManager.markPostScanEnvironmentWarningPending(activity)
@@ -1069,6 +1069,7 @@ object SettingsMenuHook {
                 if (!scanLogContains("HookPoint[")) {
                     HookSymbolResolver.formatHookPointStatusLines(scanSymbols).forEach(::appendScanLog)
                 }
+                ConfigManager.formatPerformanceStatusLines(ConfigManager.snapshot()).forEach(::appendScanLog)
                 runtimeEnvironmentJson = runCatching {
                     AboutInfoManager.runtimeEnvironmentJsonForSettings(activity)
                 }.getOrElse { t ->
