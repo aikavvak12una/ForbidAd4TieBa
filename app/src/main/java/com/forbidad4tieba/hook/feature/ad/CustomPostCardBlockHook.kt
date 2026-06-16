@@ -121,6 +121,8 @@ object CustomPostCardBlockHook {
         val noKey = Any()
         val payloadCache = IdentityHashMap<Any, Any?>(size.coerceAtLeast(8))
         val keyCache = IdentityHashMap<Any, Any?>(size.coerceAtLeast(8))
+        var adBlockedCount = 0
+        var customPostBlockedCount = 0
 
         fun getPayloadCached(target: Any?): Any? {
             if (target == null) return null
@@ -190,6 +192,11 @@ object CustomPostCardBlockHook {
             }
 
             if (decision.blocked) {
+                if (isAdBlockDecision(decision)) {
+                    adBlockedCount += 1
+                } else {
+                    customPostBlockedCount += 1
+                }
                 XposedCompat.logD {
                     "[CustomPostCardBlockHook] > blocked[$i] reason=${decision.reason.orEmpty()}"
                 }
@@ -201,7 +208,13 @@ object CustomPostCardBlockHook {
                 out?.add(item)
             }
         }
+        if (adBlockedCount > 0) BlockCountStats.recordAd(adBlockedCount)
+        if (customPostBlockedCount > 0) BlockCountStats.recordCustomPost(customPostBlockedCount)
         return out ?: list
+    }
+
+    private fun isAdBlockDecision(decision: CustomPostFilterMatcher.Decision): Boolean {
+        return decision.reason?.startsWith("ad:") == true
     }
 
     private fun decideBlock(

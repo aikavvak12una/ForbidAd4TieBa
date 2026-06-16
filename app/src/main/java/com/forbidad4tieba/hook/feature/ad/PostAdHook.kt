@@ -64,11 +64,13 @@ object PostAdHook {
     private fun filterItems(list: List<*>, runtimeFilter: RuntimeFilter): List<*> {
         val size = list.size
         var out: ArrayList<Any?>? = null
+        var blockedCount = 0
 
         for (i in 0 until size) {
             val item = list[i]
             val block = isBlockedItem(item, runtimeFilter)
             if (block) {
+                blockedCount += 1
                 if (out == null) {
                     out = ArrayList(size - 1)
                     for (j in 0 until i) out.add(list[j])
@@ -77,6 +79,7 @@ object PostAdHook {
                 out?.add(item)
             }
         }
+        if (blockedCount > 0) BlockCountStats.recordAd(blockedCount)
         return out ?: list
     }
 

@@ -36,6 +36,7 @@ object SearchBoxTextAdHook {
                 val result = chain.proceed(arrayOf<Any?>(emptyList<String>(), false))
 
                 if (originalSize > 0) {
+                    BlockCountStats.recordAd()
                     XposedCompat.logD {
                         "[SearchBoxTextAdHook] blocked home search hint list: $originalSize -> 0"
                     }

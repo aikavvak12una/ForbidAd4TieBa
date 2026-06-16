@@ -47,6 +47,7 @@ import com.forbidad4tieba.hook.config.ModuleUserDataCleaner
 import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
+import com.forbidad4tieba.hook.feature.ad.BlockCountStats
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
@@ -474,7 +475,6 @@ object SettingsMenuHook {
             }
 
             val versionInfo = buildVersionDisplayInfo(context, scanSymbols)
-
             val defaultAboutItems = listOf(
                 AboutInfoManager.AboutItem(
                     UiText.Settings.VERSION,
@@ -545,6 +545,18 @@ object SettingsMenuHook {
             renderAboutItems(AboutInfoManager.loadCachedItemsForSettings())
 
             root.addView(aboutContainer)
+            val blockCountStats = BlockCountStats.snapshot(context)
+            root.addView(TextView(context).apply {
+                text = UiText.Settings.blockCountStatsSummary(
+                    adCount = blockCountStats.adCount,
+                    customPostCount = blockCountStats.customPostCount,
+                )
+                textSize = 10f
+                setTextColor(tokensForDefault.textSecondary)
+                gravity = Gravity.CENTER_HORIZONTAL
+                includeFontPadding = false
+                setPadding(padding, 0, padding, padding)
+            })
 
             val scrollContainer = ScrollView(context).apply {
                 addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -585,11 +597,7 @@ object SettingsMenuHook {
 
                 val brandTag = TextView(context).apply {
                     text = UiText.Settings.BRAND_TAG
-                    textSize = SETTINGS_BRAND_TAG_SP
-                    letterSpacing = 0.06f
-                    typeface = Typeface.MONOSPACE
-                    setTextColor(tokensTitle.textMuted)
-                    setPadding(0, (2 * density).toInt(), 0, 0)
+                    applySettingsBrandTagStyle(tokensTitle, density)
                 }
                 addView(brandTag)
                 UiStyle.animateBrandTagShimmer(brandTag)
@@ -810,11 +818,7 @@ object SettingsMenuHook {
         })
         titleContainer.addView(TextView(activity).apply {
             text = UiText.Settings.BRAND_TAG
-            textSize = SETTINGS_BRAND_TAG_SP
-            letterSpacing = 0.06f
-            typeface = Typeface.MONOSPACE
-            setTextColor(tokens.textMuted)
-            setPadding(0, (2 * density).toInt(), 0, 0)
+            applySettingsBrandTagStyle(tokens, density)
         }.also { UiStyle.animateBrandTagShimmer(it) })
         root.addView(titleContainer)
 
@@ -4054,7 +4058,7 @@ object SettingsMenuHook {
             }
             root.addView(TextView(context).apply {
                 text = UiText.Settings.REPLY_VISIBILITY_PROBE_GUIDE
-                applySettingsMessageStyle(tokens, density)
+                applySettingsRowDescriptionStyle(tokens, density, rightPaddingDp = 0f, bottomPaddingDp = 0f)
                 setPadding(0, 0, 0, (8 * density).toInt())
             })
 

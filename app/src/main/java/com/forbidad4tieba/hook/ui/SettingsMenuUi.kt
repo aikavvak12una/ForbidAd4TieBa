@@ -60,6 +60,7 @@ internal const val SETTINGS_DESC_TOP_PADDING_DP = 3f
 internal const val SETTINGS_DESC_RIGHT_PADDING_DP = 14f
 
 private val firstSettingsDialogBackgroundErrorLogged = AtomicBoolean(false)
+private const val SETTINGS_BRAND_TAG_VIEW_TAG = "settings_brand_tag"
 
 internal data class HomeNativeGlassDialogPreviewStyle(
     val style: ConfigManager.HomeNativeGlassStyleConfig,
@@ -98,6 +99,18 @@ internal fun TextView.applySettingsDialogTitleStyle(
     gravity = Gravity.START or Gravity.CENTER_VERTICAL
     includeFontPadding = false
     setLineSpacing(1.5f * density, 1f)
+}
+
+internal fun TextView.applySettingsBrandTagStyle(
+    tokens: UiStyle.Tokens,
+    density: Float,
+) {
+    textSize = SETTINGS_BRAND_TAG_SP
+    letterSpacing = 0.06f
+    typeface = Typeface.MONOSPACE
+    setTextColor(tokens.textMuted)
+    includeFontPadding = false
+    setPadding(0, (2 * density).toInt(), 0, 0)
 }
 
 internal fun TextView.applySettingsSectionTitleStyle(
@@ -166,15 +179,23 @@ internal fun TextView.applySettingsCodeTextStyle(
     setLineSpacing(1.5f * density, 1f)
 }
 
-internal fun createSettingsDialogTitleView(context: Context, title: String): TextView {
+internal fun createSettingsDialogTitleView(context: Context, title: String): View {
     val density = context.resources.displayMetrics.density
     val padding = settingsDialogPadding(density)
     val tokens = UiStyle.tokens(context)
-    return TextView(context).apply {
-        id = android.R.id.title
-        text = title
-        applySettingsDialogTitleStyle(tokens, density)
+    return LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
         setPadding(padding, padding, padding, settingsDialogTitleBottomPadding(padding))
+        addView(TextView(context).apply {
+            id = android.R.id.title
+            text = title
+            applySettingsDialogTitleStyle(tokens, density)
+        })
+        addView(TextView(context).apply {
+            tag = SETTINGS_BRAND_TAG_VIEW_TAG
+            text = UiText.Settings.BRAND_TAG
+            applySettingsBrandTagStyle(tokens, density)
+        }.also { UiStyle.animateBrandTagShimmer(it) })
     }
 }
 
@@ -257,6 +278,17 @@ private fun refreshSettingsDialogTitle(
 ) {
     (window.decorView.findViewById<View>(android.R.id.title) as? TextView)
         ?.applySettingsDialogTitleStyle(tokens, density)
+    findTaggedTextView(window.decorView, SETTINGS_BRAND_TAG_VIEW_TAG)
+        ?.applySettingsBrandTagStyle(tokens, density)
+}
+
+private fun findTaggedTextView(view: View, tag: String): TextView? {
+    if (view is TextView && view.tag == tag) return view
+    val group = view as? ViewGroup ?: return null
+    for (index in 0 until group.childCount) {
+        findTaggedTextView(group.getChildAt(index), tag)?.let { return it }
+    }
+    return null
 }
 
 private fun clearSystemDialogCustomPanelPadding(window: Window) {
