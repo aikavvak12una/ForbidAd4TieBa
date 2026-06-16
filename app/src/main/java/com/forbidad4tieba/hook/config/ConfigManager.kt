@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
 import com.forbidad4tieba.hook.BuildConfig
+import com.forbidad4tieba.hook.feature.FeatureDescriptors
+import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -11,6 +13,13 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 object ConfigManager {
+    enum class ScanFeatureAvailabilityState {
+        UNKNOWN,
+        AVAILABLE,
+        PARTIAL,
+        DISABLED,
+    }
+
     const val USER_SETTINGS_PREFS_NAME = "tbhook_user_settings"
     const val MODULE_STATE_PREFS_NAME = "tbhook_module_state"
     const val SYMBOL_CACHE_PREFS_NAME = "tbhook_symbol_cache"
@@ -182,11 +191,16 @@ object ConfigManager {
 
     @Volatile private var prefs: SharedPreferences? = null
     @Volatile private var appContext: Context? = null
-    @Volatile private var scanFeatureAvailability: Map<String, Boolean> = emptyMap()
+    @Volatile private var scanFeatureAvailability: Map<String, ScanFeatureAvailabilityState> = emptyMap()
     @Volatile private var settingsSnapshot: SettingsSnapshot = SettingsSnapshot()
     @Volatile private var settingsSnapshotVersion: Long = 0L
     @Volatile private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     @Volatile private var homeNativeGlassDarkModeActive: Boolean = false
+
+    private val scanIndependentFeatureKeys = setOf(
+        HookFeatureKey.AUTO_SIGN_IN,
+        HookFeatureKey.HIDE_PB_BOTTOM_BANNER,
+    )
 
     @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
     @Volatile private var environmentWarningDialogActive: Boolean = false
@@ -902,8 +916,61 @@ object ConfigManager {
         return Color.rgb(Color.red(color), Color.green(color), Color.blue(color))
     }
 
-    fun isScanFeatureAvailable(featureKey: String): Boolean {
-        return scanFeatureAvailability[featureKey] != false
+    fun scanFeatureKeyForPrefKey(prefKey: String): String {
+        return scanFeatureKeyForPrefKeyOrNull(prefKey) ?: prefKey
+    }
+
+    fun scanFeatureKeyForPrefKeyOrNull(prefKey: String): String? {
+        FeatureDescriptors.forPrefKey(prefKey)?.let { return it.featureKey }
+        return when (prefKey) {
+            KEY_BLOCK_AD_FEED,
+            KEY_BLOCK_AD_POST_PAGE,
+            KEY_BLOCK_AD_FORUM_PAGE,
+            KEY_BLOCK_AD_STRATEGY,
+            KEY_BLOCK_AD_SEARCH_BOX_TEXT,
+            KEY_BLOCK_AD_HOME_TOP_BAR,
+            KEY_BLOCK_AD_MINE_TAB_WEB,
+            KEY_BLOCK_AD_HOME_SIDE_BAR_WEB,
+            -> HookFeatureKey.BLOCK_AD
+
+            KEY_FILTER_POST_VOTE,
+            KEY_FILTER_POST_VIDEO,
+            KEY_FILTER_POST_REPLY,
+            KEY_FILTER_POST_HOT,
+            KEY_FILTER_POST_GOODS,
+            KEY_FILTER_POST_GAME_BOOKING,
+            KEY_FILTER_POST_HELP,
+            KEY_FILTER_POST_SCORE,
+            KEY_FILTER_POST_LIVE,
+            KEY_FILTER_POST_RECOMMEND_FORUM,
+            KEY_FILTER_POST_UNFOLLOWED_FORUM,
+            KEY_FILTER_POST_FORUM_KEYWORD,
+            KEY_FILTER_POST_MODEL_SCORE,
+            -> HookFeatureKey.ENABLE_CUSTOM_POST_FILTER
+
+            in HookFeatureKey.orderedKeys -> prefKey
+
+            else -> null
+        }
+    }
+
+    fun getScanFeatureAvailabilityState(prefOrFeatureKey: String): ScanFeatureAvailabilityState {
+        val featureKey = scanFeatureKeyForPrefKeyOrNull(prefOrFeatureKey)
+            ?: return ScanFeatureAvailabilityState.AVAILABLE
+        if (featureKey in scanIndependentFeatureKeys) return ScanFeatureAvailabilityState.AVAILABLE
+        return scanFeatureAvailability[featureKey]
+            ?: ScanFeatureAvailabilityState.UNKNOWN
+    }
+
+    fun isScanFeatureAvailable(prefOrFeatureKey: String): Boolean {
+        return when (getScanFeatureAvailabilityState(prefOrFeatureKey)) {
+            ScanFeatureAvailabilityState.AVAILABLE,
+            ScanFeatureAvailabilityState.PARTIAL,
+            -> true
+            ScanFeatureAvailabilityState.UNKNOWN,
+            ScanFeatureAvailabilityState.DISABLED,
+            -> false
+        }
     }
 
     fun applyScanAvailability(
@@ -913,7 +980,14 @@ object ConfigManager {
     ) {
         if (featureStatusMap.isEmpty()) return
         scanFeatureAvailability = featureStatusMap.mapValues { (_, status) ->
-            status.state != HookFeatureState.DISABLED
+            when (status.state) {
+                HookFeatureState.FULL,
+                HookFeatureState.HARD_CODED,
+                -> ScanFeatureAvailabilityState.AVAILABLE
+                HookFeatureState.PARTIAL -> ScanFeatureAvailabilityState.PARTIAL
+                HookFeatureState.DISABLED -> ScanFeatureAvailabilityState.DISABLED
+                else -> ScanFeatureAvailabilityState.UNKNOWN
+            }
         }
 
         if (refreshRuntime) {

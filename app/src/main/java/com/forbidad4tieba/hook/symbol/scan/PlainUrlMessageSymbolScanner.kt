@@ -2,9 +2,8 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object PlainUrlMessageSymbolScanner {
@@ -39,13 +38,22 @@ internal object PlainUrlMessageSymbolScanner {
             log(logger, "plainUrlMessage: CustomResponsedMessage hierarchy mismatch")
             return PlainUrlMessageDispatchScanSymbols()
         }
-        val dispatchMethod = messageManagerClass.declaredMethods.singleOrNull { method ->
-            HookSymbolResolver.isPlainUrlMessageDispatchMethod(method, responsedMessageClass)
+        val messageManagerMethods = declaredMethods("MessageManager", messageManagerClass, logger)
+            ?: return PlainUrlMessageDispatchScanSymbols()
+        val responsedMessageMethods = declaredMethods("ResponsedMessage", responsedMessageClass, logger)
+            ?: return PlainUrlMessageDispatchScanSymbols()
+        val customResponsedMessageMethods = declaredMethods("CustomResponsedMessage", customResponsedMessageClass, logger)
+            ?: return PlainUrlMessageDispatchScanSymbols()
+        val applicationMethods = declaredMethods("TbadkCoreApplication", applicationClass, logger)
+            ?: return PlainUrlMessageDispatchScanSymbols()
+
+        val dispatchMethod = messageManagerMethods.singleOrNull { method ->
+            ScanReflection.isPlainUrlMessageDispatchMethod(method, responsedMessageClass)
         } ?: run {
             log(logger, "plainUrlMessage: dispatchResponsedMessage(ResponsedMessage) not found")
             return PlainUrlMessageDispatchScanSymbols()
         }
-        val getCmdMethod = responsedMessageClass.declaredMethods.singleOrNull { method ->
+        val getCmdMethod = responsedMessageMethods.singleOrNull { method ->
             method.name == GET_CMD_METHOD &&
                 !Modifier.isStatic(method.modifiers) &&
                 method.parameterTypes.isEmpty() &&
@@ -54,7 +62,7 @@ internal object PlainUrlMessageSymbolScanner {
             log(logger, "plainUrlMessage: ResponsedMessage.getCmd() not found")
             return PlainUrlMessageDispatchScanSymbols()
         }
-        val getDataMethod = customResponsedMessageClass.declaredMethods.singleOrNull { method ->
+        val getDataMethod = customResponsedMessageMethods.singleOrNull { method ->
             method.name == GET_DATA_METHOD &&
                 !Modifier.isStatic(method.modifiers) &&
                 method.parameterTypes.isEmpty() &&
@@ -63,7 +71,7 @@ internal object PlainUrlMessageSymbolScanner {
             log(logger, "plainUrlMessage: CustomResponsedMessage.getData() not found")
             return PlainUrlMessageDispatchScanSymbols()
         }
-        val getInstMethod = applicationClass.declaredMethods.singleOrNull { method ->
+        val getInstMethod = applicationMethods.singleOrNull { method ->
             method.name == GET_INST_METHOD &&
                 Modifier.isStatic(method.modifiers) &&
                 method.parameterTypes.isEmpty() &&
@@ -90,10 +98,20 @@ internal object PlainUrlMessageSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun isIntType(type: Class<*>): Boolean =
-        HookSymbolResolver.isIntType(type)
+        ScanReflection.isIntType(type)
+
+    private fun declaredMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("PlainUrlMessageHook.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+    }
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

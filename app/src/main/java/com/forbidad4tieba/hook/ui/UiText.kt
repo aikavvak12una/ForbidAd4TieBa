@@ -194,7 +194,7 @@ object UiText {
         const val BLOCK_UPDATE_DIALOG_LABEL = "屏蔽更新升级弹窗"
         const val COLLECTION_SEARCH_LABEL = "收藏搜索"
         const val HISTORY_SEARCH_LABEL = "浏览历史搜索"
-        const val DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL = "禁用图片左滑进吧入口"
+        const val DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL = "禁用图片末尾左滑跳转"
         const val DEFAULT_NOTIFY_TAB_LABEL = "消息默认通知页"
         const val DEFAULT_NOTIFY_TAB_DESC = "进入消息页时默认显示通知"
         const val CLEAN_SHARE_TRACKING_LABEL = "安全分享"
@@ -253,7 +253,9 @@ object UiText {
         const val ACTION_ICON_PLAY = "\u25b6"
 
         const val UNSUPPORTED_SUFFIX = " (当前版本不支持)"
+        const val SCAN_UNKNOWN_SUFFIX = " (需要扫描)"
         const val PARTIAL_SUFFIX = "\u26a0"
+        const val SCAN_UNKNOWN_NOTE = "需要反混淆扫描后确认可用"
         const val SCAN_DISABLED_PREFIX = "缺失关键方法："
         const val SCAN_PARTIAL_PREFIX = "缺失："
 
@@ -334,6 +336,7 @@ object UiText {
         fun withRestartHint(message: String): String = "$message$RESTART_HINT"
         fun withRestartTiebaHint(message: String): String = "$message$RESTART_TIEBA_HINT"
         fun withUnsupportedSuffix(label: String): String = "$label$UNSUPPORTED_SUFFIX"
+        fun withScanUnknownSuffix(label: String): String = "$label$SCAN_UNKNOWN_SUFFIX"
         fun withPartialSuffix(label: String): String = "$label$PARTIAL_SUFFIX"
         fun restrictedFeatureConfirmWaiting(seconds: Int): String = "$RESTRICTED_FEATURE_CONFIRM (${seconds}s)"
         fun initialScanEnvironmentWarningConfirmWaiting(seconds: Int): String = "$BUTTON_OK (${seconds}s)"

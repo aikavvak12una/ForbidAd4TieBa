@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import android.content.Context
 import android.net.Uri
 import android.view.MotionEvent
@@ -16,6 +14,9 @@ import android.widget.TextView
 import android.widget.TextSwitcher
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import java.io.IOException
+import java.lang.reflect.Constructor
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal data class ScanMatch(
@@ -28,16 +29,57 @@ internal data class ScanMatch(
 internal abstract class ScanRule {
     open val minScore: Int = 80
     open val minScoreGap: Int = 0
-    abstract fun match(cls: Class<*>, cl: ClassLoader): ScanMatch?
+    open fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = null
+    open fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? = match(cls, cl)
 }
 
-internal fun kotlinMetadataStrings(cls: Class<*>): List<String> {
+private data class ScanRuleClassShape(
+    val methods: Array<Method>,
+    val fields: Array<Field>,
+    val constructors: Array<Constructor<*>>,
+)
+
+private fun scanRuleClassShape(tag: String, cls: Class<*>, logger: ScanLogger?): ScanRuleClassShape? {
+    return scanSubStep("ScanRules.$tag.${cls.name}.ClassShape", logger, null) {
+        ScanRuleClassShape(
+            methods = cls.declaredMethods,
+            fields = cls.declaredFields,
+            constructors = cls.declaredConstructors,
+        )
+    }
+}
+
+private fun scanRuleMethods(tag: String, cls: Class<*>, logger: ScanLogger?): Array<Method>? {
+    return scanSubStep("ScanRules.$tag.${cls.name}.Methods", logger, null) {
+        cls.declaredMethods
+    }
+}
+
+private fun scanRuleFields(tag: String, cls: Class<*>, logger: ScanLogger?): Array<Field>? {
+    return scanSubStep("ScanRules.$tag.${cls.name}.Fields", logger, null) {
+        cls.declaredFields
+    }
+}
+
+private fun scanRuleNestedClasses(tag: String, cls: Class<*>, logger: ScanLogger?): Array<Class<*>>? {
+    return scanSubStep("ScanRules.$tag.${cls.name}.NestedClasses", logger, null) {
+        cls.declaredClasses
+    }
+}
+
+private fun scanRuleClassForName(tag: String, className: String, cl: ClassLoader, logger: ScanLogger?): Class<*>? {
+    return scanSubStep("ScanRules.$tag.$className.ClassForName", logger, null) {
+        Class.forName(className, false, cl)
+    }
+}
+
+internal fun kotlinMetadataStrings(cls: Class<*>, logger: ScanLogger? = null): List<String> {
     val metadata = cls.getAnnotation(kotlin.Metadata::class.java) ?: return emptyList()
     val out = ArrayList<String>(8)
     for (methodName in arrayOf("d1", "d2")) {
-        val values = runCatching {
+        val values = scanSubStep("ScanRules.${cls.name}.Metadata.$methodName", logger, null) {
             kotlin.Metadata::class.java.getMethod(methodName).invoke(metadata) as? Array<*>
-        }.getOrNull() ?: continue
+        } ?: continue
         for (value in values) {
             if (value is String && value.isNotEmpty()) out.add(value)
         }
@@ -46,19 +88,20 @@ internal fun kotlinMetadataStrings(cls: Class<*>): List<String> {
 }
 
 internal class SettingsLevel1Rule(private val navClass: Class<*>) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
-        val methods = runCatching { cls.declaredMethods }.getOrNull() ?: return null
-        val fields = runCatching { cls.declaredFields }.getOrNull() ?: return null
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
+        val shape = scanRuleClassShape("SettingsLevel1Rule", cls, logger) ?: return null
+        val methods = shape.methods
+        val fields = shape.fields
 
         // Pattern A: void xxx(Context, NavigationBar).
         val methodA = methods.firstOrNull { m ->
-            runCatching {
-                if (m.returnType != Void.TYPE) return@runCatching false
-                val p = m.parameterTypes
-                p.size == 2 &&
-                    Context::class.java.isAssignableFrom(p[0]) &&
-                    navClass.isAssignableFrom(p[1])
-            }.getOrDefault(false)
+            if (m.returnType != Void.TYPE) return@firstOrNull false
+            val p = m.parameterTypes
+            p.size == 2 &&
+                Context::class.java.isAssignableFrom(p[0]) &&
+                navClass.isAssignableFrom(p[1])
         }
 
         // 模式 B：void xxx(View)，我的页面写法，NavigationBar 在内部通过 findViewById 获取。
@@ -70,20 +113,16 @@ internal class SettingsLevel1Rule(private val navClass: Class<*>) : ScanRule() {
                 val hasNavBarField = fields.any { navClass.isAssignableFrom(it.type) }
                 val hasRelativeLayoutField = fields.any { it.type.name == "android.widget.RelativeLayout" }
                 val hasImageViewField = fields.any { it.type == ImageView::class.java }
-                val hasContextConstructor = runCatching {
-                    cls.declaredConstructors.any { ctor ->
-                        ctor.parameterTypes.size == 1 &&
-                            Context::class.java.isAssignableFrom(ctor.parameterTypes[0])
-                    }
-                }.getOrDefault(false)
+                val hasContextConstructor = shape.constructors.any { ctor ->
+                    ctor.parameterTypes.size == 1 &&
+                        Context::class.java.isAssignableFrom(ctor.parameterTypes[0])
+                }
                 if (!hasRelativeLayoutField || !hasImageViewField || !hasContextConstructor) null
                 else methods.firstOrNull { m ->
-                    runCatching {
-                        if (m.returnType != Void.TYPE) return@runCatching false
-                        if (m.name == "onClick") return@runCatching false
-                        val p = m.parameterTypes
-                        p.size == 1 && View::class.java.isAssignableFrom(p[0]) && !hasNavBarField
-                    }.getOrDefault(false)
+                    if (m.returnType != Void.TYPE) return@firstOrNull false
+                    if (m.name == "onClick") return@firstOrNull false
+                    val p = m.parameterTypes
+                    p.size == 1 && View::class.java.isAssignableFrom(p[0]) && !hasNavBarField
                 }
             }
         } else null
@@ -91,13 +130,9 @@ internal class SettingsLevel1Rule(private val navClass: Class<*>) : ScanRule() {
         val method = methodA ?: methodB ?: return null
 
         val containerField = fields.firstOrNull {
-            runCatching {
-                it.type.name == "android.widget.RelativeLayout"
-            }.getOrDefault(false)
+            it.type.name == "android.widget.RelativeLayout"
         } ?: fields.firstOrNull {
-            runCatching {
-                View::class.java.isAssignableFrom(it.type)
-            }.getOrDefault(false)
+            View::class.java.isAssignableFrom(it.type)
         } ?: return null
 
         var score = 100
@@ -110,12 +145,15 @@ internal class SettingsLevel1Rule(private val navClass: Class<*>) : ScanRule() {
 }
 
 internal class HomeTabsLevel1Rule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
-        val fields = cls.declaredFields
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
+        val shape = scanRuleClassShape("HomeTabsLevel1Rule", cls, logger) ?: return null
+        val fields = shape.fields
         val listField = fields.firstOrNull { List::class.java.isAssignableFrom(it.type) } ?: return null
         if (!fields.any { it.type == Int::class.javaPrimitiveType }) return null
 
-        val methods = cls.declaredMethods
+        val methods = shape.methods
         val hasFactory = methods.any { method ->
             val p = method.parameterTypes
             p.size == 4 &&
@@ -151,13 +189,16 @@ internal class EnterForumWebControllerRule(
 ) : ScanRule() {
     override val minScoreGap: Int = 20
 
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
         if (!cls.name.startsWith("com.baidu.tieba.")) return null
 
-        val fields = cls.declaredFields
-        val constructors = cls.declaredConstructors
-        val methods = cls.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
+        val shape = scanRuleClassShape("EnterForumWebControllerRule", cls, logger) ?: return null
+        val fields = shape.fields
+        val constructors = shape.constructors
+        val methods = shape.methods.filter { !Modifier.isStatic(it.modifiers) }
         val hasWebViewGetter = methods.any { method ->
             method.parameterTypes.isEmpty() &&
                 tbWebViewClass.isAssignableFrom(method.returnType)
@@ -205,9 +246,11 @@ internal class EnterForumWebControllerRule(
 internal class ForumBottomSheetInitScrollRule(
     private val bottomSheetClassName: String,
 ) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != bottomSheetClassName) return null
-        val methods = cls.declaredMethods
+        val methods = scanRuleMethods("ForumBottomSheetInitScrollRule", cls, logger) ?: return null
         val targetMethod = methods
             .filter { method ->
                 !Modifier.isStatic(method.modifiers) &&
@@ -235,17 +278,19 @@ internal class ForumBottomSheetInitScrollRule(
 internal class AutoRefreshTriggerRule(
     private val preferredMethodNames: List<String> = listOf("w1"),
 ) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != "com.baidu.tieba.homepage.personalize.PersonalizePageView") return null
 
-        val methods = cls.declaredMethods.filter { method ->
+        val methods = scanRuleMethods("AutoRefreshTriggerRule", cls, logger)?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.isEmpty() &&
                 method.name.length <= 3 &&
                 method.name.endsWith("1") &&
                 method.name.firstOrNull()?.isLowerCase() == true
-        }
+        } ?: return null
         if (methods.isEmpty()) return null
 
         val targetMethod = preferredMethodNames
@@ -274,7 +319,9 @@ internal class AutoLoadMoreConfigRule(
     private val parserClassName: String,
     private val preferredMethodName: String = "a",
 ) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
 
         val isParserCompanion = cls.name == "${parserClassName}\$Companion" ||
@@ -282,11 +329,11 @@ internal class AutoLoadMoreConfigRule(
             cls.enclosingClass?.name == parserClassName
         if (!isParserCompanion) return null
 
-        val candidates = cls.declaredMethods.filter { method ->
+        val candidates = scanRuleMethods("AutoLoadMoreConfigRule", cls, logger)?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.parameterTypes.isEmpty() &&
                 method.returnType == Int::class.javaPrimitiveType
-        }
+        } ?: return null
         if (candidates.isEmpty()) return null
 
         val targetMethod = candidates.minWithOrNull(
@@ -317,23 +364,27 @@ internal class PbCommentScrollRule(
     override val minScore: Int = 100
     override val minScoreGap: Int = 10
 
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
         if (cls.enclosingClass?.name != pbFragmentClassName && !cls.name.startsWith("${pbFragmentClassName}\$")) {
             return null
         }
 
-        val pbFragmentClass = runCatching { Class.forName(pbFragmentClassName, false, cl) }.getOrNull()
+        val pbFragmentClass = scanRuleClassForName("PbCommentScrollRule", pbFragmentClassName, cl, logger)
             ?: return null
 
-        val fragmentField = cls.declaredFields.firstOrNull { field ->
+        val fragmentField = scanRuleFields("PbCommentScrollRule", cls, logger)?.firstOrNull { field ->
             !Modifier.isStatic(field.modifiers) && field.type == pbFragmentClass
         } ?: return null
 
-        val bottomListenerField = findBottomListenerField(pbFragmentClass)
-        val bottomMethod = bottomListenerField?.let { findBottomMethod(it.type) }
+        val bottomListenerField = findBottomListenerField(pbFragmentClass, logger)
+        val bottomMethod = bottomListenerField?.let { findBottomMethod(it.type, logger) }
 
-        val methods = cls.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
+        val methods = scanRuleMethods("PbCommentScrollRule", cls, logger)
+            ?.filter { !Modifier.isStatic(it.modifiers) }
+            ?: return null
         val scrollCandidates = methods.filter { method ->
             method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 4 &&
@@ -382,12 +433,12 @@ internal class PbCommentScrollRule(
         )
     }
 
-    private fun findBottomListenerField(pbFragmentClass: Class<*>): java.lang.reflect.Field? {
-        val fields = pbFragmentClass.declaredFields.filter { field ->
+    private fun findBottomListenerField(pbFragmentClass: Class<*>, logger: ScanLogger?): java.lang.reflect.Field? {
+        val fields = scanRuleFields("PbCommentScrollRule.BottomListener", pbFragmentClass, logger)?.filter { field ->
             !Modifier.isStatic(field.modifiers) &&
                 field.type.name.startsWith("${StableTiebaHookPoints.BD_LIST_VIEW_CLASS}\$") &&
-                findBottomMethod(field.type) != null
-        }
+                findBottomMethod(field.type, logger) != null
+        } ?: return null
         return fields.minWithOrNull(
             compareBy<java.lang.reflect.Field>(
                 { if (Modifier.isFinal(it.modifiers)) 0 else 1 },
@@ -397,12 +448,12 @@ internal class PbCommentScrollRule(
         )
     }
 
-    private fun findBottomMethod(type: Class<*>): java.lang.reflect.Method? {
-        val methods = type.declaredMethods.filter { method ->
+    private fun findBottomMethod(type: Class<*>, logger: ScanLogger?): java.lang.reflect.Method? {
+        val methods = scanRuleMethods("PbCommentScrollRule.BottomMethod", type, logger)?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.isEmpty()
-        }
+        } ?: return null
         return methods.minWithOrNull(
             compareBy<java.lang.reflect.Method>(
                 { if (it.name == "onScrollToBottom") 0 else 1 },
@@ -419,18 +470,23 @@ internal class BdListViewBottomScrollRule(
     override val minScore: Int = 100
     override val minScoreGap: Int = 10
 
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
-        val listViewClass = Class.forName(listViewClassName, false, cl)
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
+        val listViewClass = scanRuleClassForName("BdListViewBottomScrollRule", listViewClassName, cl, logger)
+            ?: return null
         val scanTargets = if (cls.name == listViewClassName) {
-            cls.declaredClasses.asSequence()
+            scanRuleNestedClasses("BdListViewBottomScrollRule", cls, logger)?.asSequence() ?: return null
         } else {
             sequenceOf(cls)
         }
         val candidates = scanTargets.mapNotNull { target ->
-            val ownerField = target.declaredFields.firstOrNull { field ->
+            val targetShape = scanRuleClassShape("BdListViewBottomScrollRule.Target", target, logger)
+                ?: return@mapNotNull null
+            val ownerField = targetShape.fields.firstOrNull { field ->
                 !Modifier.isStatic(field.modifiers) && field.type == listViewClass
             } ?: return@mapNotNull null
-            val methods = target.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
+            val methods = targetShape.methods.filter { !Modifier.isStatic(it.modifiers) }
             val onScrollCandidates = methods.filter { method ->
                 !Modifier.isStatic(method.modifiers) &&
                     method.returnType == Void.TYPE &&
@@ -480,21 +536,36 @@ internal class BdRecyclerViewBottomScrollRule(
     override val minScore: Int = 100
     override val minScoreGap: Int = 10
 
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
-        val ownerClass = Class.forName(recyclerViewClassName, false, cl)
-        val recyclerViewClass = Class.forName(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, false, cl)
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
+        val ownerClass = scanRuleClassForName("BdRecyclerViewBottomScrollRule.Owner", recyclerViewClassName, cl, logger)
+            ?: return null
+        val recyclerViewClass = scanRuleClassForName(
+            "BdRecyclerViewBottomScrollRule.RecyclerView",
+            StableTiebaHookPoints.RECYCLER_VIEW_CLASS,
+            cl,
+            logger,
+        ) ?: return null
         val recyclerScrollListenerClass =
-            Class.forName("${StableTiebaHookPoints.RECYCLER_VIEW_CLASS}\$OnScrollListener", false, cl)
+            scanRuleClassForName(
+                "BdRecyclerViewBottomScrollRule.ScrollListener",
+                "${StableTiebaHookPoints.RECYCLER_VIEW_CLASS}\$OnScrollListener",
+                cl,
+                logger,
+            ) ?: return null
         val scanTargets = if (cls.name == recyclerViewClassName) {
-            cls.declaredClasses.asSequence()
+            scanRuleNestedClasses("BdRecyclerViewBottomScrollRule", cls, logger)?.asSequence() ?: return null
         } else {
             sequenceOf(cls)
         }
         val candidates = scanTargets.mapNotNull { target ->
-            val ownerField = target.declaredFields.firstOrNull { field ->
+            val targetShape = scanRuleClassShape("BdRecyclerViewBottomScrollRule.Target", target, logger)
+                ?: return@mapNotNull null
+            val ownerField = targetShape.fields.firstOrNull { field ->
                 !Modifier.isStatic(field.modifiers) && field.type == ownerClass
             } ?: return@mapNotNull null
-            val methods = target.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
+            val methods = targetShape.methods.filter { !Modifier.isStatic(it.modifiers) }
             val onScrolledCandidates = methods.filter { method ->
                 !Modifier.isStatic(method.modifiers) &&
                     method.returnType == Void.TYPE &&
@@ -537,13 +608,16 @@ internal class BdRecyclerViewBottomScrollRule(
 }
 
 internal class MainTabBottomLevel1Rule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
-        val fields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
+        val shape = scanRuleClassShape("MainTabBottomLevel1Rule", cls, logger) ?: return null
+        val fields = shape.fields.filter { !Modifier.isStatic(it.modifiers) }
         val listField = fields.firstOrNull { List::class.java.isAssignableFrom(it.type) } ?: return null
         val hasContextField = fields.any { Context::class.java.isAssignableFrom(it.type) }
         if (!hasContextField) return null
 
-        val methods = cls.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
+        val methods = shape.methods.filter { !Modifier.isStatic(it.modifiers) }
         val addMethod = methods.firstOrNull { method ->
             method.returnType == Void.TYPE && method.parameterTypes.size == 1
         } ?: return null
@@ -552,10 +626,12 @@ internal class MainTabBottomLevel1Rule : ScanRule() {
         } ?: return null
 
         val delegateClass = addMethod.parameterTypes[0]
-        val structureMethod = pickStructureMethod(delegateClass) ?: return null
+        val structureMethod = pickStructureMethod(delegateClass, logger) ?: return null
 
         val structureClass = structureMethod.returnType
-        val structureFields = structureClass.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+        val structureFields = scanRuleFields("MainTabBottomLevel1Rule.Structure", structureClass, logger)
+            ?.filter { !Modifier.isStatic(it.modifiers) }
+            ?: return null
         val typeField = pickTypeField(structureFields) ?: return null
         val dynamicIconField = structureFields.firstOrNull { it.type.name.contains("DynamicIconData") }
         val fragmentField = structureFields.firstOrNull {
@@ -583,13 +659,13 @@ internal class MainTabBottomLevel1Rule : ScanRule() {
         return ScanMatch(cls.name, packedMethods, packedFields, score)
     }
 
-    private fun pickStructureMethod(delegateClass: Class<*>): java.lang.reflect.Method? {
-        val candidates = delegateClass.declaredMethods.filter { method ->
+    private fun pickStructureMethod(delegateClass: Class<*>, logger: ScanLogger?): java.lang.reflect.Method? {
+        val candidates = scanRuleMethods("MainTabBottomLevel1Rule.Delegate", delegateClass, logger)?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.parameterTypes.isEmpty() &&
                 !method.returnType.isPrimitive &&
-                hasTabStructureLikeFields(method.returnType)
-        }
+                hasTabStructureLikeFields(method.returnType, logger)
+        } ?: return null
         if (candidates.isEmpty()) return null
         return candidates.minWithOrNull(
             compareBy<java.lang.reflect.Method>(
@@ -623,8 +699,10 @@ internal class MainTabBottomLevel1Rule : ScanRule() {
         )
     }
 
-    private fun hasTabStructureLikeFields(structureClass: Class<*>): Boolean {
-        val fields = structureClass.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+    private fun hasTabStructureLikeFields(structureClass: Class<*>, logger: ScanLogger?): Boolean {
+        val fields = scanRuleFields("MainTabBottomLevel1Rule.TabStructure", structureClass, logger)
+            ?.filter { !Modifier.isStatic(it.modifiers) }
+            ?: return false
         val hasTypeLikeInt = fields.any { it.type == Int::class.javaPrimitiveType }
         val hasFragmentField = fields.any {
             isFragmentLikeClass(it.type)
@@ -643,11 +721,13 @@ internal class MainTabBottomLevel1Rule : ScanRule() {
 }
 
 internal class FeedTemplateKeyRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
-        if (!cls.isInterface) return null
-        if (!isTemplateDataInterface(cls, cl)) return null
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
 
-        val methods = cls.declaredMethods
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
+        if (!cls.isInterface) return null
+        if (!isTemplateDataInterface(cls, cl, logger)) return null
+
+        val methods = scanRuleMethods("FeedTemplateKeyRule", cls, logger) ?: return null
         if (methods.size < 2 || methods.size > 6) return null
 
         val stringMethods = methods.filter {
@@ -673,13 +753,17 @@ internal class FeedTemplateKeyRule : ScanRule() {
         return ScanMatch(cls.name, keyMethod.name, payloadMethod.name, score)
     }
 
-    private fun isTemplateDataInterface(cls: Class<*>, cl: ClassLoader): Boolean {
-        val vhClass = runCatching {
-            Class.forName("com.baidu.tieba.feed.list.TemplateAdapter\$TemplateVH", false, cl)
-        }.getOrNull() ?: return false
+    private fun isTemplateDataInterface(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): Boolean {
+        val vhClass = scanRuleClassForName(
+            "FeedTemplateKeyRule.TemplateVH",
+            "com.baidu.tieba.feed.list.TemplateAdapter\$TemplateVH",
+            cl,
+            logger,
+        ) ?: return false
 
-        val hasField = vhClass.declaredFields.any { it.type == cls }
-        val hasBindMethod = vhClass.declaredMethods.any { method ->
+        val vhShape = scanRuleClassShape("FeedTemplateKeyRule.TemplateVH", vhClass, logger) ?: return false
+        val hasField = vhShape.fields.any { it.type == cls }
+        val hasBindMethod = vhShape.methods.any { method ->
             method.returnType == Void.TYPE &&
                 method.parameterTypes.any { it == cls }
         }
@@ -691,12 +775,15 @@ internal class FeedTemplateLoadMoreRule : ScanRule() {
     override val minScore: Int = 105
     override val minScoreGap: Int = 8
 
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         val superCls = cls.superclass ?: return null
         if (cls.name != "com.baidu.tieba.feed.list.FeedTemplateAdapter" &&
             superCls.name != "com.baidu.tieba.feed.list.TemplateAdapter") return null
 
-        val methods = cls.declaredMethods
+        val shape = scanRuleClassShape("FeedTemplateLoadMoreRule", cls, logger) ?: return null
+        val methods = shape.methods
         val loadMoreCandidates = methods.filter { m ->
             m.returnType == Void.TYPE &&
                 m.parameterTypes.size == 1 &&
@@ -705,10 +792,10 @@ internal class FeedTemplateLoadMoreRule : ScanRule() {
 
         if (loadMoreCandidates.isEmpty()) return null
 
-        val metadata = kotlinMetadataStrings(cls)
+        val metadata = kotlinMetadataStrings(cls, logger)
         val hasLoadMoreMetadata = metadata.any { it.contains("loadMoreRefreshList") }
         val hasRefreshMetadata = metadata.any { it.contains("refreshList") }
-        val hasRecyclerViewField = cls.declaredFields.any {
+        val hasRecyclerViewField = shape.fields.any {
             it.type.name == "androidx.recyclerview.widget.RecyclerView"
         }
         val hasPreloadInterface = cls.interfaces.any {
@@ -751,10 +838,13 @@ internal class FeedTemplateLoadMoreRule : ScanRule() {
 }
 
 internal class SplashAdHelperRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
-        val fields = cls.declaredFields
-        val methods = cls.declaredMethods
-        
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
+        val shape = scanRuleClassShape("SplashAdHelperRule", cls, logger) ?: return null
+        val fields = shape.fields
+        val methods = shape.methods
+
         // Top-level Kotlin helper: static Lazy field plus static boolean methods.
         val hasLazy = fields.any {
             Modifier.isStatic(it.modifiers) && it.type.name == "kotlin.Lazy"
@@ -767,7 +857,7 @@ internal class SplashAdHelperRule : ScanRule() {
                 it.parameterTypes.isEmpty()
         }
         if (boolMethods.size < 2) return null
-        
+
         // Pick the stable short method name when present.
         val aMethod = boolMethods.minWithOrNull(
             compareBy<java.lang.reflect.Method>(
@@ -776,7 +866,7 @@ internal class SplashAdHelperRule : ScanRule() {
                 { it.name },
             ),
         ) ?: return null
-        
+
         var score = 110
         if (cls.name.endsWith("SplashForbidAdHelperKt")) score += 30
         if (boolMethods.size == 2) score += 8
@@ -788,24 +878,27 @@ internal class SplashAdHelperRule : ScanRule() {
 internal class CloseAdDataRule : ScanRule() {
     override val minScore: Int = 120
 
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != "com.baidu.tbadk.data.CloseAdData") return null
         val superCls = cls.superclass ?: return null
         if (superCls.name != "com.baidu.adp.lib.OrmObject.toolsystem.orm.object.OrmObject") return null
 
-        val fields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+        val shape = scanRuleClassShape("CloseAdDataRule", cls, logger) ?: return null
+        val fields = shape.fields.filter { !Modifier.isStatic(it.modifiers) }
         val intFields = fields.filter { it.type == Int::class.javaPrimitiveType }
         val boolFields = fields.filter { it.type == Boolean::class.javaPrimitiveType }
         val stringFields = fields.filter { it.type == String::class.java }
         if (intFields.size < 3 || boolFields.size != 1 || stringFields.size != 1) return null
 
-        val methods = cls.declaredMethods
+        val methods = shape.methods
         val intMethods = methods.filter {
             !Modifier.isStatic(it.modifiers) &&
                 it.returnType == Int::class.javaPrimitiveType &&
                 it.parameterTypes.isEmpty()
         }
-        
+
         if (intMethods.size !in 2..3) return null
 
         val selectedMethods = intMethods.sortedWith(compareBy({ it.name.length }, { it.name }))
@@ -819,9 +912,11 @@ internal class CloseAdDataRule : ScanRule() {
 }
 
 internal class ZgaRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
-        val methods = cls.declaredMethods
+        val methods = scanRuleMethods("ZgaRule", cls, logger) ?: return null
 
         val stringMethods = methods.filter {
             Modifier.isStatic(it.modifiers) &&
@@ -854,10 +949,12 @@ internal class ZgaRule : ScanRule() {
 }
 
 internal class SearchBoxSetHintRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (!ViewGroup::class.java.isAssignableFrom(cls)) return null
 
-        val methods = cls.declaredMethods
+        val methods = scanRuleMethods("SearchBoxSetHintRule", cls, logger) ?: return null
         val targetMethod = methods.firstOrNull { method ->
             if (method.returnType != Void.TYPE) return@firstOrNull false
             val p = method.parameterTypes
@@ -886,13 +983,16 @@ internal class HomeSearchBoxOwnerRule(
     private val ownerClassName: String,
     private val searchBoxClassName: String,
 ) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != ownerClassName) return null
 
-        val fields = cls.declaredFields
+        val shape = scanRuleClassShape("HomeSearchBoxOwnerRule", cls, logger) ?: return null
+        val fields = shape.fields
         if (fields.none { it.type.name == searchBoxClassName }) return null
 
-        val methods = cls.declaredMethods.filter { !Modifier.isStatic(it.modifiers) }
+        val methods = shape.methods.filter { !Modifier.isStatic(it.modifiers) }
         val getterMethod = methods
             .filter { method ->
                 method.parameterTypes.isEmpty() &&
@@ -932,10 +1032,13 @@ internal class HomeSearchBoxOwnerRule(
 }
 
 internal class OriginalImageMethodsRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != "com.baidu.tbadk.coreExtra.view.UrlDragImageView") return null
 
-        val voidNoArgMethods = cls.declaredMethods.filter { method ->
+        val methods = scanRuleMethods("OriginalImageMethodsRule", cls, logger) ?: return null
+        val voidNoArgMethods = methods.filter { method ->
             method.returnType == Void.TYPE &&
                 method.parameterTypes.isEmpty() &&
                 !Modifier.isStatic(method.modifiers) &&
@@ -948,7 +1051,7 @@ internal class OriginalImageMethodsRule : ScanRule() {
             voidNoArgMethods.singleOrNull { it.name == "I" }?.name
                 ?: return null
 
-        val voidStringMethods = cls.declaredMethods.filter { method ->
+        val voidStringMethods = methods.filter { method ->
             method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 1 &&
                 method.parameterTypes[0] == String::class.java &&
@@ -975,18 +1078,27 @@ internal class FreeCopyPopupRule : ScanRule() {
     override val minScore: Int = 100
     override val minScoreGap: Int = 8
 
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
         if (!cls.name.startsWith("com.baidu.tieba.")) return null
 
-        val roundLayoutClass = runCatching {
-            Class.forName("com.baidu.tbadk.core.dialog.RoundLinearLayout", false, cl)
-        }.getOrNull()
-        val emTextViewClass = runCatching {
-            Class.forName("com.baidu.tbadk.core.elementsMaven.view.EMTextView", false, cl)
-        }.getOrNull()
+        val roundLayoutClass = scanRuleClassForName(
+            "FreeCopyPopupRule.RoundLinearLayout",
+            "com.baidu.tbadk.core.dialog.RoundLinearLayout",
+            cl,
+            logger,
+        )
+        val emTextViewClass = scanRuleClassForName(
+            "FreeCopyPopupRule.EMTextView",
+            "com.baidu.tbadk.core.elementsMaven.view.EMTextView",
+            cl,
+            logger,
+        )
 
-        val fields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+        val shape = scanRuleClassShape("FreeCopyPopupRule", cls, logger) ?: return null
+        val fields = shape.fields.filter { !Modifier.isStatic(it.modifiers) }
         val roundFields = fields.filter { field ->
             field.type.name == "com.baidu.tbadk.core.dialog.RoundLinearLayout" ||
                 roundLayoutClass?.isAssignableFrom(field.type) == true
@@ -999,7 +1111,7 @@ internal class FreeCopyPopupRule : ScanRule() {
         }
         val textField = textFields.singleOrNull() ?: return null
 
-        val contentViewMethods = cls.declaredMethods.filter { method ->
+        val contentViewMethods = shape.methods.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.parameterTypes.isEmpty() &&
                 View::class.java.isAssignableFrom(method.returnType)
@@ -1019,7 +1131,7 @@ internal class FreeCopyPopupRule : ScanRule() {
         if (textField.name == "g") score += 8
         if (roundFields.any { it.name == "b" }) score += 4
         score -= contentViewMethods.size * 3
-        score -= cls.declaredMethods.size / 12
+        score -= shape.methods.size / 12
         score -= cls.simpleName.length
 
         return ScanMatch(
@@ -1034,11 +1146,15 @@ internal class FreeCopyPopupRule : ScanRule() {
 internal class HomeTopBarRightSlotRule(
     private val targetClassName: String,
 ) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != targetClassName) return null
         if (!ViewGroup::class.java.isAssignableFrom(cls)) return null
 
-        val methods = cls.declaredMethods.filter { !Modifier.isStatic(it.modifiers) && !it.isSynthetic }
+        val methods = scanRuleMethods("HomeTopBarRightSlotRule", cls, logger)
+            ?.filter { !Modifier.isStatic(it.modifiers) && !it.isSynthetic }
+            ?: return null
         if (!hasGetter(methods, "getSearchIconView") { ImageView::class.java.isAssignableFrom(it) }) return null
         if (!hasGetter(methods, "getGameIconView") { View::class.java.isAssignableFrom(it) }) return null
         if (!hasGetter(methods, "getRedDotView") { View::class.java.isAssignableFrom(it) }) return null
@@ -1099,10 +1215,12 @@ internal class HomeTopBarRightSlotRule(
 }
 
 internal class PbFallingViewRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (!ViewGroup::class.java.isAssignableFrom(cls)) return null
 
-        val methods = cls.declaredMethods
+        val methods = scanRuleMethods("PbFallingViewRule", cls, logger) ?: return null
 
         val initMethod = methods.firstOrNull { method ->
             method.returnType == Void.TYPE &&
@@ -1123,7 +1241,7 @@ internal class PbFallingViewRule : ScanRule() {
         } ?: return null
 
         var score = 80
-        if (cls.name == "com.baidu.tieba.pb.view.PbFallingView") score += 30
+        if (cls.name == StableTiebaHookPoints.PB_FALLING_VIEW_CLASS) score += 30
         if (initMethod.name == "u") score += 8
         if (showMethod.name == "C") score += 8
         if (clearMethod.name == "G") score += 8
@@ -1136,10 +1254,12 @@ internal class PbFallingViewRule : ScanRule() {
 }
 
 internal class ShareTrackUrlBuilderRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
 
-        val methods = cls.declaredMethods
+        val methods = scanRuleMethods("ShareTrackUrlBuilderRule", cls, logger) ?: return null
         val composeMethod = methods.firstOrNull { method ->
             Modifier.isStatic(method.modifiers) &&
                 method.returnType == String::class.java &&
@@ -1181,14 +1301,17 @@ internal class ShareTrackUrlBuilderRule : ScanRule() {
 }
 
 internal class ImageViewerShareItemRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
-        val fields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+        val shape = scanRuleClassShape("ImageViewerShareItemRule", cls, logger) ?: return null
+        val fields = shape.fields.filter { !Modifier.isStatic(it.modifiers) }
         val stringFields = fields.filter { it.type == String::class.java }
         val uriFields = fields.filter { it.type == Uri::class.java }
         if (stringFields.size < 3 || uriFields.isEmpty()) return null
 
-        val methods = cls.declaredMethods
+        val methods = shape.methods
         val hasUriSetter = methods.any { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
@@ -1330,10 +1453,13 @@ internal class ImageViewerShareItemRule : ScanRule() {
 internal class ImageViewerShareConfigRule(
     private val shareItemClassName: String,
 ) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
 
-        val fields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+        val shape = scanRuleClassShape("ImageViewerShareConfigRule", cls, logger) ?: return null
+        val fields = shape.fields.filter { !Modifier.isStatic(it.modifiers) }
         val imageDialogField = fields.filter { it.type == Boolean::class.javaPrimitiveType }
             .minWithOrNull(
                 compareBy<java.lang.reflect.Field>(
@@ -1347,7 +1473,7 @@ internal class ImageViewerShareConfigRule(
 
         val shareItemField = fields.firstOrNull { it.type.name == shareItemClassName } ?: return null
 
-        val methods = cls.declaredMethods
+        val methods = shape.methods
         val addOutsideMethod = methods.firstOrNull { method ->
             method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 3 &&
@@ -1392,10 +1518,12 @@ internal class ImageViewerShareConfigRule(
 }
 
 internal class ImageViewerShareItemViewRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
         if (!View::class.java.isAssignableFrom(cls)) return null
-        val methods = cls.declaredMethods
+        val methods = scanRuleMethods("ImageViewerShareItemViewRule", cls, logger) ?: return null
         val byRes = methods.firstOrNull { method ->
             method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 1 &&
@@ -1422,9 +1550,11 @@ internal class ImageViewerShareItemViewRule : ScanRule() {
 }
 
 internal class ImageViewerShareIconResourceRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != "com.baidu.tieba.R\$drawable") return null
-        val fieldMatch = cls.declaredFields
+        val fieldMatch = (scanRuleFields("ImageViewerShareIconResourceRule", cls, logger) ?: return null)
             .asSequence()
             .filter { field ->
                 Modifier.isStatic(field.modifiers) &&
@@ -1442,10 +1572,10 @@ internal class ImageViewerShareIconResourceRule : ScanRule() {
                 ),
             ) ?: return null
         val field = fieldMatch.first
-        val resId = runCatching {
+        val resId = scanSubStep("ScanRules.ImageViewerShareIconResourceRule.${field.name}.ResourceId", logger, null) {
             field.isAccessible = true
             field.getInt(null)
-        }.getOrNull()?.takeIf { it != 0 } ?: return null
+        }?.takeIf { it != 0 } ?: return null
         return ScanMatch(
             className = cls.name,
             methodName = field.name,
@@ -1505,19 +1635,23 @@ internal class ImageViewerShareIconResourceRule : ScanRule() {
  * 它包含 List、String、boolean 字段，toString() 以 "CardData(" 开头。
  */
 internal class FeedCardBindRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != "com.baidu.tieba.feed.card.FeedCardView") return null
 
-        val candidates = cls.declaredMethods.filter { m ->
+        val candidates = scanRuleMethods("FeedCardBindRule", cls, logger)
+            ?.filter { m ->
             !Modifier.isStatic(m.modifiers) &&
                 m.returnType == Void.TYPE &&
                 m.parameterTypes.size == 1 &&
                 !m.parameterTypes[0].isPrimitive
-        }
+            }
+            ?: return null
 
         val bindCandidates = candidates.filter { m ->
             val paramType = m.parameterTypes[0]
-            isCardDataLike(paramType)
+            isCardDataLike(paramType, logger)
         }
         val bindMethod = bindCandidates.firstOrNull { it.name == "w" }
             ?: bindCandidates.singleOrNull()
@@ -1543,8 +1677,10 @@ internal class FeedCardBindRule : ScanRule() {
      * - 有 boolean 字段，比如 isGreyMode、canMultiManage、supportLongClick
      * - 有 Map 字段 appendixMap
      */
-    private fun isCardDataLike(cls: Class<*>): Boolean {
-        val fields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+    private fun isCardDataLike(cls: Class<*>, logger: ScanLogger?): Boolean {
+        val fields = scanRuleFields("FeedCardBindRule.CardData", cls, logger)
+            ?.filter { !Modifier.isStatic(it.modifiers) }
+            ?: return false
         val hasListField = fields.any { List::class.java.isAssignableFrom(it.type) }
         val stringFieldCount = fields.count { it.type == String::class.java }
         val boolFieldCount = fields.count { it.type == Boolean::class.javaPrimitiveType }
@@ -1558,13 +1694,17 @@ internal class FeedCardBindRule : ScanRule() {
  * 这里保存 feed_head 参数，比如 thread_id、thread_type 和 card_type。
  */
 internal class FeedHeadParamsFieldRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.name != "com.baidu.tieba.feed.component.uistate.CardHeadUiState") return null
 
-        val fields = cls.declaredFields.filter { field ->
-            !Modifier.isStatic(field.modifiers) &&
-                Map::class.java.isAssignableFrom(field.type)
-        }
+        val fields = scanRuleFields("FeedHeadParamsFieldRule", cls, logger)
+            ?.filter { field ->
+                !Modifier.isStatic(field.modifiers) &&
+                    Map::class.java.isAssignableFrom(field.type)
+            }
+            ?: return null
         if (fields.size < 2) return null
 
         return ScanMatch(
@@ -1577,48 +1717,56 @@ internal class FeedHeadParamsFieldRule : ScanRule() {
 }
 
 internal class PbGestureScaleRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? {
+    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
+
+    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
         if (!cls.name.startsWith("com.baidu.tieba.")) return null
 
-        val instanceFields = cls.declaredFields.filter { !Modifier.isStatic(it.modifiers) }
+        val shape = scanRuleClassShape("PbGestureScaleRule", cls, logger) ?: return null
+        val instanceFields = shape.fields.filter { !Modifier.isStatic(it.modifiers) }
         val hasScaleDetectorField = instanceFields.any { it.type == ScaleGestureDetector::class.java }
         if (!hasScaleDetectorField) return null
 
-        val dispatchMethod = cls.declaredMethods.firstOrNull { method ->
+        val methods = shape.methods
+        val dispatchMethod = methods.firstOrNull { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Boolean::class.javaPrimitiveType &&
                 method.parameterTypes.size == 1 &&
                 method.parameterTypes[0] == MotionEvent::class.java
         } ?: return null
 
-        val listenerSetter = cls.declaredMethods.firstOrNull { method ->
+        val listenerSetter = methods.firstOrNull { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 1 &&
                 method.parameterTypes[0].isInterface &&
-                hasBooleanOnlyCallback(method.parameterTypes[0])
+                hasBooleanOnlyCallback(method.parameterTypes[0], logger)
         } ?: return null
 
-        val scaleListenerClass = cls.declaredClasses.firstOrNull { inner ->
-            val parent = inner.superclass ?: return@firstOrNull false
-            ScaleGestureDetector.SimpleOnScaleGestureListener::class.java.isAssignableFrom(parent)
-        } ?: return null
+        val scaleListenerClass = scanRuleNestedClasses("PbGestureScaleRule", cls, logger)
+            ?.firstOrNull { inner ->
+                val parent = inner.superclass ?: return@firstOrNull false
+                ScaleGestureDetector.SimpleOnScaleGestureListener::class.java.isAssignableFrom(parent)
+            }
+            ?: return null
 
-        val onScaleMethod = scaleListenerClass.declaredMethods.firstOrNull { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.name == "onScale" &&
-                method.returnType == Boolean::class.javaPrimitiveType &&
-                method.parameterTypes.size == 1 &&
-                method.parameterTypes[0] == ScaleGestureDetector::class.java
-        } ?: return null
+        val onScaleMethod = scanRuleMethods("PbGestureScaleRule.ScaleListener", scaleListenerClass, logger)
+            ?.firstOrNull { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.name == "onScale" &&
+                    method.returnType == Boolean::class.javaPrimitiveType &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0] == ScaleGestureDetector::class.java
+            }
+            ?: return null
 
         var score = 100
         if (dispatchMethod.name.length <= 2) score += 8
         if (listenerSetter.name.length <= 2) score += 8
         if (scaleListenerClass.name.contains("$")) score += 6
         if (cls.simpleName.length <= 4) score += 8
-        score -= cls.declaredMethods.size / 3
+        score -= methods.size / 3
         score -= cls.simpleName.length
 
         val packedMethods = listOf(
@@ -1634,9 +1782,11 @@ internal class PbGestureScaleRule : ScanRule() {
         )
     }
 
-    private fun hasBooleanOnlyCallback(type: Class<*>): Boolean {
+    private fun hasBooleanOnlyCallback(type: Class<*>, logger: ScanLogger?): Boolean {
         if (!type.isInterface) return false
-        val abstractMethods = type.declaredMethods.filter { Modifier.isAbstract(it.modifiers) }
+        val abstractMethods = scanRuleMethods("PbGestureScaleRule.BooleanCallback", type, logger)
+            ?.filter { Modifier.isAbstract(it.modifiers) }
+            ?: return false
         if (abstractMethods.size != 1) return false
         val target = abstractMethods[0]
         if (target.returnType != Void.TYPE) return false

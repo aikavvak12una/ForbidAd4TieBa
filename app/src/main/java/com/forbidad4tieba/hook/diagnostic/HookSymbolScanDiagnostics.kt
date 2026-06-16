@@ -46,7 +46,7 @@ internal object HookSymbolScanDiagnostics {
         log(logger, "$tag scan exception: ${splitScanError(error).second}")
     }
 
-    private fun splitScanError(error: String): Pair<String, String> {
+    fun splitScanError(error: String): Pair<String, String> {
         val separator = " :: "
         val idx = error.indexOf(separator)
         if (idx <= 0) return "ScanException" to sanitizeScanStatusText(error)

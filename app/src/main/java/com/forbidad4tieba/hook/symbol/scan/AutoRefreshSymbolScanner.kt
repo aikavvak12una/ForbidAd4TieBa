@@ -2,20 +2,16 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import android.content.Context
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object AutoRefreshSymbolScanner {
-    private const val PERSONALIZE_PAGE_VIEW_CLASS =
-        "com.baidu.tieba.homepage.personalize.PersonalizePageView"
-
     fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): String? {
-        val targetClass = safeFindClass(PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: run {
-            log(logger, "autoRefresh: class not found: $PERSONALIZE_PAGE_VIEW_CLASS")
+        val targetClass = safeFindClass(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: run {
+            log(logger, "autoRefresh: class not found: ${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}")
             return null
         }
         val dexMatch = scanFromDex(context, cl, logger)
@@ -26,7 +22,9 @@ internal object AutoRefreshSymbolScanner {
             return null
         }
 
-        val ruleMatch = runCatching { AutoRefreshTriggerRule().match(targetClass, cl) }.getOrNull()
+        val ruleMatch = scanSubStep("AutoRefreshHook.TriggerRule", logger, null as ScanMatch?) {
+            AutoRefreshTriggerRule().match(targetClass, cl)
+        }
         if (ruleMatch != null) {
             log(
                 logger,
@@ -39,6 +37,20 @@ internal object AutoRefreshSymbolScanner {
         return null
     }
 
+    fun scanLoadMoreConfig(cl: ClassLoader, logger: ScanLogger?): AutoLoadMoreConfigScanSymbols {
+        val match = ScanReflection.runRules(
+            listOf(StableTiebaHookPoints.HOME_PRELOAD_CONFIG_COMPANION_CLASS),
+            cl,
+            listOf(AutoLoadMoreConfigRule(StableTiebaHookPoints.HOME_PRELOAD_CONFIG_PARSER_CLASS)),
+            logger,
+            "autoLoadMore",
+        ) ?: return AutoLoadMoreConfigScanSymbols()
+        return AutoLoadMoreConfigScanSymbols(
+            configClass = match.className,
+            configMethod = match.methodName,
+        )
+    }
+
     private fun scanFromDex(context: Context, cl: ClassLoader, logger: ScanLogger?): String? {
         val sourcePaths = appSourcePaths(context)
         if (sourcePaths.isEmpty()) {
@@ -48,10 +60,10 @@ internal object AutoRefreshSymbolScanner {
 
         val matches = DexShareIconScanner.scanAutoRefresh(
             sourcePaths = sourcePaths,
-            ownerClassName = PERSONALIZE_PAGE_VIEW_CLASS,
+            ownerClassName = StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS,
             logger = logger,
         )
-            .filter { isMethodNameValid(it.ownerMethodName, cl) }
+            .filter { isMethodNameValid(it.ownerMethodName, cl, logger) }
             .groupBy { it.ownerMethodName }
             .mapNotNull { (_, methodMatches) -> methodMatches.maxByOrNull { it.score } }
             .sortedWith(
@@ -76,15 +88,16 @@ internal object AutoRefreshSymbolScanner {
 
         log(
             logger,
-            "autoRefreshDex matched: $PERSONALIZE_PAGE_VIEW_CLASS.${best.ownerMethodName} " +
+            "autoRefreshDex matched: ${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.${best.ownerMethodName} " +
                 "score=${best.score} evidence=${best.evidence}",
         )
         return best.ownerMethodName
     }
 
-    private fun isMethodNameValid(methodName: String, cl: ClassLoader): Boolean {
-        val targetClass = safeFindClass(PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: return false
-        return targetClass.declaredMethods.any { method ->
+    private fun isMethodNameValid(methodName: String, cl: ClassLoader, logger: ScanLogger?): Boolean {
+        val targetClass = safeFindClass(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: return false
+        val methods = declaredMethods("HomePersonalizePageView.Validate", targetClass, logger) ?: return false
+        return methods.any { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.name == methodName &&
                 method.returnType == Void.TYPE &&
@@ -93,11 +106,12 @@ internal object AutoRefreshSymbolScanner {
     }
 
     private fun logDiagnostics(context: Context, cl: ClassLoader, logger: ScanLogger?) {
-        val targetClass = safeFindClass(PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: run {
-            log(logger, "autoRefresh diag: class not found: $PERSONALIZE_PAGE_VIEW_CLASS")
+        val targetClass = safeFindClass(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: run {
+            log(logger, "autoRefresh diag: class not found: ${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}")
             return
         }
-        val methods = targetClass.declaredMethods
+        val methods = declaredMethods("HomePersonalizePageView.Diagnostics", targetClass, logger)
+            .orEmpty()
             .filter { method ->
                 !Modifier.isStatic(method.modifiers) &&
                     method.returnType == Void.TYPE &&
@@ -111,10 +125,10 @@ internal object AutoRefreshSymbolScanner {
         val sourcePaths = appSourcePaths(context)
         val candidates = DexShareIconScanner.scanAutoRefresh(
             sourcePaths = sourcePaths,
-            ownerClassName = PERSONALIZE_PAGE_VIEW_CLASS,
+            ownerClassName = StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS,
             logger = logger,
         )
-            .filter { isMethodNameValid(it.ownerMethodName, cl) }
+            .filter { isMethodNameValid(it.ownerMethodName, cl, logger) }
             .sortedWith(compareByDescending<DexAutoRefreshMatch> { it.score }.thenBy { it.ownerMethodName })
             .take(8)
             .joinToString(" || ") { "${it.ownerMethodName}:${it.score}[${it.evidence}]" }
@@ -139,7 +153,17 @@ internal object AutoRefreshSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
+
+    private fun declaredMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("AutoRefreshHook.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+    }
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

@@ -1,9 +1,9 @@
 package com.forbidad4tieba.hook.symbol.scan
 
-import com.forbidad4tieba.hook.HookSymbolResolver
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.model.ForumPageAdScanSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
+import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -122,16 +122,16 @@ internal object ForumPageAdSymbolScanner {
             try {
                 val clazz = safeFindClass(className, cl) ?: continue
                 if (!iResponseDataClass.isAssignableFrom(clazz)) continue
-                val adFields = resolveResponseAdFields(clazz)
+                val adFields = resolveResponseAdFields(clazz, logger) ?: continue
                 if (adFields.size < MIN_RESPONSE_AD_FIELD_COUNT) continue
-                val parserMethod = resolveResponseParserMethod(clazz, preferredDataResClass) ?: continue
+                val parserMethod = resolveResponseParserMethod(clazz, preferredDataResClass, logger) ?: continue
                 val dataResClass = parserMethod.parameterTypes[0]
                 matches += ResponsePath(
                     dataClass = clazz,
                     parserMethod = parserMethod,
                     dataResClass = dataResClass,
                     adFields = adFields,
-                    dataResScore = scoreDataResClass(dataResClass, preferredDataResClass),
+                    dataResScore = scoreDataResClass(dataResClass, preferredDataResClass, logger),
                 )
             } catch (t: Throwable) {
                 skippedByReflection++
@@ -144,14 +144,18 @@ internal object ForumPageAdSymbolScanner {
         return bestResponsePath(matches, logger)
     }
 
-    private fun resolveResponseParserMethod(clazz: Class<*>, preferredDataResClass: Class<*>?): Method? {
-        val candidates = clazz.declaredMethods.filter { method ->
+    private fun resolveResponseParserMethod(
+        clazz: Class<*>,
+        preferredDataResClass: Class<*>?,
+        logger: ScanLogger?,
+    ): Method? {
+        val candidates = declaredMethods("response.${clazz.name}", clazz, logger)?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 1 &&
                 !method.parameterTypes[0].isPrimitive &&
                 !method.parameterTypes[0].isArray
-        }
+        } ?: return null
         if (candidates.isEmpty()) return null
         val preferred = preferredDataResClass?.let { preferred ->
             candidates.filter { it.parameterTypes[0] == preferred }
@@ -162,7 +166,7 @@ internal object ForumPageAdSymbolScanner {
             .map { method ->
                 ParserCandidate(
                     method = method,
-                    score = scoreDataResClass(method.parameterTypes[0], preferredDataResClass) +
+                    score = scoreDataResClass(method.parameterTypes[0], preferredDataResClass, logger) +
                         if (method.name == "parserProtobuf") 3 else 0,
                 )
             }
@@ -237,18 +241,19 @@ internal object ForumPageAdSymbolScanner {
         for (className in candidates) {
             try {
                 val mapperClass = safeFindClass(className, cl) ?: continue
-                val mapperMethods = mapperClass.declaredMethods.filter { method ->
-                    Modifier.isStatic(method.modifiers) &&
-                        method.parameterTypes.size == 1 &&
-                        method.parameterTypes[0] == dataResClass &&
-                        method.returnType != Void.TYPE
-                }
+                val mapperMethods = declaredMethods("bottom.mapper.${mapperClass.name}", mapperClass, logger)
+                    ?.filter { method ->
+                        Modifier.isStatic(method.modifiers) &&
+                            method.parameterTypes.size == 1 &&
+                            method.parameterTypes[0] == dataResClass &&
+                            method.returnType != Void.TYPE
+                    } ?: continue
                 for (method in mapperMethods) {
                     val dataClass = method.returnType
-                    val businessPromotSetter = resolveSetter(dataClass, protoTypes.businessPromotClass)
-                    val privatePopSetter = resolveSetter(dataClass, protoTypes.privatePopClass)
-                    val spriteBubbleSetter = resolveSetter(dataClass, protoTypes.spriteBubbleClass)
-                    val maskPopSetter = resolveSetter(dataClass, protoTypes.popInfoClass)
+                    val businessPromotSetter = resolveSetter(dataClass, protoTypes.businessPromotClass, logger)
+                    val privatePopSetter = resolveSetter(dataClass, protoTypes.privatePopClass, logger)
+                    val spriteBubbleSetter = resolveSetter(dataClass, protoTypes.spriteBubbleClass, logger)
+                    val maskPopSetter = resolveSetter(dataClass, protoTypes.popInfoClass, logger)
                     val setterCount = listOf(
                         businessPromotSetter,
                         privatePopSetter,
@@ -319,7 +324,7 @@ internal object ForumPageAdSymbolScanner {
         var firstReflectionError: String? = null
         for (mapperClass in mapperClasses) {
             try {
-                val methods = mapperClass.declaredMethods
+                val methods = declaredMethods("rain.mapper.${mapperClass.name}", mapperClass, logger) ?: continue
                 val rainDataMapper = methods.singleOrNull { method ->
                     Modifier.isStatic(method.modifiers) &&
                         method.parameterTypes.size == 1 &&
@@ -332,9 +337,9 @@ internal object ForumPageAdSymbolScanner {
                         method.parameterTypes.size == 1 &&
                         method.parameterTypes[0] == dataResClass &&
                         method.returnType != Void.TYPE &&
-                        resolveSetter(method.returnType, rainDataClass) != null
+                        resolveSetter(method.returnType, rainDataClass, logger) != null
                 } ?: continue
-                val rainSetter = resolveSetter(headerMapper.returnType, rainDataClass) ?: continue
+                val rainSetter = resolveSetter(headerMapper.returnType, rainDataClass, logger) ?: continue
                 log(
                     logger,
                     "forumPageAd.rain: ${mapperClass.name}.${headerMapper.name} -> " +
@@ -367,15 +372,16 @@ internal object ForumPageAdSymbolScanner {
         var firstReflectionError: String? = null
         for (mapperClass in mapperClasses) {
             try {
-                val candidatesForClass = mapperClass.declaredMethods.filter { method ->
-                    Modifier.isStatic(method.modifiers) &&
-                        method.parameterTypes.size == 1 &&
-                        method.parameterTypes[0] == dataResClass &&
-                        method.returnType != Void.TYPE &&
-                        method != bottom?.mapperMethod &&
-                        method != header?.mapperMethod &&
-                        isFloatingBarDataClass(method.returnType)
-                }
+                val candidatesForClass = declaredMethods("gameBar.mapper.${mapperClass.name}", mapperClass, logger)
+                    ?.filter { method ->
+                        Modifier.isStatic(method.modifiers) &&
+                            method.parameterTypes.size == 1 &&
+                            method.parameterTypes[0] == dataResClass &&
+                            method.returnType != Void.TYPE &&
+                            method != bottom?.mapperMethod &&
+                            method != header?.mapperMethod &&
+                            isFloatingBarDataClass(method.returnType, logger)
+                    } ?: continue
                 val resolved = candidatesForClass.singleOrNull()
                     ?: candidatesForClass.firstOrNull { it.name == "d" }
                 if (resolved != null) {
@@ -403,7 +409,7 @@ internal object ForumPageAdSymbolScanner {
             log(logger, "forumPageAd.dialog: BusinessPromot type not inferred")
             null
         } else {
-            controllerClass.declaredMethods.singleOrNull { method ->
+            declaredMethods("dialog.${controllerClass.name}", controllerClass, logger)?.singleOrNull { method ->
                 !Modifier.isStatic(method.modifiers) &&
                     method.returnType == Boolean::class.javaPrimitiveType &&
                     method.parameterTypes.size == 2 &&
@@ -415,6 +421,7 @@ internal object ForumPageAdSymbolScanner {
             controllerClass,
             preferredName = "h1",
             semanticSignal = "showAnimationView",
+            logger = logger,
         )
         if (businessPromotShow == null && animationShow == null) {
             log(logger, "forumPageAd.dialog: no validated display fallback methods found")
@@ -438,7 +445,7 @@ internal object ForumPageAdSymbolScanner {
             log(logger, "forumPageAd.floatingBar: TbFloatingBar class not found: $TB_FLOATING_BAR_CLASS")
         }
         val field = floatingBarClass?.let { barClass ->
-            controllerClass.declaredFields.singleOrNull { field ->
+            declaredFields("floatingBar.${controllerClass.name}", controllerClass, logger)?.singleOrNull { field ->
                 barClass.isAssignableFrom(field.type)
             }
         }
@@ -446,6 +453,7 @@ internal object ForumPageAdSymbolScanner {
             controllerClass,
             preferredName = "k2",
             semanticSignal = "showFloatingBar",
+            logger = logger,
         )
         if (showMethod == null) {
             log(logger, "forumPageAd.floatingBar: no validated show method found")
@@ -464,11 +472,11 @@ internal object ForumPageAdSymbolScanner {
             log(logger, "forumPageAd.biz: class not found: $BUSINESS_PROMOT_BIZ_CLASS")
             return null
         }
-        val methods = bizClass.declaredMethods.filter { method ->
+        val methods = declaredMethods("biz.${bizClass.name}", bizClass, logger)?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.contentEquals(arrayOf(String::class.java))
-        }
+        } ?: return null
         val resolved = methods.singleOrNull()
             ?: methods.firstOrNull { it.name == "l" && hasKotlinMetadataSignal(bizClass, "businessPromotJump") }
         if (resolved == null) {
@@ -485,20 +493,20 @@ internal object ForumPageAdSymbolScanner {
         logger: ScanLogger?,
     ): ProtoFieldTypes {
         val businessPromotClass =
-            resolveDataResFieldType(dataResClass, DATA_RES_BUSINESS_PROMOT_FIELD)
+            resolveDataResFieldType(dataResClass, DATA_RES_BUSINESS_PROMOT_FIELD, logger)
                 ?: safeFindClass(BUSINESS_PROMOT_CLASS, cl)
         val privatePopClass =
-            resolveDataResFieldType(dataResClass, DATA_RES_PRIVATE_POP_FIELD)
+            resolveDataResFieldType(dataResClass, DATA_RES_PRIVATE_POP_FIELD, logger)
                 ?: safeFindClass(PRIVATE_POP_CLASS, cl)
         val spriteBubbleClass =
-            resolveDataResFieldType(dataResClass, DATA_RES_SPRITE_BUBBLE_FIELD)
+            resolveDataResFieldType(dataResClass, DATA_RES_SPRITE_BUBBLE_FIELD, logger)
                 ?: safeFindClass(FRS_SPRITE_BUBBLE_CLASS, cl)
         val popInfoClass =
-            resolveDataResFieldType(dataResClass, DATA_RES_MASK_POP_FIELD)
-                ?: resolveDataResFieldType(dataResClass, DATA_RES_ENTER_POP_FIELD)
+            resolveDataResFieldType(dataResClass, DATA_RES_MASK_POP_FIELD, logger)
+                ?: resolveDataResFieldType(dataResClass, DATA_RES_ENTER_POP_FIELD, logger)
                 ?: safeFindClass(POP_INFO_CLASS, cl)
         val rainInfoClass =
-            resolveDataResFieldType(dataResClass, DATA_RES_RAIN_FIELD)
+            resolveDataResFieldType(dataResClass, DATA_RES_RAIN_FIELD, logger)
                 ?: safeFindClass(FRS_RAIN_INFO_CLASS, cl)
 
         if (dataResClass != null) {
@@ -522,48 +530,49 @@ internal object ForumPageAdSymbolScanner {
         )
     }
 
-    private fun resolveResponseAdFields(clazz: Class<*>): List<Field> {
+    private fun resolveResponseAdFields(clazz: Class<*>, logger: ScanLogger?): List<Field>? {
+        val fields = declaredFields("response.${clazz.name}", clazz, logger) ?: return null
         return responseFieldSpecs.mapNotNull { spec ->
-            resolveDeclaredField(clazz, spec.name)?.takeIf(spec.matches)
+            fields.firstOrNull { it.name == spec.name }?.takeIf(spec.matches)
         }
     }
 
-    private fun scoreDataResClass(clazz: Class<*>, preferredDataResClass: Class<*>?): Int {
+    private fun scoreDataResClass(clazz: Class<*>, preferredDataResClass: Class<*>?, logger: ScanLogger?): Int {
         if (clazz == preferredDataResClass || clazz.name == DATA_RES_CLASS) return 100
-        return try {
-            val names = clazz.declaredFields.mapTo(HashSet()) { it.name }
-            var score = 0
-            fun add(name: String, weight: Int) {
-                if (names.contains(name)) score += weight
-            }
-            add(DATA_RES_BUSINESS_PROMOT_FIELD, 3)
-            add(DATA_RES_PRIVATE_POP_FIELD, 2)
-            add(DATA_RES_SPRITE_BUBBLE_FIELD, 2)
-            add(DATA_RES_MASK_POP_FIELD, 2)
-            add(DATA_RES_RAIN_FIELD, 2)
-            add("bottom_game_bar", 2)
-            add("ad_mix_list", 1)
-            add("ad_show_select", 1)
-            add("ad_sample_map_key", 1)
-            add(DATA_RES_ENTER_POP_FIELD, 1)
-            add("agree_banner", 1)
-            add("window_toast", 1)
-            add("show_adsense", 1)
-            add("forum", 1)
-            add("user", 1)
-            score
-        } catch (_: Throwable) {
-            0
+        val names = declaredFields("dataRes.${clazz.name}", clazz, logger)
+            ?.mapTo(HashSet()) { it.name }
+            ?: return 0
+        var score = 0
+        fun add(name: String, weight: Int) {
+            if (names.contains(name)) score += weight
         }
+        add(DATA_RES_BUSINESS_PROMOT_FIELD, 3)
+        add(DATA_RES_PRIVATE_POP_FIELD, 2)
+        add(DATA_RES_SPRITE_BUBBLE_FIELD, 2)
+        add(DATA_RES_MASK_POP_FIELD, 2)
+        add(DATA_RES_RAIN_FIELD, 2)
+        add("bottom_game_bar", 2)
+        add("ad_mix_list", 1)
+        add("ad_show_select", 1)
+        add("ad_sample_map_key", 1)
+        add(DATA_RES_ENTER_POP_FIELD, 1)
+        add("agree_banner", 1)
+        add("window_toast", 1)
+        add("show_adsense", 1)
+        add("forum", 1)
+        add("user", 1)
+        return score
     }
 
-    private fun resolveDataResFieldType(dataResClass: Class<*>?, fieldName: String): Class<*>? {
+    private fun resolveDataResFieldType(
+        dataResClass: Class<*>?,
+        fieldName: String,
+        logger: ScanLogger?,
+    ): Class<*>? {
         if (dataResClass == null) return null
-        return try {
-            resolveDeclaredField(dataResClass, fieldName)?.type
-        } catch (_: Throwable) {
-            null
-        }
+        return declaredFields("proto.${dataResClass.name}", dataResClass, logger)
+            ?.firstOrNull { it.name == fieldName }
+            ?.type
     }
 
     private fun collectMapperClasses(
@@ -591,9 +600,10 @@ internal object ForumPageAdSymbolScanner {
         clazz: Class<*>,
         preferredName: String,
         semanticSignal: String,
+        logger: ScanLogger?,
     ): Method? {
         if (!hasKotlinMetadataSignal(clazz, semanticSignal)) return null
-        val method = clazz.declaredMethods.firstOrNull { candidate ->
+        val method = declaredMethods("preferredNoArg.${clazz.name}", clazz, logger)?.firstOrNull { candidate ->
             !Modifier.isStatic(candidate.modifiers) &&
                 candidate.name == preferredName &&
                 candidate.returnType == Void.TYPE &&
@@ -602,9 +612,9 @@ internal object ForumPageAdSymbolScanner {
         return method
     }
 
-    private fun resolveSetter(clazz: Class<*>, paramClass: Class<*>?): Method? {
+    private fun resolveSetter(clazz: Class<*>, paramClass: Class<*>?, logger: ScanLogger?): Method? {
         if (paramClass == null) return null
-        return clazz.declaredMethods.singleOrNull { method ->
+        return declaredMethods("setter.${clazz.name}", clazz, logger)?.singleOrNull { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 1 &&
@@ -612,27 +622,19 @@ internal object ForumPageAdSymbolScanner {
         }
     }
 
-    private fun isFloatingBarDataClass(clazz: Class<*>): Boolean {
-        return clazz.declaredConstructors.any { constructor ->
+    private fun isFloatingBarDataClass(clazz: Class<*>, logger: ScanLogger?): Boolean {
+        return declaredConstructors("floatingBarData.${clazz.name}", clazz, logger)?.any { constructor ->
             val params = constructor.parameterTypes
             params.size == 8 &&
                 params.count { isListType(it) } >= 3 &&
                 params.any { it == String::class.java } &&
                 params.any { it == Integer.TYPE }
-        }
+        } == true
     }
 
     private fun hasKotlinMetadataSignal(clazz: Class<*>, signal: String): Boolean {
         val metadata = clazz.getAnnotation(Metadata::class.java) ?: return false
         return metadata.data1.any { it.contains(signal) } || metadata.data2.any { it.contains(signal) }
-    }
-
-    private fun resolveDeclaredField(clazz: Class<*>, name: String): Field? {
-        return try {
-            clazz.getDeclaredField(name)
-        } catch (_: NoSuchFieldException) {
-            null
-        }
     }
 
     private fun preferredClassNames(): List<String> = listOf(
@@ -649,22 +651,34 @@ internal object ForumPageAdSymbolScanner {
         fallback: T,
         block: () -> T,
     ): T {
-        return try {
+        return scanSubStep("ForumPageAdBlockHook.$name", logger, fallback) {
             block()
-        } catch (t: Throwable) {
-            log(logger, "forumPageAd.$name: scan failed: ${t.javaClass.name}: ${t.message.orEmpty()}")
-            fallback
         }
     }
 
+    private fun declaredMethods(label: String, clazz: Class<*>, logger: ScanLogger?): List<Method>? =
+        step("$label.methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+
+    private fun declaredFields(label: String, clazz: Class<*>, logger: ScanLogger?): List<Field>? =
+        step("$label.fields", logger, null) {
+            clazz.declaredFields.toList()
+        }
+
+    private fun declaredConstructors(label: String, clazz: Class<*>, logger: ScanLogger?): List<Constructor<*>>? =
+        step("$label.constructors", logger, null) {
+            clazz.declaredConstructors.toList()
+        }
+
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun isListType(type: Class<*>): Boolean =
-        HookSymbolResolver.isListType(type)
+        ScanReflection.isListType(type)
 
     private fun isIntType(type: Class<*>): Boolean =
-        HookSymbolResolver.isIntType(type)
+        ScanReflection.isIntType(type)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

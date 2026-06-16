@@ -5,7 +5,9 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 
 /**
- * 娑堟伅 tab 榛樿绛栫暐锛? * - 鏄惧紡瀹氫綅鐩爣淇濇寔涓嶅彉锛屾瘮濡?selected_tab_id 鍜?ext銆? * - 鍙妸榛樿鍏滃簳浠庣淇?chat(-2) 鏀规垚閫氱煡 notify(-1)銆? */
+ * Changes the message tab default fallback from chat to notifications while preserving explicit tab
+ * selection targets.
+ */
 object MsgTabDefaultNotifyHook {
     private const val TAB_ID_NOTIFY = -1L
     private const val TAB_ID_CHAT = -2L

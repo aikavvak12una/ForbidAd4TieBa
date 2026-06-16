@@ -7,8 +7,11 @@ import java.util.Collections
 import java.util.WeakHashMap
 
 /**
- * 灞忚斀棣栭〉涓€у寲鎼滅储妗嗛噷鐨勮疆鎾枃瀛楀箍鍛娿€? *
- * 澶勭悊鏂瑰紡锛? * 1. 鎷︽埅 TbSearchBoxView.setHintTextDataList(List, boolean)銆? * 2. 鍦ㄥご閮ㄥ垵濮嬪寲鏃舵爣璁伴椤典釜鎬у寲鎼滅储妗嗐€? * 3. 鎶?hint 鍒楄〃鏇挎崲涓虹┖鍒楄〃銆? */
+ * Blocks rotating ad text in the home personalized search box.
+ *
+ * The hook marks home search boxes during header initialization, then replaces their hint list with
+ * an empty list at runtime.
+ */
 object SearchBoxTextAdHook {
     @Volatile
     private var hooked = false

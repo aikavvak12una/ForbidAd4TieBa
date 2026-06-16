@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -23,12 +22,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.MediaStore
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -43,8 +39,6 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.symbol.model.HookFeatureState
-import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.HookSymbolResolver
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
@@ -53,7 +47,6 @@ import com.forbidad4tieba.hook.config.ModuleUserDataCleaner
 import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
-import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreCatalog
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
@@ -61,9 +54,7 @@ import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassImageCache
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import com.forbidad4tieba.hook.utils.ViewExt
 import com.forbidad4tieba.hook.core.XposedCompat
-import java.io.File
 import java.lang.reflect.Field
-import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
@@ -77,159 +68,11 @@ object SettingsMenuHook {
     private const val INITIAL_SCAN_ENVIRONMENT_WARNING_DELAY_SECONDS = 10
     private const val SCAN_RUNNING_PULSE_INITIAL_DELAY_MS = 1000L
     private const val SCAN_RUNNING_PULSE_INTERVAL_MS = 1500L
-    private const val REQUEST_HOME_NATIVE_GLASS_IMAGE = 0x4E47
-    private const val HOME_NATIVE_GLASS_SOURCE_DIR_NAME = "home_native_glass"
-    private const val HOME_NATIVE_GLASS_SOURCE_FILE_PREFIX = "source_"
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS = 6
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_SAMPLE_EDGE = 96
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MIN_PIXEL_ALPHA = 32
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MIN_DISTANCE = 34
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MIN_LUMA = 16
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MAX_LUMA = 240
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_TARGET_LUMA = 144
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_TARGET_LUMA_RANGE = 128
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_MIN_HUE_DISTANCE = 20.0
-    private const val HOME_NATIVE_GLASS_TINT_PALETTE_HUE_SATURATION_FLOOR = 0.12
-    private const val HOME_NATIVE_GLASS_DEFAULT_TINT_SAMPLE_EDGE = 48
-    private const val HOME_NATIVE_GLASS_DEFAULT_TINT_MIN_LUMA = 24
-    private const val HOME_NATIVE_GLASS_DEFAULT_TINT_MAX_LUMA = 232
-    private const val HOME_NATIVE_GLASS_DEFAULT_TINT_CHROMA_BIAS = 32
-    private const val HOME_NATIVE_GLASS_AUTO_TINT_MID_LUMA = 128
-    private const val HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE = 72
-    private const val HOME_NATIVE_GLASS_AUTO_TINT_MAX_ABS_PERCENT = 22
     private const val HOME_NATIVE_GLASS_MODE_SELECTOR_MIN_FILL_ALPHA = 36
     private const val HOME_NATIVE_GLASS_MODE_SELECTOR_MAX_FILL_ALPHA = 128
 
-    private class HomeNativeGlassImageSelectionState(
-        var path: String,
-        var tintColor: Int,
-    ) {
-        var paletteColors: List<Int> = emptyList()
-        var defaultTintColor: Int? = null
-    }
-
-    private data class HomeNativeGlassImageAnalysis(
-        val paletteColors: List<Int>,
-        val defaultTintColor: Int?,
-        val tintAlphaPercent: Int,
-    )
-
-    private class HomeNativeGlassModeConfigState(
-        val imageState: HomeNativeGlassImageSelectionState,
-        var blurCacheImagePath: String,
-        var tintAlphaPercent: Int,
-        var cardBlurPercent: Int,
-        var cardRadiusDp: Int,
-        var strokeEnabled: Boolean,
-        var shadowStrengthPercent: Int,
-    )
-
-    private enum class HomeNativeGlassStyleRole {
-        ROW_TITLE,
-        ROW_DESCRIPTION,
-        MUTED_TEXT,
-        ACCENT_TEXT,
-        BUTTON_ACCENT,
-        BUTTON_SECONDARY,
-        INPUT_TEXT,
-        SEEK_BAR,
-        SWITCH,
-    }
-
-    private data class HomeNativeGlassPreviewBitmapKey(
-        val sourcePath: String,
-        val blurPercent: Int,
-        val tintAlphaPercent: Int,
-    )
-
-    private data class PendingHomeNativeGlassImagePick(
-        val contextRef: WeakReference<Context>,
-        val displayRef: WeakReference<TextView>,
-        val state: HomeNativeGlassImageSelectionState,
-        val darkMode: Boolean,
-        val refreshPalette: (() -> Unit)?,
-        val onImportedAnalysis: ((HomeNativeGlassImageAnalysis) -> Unit)?,
-    )
-
-    private data class SwitchItem(
-        val label: String,
-        val description: String,
-        val prefKey: String,
-        val supported: Boolean,
-        val defaultValue: Boolean = false,
-        val actionIcon: String? = null,
-        val linkedPrefKeys: List<String> = emptyList(),
-        val onActionClick: (() -> Unit)? = null,
-    )
-
-    private data class SettingGroup(
-        val name: String,
-        val items: List<SwitchItem>
-    )
-
-    private data class SwitchRuntimeSupport(
-        val supported: Boolean,
-        val partial: Boolean,
-        val note: String?,
-    )
-
-    private data class ModelScoreUiItem(
-        val key: String,
-        val label: String,
-        val description: String,
-    )
-
-    private data class VersionDisplayInfo(
-        val tiebaVersion: String,
-        val tiebaBuildType: String,
-        val moduleVersion: String,
-        val moduleBuildType: String,
-    )
-
-    private val modelScoreUiItems = listOf(
-        ModelScoreUiItem(
-            CustomPostModelScoreCatalog.MSD_SCORE,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_MSD_SCORE_LABEL,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_MSD_SCORE_DESC,
-        ),
-        ModelScoreUiItem(
-            CustomPostModelScoreCatalog.MSD_DURATION_SCORE,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_MSD_DURATION_SCORE_LABEL,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_MSD_DURATION_SCORE_DESC,
-        ),
-        ModelScoreUiItem(
-            CustomPostModelScoreCatalog.DNN_PB_DUR_CTR_0,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_DNN_PB_DUR_CTR_0_LABEL,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_DNN_PB_DUR_CTR_0_DESC,
-        ),
-        ModelScoreUiItem(
-            CustomPostModelScoreCatalog.CUPAI_ALL_SCORES_1,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_CUPAI_ALL_SCORES_1_LABEL,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_CUPAI_ALL_SCORES_1_DESC,
-        ),
-        ModelScoreUiItem(
-            CustomPostModelScoreCatalog.CUPAI_ALL_SCORES_2,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_CUPAI_ALL_SCORES_2_LABEL,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_CUPAI_ALL_SCORES_2_DESC,
-        ),
-        ModelScoreUiItem(
-            CustomPostModelScoreCatalog.CUPAI_ALL_SCORES_3,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_CUPAI_ALL_SCORES_3_LABEL,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_CUPAI_ALL_SCORES_3_DESC,
-        ),
-        ModelScoreUiItem(
-            CustomPostModelScoreCatalog.CDNN_LTR,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_CDNN_LTR_LABEL,
-            UiText.Settings.CUSTOM_POST_FILTER_MODEL_CDNN_LTR_DESC,
-        ),
-    )
-
     private val sSettingsFieldCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Class<*>, Field>())
-    private val homeNativeGlassImagePickerResultHookInstalled = AtomicBoolean(false)
     private val homeNativeGlassHostDarkModeBridgeHookInstalled = AtomicBoolean(false)
-    private val homeNativeGlassImagePickerActivityResultHooks =
-        java.util.Collections.synchronizedMap(java.util.WeakHashMap<Class<*>, Boolean>())
-    @Volatile private var pendingHomeNativeGlassImagePick: PendingHomeNativeGlassImagePick? = null
 
     internal fun hook(cl: ClassLoader, symbols: HookSymbols) {
         val mod = XposedCompat.module ?: return
@@ -336,597 +179,15 @@ object SettingsMenuHook {
         }
     }
 
-    private fun installHomeNativeGlassImagePickerResultHook() {
-        val mod = XposedCompat.module ?: return
-        if (!homeNativeGlassImagePickerResultHookInstalled.compareAndSet(false, true)) return
-        try {
-            val method = Activity::class.java.getDeclaredMethod(
-                "onActivityResult",
-                Int::class.javaPrimitiveType!!,
-                Int::class.javaPrimitiveType!!,
-                Intent::class.java,
-            ).apply { isAccessible = true }
-            mod.hook(method).intercept { chain ->
-                val requestCode = chain.args.getOrNull(0) as? Int
-                val resultCode = chain.args.getOrNull(1) as? Int
-                val data = chain.args.getOrNull(2) as? Intent
-                if (shouldHandleHomeNativeGlassImagePickerResult(
-                        activity = chain.thisObject as? Activity,
-                        requestCode = requestCode,
-                        resultCode = resultCode,
-                        data = data,
-                    )
-                ) {
-                    return@intercept null
-                }
-                chain.proceed()
-            }
-        } catch (t: Throwable) {
-            homeNativeGlassImagePickerResultHookInstalled.set(false)
-            XposedCompat.logW("[SettingsMenuHook] install home native image picker result hook failed: ${t.message}")
-        }
-    }
-
-    private fun installHomeNativeGlassImagePickerResultHook(activity: Activity) {
-        val mod = XposedCompat.module ?: return
-        val method = ReflectionUtils.findMethodInHierarchy(
-            activity.javaClass,
-            "onActivityResult",
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            Intent::class.java,
-        ) ?: return
-        if (method.declaringClass == Activity::class.java) return
-        synchronized(homeNativeGlassImagePickerActivityResultHooks) {
-            if (homeNativeGlassImagePickerActivityResultHooks.containsKey(method.declaringClass)) return
-            homeNativeGlassImagePickerActivityResultHooks[method.declaringClass] = true
-        }
-        try {
-            mod.hook(method).intercept { chain ->
-                val requestCode = chain.args.getOrNull(0) as? Int
-                val resultCode = chain.args.getOrNull(1) as? Int
-                val data = chain.args.getOrNull(2) as? Intent
-                if (shouldHandleHomeNativeGlassImagePickerResult(
-                        activity = chain.thisObject as? Activity,
-                        requestCode = requestCode,
-                        resultCode = resultCode,
-                        data = data,
-                    )
-                ) {
-                    return@intercept null
-                }
-                chain.proceed()
-            }
-        } catch (t: Throwable) {
-            homeNativeGlassImagePickerActivityResultHooks.remove(method.declaringClass)
-            XposedCompat.logW(
-                "[SettingsMenuHook] install activity image picker result hook failed: " +
-                    "${method.declaringClass.name}: ${t.message}"
-            )
-        }
-    }
-
-    private fun shouldHandleHomeNativeGlassImagePickerResult(
-        activity: Activity?,
-        requestCode: Int?,
-        resultCode: Int?,
-        data: Intent?,
-    ): Boolean {
-        if (requestCode != REQUEST_HOME_NATIVE_GLASS_IMAGE || pendingHomeNativeGlassImagePick == null) {
-            return false
-        }
-        handleHomeNativeGlassImagePickerResult(
-            activity = activity,
-            resultCode = resultCode,
-            data = data,
-        )
-        return true
-    }
-
-    private fun launchHomeNativeGlassImagePicker(
-        context: Context,
-        state: HomeNativeGlassImageSelectionState,
-        display: TextView,
-        darkMode: Boolean,
-        refreshPalette: (() -> Unit)? = null,
-        onImportedAnalysis: ((HomeNativeGlassImageAnalysis) -> Unit)? = null,
-    ) {
-        val activity = ReflectionUtils.findActivityFromContext(context)
-        if (activity == null) {
-            Toast.makeText(context, UiText.Settings.CONTEXT_UNAVAILABLE, Toast.LENGTH_SHORT).show()
-            return
-        }
-        installHomeNativeGlassImagePickerResultHook()
-        installHomeNativeGlassImagePickerResultHook(activity)
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Intent(MediaStore.ACTION_PICK_IMAGES)
-        } else {
-            Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
-        }.apply {
-            type = "image/*"
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        pendingHomeNativeGlassImagePick = PendingHomeNativeGlassImagePick(
-            contextRef = WeakReference(activity),
-            displayRef = WeakReference(display),
-            state = state,
-            darkMode = darkMode,
-            refreshPalette = refreshPalette,
-            onImportedAnalysis = onImportedAnalysis,
-        )
-        try {
-            @Suppress("DEPRECATION")
-            activity.startActivityForResult(intent, REQUEST_HOME_NATIVE_GLASS_IMAGE)
-        } catch (t: Throwable) {
-            pendingHomeNativeGlassImagePick = null
-            XposedCompat.logW("[SettingsMenuHook] launch home native image picker failed: ${t.message}")
-            Toast.makeText(
-                activity,
-                UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PICKER_UNAVAILABLE,
-                Toast.LENGTH_SHORT,
-            ).show()
-        }
-    }
-
-    private fun handleHomeNativeGlassImagePickerResult(
-        activity: Activity?,
-        resultCode: Int?,
-        data: Intent?,
-    ) {
-        val pending = pendingHomeNativeGlassImagePick ?: return
-        if (resultCode != Activity.RESULT_OK) {
-            pendingHomeNativeGlassImagePick = null
-            return
-        }
-        val uri = data?.data
-        val context = pending.contextRef.get() ?: activity
-        if (uri == null || context == null) {
-            pendingHomeNativeGlassImagePick = null
-            return
-        }
-        thread(name = "tbhook-home-native-glass-image-import", isDaemon = true) {
-            val copiedPath = runCatching {
-                copyHomeNativeGlassImageToPrivateFile(context, uri, pending.darkMode)
-            }.onFailure {
-                XposedCompat.logW("[SettingsMenuHook] import home native image failed: ${it.message}")
-            }.getOrNull()
-            val imageAnalysis = if (copiedPath.isNullOrBlank()) {
-                null
-            } else {
-                runCatching {
-                    analyzeHomeNativeGlassImage(copiedPath, pending.darkMode)
-                }.onFailure {
-                    XposedCompat.logW("[SettingsMenuHook] analyze home native image failed: ${it.message}")
-                }.getOrNull()
-            }
-            Handler(Looper.getMainLooper()).post {
-                if (pendingHomeNativeGlassImagePick !== pending) return@post
-                if (copiedPath.isNullOrBlank()) {
-                    Toast.makeText(
-                        context,
-                        UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_IMPORT_FAILED,
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                } else {
-                    pending.state.path = copiedPath
-                    pending.state.tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
-                    pending.state.paletteColors = imageAnalysis?.paletteColors.orEmpty()
-                    pending.state.defaultTintColor = imageAnalysis?.defaultTintColor
-                    pending.displayRef.get()?.text = homeNativeGlassImageDisplayText(copiedPath)
-                    pending.refreshPalette?.invoke()
-                    imageAnalysis?.let { pending.onImportedAnalysis?.invoke(it) }
-                    Toast.makeText(
-                        context,
-                        UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_IMPORTED,
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
-                pendingHomeNativeGlassImagePick = null
-            }
-        }
-    }
-
-    private fun analyzeHomeNativeGlassImage(path: String, darkMode: Boolean): HomeNativeGlassImageAnalysis? {
-        val file = File(path.trim())
-        if (!file.isFile || file.length() <= 0L) return null
-        val bounds = BitmapFactory.Options().apply {
-            inJustDecodeBounds = true
-        }
-        BitmapFactory.decodeFile(file.absolutePath, bounds)
-        val width = bounds.outWidth
-        val height = bounds.outHeight
-        if (width <= 0 || height <= 0) return null
-        val sampleEdge = max(
-            HOME_NATIVE_GLASS_TINT_PALETTE_SAMPLE_EDGE,
-            HOME_NATIVE_GLASS_DEFAULT_TINT_SAMPLE_EDGE,
-        )
-        var sampleSize = 1
-        while (max(width, height) / sampleSize > sampleEdge) {
-            sampleSize *= 2
-        }
-        val bitmap = BitmapFactory.decodeFile(
-            file.absolutePath,
-            BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            },
-        ) ?: return null
-        return try {
-            val averageLuma = computeHomeNativeGlassAverageLuma(bitmap)
-            HomeNativeGlassImageAnalysis(
-                paletteColors = extractHomeNativeGlassTintPalette(bitmap),
-                defaultTintColor = extractHomeNativeGlassDefaultTintColor(bitmap),
-                tintAlphaPercent = averageLuma?.let {
-                    homeNativeGlassAutoTintAlphaPercent(it, darkMode)
-                }
-                    ?: ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            )
-        } finally {
-            bitmap.recycle()
-        }
-    }
-
-    private fun extractHomeNativeGlassDefaultTintColor(bitmap: Bitmap): Int? {
-        val width = bitmap.width
-        val height = bitmap.height
-        if (width <= 0 || height <= 0) return null
-        val step = (max(width, height) / HOME_NATIVE_GLASS_DEFAULT_TINT_SAMPLE_EDGE).coerceAtLeast(1)
-        var weightedRed = 0L
-        var weightedGreen = 0L
-        var weightedBlue = 0L
-        var weightSum = 0L
-        var fallbackRed = 0L
-        var fallbackGreen = 0L
-        var fallbackBlue = 0L
-        var fallbackCount = 0L
-        var y = 0
-        while (y < height) {
-            var x = 0
-            while (x < width) {
-                val color = bitmap.getPixel(x, y)
-                val alpha = color ushr 24
-                if (alpha >= HOME_NATIVE_GLASS_TINT_PALETTE_MIN_PIXEL_ALPHA) {
-                    val red = color shr 16 and 0xFF
-                    val green = color shr 8 and 0xFF
-                    val blue = color and 0xFF
-                    fallbackRed += red.toLong()
-                    fallbackGreen += green.toLong()
-                    fallbackBlue += blue.toLong()
-                    fallbackCount++
-                    val maxChannel = max(red, max(green, blue))
-                    val minChannel = red.coerceAtMost(green).coerceAtMost(blue)
-                    val chroma = maxChannel - minChannel
-                    val luma = (red * 299 + green * 587 + blue * 114) / 1000
-                    if (luma in HOME_NATIVE_GLASS_DEFAULT_TINT_MIN_LUMA..HOME_NATIVE_GLASS_DEFAULT_TINT_MAX_LUMA) {
-                        val weight = (alpha * (chroma + HOME_NATIVE_GLASS_DEFAULT_TINT_CHROMA_BIAS)).toLong()
-                        weightedRed += red.toLong() * weight
-                        weightedGreen += green.toLong() * weight
-                        weightedBlue += blue.toLong() * weight
-                        weightSum += weight
-                    }
-                }
-                x += step
-            }
-            y += step
-        }
-        if (weightSum > 0L) {
-            return Color.rgb(
-                (weightedRed / weightSum).toInt().coerceIn(0, 255),
-                (weightedGreen / weightSum).toInt().coerceIn(0, 255),
-                (weightedBlue / weightSum).toInt().coerceIn(0, 255),
-            )
-        }
-        if (fallbackCount <= 0L) return null
-        return Color.rgb(
-            (fallbackRed / fallbackCount).toInt().coerceIn(0, 255),
-            (fallbackGreen / fallbackCount).toInt().coerceIn(0, 255),
-            (fallbackBlue / fallbackCount).toInt().coerceIn(0, 255),
-        )
-    }
-
-    private fun computeHomeNativeGlassAverageLuma(bitmap: Bitmap): Int? {
-        val width = bitmap.width
-        val height = bitmap.height
-        if (width <= 0 || height <= 0) return null
-        val step = (max(width, height) / HOME_NATIVE_GLASS_TINT_PALETTE_SAMPLE_EDGE).coerceAtLeast(1)
-        var lumaSum = 0L
-        var alphaSum = 0L
-        var y = 0
-        while (y < height) {
-            var x = 0
-            while (x < width) {
-                val color = bitmap.getPixel(x, y)
-                val alpha = color ushr 24
-                if (alpha >= HOME_NATIVE_GLASS_TINT_PALETTE_MIN_PIXEL_ALPHA) {
-                    val red = color shr 16 and 0xFF
-                    val green = color shr 8 and 0xFF
-                    val blue = color and 0xFF
-                    val luma = (red * 299 + green * 587 + blue * 114) / 1000
-                    lumaSum += luma.toLong() * alpha
-                    alphaSum += alpha.toLong()
-                }
-                x += step
-            }
-            y += step
-        }
-        if (alphaSum <= 0L) return null
-        return (lumaSum / alphaSum).toInt().coerceIn(0, 255)
-    }
-
-    private fun homeNativeGlassAutoTintAlphaPercent(
-        averageLuma: Int,
-        darkMode: Boolean,
-    ): Int {
-        val luma = averageLuma.coerceIn(0, 255)
-        val distanceFromMid = if (luma >= HOME_NATIVE_GLASS_AUTO_TINT_MID_LUMA) {
-            luma - HOME_NATIVE_GLASS_AUTO_TINT_MID_LUMA
-        } else {
-            HOME_NATIVE_GLASS_AUTO_TINT_MID_LUMA - luma
-        }
-        if (distanceFromMid >= HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE) {
-            return ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
-        }
-        val strength = (
-            (HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE - distanceFromMid) *
-                HOME_NATIVE_GLASS_AUTO_TINT_MAX_ABS_PERCENT +
-                HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE / 2
-            ) / HOME_NATIVE_GLASS_AUTO_TINT_TRIGGER_DISTANCE
-        val signedStrength = if (darkMode) -strength else strength
-        return signedStrength.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-        )
-    }
-
-    private fun copyHomeNativeGlassImageToPrivateFile(
-        context: Context,
-        uri: Uri,
-        darkMode: Boolean,
-    ): String? {
-        val appContext = context.applicationContext ?: context
-        val sourceDir = File(appContext.filesDir, HOME_NATIVE_GLASS_SOURCE_DIR_NAME)
-        if (!sourceDir.exists() && !sourceDir.mkdirs()) return null
-        val modePrefix = HOME_NATIVE_GLASS_SOURCE_FILE_PREFIX + if (darkMode) "dark_" else "light_"
-        val fileName = "$modePrefix${System.currentTimeMillis()}.img"
-        val targetFile = File(sourceDir, fileName)
-        val tempFile = File(sourceDir, "$fileName.tmp")
-        appContext.contentResolver.openInputStream(uri)?.use { input ->
-            tempFile.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        } ?: return null
-        if (tempFile.length() <= 0L) {
-            runCatching { tempFile.delete() }
-            return null
-        }
-        if (!tempFile.renameTo(targetFile)) {
-            runCatching {
-                tempFile.copyTo(targetFile, overwrite = true)
-                tempFile.delete()
-            }.getOrElse {
-                runCatching { tempFile.delete() }
-                return null
-            }
-        }
-        if (!targetFile.isFile || targetFile.length() <= 0L) return null
-        cleanupOldHomeNativeGlassSourceImages(sourceDir, modePrefix, targetFile.name)
-        return targetFile.absolutePath
-    }
-
-    private fun cleanupOldHomeNativeGlassSourceImages(
-        sourceDir: File,
-        modePrefix: String,
-        keepName: String,
-    ) {
-        runCatching {
-            sourceDir.listFiles()?.forEach { file ->
-                if (
-                    file.isFile &&
-                    file.name.startsWith(modePrefix) &&
-                    file.name != keepName
-                ) {
-                    file.delete()
-                }
-            }
-        }
-    }
-
-    private fun homeNativeGlassImageDisplayText(path: String): String {
-        val name = path.trim().takeIf { it.isNotEmpty() }?.let { File(it).name }.orEmpty()
-        return if (name.isBlank()) {
-            UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_NONE
-        } else {
-            UiText.Settings.homeNativeGlassBackgroundImageSelected(name)
-        }
-    }
-
-    private fun extractHomeNativeGlassTintPalette(bitmap: Bitmap): List<Int> {
-        val width = bitmap.width
-        val height = bitmap.height
-        if (width <= 0 || height <= 0) return emptyList()
-        val step = (max(width, height) / HOME_NATIVE_GLASS_TINT_PALETTE_SAMPLE_EDGE).coerceAtLeast(1)
-        val buckets = HashMap<Int, HomeNativeGlassColorBucket>()
-        var y = 0
-        while (y < height) {
-            var x = 0
-            while (x < width) {
-                val color = bitmap.getPixel(x, y)
-                val alpha = color ushr 24
-                if (alpha >= HOME_NATIVE_GLASS_TINT_PALETTE_MIN_PIXEL_ALPHA) {
-                    val red = color shr 16 and 0xFF
-                    val green = color shr 8 and 0xFF
-                    val blue = color and 0xFF
-                    val key = ((red shr 4) shl 8) or ((green shr 4) shl 4) or (blue shr 4)
-                    val bucket = buckets.getOrPut(key) { HomeNativeGlassColorBucket() }
-                    bucket.weight += alpha.toLong()
-                    bucket.red += red.toLong() * alpha
-                    bucket.green += green.toLong() * alpha
-                    bucket.blue += blue.toLong() * alpha
-                }
-                x += step
-            }
-            y += step
-        }
-        if (buckets.isEmpty()) return emptyList()
-        var maxWeight = 0L
-        buckets.values.forEach { bucket ->
-            if (bucket.weight > maxWeight) maxWeight = bucket.weight
-        }
-        if (maxWeight <= 0L) return emptyList()
-        val candidates = buckets.values.asSequence()
-            .filter { it.weight > 0L }
-            .map { bucket ->
-                val red = (bucket.red / bucket.weight).toInt().coerceIn(0, 255)
-                val green = (bucket.green / bucket.weight).toInt().coerceIn(0, 255)
-                val blue = (bucket.blue / bucket.weight).toInt().coerceIn(0, 255)
-                val maxChannel = max(red, max(green, blue))
-                val minChannel = red.coerceAtMost(green).coerceAtMost(blue)
-                val chroma = maxChannel - minChannel
-                val luma = (red * 299 + green * 587 + blue * 114) / 1000
-                val saturation = homeNativeGlassTintPaletteSaturation(maxChannel, minChannel, chroma)
-                val populationScore = Math.sqrt(bucket.weight.toDouble() / maxWeight.toDouble())
-                val saturationScore = saturation.coerceIn(0.0, 1.0)
-                val toneScore = (
-                    1.0 - Math.abs(luma - HOME_NATIVE_GLASS_TINT_PALETTE_TARGET_LUMA).toDouble() /
-                        HOME_NATIVE_GLASS_TINT_PALETTE_TARGET_LUMA_RANGE
-                    ).coerceIn(0.0, 1.0)
-                val neutralPenalty = if (chroma < 8) 0.65 else 1.0
-                HomeNativeGlassPaletteColor(
-                    color = Color.rgb(red, green, blue),
-                    score = (
-                        populationScore * 0.52 +
-                            saturationScore * 0.28 +
-                            toneScore * 0.20
-                        ) * neutralPenalty,
-                    luma = luma,
-                    saturation = saturation,
-                    hue = homeNativeGlassTintPaletteHue(red, green, blue, maxChannel, chroma),
-                )
-            }
-            .toList()
-        val ranked = (
-            candidates
-                .filter {
-                    it.luma in HOME_NATIVE_GLASS_TINT_PALETTE_MIN_LUMA..HOME_NATIVE_GLASS_TINT_PALETTE_MAX_LUMA
-                }
-                .takeIf { it.isNotEmpty() }
-                ?: candidates
-            )
-            .sortedByDescending { it.score }
-        val minDistanceSquared = HOME_NATIVE_GLASS_TINT_PALETTE_MIN_DISTANCE *
-            HOME_NATIVE_GLASS_TINT_PALETTE_MIN_DISTANCE
-        val selected = ArrayList<HomeNativeGlassPaletteColor>(HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS)
-        val postponed = ArrayList<HomeNativeGlassPaletteColor>()
-        for (candidate in ranked) {
-            if (selected.any { homeNativeGlassTintColorDistanceSquared(it.color, candidate.color) < minDistanceSquared }) {
-                continue
-            }
-            if (selected.any { homeNativeGlassTintPaletteHueDistanceTooSmall(it, candidate) }) {
-                postponed.add(candidate)
-                continue
-            }
-            selected.add(candidate)
-            if (selected.size >= HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS) break
-        }
-        if (selected.size < HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS) {
-            for (candidate in postponed) {
-                if (selected.any { homeNativeGlassTintColorDistanceSquared(it.color, candidate.color) < minDistanceSquared }) {
-                    continue
-                }
-                selected.add(candidate)
-                if (selected.size >= HOME_NATIVE_GLASS_TINT_PALETTE_MAX_COLORS) break
-            }
-        }
-        return selected.map { it.color }
-    }
-
-    private fun homeNativeGlassTintPaletteSaturation(
-        maxChannel: Int,
-        minChannel: Int,
-        chroma: Int,
-    ): Double {
-        if (chroma <= 0) return 0.0
-        val denominator = 255 - Math.abs(maxChannel + minChannel - 255)
-        if (denominator <= 0) return 0.0
-        return (chroma.toDouble() / denominator.toDouble()).coerceIn(0.0, 1.0)
-    }
-
-    private fun homeNativeGlassTintPaletteHue(
-        red: Int,
-        green: Int,
-        blue: Int,
-        maxChannel: Int,
-        chroma: Int,
-    ): Double {
-        if (chroma <= 0) return 0.0
-        val rawHue = when (maxChannel) {
-            red -> ((green - blue).toDouble() / chroma.toDouble()) % 6.0
-            green -> ((blue - red).toDouble() / chroma.toDouble()) + 2.0
-            else -> ((red - green).toDouble() / chroma.toDouble()) + 4.0
-        } * 60.0
-        return if (rawHue < 0.0) rawHue + 360.0 else rawHue
-    }
-
-    private fun homeNativeGlassTintPaletteHueDistanceTooSmall(
-        a: HomeNativeGlassPaletteColor,
-        b: HomeNativeGlassPaletteColor,
-    ): Boolean {
-        if (
-            a.saturation < HOME_NATIVE_GLASS_TINT_PALETTE_HUE_SATURATION_FLOOR ||
-            b.saturation < HOME_NATIVE_GLASS_TINT_PALETTE_HUE_SATURATION_FLOOR
-        ) {
-            return false
-        }
-        val distance = Math.abs(a.hue - b.hue)
-        val circularDistance = distance.coerceAtMost(360.0 - distance)
-        return circularDistance < HOME_NATIVE_GLASS_TINT_PALETTE_MIN_HUE_DISTANCE
-    }
-
-    private fun homeNativeGlassTintColorDistanceSquared(a: Int, b: Int): Int {
-        val red = Color.red(a) - Color.red(b)
-        val green = Color.green(a) - Color.green(b)
-        val blue = Color.blue(a) - Color.blue(b)
-        return red * red + green * green + blue * blue
-    }
-
-    private class HomeNativeGlassColorBucket {
-        var weight: Long = 0L
-        var red: Long = 0L
-        var green: Long = 0L
-        var blue: Long = 0L
-    }
-
-    private data class HomeNativeGlassPaletteColor(
-        val color: Int,
-        val score: Double,
-        val luma: Int,
-        val saturation: Double,
-        val hue: Double,
-    )
-
     fun ensureInitialScanDialogHook(classLoader: ClassLoader) {
-        InitialScanDialogInstaller.ensureInstalled(classLoader) { activity, cl ->
+        SettingsScanDialogHooks.ensureInitialScanDialogHook(classLoader) { activity, cl ->
             startSymbolScanWithDialog(activity, cl, clearUserData = false)
         }
     }
 
     fun ensurePostScanEnvironmentWarningHook() {
-        PostScanEnvironmentWarningInstaller.ensureInstalled { activity ->
-            if (ConfigManager.hasPendingPostScanEnvironmentWarning(activity)) {
-                ModuleDialogQueue.enqueue {
-                    if (
-                        activity.isFinishing ||
-                        activity.isDestroyed ||
-                        !ConfigManager.consumePendingPostScanEnvironmentWarning(activity)
-                    ) {
-                        ModuleDialogQueue.finishCurrent()
-                        return@enqueue
-                    }
-                    showEnvironmentWarningDialog(activity) {
-                        ModuleDialogQueue.finishCurrent()
-                    }
-                }
-            }
+        SettingsScanDialogHooks.ensurePostScanEnvironmentWarningHook { activity, onConfirmed ->
+            showEnvironmentWarningDialog(activity, onConfirmed)
         }
     }
 
@@ -1041,29 +302,7 @@ object SettingsMenuHook {
     }
 
     private fun buildVersionDisplayInfo(context: Context, symbols: HookSymbols? = null): VersionDisplayInfo {
-        val tiebaVersion = try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-                ?: UiText.Settings.UNKNOWN
-        } catch (_: Exception) {
-            UiText.Settings.UNKNOWN
-        }
-        val versionType = symbols?.scanTargetVersionType ?: HookSymbolResolver.readTargetVersionType(context)
-        val tiebaBuildType = if (HookSymbolResolver.isOfficialTiebaVersionType(versionType)) {
-            UiText.Settings.TIEBA_OFFICIAL_VERSION
-        } else {
-            UiText.Settings.TIEBA_TEST_VERSION
-        }
-        val moduleBuildType = if (com.forbidad4tieba.hook.BuildConfig.DEBUG) {
-            UiText.Settings.MODULE_DEBUG_VERSION
-        } else {
-            UiText.Settings.MODULE_RELEASE_VERSION
-        }
-        return VersionDisplayInfo(
-            tiebaVersion = tiebaVersion,
-            tiebaBuildType = tiebaBuildType,
-            moduleVersion = HookSymbolResolver.runtimeModuleVersionName(),
-            moduleBuildType = moduleBuildType,
-        )
+        return SettingsVersionInfoProvider.build(context, symbols)
     }
 
     internal fun showModuleSettingsDialog(context: Context, classLoader: ClassLoader?) {
@@ -1087,290 +326,31 @@ object SettingsMenuHook {
             }
 
             val restrictedFeaturesUnlocked = ConfigManager.isRestrictedFeaturesUnlocked(context)
-            val adBlockItems = listOf(
-                SwitchItem(
-                    UiText.Settings.BLOCK_AD_FEED_LABEL,
-                    UiText.Settings.BLOCK_AD_FEED_DESC,
-                    ConfigManager.KEY_BLOCK_AD_FEED,
-                    true,
-                    true,
+            val groups = SettingsMenuGroupBuilder.build(
+                restrictedFeaturesUnlocked = restrictedFeaturesUnlocked,
+                actions = SettingsMenuGroupActions(
+                    onAdBlock = { items -> showAdBlockDialog(context, prefs, items) },
+                    onCustomPostFilter = { items -> showCustomPostFilterDialog(context, prefs, items) },
+                    onCustomPostModelScore = { showCustomPostModelScoreDialog(context, prefs) },
+                    onCustomPostFilterKeyword = { showCustomPostFilterKeywordDialog(context, prefs) },
+                    onPbLikeAutoReply = { showPbLikeAutoReplyDialog(context, prefs) },
+                    onPerformanceOptimization = { groups -> showPerformanceOptimizationDialog(context, prefs, groups) },
+                    onAutoSignIn = { AutoSignInManager.tryAutoSignIn(context, force = true) },
+                    onReplyVisibilityProbe = { showReplyVisibilityProbeDialog(context, prefs) },
+                    onHomeTopTab = { showHomeTopTabDialog(context, prefs) },
+                    onHomeNativeGlass = { showHomeNativeGlassDialog(context, prefs) },
+                    onBottomTab = { showBottomTabDialog(context, prefs) },
                 ),
-                SwitchItem(
-                    UiText.Settings.BLOCK_AD_POST_PAGE_LABEL,
-                    UiText.Settings.BLOCK_AD_POST_PAGE_DESC,
-                    ConfigManager.KEY_BLOCK_AD_POST_PAGE,
-                    true,
-                    true,
-                ),
-                SwitchItem(
-                    UiText.Settings.BLOCK_AD_FORUM_PAGE_LABEL,
-                    UiText.Settings.BLOCK_AD_FORUM_PAGE_DESC,
-                    ConfigManager.KEY_BLOCK_AD_FORUM_PAGE,
-                    true,
-                    true,
-                ),
-                SwitchItem(
-                    UiText.Settings.BLOCK_AD_STRATEGY_LABEL,
-                    UiText.Settings.BLOCK_AD_STRATEGY_DESC,
-                    ConfigManager.KEY_BLOCK_AD_STRATEGY,
-                    true,
-                    true,
-                ),
-                SwitchItem(
-                    UiText.Settings.BLOCK_AD_SEARCH_BOX_TEXT_LABEL,
-                    UiText.Settings.BLOCK_AD_SEARCH_BOX_TEXT_DESC,
-                    ConfigManager.KEY_BLOCK_AD_SEARCH_BOX_TEXT,
-                    true,
-                    true,
-                ),
-                SwitchItem(
-                    UiText.Settings.BLOCK_AD_HOME_TOP_BAR_LABEL,
-                    UiText.Settings.BLOCK_AD_HOME_TOP_BAR_DESC,
-                    ConfigManager.KEY_BLOCK_AD_HOME_TOP_BAR,
-                    true,
-                    true,
-                ),
-                SwitchItem(
-                    UiText.Settings.BLOCK_AD_MINE_TAB_WEB_LABEL,
-                    UiText.Settings.BLOCK_AD_MINE_TAB_WEB_DESC,
-                    ConfigManager.KEY_BLOCK_AD_MINE_TAB_WEB,
-                    true,
-                    true,
-                ),
-                SwitchItem(
-                    UiText.Settings.BLOCK_AD_HOME_SIDE_BAR_WEB_LABEL,
-                    UiText.Settings.BLOCK_AD_HOME_SIDE_BAR_WEB_DESC,
-                    ConfigManager.KEY_BLOCK_AD_HOME_SIDE_BAR_WEB,
-                    true,
-                    true,
-                ),
-                SwitchItem(
-                    UiText.Settings.FILTER_ENTER_FORUM_WEB_LABEL,
-                    UiText.Settings.FILTER_ENTER_FORUM_WEB_DESC,
-                    ConfigManager.KEY_FILTER_ENTER_FORUM_WEB,
-                    true,
-                    false,
-                ),
-            )
-            val customPostFilterItems = mutableListOf(
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_VOTE_LABEL, UiText.Settings.CUSTOM_POST_FILTER_VOTE_DESC, ConfigManager.KEY_FILTER_POST_VOTE, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_VIDEO_LABEL, UiText.Settings.CUSTOM_POST_FILTER_VIDEO_DESC, ConfigManager.KEY_FILTER_POST_VIDEO, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_LIVE_LABEL, UiText.Settings.CUSTOM_POST_FILTER_LIVE_DESC, ConfigManager.KEY_FILTER_POST_LIVE, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_REPLY_LABEL, UiText.Settings.CUSTOM_POST_FILTER_REPLY_DESC, ConfigManager.KEY_FILTER_POST_REPLY, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_HOT_LABEL, UiText.Settings.CUSTOM_POST_FILTER_HOT_DESC, ConfigManager.KEY_FILTER_POST_HOT, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_GOODS_LABEL, UiText.Settings.CUSTOM_POST_FILTER_GOODS_DESC, ConfigManager.KEY_FILTER_POST_GOODS, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_GAME_BOOKING_LABEL, UiText.Settings.CUSTOM_POST_FILTER_GAME_BOOKING_DESC, ConfigManager.KEY_FILTER_POST_GAME_BOOKING, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_HELP_LABEL, UiText.Settings.CUSTOM_POST_FILTER_HELP_DESC, ConfigManager.KEY_FILTER_POST_HELP, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_SCORE_LABEL, UiText.Settings.CUSTOM_POST_FILTER_SCORE_DESC, ConfigManager.KEY_FILTER_POST_SCORE, true, false),
-                SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_RECOMMEND_FORUM_LABEL, UiText.Settings.CUSTOM_POST_FILTER_RECOMMEND_FORUM_DESC, ConfigManager.KEY_FILTER_POST_RECOMMEND_FORUM, true, false),
-            )
-            if (restrictedFeaturesUnlocked) {
-                customPostFilterItems.add(
-                    SwitchItem(
-                        UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_LABEL,
-                        UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_DESC,
-                        ConfigManager.KEY_FILTER_POST_MODEL_SCORE,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_SETTINGS
-                    ) {
-                        showCustomPostModelScoreDialog(context, prefs)
-                    }
-                )
-            }
-            customPostFilterItems.add(SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_UNFOLLOWED_FORUM_LABEL, UiText.Settings.CUSTOM_POST_FILTER_UNFOLLOWED_FORUM_DESC, ConfigManager.KEY_FILTER_POST_UNFOLLOWED_FORUM, true, false))
-            customPostFilterItems.add(
-                SwitchItem(
-                    UiText.Settings.CUSTOM_POST_FILTER_FORUM_KEYWORD_LABEL,
-                    UiText.Settings.CUSTOM_POST_FILTER_FORUM_KEYWORD_DESC,
-                    ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD,
-                    true,
-                    false,
-                    UiText.Settings.ACTION_ICON_SETTINGS
-                ) {
-                    showCustomPostFilterKeywordDialog(context, prefs)
-                }
             )
 
-            val contentBlockItems = mutableListOf<SwitchItem>()
-            if (restrictedFeaturesUnlocked) {
-                contentBlockItems.add(
-                    SwitchItem(
-                        UiText.Settings.BLOCK_AD_LABEL,
-                        UiText.Settings.BLOCK_AD_DESC,
-                        ConfigManager.KEY_BLOCK_AD,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_SETTINGS,
-                    ) {
-                        showAdBlockDialog(context, prefs, adBlockItems)
-                    }
-                )
-            }
-            contentBlockItems.add(
-                SwitchItem(
-                    UiText.Settings.CUSTOM_POST_FILTER_LABEL,
-                    UiText.Settings.CUSTOM_POST_FILTER_DESC,
-                    ConfigManager.KEY_ENABLE_CUSTOM_POST_FILTER,
-                    true,
-                    false,
-                    UiText.Settings.ACTION_ICON_SETTINGS
-                ) {
-                    showCustomPostFilterDialog(context, prefs, customPostFilterItems)
-                }
-            )
-
-            val extensionItems = mutableListOf(
-                SwitchItem(UiText.Settings.AUTO_LOAD_MORE_LABEL, UiText.Settings.AUTO_LOAD_MORE_DESC, ConfigManager.KEY_ENABLE_AUTO_LOAD_MORE, true, false),
-                SwitchItem(UiText.Settings.DISABLE_AUTO_REFRESH_LABEL, UiText.Settings.DISABLE_AUTO_REFRESH_DESC, ConfigManager.KEY_DISABLE_AUTO_REFRESH, true, false),
-                SwitchItem(UiText.Settings.DEFAULT_ORIGINAL_IMAGE_LABEL, UiText.Settings.DEFAULT_ORIGINAL_IMAGE_DESC, ConfigManager.KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE, true, false),
-                SwitchItem(UiText.Settings.OPEN_WEB_LINK_IN_SYSTEM_BROWSER_LABEL, UiText.Settings.OPEN_WEB_LINK_IN_SYSTEM_BROWSER_DESC, ConfigManager.KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER, true, false),
-            )
-            if (restrictedFeaturesUnlocked) {
-                extensionItems.add(
-                    1,
-                    SwitchItem(
-                        UiText.Settings.PB_LIKE_AUTO_REPLY_LABEL,
-                        UiText.Settings.PB_LIKE_AUTO_REPLY_DESC,
-                        ConfigManager.KEY_ENABLE_PB_LIKE_AUTO_REPLY,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_SETTINGS
-                    ) {
-                        showPbLikeAutoReplyDialog(context, prefs)
-                    }
-                )
-                val performanceGroups = listOf(
-                    SettingGroup(
-                        UiText.Settings.PERFORMANCE_GROUP_HOST_RUNTIME,
-                        listOf(
-                            SwitchItem(UiText.Settings.FORCE_HOST_PERFORMANCE_FLAGS_LABEL, UiText.Settings.FORCE_HOST_PERFORMANCE_FLAGS_DESC, ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS, true, true),
-                            SwitchItem(UiText.Settings.FORCE_LOW_END_DEVICE_CONFIG_LABEL, UiText.Settings.FORCE_LOW_END_DEVICE_CONFIG_DESC, ConfigManager.KEY_FORCE_LOW_END_DEVICE_CONFIG, true, true),
-                            SwitchItem(UiText.Settings.DISABLE_APSARAS_SCHEDULE_LABEL, UiText.Settings.DISABLE_APSARAS_SCHEDULE_DESC, ConfigManager.KEY_DISABLE_APSARAS_SCHEDULE, true, true),
-                            SwitchItem(UiText.Settings.PB_PERFORMANCE_MODE_LABEL, UiText.Settings.PB_PERFORMANCE_MODE_DESC, ConfigManager.KEY_ENABLE_PB_PERFORMANCE_MODE, true, true),
-                            SwitchItem(UiText.Settings.PB_SCROLL_COALESCE_LABEL, UiText.Settings.PB_SCROLL_COALESCE_DESC, ConfigManager.KEY_ENABLE_PB_SCROLL_COALESCE, true, true),
-                        ),
-                    ),
-                    SettingGroup(
-                        UiText.Settings.PERFORMANCE_GROUP_STARTUP,
-                        listOf(
-                            SwitchItem(UiText.Settings.DISABLE_AD_SDK_COMPONENTS_LABEL, UiText.Settings.DISABLE_AD_SDK_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_AD_SDK_COMPONENTS, true, true),
-                            SwitchItem(UiText.Settings.DISABLE_FLUTTER_PREINIT_LABEL, UiText.Settings.DISABLE_FLUTTER_PREINIT_DESC, ConfigManager.KEY_DISABLE_FLUTTER_PREINIT, true, true),
-                            SwitchItem(UiText.Settings.BLOCK_TITAN_PATCH_LABEL, UiText.Settings.BLOCK_TITAN_PATCH_DESC, ConfigManager.KEY_BLOCK_TITAN_PATCH, true, false),
-                        ),
-                    ),
-                    SettingGroup(
-                        UiText.Settings.PERFORMANCE_GROUP_COMPONENT,
-                        listOf(
-                            SwitchItem(UiText.Settings.DISABLE_AI_COMPONENTS_LABEL, UiText.Settings.DISABLE_AI_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_AI_COMPONENTS, true, true),
-                            SwitchItem(UiText.Settings.DISABLE_VIDEO_COMPONENTS_LABEL, UiText.Settings.DISABLE_VIDEO_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_VIDEO_COMPONENTS, true, true),
-                        ),
-                    ),
-                )
-                extensionItems.add(
-                    SwitchItem(
-                        UiText.Settings.GROUP_PERFORMANCE,
-                        UiText.Settings.PERFORMANCE_OPTIMIZATION_DESC,
-                        ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_SETTINGS,
-                    ) {
-                        showPerformanceOptimizationDialog(context, prefs, performanceGroups)
-                    }
-                )
-                extensionItems.add(
-                    SwitchItem(
-                        UiText.Settings.AUTO_SIGN_IN_LABEL,
-                        UiText.Settings.AUTO_SIGN_IN_DESC,
-                        ConfigManager.KEY_ENABLE_AUTO_SIGN_IN,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_PLAY
-                    ) {
-                        AutoSignInManager.tryAutoSignIn(context, force = true)
-                    }
-                )
-                extensionItems.add(
-                    SwitchItem(
-                        UiText.Settings.PRIVATE_READ_RECEIPT_INVISIBLE_LABEL,
-                        UiText.Settings.PRIVATE_READ_RECEIPT_INVISIBLE_DESC,
-                        ConfigManager.KEY_PRIVATE_READ_RECEIPT_INVISIBLE,
-                        true,
-                        false,
-                    )
-                )
-                extensionItems.add(
-                    SwitchItem(
-                        UiText.Settings.REPLY_VISIBILITY_PROBE_LABEL,
-                        UiText.Settings.REPLY_VISIBILITY_PROBE_DESC,
-                        ConfigManager.KEY_VERIFY_REPLY_AFTER_POST,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_SETTINGS,
-                    ) {
-                        showReplyVisibilityProbeDialog(context, prefs)
-                    }
-                )
-                 extensionItems.add(
-                    SwitchItem(UiText.Settings.DETAILED_LOGGING_LABEL, UiText.Settings.DETAILED_LOGGING_DESC, ConfigManager.KEY_ENABLE_DETAILED_LOGGING, true, false),
-                )
-            }
-
-            val groups = mutableListOf(
-                SettingGroup(UiText.Settings.GROUP_CONTENT_BLOCK, contentBlockItems),
-
-                SettingGroup(UiText.Settings.GROUP_UI_OPTIMIZE, listOf(
-                    SwitchItem(
-                        UiText.Settings.SIMPLIFY_HOME_TAB_LABEL,
-                        UiText.Settings.SIMPLIFY_HOME_TAB_DESC,
-                        ConfigManager.KEY_CUSTOM_HOME_TOP_TABS,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_SETTINGS
-                    ) {
-                        showHomeTopTabDialog(context, prefs)
-                    },
-                    SwitchItem(UiText.Settings.AUTO_HIDE_HOME_TAB_LABEL, UiText.Settings.AUTO_HIDE_HOME_TAB_DESC, ConfigManager.KEY_AUTO_HIDE_HOME_TAB, true, false),
-                    SwitchItem(
-                        UiText.Settings.HOME_NATIVE_GLASS_LABEL,
-                        UiText.Settings.HOME_NATIVE_GLASS_DESC,
-                        ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_SETTINGS
-                    ) {
-                        showHomeNativeGlassDialog(
-                            context,
-                            prefs,
-                        )
-                    },
-                    SwitchItem(
-                        UiText.Settings.FORCE_FEED_UI_OPT_LABEL,
-                        UiText.Settings.FORCE_FEED_UI_OPT_DESC,
-                        ConfigManager.KEY_FORCE_FEED_UI_OPT,
-                        true,
-                        false,
-                        linkedPrefKeys = listOf(ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS),
-                    ),
-                    SwitchItem(
-                        UiText.Settings.SIMPLIFY_BOTTOM_TAB_LABEL,
-                        UiText.Settings.SIMPLIFY_BOTTOM_TAB_DESC,
-                        ConfigManager.KEY_CUSTOM_BOTTOM_TABS,
-                        true,
-                        false,
-                        UiText.Settings.ACTION_ICON_SETTINGS
-                    ) {
-                        showBottomTabDialog(context, prefs)
-                    }
-                )),
-            )
-            groups.add(SettingGroup(UiText.Settings.GROUP_EXTENSION, extensionItems))
-
-            val runtimeSupportByKey = mutableMapOf<String, SwitchRuntimeSupport>()
-            fun supportOf(item: SwitchItem): SwitchRuntimeSupport {
+            val runtimeSupportByKey = mutableMapOf<String, SettingsSwitchSupport>()
+            fun supportOf(item: SwitchItem): SettingsSwitchSupport {
                 return runtimeSupportByKey.getOrPut(item.prefKey) {
-                    resolveSwitchRuntimeSupport(item, featureStatusMap)
+                    SettingsSwitchSupportResolver.resolve(
+                        prefKey = item.prefKey,
+                        supported = item.supported,
+                        featureStatusMap = featureStatusMap,
+                    )
                 }
             }
 
@@ -1395,11 +375,12 @@ object SettingsMenuHook {
                 group.items.forEach { item ->
                     val support = supportOf(item)
                     val finalLabel = when {
+                        support.unknown -> UiText.Settings.withScanUnknownSuffix(item.label)
                         !support.supported -> UiText.Settings.withUnsupportedSuffix(item.label)
                         support.partial -> UiText.Settings.withPartialSuffix(item.label)
                         else -> item.label
                     }
-                    val finalDesc = mergeDescription(item.description, support.note)
+                    val finalDesc = SettingsSwitchSupportResolver.mergeDescription(item.description, support.note)
 
                     val rowView = createSwitchRow(
                         context,
@@ -2280,62 +1261,8 @@ object SettingsMenuHook {
             }
         }
     }
-
-
-
-
-    private fun resolveSwitchRuntimeSupport(
-        item: SwitchItem,
-        featureStatusMap: Map<String, HookFeatureStatus>,
-    ): SwitchRuntimeSupport {
-        val status = featureStatusMap[item.prefKey]
-        if (status == null) {
-            return SwitchRuntimeSupport(
-                supported = item.supported,
-                partial = false,
-                note = null,
-            )
-        }
-        return when (status.state) {
-            HookFeatureState.DISABLED -> {
-                val critical = if (status.missingCritical.isEmpty()) "-" else status.missingCritical.joinToString(", ")
-                SwitchRuntimeSupport(
-                    supported = false,
-                    partial = false,
-                    note = UiText.Settings.SCAN_DISABLED_PREFIX + critical,
-                )
-            }
-            HookFeatureState.PARTIAL -> {
-                val miss = status.missingCritical + status.missingOptional
-                val detail = if (miss.isEmpty()) "-" else miss.joinToString(", ")
-                SwitchRuntimeSupport(
-                    supported = item.supported,
-                    partial = true,
-                    note = UiText.Settings.SCAN_PARTIAL_PREFIX + detail,
-                )
-            }
-            else -> {
-                SwitchRuntimeSupport(
-                    supported = item.supported,
-                    partial = false,
-                    note = null,
-                )
-            }
-        }
-    }
-
-    private fun mergeDescription(base: String?, note: String?): String? {
-        if (base.isNullOrBlank()) return note
-        if (note.isNullOrBlank()) return base
-        return "$base\n$note"
-    }
-
     private fun resolveAdBlockDialogItemSupported(item: SwitchItem): Boolean {
-        val featureKey = when (item.prefKey) {
-            ConfigManager.KEY_FILTER_ENTER_FORUM_WEB -> item.prefKey
-            else -> ConfigManager.KEY_BLOCK_AD
-        }
-        return item.supported && ConfigManager.isScanFeatureAvailable(featureKey)
+        return item.supported && ConfigManager.isScanFeatureAvailable(item.prefKey)
     }
 
     private fun showAdBlockDialog(
@@ -3233,7 +2160,7 @@ object SettingsMenuHook {
                 loadingVisibleModeState = true
                 try {
                     copyHomeNativeGlassImageState(visibleImageState, state.imageState)
-                    backgroundImageDisplay.text = homeNativeGlassImageDisplayText(visibleImageState.path)
+                    backgroundImageDisplay.text = HomeNativeGlassImageFiles.displayText(visibleImageState.path)
                     tintColorRefresh()
                     tintAlphaSeekBar.progress = state.tintAlphaPercent.coerceIn(
                         ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
@@ -3336,7 +2263,7 @@ object SettingsMenuHook {
                         visibleImageState.tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
                         visibleImageState.paletteColors = emptyList()
                         visibleImageState.defaultTintColor = null
-                        backgroundImageDisplay.text = homeNativeGlassImageDisplayText(visibleImageState.path)
+                        backgroundImageDisplay.text = HomeNativeGlassImageFiles.displayText(visibleImageState.path)
                         tintColorRefresh()
                         strokeSwitch.second.isChecked = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
                         shadowSeekBar.progress = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT -
@@ -3424,9 +2351,7 @@ object SettingsMenuHook {
                 }
             }
             dialog.setOnDismissListener {
-                if (pendingHomeNativeGlassImagePick?.state === visibleImageState) {
-                    pendingHomeNativeGlassImagePick = null
-                }
+                HomeNativeGlassImagePickerBridge.clearIfState(visibleImageState)
                 previewRequestSerial++
                 clearVisiblePreviewBitmap()
                 homeNativeGlassDialog = null
@@ -3467,7 +2392,7 @@ object SettingsMenuHook {
             gravity = Gravity.CENTER_VERTICAL
         }
         val display = TextView(context).apply {
-            text = homeNativeGlassImageDisplayText(state.path)
+            text = HomeNativeGlassImageFiles.displayText(state.path)
             textSize = SETTINGS_VALUE_TEXT_SP
             gravity = Gravity.CENTER_VERTICAL
             maxLines = 1
@@ -3478,7 +2403,7 @@ object SettingsMenuHook {
             tag = HomeNativeGlassStyleRole.INPUT_TEXT
             setPadding((10 * density).toInt(), 0, (10 * density).toInt(), 0)
             setOnClickListener {
-                launchHomeNativeGlassImagePicker(
+                HomeNativeGlassImagePickerBridge.launch(
                     context,
                     state,
                     this,
@@ -3498,7 +2423,7 @@ object SettingsMenuHook {
             UiStyle.paintScanActionButton(this, density, tokens.accent)
             tag = HomeNativeGlassStyleRole.BUTTON_ACCENT
             setOnClickListener {
-                launchHomeNativeGlassImagePicker(
+                HomeNativeGlassImagePickerBridge.launch(
                     context,
                     state,
                     display,
@@ -3527,11 +2452,9 @@ object SettingsMenuHook {
                 state.tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
                 state.paletteColors = emptyList()
                 state.defaultTintColor = null
-                display.text = homeNativeGlassImageDisplayText(state.path)
+                display.text = HomeNativeGlassImageFiles.displayText(state.path)
                 refreshPalette?.invoke()
-                if (pendingHomeNativeGlassImagePick?.state === state) {
-                    pendingHomeNativeGlassImagePick = null
-                }
+                HomeNativeGlassImagePickerBridge.clearIfState(state)
             }
         }
         controlRow.addView(
@@ -3725,11 +2648,11 @@ object SettingsMenuHook {
         state: HomeNativeGlassImageSelectionState,
     ): List<Int> {
         val defaultColor = state.defaultTintColor ?: return state.paletteColors
-        val minDistanceSquared = HOME_NATIVE_GLASS_TINT_PALETTE_MIN_DISTANCE *
-            HOME_NATIVE_GLASS_TINT_PALETTE_MIN_DISTANCE
+        val minDistanceSquared = HomeNativeGlassImageAnalyzer.TINT_PALETTE_MIN_DISTANCE *
+            HomeNativeGlassImageAnalyzer.TINT_PALETTE_MIN_DISTANCE
         return state.paletteColors.filter { color ->
             state.tintColor == color ||
-                homeNativeGlassTintColorDistanceSquared(color, defaultColor) >= minDistanceSquared
+                HomeNativeGlassImageAnalyzer.tintColorDistanceSquared(color, defaultColor) >= minDistanceSquared
         }
     }
 
@@ -4132,6 +3055,7 @@ object SettingsMenuHook {
             val autoPercentiles = ConfigManager.parseModelScoreAutoPercentiles(
                 prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES, "")
             ).toMutableMap()
+            val modelScoreUiItems = CustomPostModelScoreUiCatalog.items
             val inputRows = ArrayList<Pair<ModelScoreUiItem, android.widget.EditText>>(modelScoreUiItems.size)
             val statsRefreshers = ArrayList<() -> Unit>(modelScoreUiItems.size)
             val initialStatsPostLimit = prefs.getInt(

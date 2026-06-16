@@ -6,12 +6,14 @@ import android.content.ContextWrapper
 import java.lang.reflect.Method
 
 /**
- * 澶氫釜 hook 绫诲叡鐢ㄧ殑鍙嶅皠宸ュ叿銆? * 鏀惧湪杩欓噷鍙互鍑忓皯閲嶅浠ｇ爜锛屽苟璁╄涓轰繚鎸佷竴鑷淬€? */
+ * Shared reflection helpers used by multiple hook modules.
+ */
 object ReflectionUtils {
 
     /**
-     * 娌跨被缁ф壙閾炬寜鍚嶇О鍜屽弬鏁扮被鍨嬫煡鎵惧０鏄庢柟娉曘€?     *
-     * 閬囧埌 [Any] 涔熷氨鏄?java.lang.Object 灏卞仠姝紝閬垮厤鎵埌妗嗘灦鍐呴儴銆?     * 杩斿洖鐨勬柟娉曚細璁剧疆涓哄彲璁块棶銆?     */
+     * Finds a declared method by name and parameter types along the class hierarchy.
+     * Stops before [Any] and returns an accessible method.
+     */
     fun findMethodInHierarchy(
         clazz: Class<*>,
         name: String,
@@ -30,7 +32,8 @@ object ReflectionUtils {
     }
 
     /**
-     * 娌跨被缁ф壙閾炬煡鎵惧０鏄庢柟娉曘€?     * 鏂规硶闇€瑕佸悓鏃跺尮閰?[name] 鍜岃嚜瀹氫箟 [predicate]銆?     */
+     * Finds a declared method whose name and custom [predicate] both match.
+     */
     fun findMethodInHierarchy(
         clazz: Class<*>,
         name: String,
@@ -49,7 +52,8 @@ object ReflectionUtils {
     }
 
     /**
-     * 浠?[Context] 閲屽彇瀹夸富 [Activity]銆?     * 鏈€澶氬悜澶栨媶 [maxDepth] 灞?[ContextWrapper]銆?     */
+     * Extracts the host [Activity] from a [Context], unwrapping up to [maxDepth] [ContextWrapper]s.
+     */
     fun findActivityFromContext(context: Context?, maxDepth: Int = 12): Activity? {
         var current = context
         var guard = 0
@@ -62,7 +66,8 @@ object ReflectionUtils {
     }
 
     /**
-     * 涓?[Method] 鐢熸垚渚夸簬闃呰鐨勫敮涓€閿€?     * 鍐呭鍖呭惈澹版槑绫汇€佹柟娉曞悕鍜屽弬鏁扮被鍨嬨€?     */
+     * Builds a compact readable signature for a [Method].
+     */
     fun methodSignature(method: Method): String {
         val params = method.parameterTypes.joinToString(",") { it.name }
         return "${method.declaringClass.name}#${method.name}($params)"

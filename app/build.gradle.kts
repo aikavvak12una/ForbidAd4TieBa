@@ -105,4 +105,6 @@ android {
 
 dependencies {
     compileOnly(libs.xposed.api)
+    testImplementation(libs.json)
+    testImplementation(libs.junit)
 }

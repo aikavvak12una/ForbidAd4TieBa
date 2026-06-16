@@ -1,10 +1,7 @@
 package com.forbidad4tieba.hook
 
-import com.forbidad4tieba.hook.symbol.model.*
-
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.FeedAdHook
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogHook
@@ -58,6 +55,7 @@ import com.forbidad4tieba.hook.feature.web.HelpCenterFooterBlockHook
 import com.forbidad4tieba.hook.feature.web.HomeSideBarWebBlockHook
 import com.forbidad4tieba.hook.feature.web.MineTabWebBlockHook
 import com.forbidad4tieba.hook.feature.web.PlainUrlDirectBrowserHook
+import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.ui.SettingsMenuHook
 
 internal data class HookInstallEntry(
@@ -94,194 +92,17 @@ internal object HookInstaller {
 }
 
 internal object HookInstallPlanner {
-    private class PlanContext(
-        val processName: String,
-        val symbols: HookSymbols,
-    ) {
-        val isMain: Boolean = processName == Constants.TARGET_PACKAGE
-        val isImageViewerRemote: Boolean = processName == "${Constants.TARGET_PACKAGE}:remote"
-        val isImageViewerProcess: Boolean = isMain || isImageViewerRemote
-        private val featureSymbols: HookFeatureSymbols = symbols.toFeatureSymbols()
-        private val statusMap: Map<String, HookFeatureStatus> = HookSymbolResolver.featureStatusMap(symbols)
-
-        private fun available(featureKey: String): Boolean {
-            return statusMap[featureKey]?.isSupported() == true
-        }
-
-        fun canInstallFreeCopy(): Boolean {
-            return isMain &&
-                available(HookFeatureKey.FREE_COPY) &&
-                featureSymbols.freeCopy.isComplete()
-        }
-
-        fun canInstallImageViewerNativeShare(): Boolean {
-            return isImageViewerProcess && featureSymbols.share.isNativeShareComplete()
-        }
-
-        fun canInstallDefaultOriginalImage(settings: SettingsSnapshot): Boolean {
-            return isImageViewerProcess &&
-                settings.isDefaultOriginalImageEnabled &&
-                available(HookFeatureKey.DEFAULT_ORIGINAL_IMAGE) &&
-                featureSymbols.originalImage.isComplete()
-        }
-
-        fun canInstallImageViewerAiJumpButton(settings: SettingsSnapshot): Boolean {
-            return isImageViewerRemote &&
-                settings.isAiComponentsDisabled &&
-                available(HookFeatureKey.DISABLE_AI_COMPONENTS) &&
-                featureSymbols.performance.isImageViewerJumpButtonComplete()
-        }
-
-        private fun canInstallAdBlockSubFeature(enabled: Boolean): Boolean {
-            return enabled && available(HookFeatureKey.BLOCK_AD)
-        }
-
-        fun canInstallFeedAdBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isFeedAdBlockEnabled)
-        }
-
-        fun canInstallPostAdBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
-        }
-
-        fun canInstallForumPageAdBlock(settings: SettingsSnapshot): Boolean {
-            return isMain &&
-                canInstallAdBlockSubFeature(settings.isForumPageAdBlockEnabled) &&
-                hasForumPageAdBlockPath(symbols)
-        }
-
-        fun canInstallStrategyAdBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isStrategyAdBlockEnabled)
-        }
-
-        fun canInstallPbEarlyAdBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
-        }
-
-        fun canInstallPbAdRequestBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
-        }
-
-        fun canInstallPbFallingAdBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
-        }
-
-        fun canInstallSearchBoxTextAdBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isSearchBoxTextAdBlockEnabled)
-        }
-
-        fun canInstallHomeTopBarAdBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isHomeTopBarAdBlockEnabled)
-        }
-
-        private fun hasForumPageAdBlockPath(symbols: HookSymbols): Boolean {
-            return ForumPageAdSymbolReadiness.evaluate(symbols).any
-        }
-
-        fun canInstallCustomPostFilter(settings: SettingsSnapshot): Boolean {
-            return settings.isCustomPostFilterEnabled && available(HookFeatureKey.ENABLE_CUSTOM_POST_FILTER)
-        }
-
-        fun canInstallHomeNativeGlass(settings: SettingsSnapshot): Boolean {
-            return settings.isHomeNativeGlassEnabled &&
-                settings.hasAnyHomeNativeGlassBackgroundImage() &&
-                available(HookFeatureKey.HOME_NATIVE_GLASS)
-        }
-
-        fun canInstallHomeTopTabs(settings: SettingsSnapshot): Boolean {
-            return settings.isHomeTopTabsCustomEnabled &&
-                available(HookFeatureKey.SIMPLIFY_HOME_TOP_TABS) &&
-                featureSymbols.homeTab.isComplete()
-        }
-
-        fun canInstallFollowedTabWeb(settings: SettingsSnapshot): Boolean {
-            return canInstallHomeTopTabs(settings) && settings.isHomeTopTabFollowedEnabled
-        }
-
-        fun canInstallBottomTabs(settings: SettingsSnapshot): Boolean {
-            return settings.isBottomTabsCustomEnabled &&
-                available(HookFeatureKey.SIMPLIFY_BOTTOM_TABS) &&
-                featureSymbols.mainTab.isComplete()
-        }
-
-        fun canInstallEnterForumWeb(settings: SettingsSnapshot): Boolean {
-            return settings.isEnterForumWebFilterEnabled && available(HookFeatureKey.FILTER_ENTER_FORUM_WEB)
-        }
-
-        fun canInstallSystemBrowser(settings: SettingsSnapshot): Boolean {
-            return settings.isOpenWebLinkInSystemBrowserEnabled &&
-                available(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
-        }
-
-        fun canInstallMineTabWebBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isMineTabWebAdBlockEnabled)
-        }
-
-        fun canInstallHomeSideBarWebBlock(settings: SettingsSnapshot): Boolean {
-            return canInstallAdBlockSubFeature(settings.isHomeSideBarWebAdBlockEnabled)
-        }
-
-        fun canInstallForumNativeTopShift(): Boolean = available(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
-
-        fun canInstallAutoRefresh(settings: SettingsSnapshot): Boolean {
-            return settings.isAutoRefreshDisabled && available(HookFeatureKey.DISABLE_AUTO_REFRESH)
-        }
-
-        fun canInstallAutoLoadMore(settings: SettingsSnapshot): Boolean {
-            return settings.isAutoLoadMoreEnabled && available(HookFeatureKey.AUTO_LOAD_MORE)
-        }
-
-        fun canInstallPbScrollCoalesce(settings: SettingsSnapshot): Boolean {
-            return settings.isPbScrollCoalesceEnabled && available(HookFeatureKey.ENABLE_PB_SCROLL_COALESCE)
-        }
-
-        fun canInstallPbGestureFontScale(): Boolean = available(HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE)
-
-        fun canInstallPbLikeAutoReply(settings: SettingsSnapshot): Boolean {
-            return settings.isPbLikeAutoReplyEnabled &&
-                settings.pbLikeAutoReplyText.isNotBlank() &&
-                available(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
-        }
-
-        fun canInstallMainAiComponents(settings: SettingsSnapshot): Boolean {
-            return isMain &&
-                settings.isAiComponentsDisabled &&
-                available(HookFeatureKey.DISABLE_AI_COMPONENTS) &&
-                featureSymbols.performance.isComplete()
-        }
-
-        fun canInstallDefaultNotifyTab(settings: SettingsSnapshot): Boolean {
-            return settings.isDefaultNotifyTabEnabled && available(HookFeatureKey.DEFAULT_NOTIFY_TAB)
-        }
-
-        fun canInstallPrivateReadReceipt(settings: SettingsSnapshot): Boolean {
-            return settings.isPrivateReadReceiptInvisibleEnabled &&
-                available(HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE)
-        }
-
-        fun canInstallShareTrackingCleaner(settings: SettingsSnapshot): Boolean {
-            return settings.isCleanShareTrackingParamsEnabled &&
-                available(HookFeatureKey.CLEAN_SHARE_TRACKING_PARAMS)
-        }
-
-        fun canInstallReplyVisibilityProbe(settings: SettingsSnapshot): Boolean {
-            return isMain &&
-                settings.isReplyVisibilityProbeEnabled &&
-                available(HookFeatureKey.VERIFY_REPLY_AFTER_POST)
-        }
-    }
-
     fun shouldHandleProcess(processName: String): Boolean {
         return shouldInstallAttachHook(processName) || !staticPlan(processName).isEmpty()
     }
 
     fun shouldInstallAttachHook(processName: String): Boolean {
-        return processName == Constants.TARGET_PACKAGE || isImageViewerRemoteProcess(processName)
+        return HookProcess.isMain(processName) || HookProcess.isImageViewerRemote(processName)
     }
 
     fun staticPlan(processName: String): HookInstallPlan {
         val entries = ArrayList<HookInstallEntry>()
-        val isMain = isMainProcess(processName)
+        val isMain = HookProcess.isMain(processName)
         if (isMain) {
             entries += HookInstallEntry("PbBottomEnterBarHook") { cl -> PbBottomEnterBarHook.hook(cl) }
             entries += HookInstallEntry("UpgradePopWindowBlockHook") { cl -> UpgradePopWindowBlockHook.hook(cl) }
@@ -295,7 +116,7 @@ internal object HookInstallPlanner {
         settings: SettingsSnapshot,
     ): HookInstallPlan {
         val entries = ArrayList<HookInstallEntry>()
-        val context = PlanContext(processName, symbols)
+        val context = HookInstallContext(processName, symbols)
 
         if (context.canInstallFreeCopy()) {
             entries += HookInstallEntry("FreeCopyHook") { cl ->
@@ -366,7 +187,7 @@ internal object HookInstallPlanner {
         symbols: HookSymbols,
         settings: SettingsSnapshot,
     ): HookInstallPlan {
-        val context = PlanContext(processName, symbols)
+        val context = HookInstallContext(processName, symbols)
         val entries = ArrayList<HookInstallEntry>()
         if (context.isImageViewerRemote) {
             if (context.canInstallImageViewerAiJumpButton(settings)) {
@@ -588,14 +409,18 @@ internal object HookInstallPlanner {
             }
         }
 
-        entries += HookInstallEntry("CollectionSearchHook") { cl ->
-            HookSymbolResolver.resolveCollectionSearchSymbols(cl, symbols)?.let { targets ->
-                CollectionSearchHook.hook(targets)
+        if (context.canInstallCollectionSearch()) {
+            entries += HookInstallEntry("CollectionSearchHook") { cl ->
+                HookSymbolResolver.resolveCollectionSearchSymbols(cl, symbols)?.let { targets ->
+                    CollectionSearchHook.hook(targets)
+                }
             }
         }
-        entries += HookInstallEntry("HistorySearchHook") { cl ->
-            HookSymbolResolver.resolveHistorySearchSymbols(cl, symbols)?.let { targets ->
-                HistorySearchHook.hook(targets)
+        if (context.canInstallHistorySearch()) {
+            entries += HookInstallEntry("HistorySearchHook") { cl ->
+                HookSymbolResolver.resolveHistorySearchSymbols(cl, symbols)?.let { targets ->
+                    HistorySearchHook.hook(targets)
+                }
             }
         }
 
@@ -671,11 +496,4 @@ internal object HookInstallPlanner {
         return entries
     }
 
-    private fun isMainProcess(processName: String): Boolean {
-        return processName == Constants.TARGET_PACKAGE
-    }
-
-    fun isImageViewerRemoteProcess(processName: String): Boolean {
-        return processName == "${Constants.TARGET_PACKAGE}:remote"
-    }
 }

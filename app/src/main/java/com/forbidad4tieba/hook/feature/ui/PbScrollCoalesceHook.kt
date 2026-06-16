@@ -8,7 +8,8 @@ import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.ref.WeakReference
 
 /**
- * 鍚堝苟鍒楄〃鐘舵€佺浉鍚岀殑 PB 璇勮婊氬姩鍥炶皟銆? */
+ * Coalesces PB comment scroll callbacks when the visible list state has not changed.
+ */
 object PbScrollCoalesceHook {
     private const val COALESCE_WINDOW_MS = 96L
     private const val BOTTOM_GUARD_REMAINING_ITEMS = 20

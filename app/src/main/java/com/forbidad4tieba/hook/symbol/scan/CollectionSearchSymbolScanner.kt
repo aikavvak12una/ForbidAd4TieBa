@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.view.View
 
@@ -12,51 +10,54 @@ internal object CollectionSearchSymbolScanner {
     private const val COLLECTION_THREAD_FRAGMENT_CLASS = "com.baidu.tieba.myCollection.ThreadFragment"
 
     fun scan(cl: ClassLoader, logger: ScanLogger?): CollectionSearchScanSymbols {
-    val fragmentClass = safeFindClass(COLLECTION_THREAD_FRAGMENT_CLASS, cl)
-    if (fragmentClass == null) {
-        log(logger, "collectionScan: thread fragment class not found")
-        return CollectionSearchScanSymbols()
+        return scanSubStep("CollectionSearchHook", logger, CollectionSearchScanSymbols()) {
+            val fragmentClass = safeFindClass(COLLECTION_THREAD_FRAGMENT_CLASS, cl)
+            if (fragmentClass == null) {
+                log(logger, "collectionScan: thread fragment class not found")
+                return@scanSubStep CollectionSearchScanSymbols()
+            }
+
+            val presenterCandidate = resolveCollectionPresenterCandidate(fragmentClass)
+            val modelCandidate = resolveCollectionModelCandidate(fragmentClass)
+            val adapterSymbols = presenterCandidate?.let { resolveCollectionAdapterSymbols(it.presenterClass) }
+                ?: CollectionAdapterSymbols()
+            val fragmentDisplayListField = resolveCollectionFragmentDisplayListField(
+                fragmentClass = fragmentClass,
+                modelFieldName = modelCandidate?.fieldName,
+            )
+            val collectionActivityClass = safeFindClass(COLLECTION_ACTIVITY_CLASS, cl)
+            val navigationSymbols = collectionActivityClass?.let(::resolveCollectionNavigationSymbols)
+                ?: CollectionNavigationSymbols()
+            val editModeMethod = collectionActivityClass?.let(::resolveCollectionEditModeMethod)
+
+            val out = CollectionSearchScanSymbols(
+                presenterField = presenterCandidate?.fieldName,
+                presenterListSetterMethod = presenterCandidate?.setterMethod,
+                presenterAdapterField = adapterSymbols.presenterAdapterField,
+                modelField = modelCandidate?.fieldName,
+                modelListGetterMethod = modelCandidate?.getterMethod,
+                modelParseMethod = modelCandidate?.parseMethod,
+                modelListField = modelCandidate?.listFieldName,
+                fragmentDisplayListField = fragmentDisplayListField,
+                activityNavControllerField = navigationSymbols.activityNavControllerField,
+                navBarField = navigationSymbols.navBarField,
+                adapterShowFooterMethod = adapterSymbols.showFooterMethod,
+                adapterLoadingMethod = adapterSymbols.loadingMethod,
+                adapterHasMoreMethod = adapterSymbols.hasMoreMethod,
+                editModeMethod = editModeMethod,
+            )
+
+            log(
+                logger,
+                "collectionScan: presenter=${out.presenterField}.${out.presenterListSetterMethod}, " +
+                    "model=${out.modelField}.${out.modelListGetterMethod}/${out.modelParseMethod}[${out.modelListField}], " +
+                    "nav={${out.activityNavControllerField},${out.navBarField}}, " +
+                    "adapter=${out.presenterAdapterField}.{${out.adapterShowFooterMethod},${out.adapterLoadingMethod},${out.adapterHasMoreMethod}}, " +
+                    "fragmentList=${out.fragmentDisplayListField}, editMode=${out.editModeMethod}",
+            )
+            out
+        }
     }
-
-    val presenterCandidate = resolveCollectionPresenterCandidate(fragmentClass)
-    val modelCandidate = resolveCollectionModelCandidate(fragmentClass)
-    val adapterSymbols = presenterCandidate?.let { resolveCollectionAdapterSymbols(it.presenterClass) }
-        ?: CollectionAdapterSymbols()
-    val fragmentDisplayListField = resolveCollectionFragmentDisplayListField(
-        fragmentClass = fragmentClass,
-        modelFieldName = modelCandidate?.fieldName,
-    )
-    val collectionActivityClass = safeFindClass(COLLECTION_ACTIVITY_CLASS, cl)
-    val navigationSymbols = collectionActivityClass?.let(::resolveCollectionNavigationSymbols) ?: CollectionNavigationSymbols()
-    val editModeMethod = collectionActivityClass?.let(::resolveCollectionEditModeMethod)
-
-    val out = CollectionSearchScanSymbols(
-        presenterField = presenterCandidate?.fieldName,
-        presenterListSetterMethod = presenterCandidate?.setterMethod,
-        presenterAdapterField = adapterSymbols.presenterAdapterField,
-        modelField = modelCandidate?.fieldName,
-        modelListGetterMethod = modelCandidate?.getterMethod,
-        modelParseMethod = modelCandidate?.parseMethod,
-        modelListField = modelCandidate?.listFieldName,
-        fragmentDisplayListField = fragmentDisplayListField,
-        activityNavControllerField = navigationSymbols.activityNavControllerField,
-        navBarField = navigationSymbols.navBarField,
-        adapterShowFooterMethod = adapterSymbols.showFooterMethod,
-        adapterLoadingMethod = adapterSymbols.loadingMethod,
-        adapterHasMoreMethod = adapterSymbols.hasMoreMethod,
-        editModeMethod = editModeMethod,
-    )
-
-    log(
-        logger,
-        "collectionScan: presenter=${out.presenterField}.${out.presenterListSetterMethod}, " +
-            "model=${out.modelField}.${out.modelListGetterMethod}/${out.modelParseMethod}[${out.modelListField}], " +
-            "nav={${out.activityNavControllerField},${out.navBarField}}, " +
-            "adapter=${out.presenterAdapterField}.{${out.adapterShowFooterMethod},${out.adapterLoadingMethod},${out.adapterHasMoreMethod}}, " +
-            "fragmentList=${out.fragmentDisplayListField}, editMode=${out.editModeMethod}",
-    )
-    return out
-}
 
 private fun resolveCollectionPresenterCandidate(fragmentClass: Class<*>): CollectionPresenterCandidate? {
     val candidates = collectInstanceFields(fragmentClass).mapNotNull { field ->
@@ -209,32 +210,32 @@ private fun hasNavigationAddCustomViewMethod(clazz: Class<*>): Boolean {
 
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
 
     private fun collectInstanceMethods(clazz: Class<*>): List<java.lang.reflect.Method> =
-        HookSymbolResolver.collectInstanceMethods(clazz)
+        ScanReflection.collectInstanceMethods(clazz)
 
     private fun resolveListSetterMethodName(clazz: Class<*>, preferredName: String): String? =
-        HookSymbolResolver.resolveListSetterMethodName(clazz, preferredName)
+        ScanReflection.resolveListSetterMethodName(clazz, preferredName)
 
     private fun resolveListGetterMethodName(clazz: Class<*>, preferredName: String): String? =
-        HookSymbolResolver.resolveListGetterMethodName(clazz, preferredName)
+        ScanReflection.resolveListGetterMethodName(clazz, preferredName)
 
     private fun resolveParseMethodName(clazz: Class<*>, preferredName: String): String? =
-        HookSymbolResolver.resolveParseMethodName(clazz, preferredName)
+        ScanReflection.resolveParseMethodName(clazz, preferredName)
 
     private fun resolveListFieldName(clazz: Class<*>, preferredName: String): String? =
-        HookSymbolResolver.resolveListFieldName(clazz, preferredName)
+        ScanReflection.resolveListFieldName(clazz, preferredName)
 
-    private fun isAdapterLike(type: Class<*>): Boolean = HookSymbolResolver.isAdapterLike(type)
+    private fun isAdapterLike(type: Class<*>): Boolean = ScanReflection.isAdapterLike(type)
 
-    private fun isListType(type: Class<*>): Boolean = HookSymbolResolver.isListType(type)
+    private fun isListType(type: Class<*>): Boolean = ScanReflection.isListType(type)
 
     private fun pickMethodName(methods: List<java.lang.reflect.Method>, preferredName: String): String? =
-        HookSymbolResolver.pickMethodName(methods, preferredName)
+        ScanReflection.pickMethodName(methods, preferredName)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

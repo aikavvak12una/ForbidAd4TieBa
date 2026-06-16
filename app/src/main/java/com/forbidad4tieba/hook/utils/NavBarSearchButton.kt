@@ -17,9 +17,10 @@ import java.util.Collections
 import java.util.WeakHashMap
 
 /**
- * 缁欑洰鏍囧簲鐢?NavigationBar 娉ㄥ叆鎼滅储鎸夐挳鐨勫叡鐢ㄥ伐鍏枫€? * 绫诲悕鏄?com.baidu.tbadk.core.view.NavigationBar銆? *
- * 璋冪敤鏂逛粛鐒惰嚜宸卞喅瀹氾細
- * - 鎬庝箞鎷垮埌 NavigationBar 瀹炰緥锛屾瘮濡?Activity 瀛楁鎴栨帶鍒跺櫒閾? * - 鎸夊摢涓洰鏍囬噸鎺掍綅缃紝姣斿娓呴櫎鎸夐挳鎴栧彸渚у悓绾?View
+ * Shared helper for injecting a search button into the host NavigationBar.
+ *
+ * Callers still decide how to obtain the NavigationBar instance and which sibling or clear button
+ * should be used as the positioning anchor.
  */
 internal object NavBarSearchButton {
 
@@ -30,12 +31,14 @@ internal object NavBarSearchButton {
     private val sAddCustomViewMethodCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Any>())
 
     /**
-     * 缂撳瓨浠?HomeTabBarRightSlot 鎷垮埌鐨勬悳绱㈠浘鏍?ConstantState銆?     * 鐢?[cacheSearchIconDrawable] 鍐欏叆涓€娆★紝鍐嶇敱 [resolveSearchIconDrawable] 浣跨敤銆?     */
+     * Cached search icon state copied from HomeTabBarRightSlot.
+     */
     @Volatile
     private var sCachedSearchIconState: Drawable.ConstantState? = null
 
     /**
-     * 缂撳瓨 HomeTabBarRightSlot.getSearchIconView() 杩斿洖鐨勬悳绱㈠浘鏍?drawable銆?     * 鐢?HomeTopBarRightSlotHook 鍦ㄧ‘璁ゆЫ浣嶆悳绱㈠浘鏍囧彲鐢ㄥ悗璋冪敤銆?     */
+     * Stores the drawable returned by HomeTabBarRightSlot.getSearchIconView() once it is known.
+     */
     fun cacheSearchIconDrawable(drawable: Drawable?) {
         if (drawable == null) return
         if (sCachedSearchIconState != null) return
@@ -43,7 +46,8 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 浠庣洰鏍囧簲鐢ㄨ鍙栭潤鎬佸父閲?`ControlAlign.HORIZONTAL_RIGHT`銆?     */
+     * Reads the host static value `ControlAlign.HORIZONTAL_RIGHT`.
+     */
     fun resolveNavigationRightAlign(cl: ClassLoader?): Any? {
         val targetCl = cl ?: return null
         synchronized(sAlignRightCache) {
@@ -68,7 +72,8 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 鎸夌鍚嶅舰鐘惰В鏋?`NavigationBar.addCustomView(Align, View, ...)`銆?     */
+     * Resolves `NavigationBar.addCustomView(Align, View, ...)` by signature shape.
+     */
     fun resolveAddCustomViewMethod(navClass: Class<*>): Method? {
         synchronized(sAddCustomViewMethodCache) {
             if (sAddCustomViewMethodCache.containsKey(navClass)) {
@@ -88,7 +93,8 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 鏋勫缓鏍囧噯鐨?40dp 瀹瑰櫒锛岄噷闈㈡斁灞呬腑鐨?32dp 鍥炬爣銆?     * [iconDrawable] 涓虹┖鏃朵娇鐢?Android 绯荤粺鎼滅储鍥炬爣銆?     */
+     * Builds the standard 40dp button container with a centered 32dp icon.
+     */
     fun buildSearchButton(
         activity: Activity,
         iconDrawable: Drawable?,
@@ -117,8 +123,9 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 瑙ｆ瀽鎼滅储鍥炬爣 Drawable锛屾煡鎵鹃『搴忓涓嬶細
-     * 1. HomeTopBarRightSlotHook 缂撳瓨鐨?HomeTabBarRightSlot 鍥炬爣銆?     * 2. 褰撳墠 Activity decor view 閲岀殑 HomeTabBarRightSlot.getSearchIconView()銆?     * 3. Android 鍐呯疆鑿滃崟鎼滅储鍥炬爣銆?     */
+     * Resolves the search icon from the cached right-slot icon, the current decor tree, or Android's
+     * built-in search icon.
+     */
     fun resolveSearchIconDrawable(activity: Activity, @Suppress("UNUSED_PARAMETER") navigationBar: Any): Drawable? {
         sCachedSearchIconState?.newDrawable()?.mutate()?.let { return it }
         findHomeRightSlotSearchDrawable(activity.window?.decorView)?.let { return it }
@@ -126,7 +133,8 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 浠?NavigationBar 瀹炰緥鍙栨牴 View銆?     * 鍏煎瀹炰緥鏈韩灏辨槸 View锛屾垨瀹炰緥鍐呴儴鎸佹湁 View 绫诲瀷瀛楁杩欎袱绉嶆儏鍐点€?     */
+     * Extracts the root [View] from a NavigationBar instance.
+     */
     fun extractNavigationRootView(navigationBar: Any): View? {
         if (navigationBar is View) return navigationBar
         findFieldValue(navigationBar) { it is View }?.let { return it as? View }
@@ -134,7 +142,8 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 鍦?[root] 鍐呮部 [target] 鐨勭埗閾惧悜涓婃壘锛岃繑鍥炲畠鐨勭洿鎺ョ埗绾?ViewGroup銆?     */
+     * Finds the direct [ViewGroup] parent of [target] within [root].
+     */
     fun findParentOfView(root: View, target: View): ViewGroup? {
         if (root !is ViewGroup) return null
         for (i in 0 until root.childCount) {
@@ -146,7 +155,8 @@ internal object NavBarSearchButton {
     }
 
     /**
-     * 鍦ㄦ寜閽笂鎸?0銆?0銆?20ms 鎶曢€?[reposition]銆?     * 绛夊竷灞€绋冲畾鍚庢墽琛岋紝涓嶉樆濉炶皟鐢ㄦ柟銆?     */
+     * Posts a few delayed reposition attempts after layout settles.
+     */
     fun scheduleReposition(button: View, reposition: () -> Unit) {
         button.post(reposition)
         button.postDelayed(reposition, 80L)

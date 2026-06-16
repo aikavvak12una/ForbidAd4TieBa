@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 internal object MainTabBottomSymbolScanner {
     fun scan(
@@ -11,7 +9,7 @@ internal object MainTabBottomSymbolScanner {
     cl: ClassLoader,
     logger: ScanLogger?,
 ): MainTabBottomScanSymbols {
-    val match = runRules(candidates, cl, listOf(MainTabBottomLevel1Rule()), logger, "mainTabBottom")
+    val match = ScanReflection.runRules(candidates, cl, listOf(MainTabBottomLevel1Rule()), logger, "mainTabBottom")
     if (match == null) {
         log(logger, "mainTabBottom: no scan match")
         return MainTabBottomScanSymbols()
@@ -171,32 +169,24 @@ private fun resolveMainTabBottomOptionalFieldName(
 }
 
 
-    private fun runRules(
-        candidates: List<String>,
-        cl: ClassLoader,
-        rules: List<ScanRule>,
-        logger: ScanLogger?,
-        tag: String,
-    ): ScanMatch? = HookSymbolResolver.runRules(candidates, cl, rules, logger, tag)
-
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
 
     private fun collectInstanceMethods(clazz: Class<*>): List<java.lang.reflect.Method> =
-        HookSymbolResolver.collectInstanceMethods(clazz)
+        ScanReflection.collectInstanceMethods(clazz)
 
-    private fun isListType(type: Class<*>): Boolean = HookSymbolResolver.isListType(type)
+    private fun isListType(type: Class<*>): Boolean = ScanReflection.isListType(type)
 
     private fun pickMethod(methods: List<java.lang.reflect.Method>, preferredName: String?): java.lang.reflect.Method? =
-        HookSymbolResolver.pickMethod(methods, preferredName)
+        ScanReflection.pickMethod(methods, preferredName)
 
     private fun pickFieldName(fields: List<java.lang.reflect.Field>, preferredName: String?): String? =
-        HookSymbolResolver.pickFieldName(fields, preferredName)
+        ScanReflection.pickFieldName(fields, preferredName)
 
-    private fun isFragmentLikeType(type: Class<*>): Boolean = HookSymbolResolver.isFragmentLikeType(type)
+    private fun isFragmentLikeType(type: Class<*>): Boolean = ScanReflection.isFragmentLikeType(type)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

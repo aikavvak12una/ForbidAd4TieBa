@@ -2,10 +2,9 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.lang.reflect.ParameterizedType
@@ -42,12 +41,12 @@ internal object PostAdDataFilterSymbolScanner {
         typeAdapterClass: Class<*>,
         logger: ScanLogger?,
     ): Method? {
-        val candidates = typeAdapterClass.declaredMethods.filter { method ->
+        val candidates = declaredMethods("TypeAdapter", typeAdapterClass, logger)?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 1 &&
                 isListType(method.parameterTypes[0])
-        }
+        } ?: return null
         val genericCandidates = candidates.filter { method ->
             extractListGenericClass(method.genericParameterTypes.firstOrNull()) != null
         }
@@ -73,7 +72,7 @@ internal object PostAdDataFilterSymbolScanner {
             ?.let(::extractListGenericClass)
             ?.let { return it }
 
-        val listFieldItemClasses = collectInstanceFields(typeAdapterClass)
+        val listFieldItemClasses = (instanceFields("TypeAdapter", typeAdapterClass, logger) ?: return null)
             .asSequence()
             .filter { field -> isListType(field.type) }
             .mapNotNull { field -> extractListGenericClass(field.genericType) }
@@ -102,10 +101,10 @@ internal object PostAdDataFilterSymbolScanner {
         bdUniqueIdClass: Class<*>,
         logger: ScanLogger?,
     ): Method? {
-        val candidates = dataItemClass.methods.filter { method ->
+        val candidates = methods("DataItem", dataItemClass, logger)?.filter { method ->
             method.parameterTypes.isEmpty() &&
                 bdUniqueIdClass.isAssignableFrom(method.returnType)
-        }
+        } ?: return null
         val resolved = candidates.singleOrNull()
         if (resolved == null) {
             log(
@@ -148,13 +147,43 @@ internal object PostAdDataFilterSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
+
+    private fun declaredMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("TypeAdapterDataFilterHook.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+    }
+
+    private fun instanceFields(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Field>? {
+        return scanSubStep("TypeAdapterDataFilterHook.$label.InstanceFields", logger, null) {
+            collectInstanceFields(clazz)
+        }
+    }
+
+    private fun methods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("TypeAdapterDataFilterHook.$label.Methods", logger, null) {
+            clazz.methods.toList()
+        }
+    }
 
     private fun isListType(type: Class<*>): Boolean =
-        HookSymbolResolver.isListType(type)
+        ScanReflection.isListType(type)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

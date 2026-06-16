@@ -40,8 +40,11 @@ import java.util.concurrent.Executors
 import org.json.JSONObject
 
 /**
- * 鏀惰棌椤垫悳绱細
- * - 娣诲姞鐙珛鐨勫彸涓婅鎼滅储鎸夐挳銆? * - 鍦ㄦ湰鍦拌繃婊?adapter 鍒楄〃銆? * - 淇濇寔瀹屾暣 model 鏁版嵁涓嶅彉锛岃繃婊ゅ悗閲嶆槧灏勭偣鍑讳笅鏍囥€? * - 娣锋穯鎴愬憳鐢辨壂鎻忕鍙疯В鏋愪竴娆★紝杩愯鏈熶綔涓哄浐瀹氱洰鏍囦娇鐢ㄣ€? */
+ * Adds local search to the collection page.
+ *
+ * The hook injects a separate top-right search button, filters the loaded adapter list locally, and
+ * keeps the complete model list unchanged so click positions can be remapped after filtering.
+ */
 object CollectionSearchHook {
     private const val FULL_CACHE_MAX_ACCOUNTS = 3
     private const val PAGE_SIZE = 20

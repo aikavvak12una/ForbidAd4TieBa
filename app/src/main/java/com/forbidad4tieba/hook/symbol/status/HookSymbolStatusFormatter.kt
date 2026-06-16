@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.symbol.status
 
+import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.model.*
 
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
@@ -33,18 +34,8 @@ internal object HookSymbolStatusFormatter {
         fun has(value: String?): Boolean = !value.isNullOrBlank()
         fun has(value: Int?): Boolean = value != null && value != 0
         fun hasList(values: List<String>?): Boolean = values.orEmpty().any { it.isNotBlank() }
-        fun hasIntList(values: List<Int>?): Boolean = values.orEmpty().any { it != 0 }
-        fun hasHomeNativeGlassPageClass(): Boolean {
-            return symbols.homePersonalizeAnchorClasses
-                .orEmpty()
-                .contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS)
-        }
         fun listTarget(values: List<String>?): String {
             return values.orEmpty().filter { it.isNotBlank() }.joinToString(",").ifBlank { "-" }
-        }
-        fun resourceListTarget(values: List<Int>?): String {
-            val ids = values.orEmpty().filter { it != 0 }
-            return if (ids.isEmpty()) "-" else "count=${ids.size}"
         }
         fun add(name: String, target: String, checks: List<Pair<String, Boolean>>) {
             val missing = checks.asSequence()
@@ -238,105 +229,7 @@ internal object HookSymbolStatusFormatter {
                 ),
             ),
         )
-        add(
-            "HomeNativeGlassHook",
-            "${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.<init> / " +
-                "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.${symbols.feedCardBindMethod}",
-            listOf(
-                "homeNativeGlassPageClass" to hasHomeNativeGlassPageClass(),
-                "feedCardBindMethod" to has(symbols.feedCardBindMethod),
-            ),
-        )
-        add(
-            "HomeNativeGlassHook.Resources",
-            "subPbNext=${formatResourceId(symbols.homeNativeGlassSubPbNextPageMoreViewId)}, " +
-                "titleDivider=${formatResourceId(symbols.homeNativeGlassPbReplyTitleDividerViewId)}",
-            listOf(
-                "homeNativeGlassSubPbNextPageMoreViewId" to has(symbols.homeNativeGlassSubPbNextPageMoreViewId),
-                "homeNativeGlassPbReplyTitleDividerViewId" to has(symbols.homeNativeGlassPbReplyTitleDividerViewId),
-            ),
-        )
-        add(
-            "HomeNativeGlassHook.DynamicBackgroundColors",
-            resourceListTarget(symbols.homeNativeGlassDynamicBackgroundColorIds),
-            listOf(
-                "homeNativeGlassDynamicBackgroundColorIds" to
-                    hasIntList(symbols.homeNativeGlassDynamicBackgroundColorIds),
-            ),
-        )
-        add(
-            "HomeNativeGlassHook.SortSwitchBackground",
-            "${StableTiebaHookPoints.SORT_SWITCH_BUTTON_CLASS}.${symbols.homeNativeGlassSortSwitchBackgroundPaintField}",
-            listOf(
-                "homeNativeGlassSortSwitchBackgroundPaintField" to
-                    has(symbols.homeNativeGlassSortSwitchBackgroundPaintField),
-            ),
-        )
-        add(
-            "HomeNativeGlassHook.SortSwitchSelectedSlide",
-            "${StableTiebaHookPoints.SORT_SWITCH_BUTTON_CLASS}." +
-                "${symbols.homeNativeGlassSortSwitchSlideDrawMethod}(Canvas)" +
-                "[${symbols.homeNativeGlassSortSwitchSlidePathField}]",
-            listOf(
-                "homeNativeGlassSortSwitchSlideDrawMethod" to
-                    has(symbols.homeNativeGlassSortSwitchSlideDrawMethod),
-                "homeNativeGlassSortSwitchSlidePathField" to
-                    has(symbols.homeNativeGlassSortSwitchSlidePathField),
-            ),
-        )
-        add(
-            "HomeNativeGlassHook.EnterForumCapsule",
-            "${symbols.homeNativeGlassEnterForumCapsuleControllerClass}." +
-                "${symbols.homeNativeGlassEnterForumCapsuleInitMethod}/" +
-                "${symbols.homeNativeGlassEnterForumCapsuleRefreshMethod}" +
-                "[${symbols.homeNativeGlassEnterForumCapsuleViewField}]",
-            listOf(
-                "homeNativeGlassEnterForumCapsuleControllerClass" to
-                    has(symbols.homeNativeGlassEnterForumCapsuleControllerClass),
-                "homeNativeGlassEnterForumCapsuleInitMethod" to
-                    has(symbols.homeNativeGlassEnterForumCapsuleInitMethod),
-                "homeNativeGlassEnterForumCapsuleRefreshMethod" to
-                    has(symbols.homeNativeGlassEnterForumCapsuleRefreshMethod),
-                "homeNativeGlassEnterForumCapsuleViewField" to
-                    has(symbols.homeNativeGlassEnterForumCapsuleViewField),
-                "homeNativeGlassEnterForumCapsuleTitleField" to
-                    has(symbols.homeNativeGlassEnterForumCapsuleTitleField),
-            ),
-        )
-        add(
-            "HomeNativeGlassHook.HostDarkModeSwitch",
-            "${symbols.homeNativeGlassHostDarkModeMoreActivityClass}" +
-                "[${symbols.homeNativeGlassHostDarkModeControllerField}]." +
-                "${symbols.homeNativeGlassHostDarkModeSwitchGetterMethod}/" +
-                "${symbols.homeNativeGlassHostDarkModeSwitchStateField}/" +
-                "${symbols.homeNativeGlassHostDarkModeSwitchSetOnMethod}/" +
-                "${symbols.homeNativeGlassHostDarkModeSwitchSetOffMethod}/" +
-                "${symbols.homeNativeGlassHostDarkModeSwitchCallbackMethod}",
-            listOf(
-                "homeNativeGlassHostDarkModeMoreActivityClass" to
-                    has(symbols.homeNativeGlassHostDarkModeMoreActivityClass),
-                "homeNativeGlassHostDarkModeControllerField" to
-                    has(symbols.homeNativeGlassHostDarkModeControllerField),
-                "homeNativeGlassHostDarkModeSwitchGetterMethod" to
-                    has(symbols.homeNativeGlassHostDarkModeSwitchGetterMethod),
-                "homeNativeGlassHostDarkModeSwitchStateField" to
-                    has(symbols.homeNativeGlassHostDarkModeSwitchStateField),
-                "homeNativeGlassHostDarkModeSwitchSetOnMethod" to
-                    has(symbols.homeNativeGlassHostDarkModeSwitchSetOnMethod),
-                "homeNativeGlassHostDarkModeSwitchSetOffMethod" to
-                    has(symbols.homeNativeGlassHostDarkModeSwitchSetOffMethod),
-                "homeNativeGlassHostDarkModeSwitchCallbackMethod" to
-                    has(symbols.homeNativeGlassHostDarkModeSwitchCallbackMethod),
-            ),
-        )
-        add(
-            "HomeNativeGlassHook.CommonLayoutPreloader",
-            "${StableTiebaHookPoints.PB_COMMON_LAYOUT_PRELOADER_CLASS}.${symbols.pbCommonLayoutPreloaderGetOrDefaultMethod}",
-            listOf(
-                "pbCommonLayoutPreloaderGetOrDefaultMethod" to
-                    has(symbols.pbCommonLayoutPreloaderGetOrDefaultMethod),
-            ),
-        )
+        out.addAll(formatHomeNativeGlassHookPointStatusLines(symbols))
         add(
             "StrategyAdHook.Splash",
             "${symbols.splashAdHelperClass}.${symbols.splashAdHelperMethod}",
@@ -621,6 +514,16 @@ internal object HookSymbolStatusFormatter {
                 "pbCommentScrollMethod" to has(symbols.pbCommentScrollMethod),
             ),
         )
+        addOptional(
+            "PbScrollCoalesceHook.BottomGuard",
+            "${symbols.pbCommentScrollListenerClass}[${symbols.pbCommentScrollFragmentField}]." +
+                "${symbols.pbCommentScrollBottomListenerField}.${symbols.pbCommentScrollBottomMethod}",
+            listOf(
+                "pbCommentScrollFragmentField" to has(symbols.pbCommentScrollFragmentField),
+                "pbCommentScrollBottomListenerField" to has(symbols.pbCommentScrollBottomListenerField),
+                "pbCommentScrollBottomMethod" to has(symbols.pbCommentScrollBottomMethod),
+            ),
+        )
         run {
             val listChecks = listOf(
                 "pbCommentBottomListScrollClass" to has(symbols.pbCommentBottomListScrollClass),
@@ -714,15 +617,14 @@ internal object HookSymbolStatusFormatter {
                 "aiPbAiEmojiCreationViewBindMethod" to has(symbols.aiPbAiEmojiCreationViewBindMethod),
             ),
         )
-        if (has(symbols.aiPbPageBrowserAiEmojiCreationBindMethod)) {
-            add(
-                "AiComponentDisableHook.PbPageBrowserAiEmojiCreation",
-                "$aiPbAiEmojiCreationPageBrowserViewClass.${symbols.aiPbPageBrowserAiEmojiCreationBindMethod}",
-                listOf(
-                    "aiPbPageBrowserAiEmojiCreationBindMethod" to true,
-                ),
-            )
-        }
+        addOptional(
+            "AiComponentDisableHook.PbPageBrowserAiEmojiCreation",
+            "$aiPbAiEmojiCreationPageBrowserViewClass.${symbols.aiPbPageBrowserAiEmojiCreationBindMethod}",
+            listOf(
+                "aiPbPageBrowserAiEmojiCreationBindMethod" to
+                    has(symbols.aiPbPageBrowserAiEmojiCreationBindMethod),
+            ),
+        )
         add(
             "AiComponentDisableHook.ImageViewerJumpButton",
             "${symbols.aiImageViewerJumpButtonOwnerClass}.${symbols.aiImageViewerJumpButtonInitMethod}",
@@ -956,28 +858,11 @@ internal object HookSymbolStatusFormatter {
     }
 
 
-    private fun formatResourceId(value: Int?): String {
-        return if (value != null && value != 0) {
-            "0x${Integer.toHexString(value)}"
-        } else {
-            "-"
-        }
-    }
-
     private fun splitScanError(error: String): Pair<String, String> {
-        val separator = " :: "
-        val idx = error.indexOf(separator)
-        if (idx <= 0) return "ScanException" to sanitizeScanStatusText(error)
-        val tag = error.substring(0, idx).trim().ifEmpty { "ScanException" }
-        val detail = error.substring(idx + separator.length).trim().ifEmpty { "unknown" }
-        return tag to sanitizeScanStatusText(detail)
+        return HookSymbolScanDiagnostics.splitScanError(error)
     }
 
     private fun sanitizeScanStatusText(raw: String): String {
-        return raw
-            .replace('\n', ' ')
-            .replace('\r', ' ')
-            .take(240)
-            .ifBlank { "unknown" }
+        return HookSymbolScanDiagnostics.sanitizeScanStatusText(raw)
     }
 }

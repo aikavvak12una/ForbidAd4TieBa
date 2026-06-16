@@ -6,8 +6,11 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import io.github.libxposed.api.XposedInterface
 
 /**
- * 涓€娆℃€у畨瑁呭櫒銆? * 妯″潡鍚姩鍚庡鏋滄病鏈夊彲鐢ㄧ鍙风紦瀛橈紝鐩爣搴旂敤 Activity 绗竴娆¤繘鍏?onResume 鏃舵樉绀哄垵濮嬬鍙锋壂鎻忓脊绐椼€? *
- * 寮圭獥鏄剧ず涓€娆″悗锛岀Щ闄よ繖閲屽畨瑁呯殑鎵€鏈?onResume hook锛屽悗缁笉鍐嶆壙鎷呰繖閮ㄥ垎寮€閿€銆? */
+ * One-shot installer for the initial symbol scan dialog.
+ *
+ * After the first target Activity resumes and the dialog is shown, all onResume hooks installed here
+ * are removed so this path no longer adds runtime overhead.
+ */
 internal object InitialScanDialogInstaller {
     @Volatile private var hookInstalled = false
     @Volatile private var dialogShown = false
