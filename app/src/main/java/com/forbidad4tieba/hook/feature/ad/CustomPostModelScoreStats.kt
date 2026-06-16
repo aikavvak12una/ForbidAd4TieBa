@@ -23,11 +23,9 @@ internal object CustomPostModelScoreStats {
     private const val TRIM_POST_THRESHOLD_RATIO = 0.1
     private val lock = Any()
     private val fileLock = Any()
-    private val autoPercentileReadyLock = Any()
     private val pendingRecords = ArrayList<StoredRecord>(128)
     private val flushScheduled = AtomicBoolean(false)
     private val postIdGenerator = AtomicLong(System.currentTimeMillis())
-    @Volatile private var autoPercentileReadyKeys: Set<String> = emptySet()
     private var statsGeneration = 0L
     // Guarded by fileLock.
     private var persistenceFailureCount = 0
@@ -61,7 +59,6 @@ internal object CustomPostModelScoreStats {
             statsGeneration += 1
             pendingRecords.clear()
         }
-        replaceAutoPercentileThresholdReadyKeys(emptySet())
         val context = ConfigManager.getAppContext() ?: return
         synchronized(fileLock) {
             persistenceFailureCount = 0
@@ -91,91 +88,7 @@ internal object CustomPostModelScoreStats {
 
     fun applyAutoPercentileThresholdsAsync() {
         executor.execute {
-            val context = ConfigManager.getAppContext() ?: return@execute
-            val autoPercentiles = ConfigManager.postModelScoreAutoPercentiles
-            if (autoPercentiles.isEmpty()) return@execute
-            val applied = ArrayList<AppliedAutoThreshold>(autoPercentiles.size)
-            val skippedBySampleCount = LinkedHashMap<String, Int>()
-            for ((key, rawPercentile) in autoPercentiles) {
-                val percentile = ConfigManager.normalizeModelScoreAutoPercentile(rawPercentile)
-                val summary = summary(key)
-                if (summary.sampleCount <= ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT) {
-                    skippedBySampleCount[key] = summary.sampleCount
-                    continue
-                }
-                val rawValue = summary.percentileValue(percentile) ?: continue
-                val value = ConfigManager.roundModelScoreThreshold(rawValue)
-                if (value < 0.0 || value.isNaN() || value.isInfinite()) continue
-                applied.add(AppliedAutoThreshold(key, percentile, value))
-            }
-            replaceAutoPercentileThresholdReadyKeys(applied.mapTo(LinkedHashSet<String>()) { it.key })
-            if (applied.isEmpty() && skippedBySampleCount.isEmpty()) return@execute
-
-            val prefs = ConfigManager.getPrefs(context)
-            val merged = LinkedHashMap<String, Double>()
-            for (threshold in ConfigManager.parseModelScoreThresholds(
-                prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
-            )) {
-                merged[threshold.key] = threshold.threshold
-            }
-
-            var changed = false
-            for (key in skippedBySampleCount.keys) {
-                if (merged.remove(key) != null) {
-                    changed = true
-                }
-            }
-            for (threshold in applied) {
-                if (merged[threshold.key] != threshold.value) {
-                    changed = true
-                    merged[threshold.key] = threshold.value
-                }
-            }
-            val thresholds = merged.map { (key, threshold) ->
-                ConfigManager.ModelScoreThreshold(key, threshold)
-            }
-            if (changed) {
-                ConfigManager.postModelScoreThresholds = thresholds
-                prefs.edit()
-                    .putString(
-                        ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
-                        ConfigManager.serializeModelScoreThresholds(thresholds)
-                    )
-                    .apply()
-            }
-            if (applied.isNotEmpty()) {
-                XposedCompat.log(
-                    "[CustomPostModelScoreStats] auto percentile effective: " +
-                        applied.joinToString(", ") {
-                            "${it.key}=P${it.percentile}:${ConfigManager.formatModelScoreThresholdValue(it.value)}"
-                        }
-                )
-            }
-            if (skippedBySampleCount.isNotEmpty()) {
-                XposedCompat.log(
-                    "[CustomPostModelScoreStats] auto percentile pending samples: " +
-                        skippedBySampleCount.entries.joinToString(", ") {
-                            "${it.key}=${it.value}<=${ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT}"
-                        }
-                )
-            }
-        }
-    }
-
-    fun isAutoPercentileThresholdReady(modelKey: String): Boolean {
-        return modelKey in autoPercentileReadyKeys
-    }
-
-    fun setAutoPercentileThresholdReady(modelKey: String, ready: Boolean) {
-        if (modelKey.isBlank()) return
-        synchronized(autoPercentileReadyLock) {
-            val next = autoPercentileReadyKeys.toMutableSet()
-            if (ready) {
-                next.add(modelKey)
-            } else {
-                next.remove(modelKey)
-            }
-            autoPercentileReadyKeys = next
+            applyAutoPercentileThresholds()
         }
     }
 
@@ -203,12 +116,6 @@ internal object CustomPostModelScoreStats {
             displayMax = displayMax.takeIf { it > min } ?: max,
             buckets = buildBuckets(values, min, max, displayMax),
         )
-    }
-
-    private fun replaceAutoPercentileThresholdReadyKeys(keys: Set<String>) {
-        synchronized(autoPercentileReadyLock) {
-            autoPercentileReadyKeys = keys.filterTo(LinkedHashSet<String>()) { it.isNotBlank() }
-        }
     }
 
     private fun scheduleFlush() {
@@ -294,6 +201,82 @@ internal object CustomPostModelScoreStats {
             }
         }
         return true
+    }
+
+    private fun applyAutoPercentileThresholds() {
+        val context = ConfigManager.getAppContext() ?: return
+        ConfigManager.refreshRuntimeSettings(context)
+        val settings = ConfigManager.snapshot()
+        if (!settings.isCustomPostFilterEnabled || !settings.isPostModelScoreFilterEnabled) return
+        val autoPercentiles = settings.postModelScoreAutoPercentiles
+        if (autoPercentiles.isEmpty()) return
+        val applied = ArrayList<AppliedAutoThreshold>(autoPercentiles.size)
+        val skippedBySampleCount = LinkedHashMap<String, Int>()
+        for ((key, rawPercentile) in autoPercentiles) {
+            val percentile = ConfigManager.normalizeModelScoreAutoPercentile(rawPercentile)
+            val summary = summary(key)
+            if (summary.sampleCount <= ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT) {
+                skippedBySampleCount[key] = summary.sampleCount
+                continue
+            }
+            val rawValue = summary.percentileValue(percentile) ?: continue
+            val value = ConfigManager.roundModelScoreThreshold(rawValue)
+            if (value < 0.0 || value.isNaN() || value.isInfinite()) continue
+            applied.add(AppliedAutoThreshold(key, percentile, value))
+        }
+        if (applied.isEmpty() && skippedBySampleCount.isEmpty()) return
+
+        val prefs = ConfigManager.getPrefs(context)
+        val merged = LinkedHashMap<String, Double>()
+        for (threshold in ConfigManager.parseModelScoreThresholds(
+            prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
+        )) {
+            merged[threshold.key] = threshold.threshold
+        }
+
+        var changed = false
+        for (key in skippedBySampleCount.keys) {
+            if (merged.remove(key) != null) {
+                changed = true
+            }
+        }
+        for (threshold in applied) {
+            if (merged[threshold.key] != threshold.value) {
+                changed = true
+                merged[threshold.key] = threshold.value
+            }
+        }
+        val thresholds = merged.map { (key, threshold) ->
+            ConfigManager.ModelScoreThreshold(key, threshold)
+        }
+        if (changed) {
+            ConfigManager.postModelScoreThresholds = thresholds
+            val persisted = prefs.edit()
+                .putString(
+                    ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
+                    ConfigManager.serializeModelScoreThresholds(thresholds)
+                )
+                .commit()
+            if (!persisted) {
+                XposedCompat.logW("[CustomPostModelScoreStats] auto percentile threshold persist failed")
+            }
+        }
+        if (applied.isNotEmpty()) {
+            XposedCompat.log(
+                "[CustomPostModelScoreStats] auto percentile effective: " +
+                    applied.joinToString(", ") {
+                        "${it.key}=P${it.percentile}:${ConfigManager.formatModelScoreThresholdValue(it.value)}"
+                    }
+            )
+        }
+        if (skippedBySampleCount.isNotEmpty()) {
+            XposedCompat.log(
+                "[CustomPostModelScoreStats] auto percentile pending samples: " +
+                    skippedBySampleCount.entries.joinToString(", ") {
+                        "${it.key}=${it.value}<=${ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT}"
+                    }
+            )
+        }
     }
 
     private fun isPersistenceDisabled(): Boolean {
