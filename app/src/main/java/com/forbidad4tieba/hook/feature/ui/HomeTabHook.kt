@@ -74,10 +74,7 @@ object HomeTabHook {
 
     @Volatile private var sRuntimeTargets: HomeTabResolvedSymbols? = null
 
-    internal fun hook(
-        symbols: HomeTabResolvedSymbols,
-        selection: ConfigManager.HomeTopTabSelection,
-    ) {
+    internal fun hook(symbols: HomeTabResolvedSymbols) {
         val mod = XposedCompat.module ?: return
         sRuntimeTargets = symbols
         sSchemaCache.clear()
@@ -90,21 +87,23 @@ object HomeTabHook {
         try {
             mod.hook(symbols.rebuildMethod).intercept { chain ->
                 val result = chain.proceed()
+                val currentSelection = currentSelectionOrNull() ?: return@intercept result
                 @Suppress("UNCHECKED_CAST")
                 val list = resolveMutableListField(chain.thisObject) as? MutableList<Any?>
                 if (list != null) {
                     val templateContext = resolveFollowedTemplateContext(list)
                     val sizeBefore = list.size
-                    val filteredCount = filterTabsInPlace(list, selection)
-                    val followedSync = syncFollowedTabState(list, selection, templateContext)
+                    val filteredCount = filterTabsInPlace(list, currentSelection)
+                    val followedSync = syncFollowedTabState(list, currentSelection, templateContext)
                     if (filteredCount > 0 || followedSync.changed || followedSync.failed) {
                         XposedCompat.logD {
                             "[HomeTabHook] > top tabs rebuilt: $sizeBefore -> ${list.size}, " +
                                 "removed=$filteredCount, followedAdded=${followedSync.added}, " +
                                 "followedRemoved=${followedSync.removed}, followedFailed=${followedSync.failed}, " +
-                                "selection=(material=${selection.materialEnabled}, " +
-                                "recommend=${selection.recommendEnabled}, live=${selection.liveEnabled}, " +
-                                "followed=${selection.followedEnabled})"
+                                "selection=(material=${currentSelection.materialEnabled}, " +
+                                "recommend=${currentSelection.recommendEnabled}, " +
+                                "live=${currentSelection.liveEnabled}, " +
+                                "followed=${currentSelection.followedEnabled})"
                         }
                     }
                 }
@@ -117,6 +116,19 @@ object HomeTabHook {
             )
             XposedCompat.log(t)
         }
+    }
+
+    private fun currentSelectionOrNull(): ConfigManager.HomeTopTabSelection? {
+        val settings = ConfigManager.snapshot()
+        if (!settings.isHomeTopTabsCustomEnabled) return null
+        return ConfigManager.normalizeHomeTopTabSelection(
+            ConfigManager.HomeTopTabSelection(
+                materialEnabled = settings.isHomeTopTabMaterialEnabled,
+                recommendEnabled = settings.isHomeTopTabRecommendEnabled,
+                liveEnabled = settings.isHomeTopTabLiveEnabled,
+                followedEnabled = settings.isHomeTopTabFollowedEnabled,
+            ),
+        )
     }
 
     private fun filterTabsInPlace(
@@ -710,4 +722,3 @@ object HomeTabHook {
         OTHER,
     }
 }
-

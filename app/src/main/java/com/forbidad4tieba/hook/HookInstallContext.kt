@@ -49,50 +49,101 @@ internal class HookInstallContext(
             featureSymbols.performance.isImageViewerJumpButtonComplete()
     }
 
-    private fun canInstallAdBlockSubFeature(enabled: Boolean): Boolean {
-        return enabled && available(HookFeatureKey.BLOCK_AD)
+    private fun canInstallAdBlockSubFeature(enabled: Boolean, featureKey: String): Boolean {
+        return enabled && available(featureKey)
     }
 
     fun canInstallFeedAdBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isFeedAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isFeedAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_FEED,
+        ) && hasFeedAdPath()
     }
 
     fun canInstallPostAdBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isPostPageAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_POST_PAGE,
+        ) && hasPostAdDataPath()
     }
 
     fun canInstallForumPageAdBlock(settings: SettingsSnapshot): Boolean {
         return isMain &&
-            canInstallAdBlockSubFeature(settings.isForumPageAdBlockEnabled) &&
+            canInstallAdBlockSubFeature(
+                settings.isForumPageAdBlockEnabled,
+                HookFeatureKey.BLOCK_AD_FORUM_PAGE,
+            ) &&
             hasForumPageAdBlockPath()
     }
 
     fun canInstallStrategyAdBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isStrategyAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isStrategyAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_STRATEGY,
+        )
     }
 
     fun canInstallPbEarlyAdBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isPostPageAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_POST_PAGE,
+        ) && hasPbEarlyAdBlockPath()
     }
 
     fun canInstallPbAdRequestBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isPostPageAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_POST_PAGE,
+        )
     }
 
     fun canInstallPbFallingAdBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isPostPageAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isPostPageAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_POST_PAGE,
+        ) && hasPbFallingAdBlockPath()
     }
 
     fun canInstallSearchBoxTextAdBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isSearchBoxTextAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isSearchBoxTextAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT,
+        )
     }
 
     fun canInstallHomeTopBarAdBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isHomeTopBarAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isHomeTopBarAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_HOME_TOP_BAR,
+        )
     }
 
     private fun hasForumPageAdBlockPath(): Boolean {
         return ForumPageAdSymbolReadiness.evaluate(symbols).any
+    }
+
+    private fun hasFeedAdPath(): Boolean {
+        return !symbols.feedTemplateKeyMethod.isNullOrBlank()
+    }
+
+    private fun hasPostAdDataPath(): Boolean {
+        return !symbols.typeAdapterSetDataMethod.isNullOrBlank() &&
+            !symbols.typeAdapterDataItemClass.isNullOrBlank() &&
+            !symbols.typeAdapterDataGetTypeMethod.isNullOrBlank()
+    }
+
+    private fun hasPbEarlyAdBlockPath(): Boolean {
+        return !symbols.pbEarlyAdInsertClass.isNullOrBlank() &&
+            !symbols.pbEarlyAdInsertMethodSpecs.isNullOrEmpty()
+    }
+
+    private fun hasPbFallingAdBlockPath(): Boolean {
+        return !symbols.pbFallingViewClass.isNullOrBlank() &&
+            (
+                !symbols.pbFallingInitMethod.isNullOrBlank() ||
+                    !symbols.pbFallingShowMethod.isNullOrBlank() ||
+                    !symbols.pbFallingClearMethod.isNullOrBlank()
+                )
     }
 
     fun canInstallCustomPostFilter(settings: SettingsSnapshot): Boolean {
@@ -131,11 +182,17 @@ internal class HookInstallContext(
     }
 
     fun canInstallMineTabWebBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isMineTabWebAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isMineTabWebAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_MINE_TAB_WEB,
+        )
     }
 
     fun canInstallHomeSideBarWebBlock(settings: SettingsSnapshot): Boolean {
-        return canInstallAdBlockSubFeature(settings.isHomeSideBarWebAdBlockEnabled)
+        return canInstallAdBlockSubFeature(
+            settings.isHomeSideBarWebAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB,
+        )
     }
 
     fun canInstallForumNativeTopShift(): Boolean = available(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)

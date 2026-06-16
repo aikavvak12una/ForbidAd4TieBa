@@ -28,14 +28,11 @@ object MainTabBottomHook {
     private val resolveErrorLogCount = AtomicInteger(0)
     private val unknownTabLogCount = AtomicInteger(0)
 
-    internal fun hook(
-        symbols: MainTabBottomSymbols,
-        selection: ConfigManager.BottomTabSelection,
-    ) {
+    internal fun hook(symbols: MainTabBottomSymbols) {
         val mod = XposedCompat.module ?: return
         try {
-            hookAddFragment(mod, symbols, selection)
-            hookGetList(mod, symbols, selection)
+            hookAddFragment(mod, symbols)
+            hookGetList(mod, symbols)
             XposedCompat.log(
                 "[MainTabBottomHook] hook INSTALLED: " +
                     "${symbols.dataClass.name}.${symbols.addMethod.name}/${symbols.getListMethod.name}",
@@ -49,13 +46,13 @@ object MainTabBottomHook {
     private fun hookAddFragment(
         mod: io.github.libxposed.api.XposedModule,
         symbols: MainTabBottomSymbols,
-        selection: ConfigManager.BottomTabSelection,
     ) {
         mod.hook(symbols.addMethod).intercept { chain ->
+            val currentSelection = currentSelectionOrNull()
             val delegate = chain.args.firstOrNull()
-            if (delegate != null) {
+            if (delegate != null && currentSelection != null) {
                 val identity = resolveTabIdentity(delegate, symbols)
-                if (shouldFilterOut(identity.targetTab, selection)) {
+                if (shouldFilterOut(identity.targetTab, currentSelection)) {
                     XposedCompat.logD {
                         "[MainTabBottomHook] blocked addFragment: tab=${identity.targetTab}, " +
                             "type=${identity.type}, dynamic=${identity.hasDynamicIcon}, " +
@@ -71,10 +68,10 @@ object MainTabBottomHook {
     private fun hookGetList(
         mod: io.github.libxposed.api.XposedModule,
         symbols: MainTabBottomSymbols,
-        selection: ConfigManager.BottomTabSelection,
     ) {
         mod.hook(symbols.getListMethod).intercept { chain ->
             val result = chain.proceed()
+            val currentSelection = currentSelectionOrNull() ?: return@intercept result
             @Suppress("UNCHECKED_CAST")
             val list = result as? MutableList<Any?>
             if (list != null) {
@@ -82,7 +79,7 @@ object MainTabBottomHook {
                 while (it.hasNext()) {
                     val delegate = it.next() ?: continue
                     val identity = resolveTabIdentity(delegate, symbols)
-                    if (shouldFilterOut(identity.targetTab, selection)) {
+                    if (shouldFilterOut(identity.targetTab, currentSelection)) {
                         it.remove()
                         XposedCompat.logD {
                             "[MainTabBottomHook] removed from getList: tab=${identity.targetTab}, " +
@@ -94,6 +91,20 @@ object MainTabBottomHook {
             }
             result
         }
+    }
+
+    private fun currentSelectionOrNull(): ConfigManager.BottomTabSelection? {
+        val settings = ConfigManager.snapshot()
+        if (!settings.isBottomTabsCustomEnabled) return null
+        return ConfigManager.normalizeBottomTabSelection(
+            ConfigManager.BottomTabSelection(
+                homeEnabled = settings.isBottomTabHomeEnabled,
+                enterForumEnabled = settings.isBottomTabEnterForumEnabled,
+                retailStoreEnabled = settings.isBottomTabRetailStoreEnabled,
+                messageEnabled = settings.isBottomTabMessageEnabled,
+                mineEnabled = settings.isBottomTabMineEnabled,
+            ),
+        )
     }
 
     private fun shouldFilterOut(

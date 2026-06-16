@@ -253,7 +253,7 @@ object UiText {
         const val ACTION_ICON_PLAY = "\u25b6"
 
         const val UNSUPPORTED_SUFFIX = " (当前版本不支持)"
-        const val SCAN_UNKNOWN_SUFFIX = " (需要扫描)"
+        const val SCAN_UNKNOWN_SUFFIX = " (需要扫描或不支持)"
         const val PARTIAL_SUFFIX = "\u26a0"
         const val SCAN_UNKNOWN_NOTE = "需要反混淆扫描后确认可用"
         const val SCAN_DISABLED_PREFIX = "缺失关键方法："

@@ -200,6 +200,8 @@ object ConfigManager {
     private val scanIndependentFeatureKeys = setOf(
         HookFeatureKey.AUTO_SIGN_IN,
         HookFeatureKey.HIDE_PB_BOTTOM_BANNER,
+        HookFeatureKey.BLOCK_AD_MINE_TAB_WEB,
+        HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB,
     )
 
     @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
@@ -493,6 +495,78 @@ object ConfigManager {
         return settingsSnapshot.shouldForceFeedUiOpt()
     }
 
+    fun formatPerformanceStatusLines(settings: SettingsSnapshot = settingsSnapshot): List<String> {
+        val currentPrefs = prefs
+
+        fun configured(key: String, defaultValue: Boolean): Boolean {
+            val p = currentPrefs ?: return defaultValue
+            return if (p.contains(key)) p.getBoolean(key, false) else defaultValue
+        }
+
+        fun onOff(value: Boolean): String = if (value) "ON" else "OFF"
+
+        fun masterReason(configured: Boolean, active: Boolean): String {
+            return when {
+                active -> "active"
+                !settings.areRestrictedFeaturesUnlocked -> "restricted_locked"
+                !configured -> "config_off"
+                !isScanFeatureAvailable(KEY_ENABLE_PERFORMANCE_OPTIMIZATION) -> "scan_unavailable"
+                else -> "inactive"
+            }
+        }
+
+        fun childReason(key: String, configured: Boolean, active: Boolean): String {
+            return when {
+                active -> "active"
+                !settings.areRestrictedFeaturesUnlocked -> "restricted_locked"
+                !settings.isPerformanceOptimizationEnabled -> "master_off"
+                !isScanFeatureAvailable(key) -> "scan_unavailable"
+                !configured -> "config_off"
+                else -> "inactive"
+            }
+        }
+
+        fun childLine(key: String, active: Boolean, defaultValue: Boolean): String {
+            val configured = configured(key, defaultValue)
+            return "PerformanceFeature[$key] config=${onOff(configured)} " +
+                "master=${onOff(settings.isPerformanceOptimizationEnabled)} " +
+                "active=${onOff(active)} scan=${getScanFeatureAvailabilityState(key)} " +
+                "reason=${childReason(key, configured, active)}"
+        }
+
+        val masterConfigured = configured(KEY_ENABLE_PERFORMANCE_OPTIMIZATION, false)
+        val forceFeedConfigured = configured(KEY_FORCE_FEED_UI_OPT, false)
+        val forceFeedReason = when {
+            settings.isFeedUiOptForced -> "active"
+            !isScanFeatureAvailable(KEY_FORCE_FEED_UI_OPT) -> "scan_unavailable"
+            !forceFeedConfigured -> "config_off"
+            else -> "inactive"
+        }
+
+        return listOf(
+            "PerformanceFeature[$KEY_ENABLE_PERFORMANCE_OPTIMIZATION] " +
+                "config=${onOff(masterConfigured)} active=${onOff(settings.isPerformanceOptimizationEnabled)} " +
+                "scan=${getScanFeatureAvailabilityState(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)} " +
+                "restricted=${onOff(settings.areRestrictedFeaturesUnlocked)} " +
+                "reason=${masterReason(masterConfigured, settings.isPerformanceOptimizationEnabled)}",
+            childLine(KEY_FORCE_HOST_PERFORMANCE_FLAGS, settings.isHostPerformanceFlagsForced, true),
+            childLine(KEY_FORCE_LOW_END_DEVICE_CONFIG, settings.isLowEndDeviceConfigForced, true),
+            childLine(KEY_DISABLE_APSARAS_SCHEDULE, settings.isApsarasScheduleDisabled, true),
+            childLine(KEY_ENABLE_PB_PERFORMANCE_MODE, settings.isPbPerformanceModeEnabled, true),
+            childLine(KEY_ENABLE_PB_SCROLL_COALESCE, settings.isPbScrollCoalesceEnabled, true),
+            childLine(KEY_DISABLE_AD_SDK_COMPONENTS, settings.isAdSdkComponentsDisabled, true),
+            childLine(KEY_DISABLE_FLUTTER_PREINIT, settings.isFlutterPreinitDisabled, true),
+            childLine(KEY_BLOCK_TITAN_PATCH, settings.isTitanPatchBlockEnabled, false),
+            childLine(KEY_DISABLE_AI_COMPONENTS, settings.isAiComponentsDisabled, true),
+            childLine(KEY_DISABLE_VIDEO_COMPONENTS, settings.isVideoComponentsDisabled, true),
+            childLine(KEY_DISABLE_MONITOR_SYNC_COMPONENTS, settings.isMonitorSyncComponentsDisabled, false),
+            "PerformanceFeature[$KEY_FORCE_FEED_UI_OPT] config=${onOff(forceFeedConfigured)} " +
+                "active=${onOff(settings.isForceFeedUiOptRuntimeEnabled)} " +
+                "userActive=${onOff(settings.isFeedUiOptForced)} " +
+                "scan=${getScanFeatureAvailabilityState(KEY_FORCE_FEED_UI_OPT)} reason=$forceFeedReason",
+        )
+    }
+
     fun isAutoSignInEnabled(context: Context): Boolean {
         if (prefs == null) init(context)
         return settingsSnapshot.isAutoSignInEnabled
@@ -591,29 +665,66 @@ object ConfigManager {
 
         val adBlockEnabled = restrictedBoolean(KEY_BLOCK_AD)
         fun adBlockChildBoolean(key: String): Boolean {
-            if (!adBlockEnabled) return false
+            if (!adBlockEnabled || !isScanFeatureAvailable(key)) return false
             return if (p.contains(key)) p.getBoolean(key, true) else true
         }
 
         val performanceOptimizationEnabled = restrictedBoolean(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)
+        val customPostFilterEnabled = featureBoolean(KEY_ENABLE_CUSTOM_POST_FILTER)
+        fun customPostFilterChildBoolean(key: String): Boolean {
+            return customPostFilterEnabled &&
+                isScanFeatureAvailable(key) &&
+                p.getBoolean(key, false)
+        }
+
+        val postForumKeywordFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_FORUM_KEYWORD)
+        val postModelScoreFilterEnabled = customPostFilterEnabled &&
+            restrictedBoolean(KEY_FILTER_POST_MODEL_SCORE)
         val homeNativeGlassLightStyle = readHomeNativeGlassStyle(p, HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS)
         val homeNativeGlassDarkStyle = readHomeNativeGlassStyle(p, HOME_NATIVE_GLASS_DARK_STYLE_KEYS)
         val hasHomeNativeGlassStyle = homeNativeGlassLightStyle.hasBackgroundImage() ||
             homeNativeGlassDarkStyle.hasBackgroundImage()
         val homeNativeGlassEnabled = featureBoolean(KEY_ENABLE_HOME_NATIVE_GLASS)
+        val homeTopTabsCustomEnabled = featureBoolean(KEY_CUSTOM_HOME_TOP_TABS)
+        val homeTopTabSelection = if (homeTopTabsCustomEnabled) {
+            normalizeHomeTopTabSelection(
+                HomeTopTabSelection(
+                    materialEnabled = p.getBoolean(KEY_HOME_TOP_TAB_MATERIAL, true),
+                    recommendEnabled = p.getBoolean(KEY_HOME_TOP_TAB_RECOMMEND, true),
+                    liveEnabled = p.getBoolean(KEY_HOME_TOP_TAB_LIVE, true),
+                    followedEnabled = p.getBoolean(KEY_HOME_TOP_TAB_FOLLOWED, true),
+                ),
+            )
+        } else {
+            HomeTopTabSelection(
+                materialEnabled = false,
+                recommendEnabled = false,
+                liveEnabled = false,
+                followedEnabled = false,
+            )
+        }
         val bottomTabsCustomEnabled = featureBoolean(KEY_CUSTOM_BOTTOM_TABS)
-        val bottomTabSelection = loadBottomTabSelectionFromPrefs(
-            p,
-            persistNormalized = bottomTabsCustomEnabled,
+        val bottomTabSelection = if (bottomTabsCustomEnabled) {
+            loadBottomTabSelectionFromPrefs(
+                p,
+                persistNormalized = true,
+            )
+        } else {
+            BottomTabSelection(
+                homeEnabled = false,
+                enterForumEnabled = false,
+                retailStoreEnabled = false,
+                messageEnabled = false,
+                mineEnabled = false,
+            )
+        }
+        val forceFeedUiOptUserEnabled = featureBoolean(KEY_FORCE_FEED_UI_OPT)
+        val monitorSyncComponentsDisabled = performanceChildBoolean(
+            KEY_DISABLE_MONITOR_SYNC_COMPONENTS,
+            performanceOptimizationEnabled,
+            false,
         )
-        val homeFeedUiOptEnabled = featureBoolean(KEY_FORCE_FEED_UI_OPT) ||
-            featureBoolean(KEY_DISABLE_MONITOR_SYNC_COMPONENTS)
-        val forceFeedUiOptRuntimeEnabled = homeFeedUiOptEnabled ||
-            (
-                homeNativeGlassEnabled &&
-                    hasHomeNativeGlassStyle &&
-                    isScanFeatureAvailable(KEY_FORCE_FEED_UI_OPT)
-                )
+        val forceFeedUiOptRuntimeEnabled = forceFeedUiOptUserEnabled
 
         return SettingsSnapshot(
             areRestrictedFeaturesUnlocked = restrictedUnlocked,
@@ -626,11 +737,11 @@ object ConfigManager {
             isHomeTopBarAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_HOME_TOP_BAR),
             isMineTabWebAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_MINE_TAB_WEB),
             isHomeSideBarWebAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_HOME_SIDE_BAR_WEB),
-            isHomeTopTabsCustomEnabled = featureBoolean(KEY_CUSTOM_HOME_TOP_TABS),
-            isHomeTopTabMaterialEnabled = p.getBoolean(KEY_HOME_TOP_TAB_MATERIAL, true),
-            isHomeTopTabRecommendEnabled = p.getBoolean(KEY_HOME_TOP_TAB_RECOMMEND, true),
-            isHomeTopTabLiveEnabled = p.getBoolean(KEY_HOME_TOP_TAB_LIVE, true),
-            isHomeTopTabFollowedEnabled = p.getBoolean(KEY_HOME_TOP_TAB_FOLLOWED, true),
+            isHomeTopTabsCustomEnabled = homeTopTabsCustomEnabled,
+            isHomeTopTabMaterialEnabled = homeTopTabSelection.materialEnabled,
+            isHomeTopTabRecommendEnabled = homeTopTabSelection.recommendEnabled,
+            isHomeTopTabLiveEnabled = homeTopTabSelection.liveEnabled,
+            isHomeTopTabFollowedEnabled = homeTopTabSelection.followedEnabled,
             isHomeTabAutoHideEnabled = featureBoolean(KEY_AUTO_HIDE_HOME_TAB),
             isBottomTabsCustomEnabled = bottomTabsCustomEnabled,
             isBottomTabHomeEnabled = bottomTabSelection.homeEnabled,
@@ -647,7 +758,11 @@ object ConfigManager {
             isAutoRefreshDisabled = featureBoolean(KEY_DISABLE_AUTO_REFRESH),
             isAutoLoadMoreEnabled = featureBoolean(KEY_ENABLE_AUTO_LOAD_MORE),
             isPbLikeAutoReplyEnabled = restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY),
-            pbLikeAutoReplyText = p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty(),
+            pbLikeAutoReplyText = if (restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY)) {
+                p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty()
+            } else {
+                ""
+            },
             isReplyVisibilityProbeEnabled = restrictedBoolean(KEY_VERIFY_REPLY_AFTER_POST),
             replyVisibilityProbeMaxAttempts = p.getInt(
                 KEY_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
@@ -677,7 +792,7 @@ object ConfigManager {
                 performanceOptimizationEnabled,
                 true,
             ),
-            isCustomPostFilterEnabled = featureBoolean(KEY_ENABLE_CUSTOM_POST_FILTER),
+            isCustomPostFilterEnabled = customPostFilterEnabled,
             isAdSdkComponentsDisabled = performanceChildBoolean(
                 KEY_DISABLE_AD_SDK_COMPONENTS,
                 performanceOptimizationEnabled,
@@ -688,14 +803,15 @@ object ConfigManager {
                 performanceOptimizationEnabled,
                 true,
             ),
-            isMonitorSyncComponentsDisabled = homeFeedUiOptEnabled,
+            isMonitorSyncComponentsDisabled = monitorSyncComponentsDisabled,
             isPbPerformanceModeEnabled = performanceChildBoolean(
                 KEY_ENABLE_PB_PERFORMANCE_MODE,
                 performanceOptimizationEnabled,
                 true,
             ),
-            isFeedUiOptForced = homeFeedUiOptEnabled,
+            isFeedUiOptForced = forceFeedUiOptUserEnabled,
             isForceFeedUiOptRuntimeEnabled = forceFeedUiOptRuntimeEnabled,
+            isPerformanceOptimizationEnabled = performanceOptimizationEnabled,
             isHostPerformanceFlagsForced = performanceChildBoolean(
                 KEY_FORCE_HOST_PERFORMANCE_FLAGS,
                 performanceOptimizationEnabled,
@@ -722,26 +838,34 @@ object ConfigManager {
                 false,
             ),
             isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(KEY_PRIVATE_READ_RECEIPT_INVISIBLE),
-            isPostVoteFilterEnabled = p.getBoolean(KEY_FILTER_POST_VOTE, false),
-            isPostVideoFilterEnabled = p.getBoolean(KEY_FILTER_POST_VIDEO, false),
-            isPostReplyFilterEnabled = p.getBoolean(KEY_FILTER_POST_REPLY, false),
-            isPostHotFilterEnabled = p.getBoolean(KEY_FILTER_POST_HOT, false),
-            isPostGoodsFilterEnabled = p.getBoolean(KEY_FILTER_POST_GOODS, false),
-            isPostGameBookingFilterEnabled = p.getBoolean(KEY_FILTER_POST_GAME_BOOKING, false),
-            isPostHelpFilterEnabled = p.getBoolean(KEY_FILTER_POST_HELP, false),
-            isPostScoreFilterEnabled = p.getBoolean(KEY_FILTER_POST_SCORE, false),
-            isPostLiveFilterEnabled = p.getBoolean(KEY_FILTER_POST_LIVE, false),
-            isPostRecommendForumFilterEnabled = p.getBoolean(KEY_FILTER_POST_RECOMMEND_FORUM, false),
-            isPostUnfollowedForumFilterEnabled = p.getBoolean(KEY_FILTER_POST_UNFOLLOWED_FORUM, false),
-            isPostForumKeywordFilterEnabled = p.getBoolean(KEY_FILTER_POST_FORUM_KEYWORD, false),
-            postForumKeywordList = parseKeywordList(p.getString(KEY_FILTER_POST_FORUM_KEYWORD_LIST, "")),
-            isPostModelScoreFilterEnabled = restrictedBoolean(KEY_FILTER_POST_MODEL_SCORE),
-            postModelScoreThresholds = parseModelScoreThresholds(
-                p.getString(KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
-            ),
-            postModelScoreAutoPercentiles = parseModelScoreAutoPercentiles(
-                p.getString(KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES, "")
-            ),
+            isPostVoteFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_VOTE),
+            isPostVideoFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_VIDEO),
+            isPostReplyFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_REPLY),
+            isPostHotFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_HOT),
+            isPostGoodsFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_GOODS),
+            isPostGameBookingFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_GAME_BOOKING),
+            isPostHelpFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_HELP),
+            isPostScoreFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_SCORE),
+            isPostLiveFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_LIVE),
+            isPostRecommendForumFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_RECOMMEND_FORUM),
+            isPostUnfollowedForumFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_UNFOLLOWED_FORUM),
+            isPostForumKeywordFilterEnabled = postForumKeywordFilterEnabled,
+            postForumKeywordList = if (postForumKeywordFilterEnabled) {
+                parseKeywordList(p.getString(KEY_FILTER_POST_FORUM_KEYWORD_LIST, ""))
+            } else {
+                emptyList()
+            },
+            isPostModelScoreFilterEnabled = postModelScoreFilterEnabled,
+            postModelScoreThresholds = if (postModelScoreFilterEnabled) {
+                parseModelScoreThresholds(p.getString(KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, ""))
+            } else {
+                emptyList()
+            },
+            postModelScoreAutoPercentiles = if (postModelScoreFilterEnabled) {
+                parseModelScoreAutoPercentiles(p.getString(KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES, ""))
+            } else {
+                emptyMap()
+            },
             postModelScoreStatsPostLimit = p.getInt(
                 KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT,
                 DEFAULT_MODEL_SCORE_STATS_POST_LIMIT
@@ -923,15 +1047,14 @@ object ConfigManager {
     fun scanFeatureKeyForPrefKeyOrNull(prefKey: String): String? {
         FeatureDescriptors.forPrefKey(prefKey)?.let { return it.featureKey }
         return when (prefKey) {
-            KEY_BLOCK_AD_FEED,
-            KEY_BLOCK_AD_POST_PAGE,
-            KEY_BLOCK_AD_FORUM_PAGE,
-            KEY_BLOCK_AD_STRATEGY,
-            KEY_BLOCK_AD_SEARCH_BOX_TEXT,
-            KEY_BLOCK_AD_HOME_TOP_BAR,
-            KEY_BLOCK_AD_MINE_TAB_WEB,
-            KEY_BLOCK_AD_HOME_SIDE_BAR_WEB,
-            -> HookFeatureKey.BLOCK_AD
+            KEY_BLOCK_AD_FEED -> HookFeatureKey.BLOCK_AD_FEED
+            KEY_BLOCK_AD_POST_PAGE -> HookFeatureKey.BLOCK_AD_POST_PAGE
+            KEY_BLOCK_AD_FORUM_PAGE -> HookFeatureKey.BLOCK_AD_FORUM_PAGE
+            KEY_BLOCK_AD_STRATEGY -> HookFeatureKey.BLOCK_AD_STRATEGY
+            KEY_BLOCK_AD_SEARCH_BOX_TEXT -> HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT
+            KEY_BLOCK_AD_HOME_TOP_BAR -> HookFeatureKey.BLOCK_AD_HOME_TOP_BAR
+            KEY_BLOCK_AD_MINE_TAB_WEB -> HookFeatureKey.BLOCK_AD_MINE_TAB_WEB
+            KEY_BLOCK_AD_HOME_SIDE_BAR_WEB -> HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB
 
             KEY_FILTER_POST_VOTE,
             KEY_FILTER_POST_VIDEO,
@@ -1087,6 +1210,14 @@ object ConfigManager {
 
     fun resolveHomeTopTabSelection(): HomeTopTabSelection {
         val settings = settingsSnapshot
+        if (!settings.isHomeTopTabsCustomEnabled) {
+            return HomeTopTabSelection(
+                materialEnabled = false,
+                recommendEnabled = false,
+                liveEnabled = false,
+                followedEnabled = false,
+            )
+        }
         val current = HomeTopTabSelection(
             materialEnabled = settings.isHomeTopTabMaterialEnabled,
             recommendEnabled = settings.isHomeTopTabRecommendEnabled,
@@ -1122,6 +1253,15 @@ object ConfigManager {
 
     fun resolveBottomTabSelection(): BottomTabSelection {
         val settings = settingsSnapshot
+        if (!settings.isBottomTabsCustomEnabled) {
+            return BottomTabSelection(
+                homeEnabled = false,
+                enterForumEnabled = false,
+                retailStoreEnabled = false,
+                messageEnabled = false,
+                mineEnabled = false,
+            )
+        }
         val current = BottomTabSelection(
             homeEnabled = settings.isBottomTabHomeEnabled,
             enterForumEnabled = settings.isBottomTabEnterForumEnabled,

@@ -735,34 +735,70 @@ internal object HookFeatureStatusDeriver {
             )
         }
 
-        val adOptional = ArrayList<String>(18)
-        if (symbols.feedTemplateKeyMethod.isNullOrBlank()) adOptional.add("feedTemplateKeyMethod")
-        if (symbols.feedTemplateLoadMoreMethod.isNullOrBlank()) adOptional.add("feedTemplateLoadMoreMethod")
-        if (symbols.splashAdHelperClass.isNullOrBlank()) adOptional.add("splashAdHelperClass")
-        if (symbols.splashAdHelperMethod.isNullOrBlank()) adOptional.add("splashAdHelperMethod")
-        if (symbols.closeAdDataClass.isNullOrBlank()) adOptional.add("closeAdDataClass")
-        if (symbols.closeAdDataMethodG1.isNullOrBlank()) adOptional.add("closeAdDataMethodG1")
-        if (symbols.closeAdDataMethodJ1.isNullOrBlank()) adOptional.add("closeAdDataMethodJ1")
-        if (symbols.zgaClass.isNullOrBlank()) adOptional.add("zgaClass")
-        if (symbols.zgaMethods.isNullOrEmpty()) adOptional.add("zgaMethods")
-        if (symbols.searchBoxViewClass.isNullOrBlank()) adOptional.add("searchBoxViewClass")
-        if (symbols.searchBoxSetHintMethod.isNullOrBlank()) adOptional.add("searchBoxSetHintMethod")
-        if (symbols.homeSearchBoxOwnerClass.isNullOrBlank()) adOptional.add("homeSearchBoxOwnerClass")
-        if (symbols.homeSearchBoxInitMethod.isNullOrBlank()) adOptional.add("homeSearchBoxInitMethod")
-        if (symbols.homeSearchBoxGetterMethod.isNullOrBlank()) adOptional.add("homeSearchBoxGetterMethod")
-        if (symbols.homePersonalizeAnchorClasses.isNullOrEmpty()) {
-            adOptional.add("homePersonalizeAnchorClasses")
+        fun statusFromMissing(
+            critical: List<String>,
+            optional: List<String> = emptyList(),
+        ): HookFeatureStatus {
+            return when {
+                critical.isNotEmpty() -> HookFeatureStatus(
+                    state = HookFeatureState.DISABLED,
+                    missingCritical = critical,
+                    missingOptional = optional,
+                )
+                optional.isNotEmpty() -> HookFeatureStatus(
+                    state = HookFeatureState.PARTIAL,
+                    missingOptional = optional,
+                )
+                else -> HookFeatureStatus(state = HookFeatureState.FULL)
+            }
         }
-        if (symbols.homeRightSlotClass.isNullOrBlank()) adOptional.add("homeRightSlotClass")
-        if (symbols.homeRightSlotStateMethods.isNullOrEmpty()) adOptional.add("homeRightSlotStateMethods")
-        if (symbols.pbFallingViewClass.isNullOrBlank()) adOptional.add("pbFallingViewClass")
-        if (symbols.pbFallingInitMethod.isNullOrBlank()) adOptional.add("pbFallingInitMethod")
-        if (symbols.pbFallingShowMethod.isNullOrBlank()) adOptional.add("pbFallingShowMethod")
-        if (symbols.pbFallingClearMethod.isNullOrBlank()) adOptional.add("pbFallingClearMethod")
-        if (symbols.pbEarlyAdInsertClass.isNullOrBlank()) adOptional.add("pbEarlyAdInsertClass")
-        if (symbols.pbEarlyAdInsertMethodSpecs.orEmpty().size < PB_EARLY_AD_INSERT_MIN_METHOD_COUNT) {
-            adOptional.add("pbEarlyAdInsertMethodSpecs")
+
+        val feedAdCritical = ArrayList<String>(1)
+        val feedAdOptional = ArrayList<String>(1)
+        if (symbols.feedTemplateKeyMethod.isNullOrBlank()) feedAdCritical.add("feedTemplateKeyMethod")
+        if (symbols.feedTemplateLoadMoreMethod.isNullOrBlank()) feedAdOptional.add("feedTemplateLoadMoreMethod")
+        out[HookFeatureKey.BLOCK_AD_FEED] = statusFromMissing(feedAdCritical, feedAdOptional)
+
+        val postDataCritical = ArrayList<String>(3)
+        if (symbols.typeAdapterSetDataMethod.isNullOrBlank()) postDataCritical.add("typeAdapterSetDataMethod")
+        if (symbols.typeAdapterDataItemClass.isNullOrBlank()) postDataCritical.add("typeAdapterDataItemClass")
+        if (symbols.typeAdapterDataGetTypeMethod.isNullOrBlank()) {
+            postDataCritical.add("typeAdapterDataGetTypeMethod")
         }
+        val postDataStatus = statusFromMissing(postDataCritical)
+
+        val pbEarlyCritical = ArrayList<String>(2)
+        if (symbols.pbEarlyAdInsertClass.isNullOrBlank()) pbEarlyCritical.add("pbEarlyAdInsertClass")
+        if (symbols.pbEarlyAdInsertMethodSpecs.orEmpty().isEmpty()) {
+            pbEarlyCritical.add("pbEarlyAdInsertMethodSpecs")
+        }
+        val pbEarlyOptional = if (
+            symbols.pbEarlyAdInsertMethodSpecs.orEmpty().size in 1 until PB_EARLY_AD_INSERT_MIN_METHOD_COUNT
+        ) {
+            listOf("pbEarlyAdInsertMethodSpecs")
+        } else {
+            emptyList()
+        }
+        val pbEarlyStatus = statusFromMissing(pbEarlyCritical, pbEarlyOptional)
+
+        val pbFallingCritical = ArrayList<String>(2)
+        val pbFallingOptional = ArrayList<String>(3)
+        if (symbols.pbFallingViewClass.isNullOrBlank()) pbFallingCritical.add("pbFallingViewClass")
+        val pbFallingMethodNames = listOf(
+            "pbFallingInitMethod" to symbols.pbFallingInitMethod,
+            "pbFallingShowMethod" to symbols.pbFallingShowMethod,
+            "pbFallingClearMethod" to symbols.pbFallingClearMethod,
+        )
+        val missingPbFallingMethods = pbFallingMethodNames
+            .filter { (_, value) -> value.isNullOrBlank() }
+            .map { (name, _) -> name }
+        if (missingPbFallingMethods.size == pbFallingMethodNames.size) {
+            pbFallingCritical.add("pbFallingMethods")
+        } else {
+            pbFallingOptional.addAll(missingPbFallingMethods)
+        }
+        val pbFallingStatus = statusFromMissing(pbFallingCritical, pbFallingOptional)
+
         val hasPbAdBidCommonPath =
             !symbols.pbAdBidCommonRequestModelClass.isNullOrBlank() &&
                 !symbols.pbAdBidCommonRequestStartMethods.isNullOrEmpty() &&
@@ -770,41 +806,116 @@ internal object HookFeatureStatusDeriver {
         val hasPbAdBidPageBrowserPath =
             !symbols.pbAdBidPageBrowserRequestModelClass.isNullOrBlank() &&
                 !symbols.pbAdBidPageBrowserRequestDataMethod.isNullOrBlank()
+        val pbAdRequestOptional = ArrayList<String>(5)
         if (!hasPbAdBidCommonPath && !hasPbAdBidPageBrowserPath) {
             if (symbols.pbAdBidCommonRequestModelClass.isNullOrBlank()) {
-                adOptional.add("pbAdBidCommonRequestModelClass")
+                pbAdRequestOptional.add("pbAdBidCommonRequestModelClass")
             }
             if (symbols.pbAdBidCommonRequestStartMethods.isNullOrEmpty()) {
-                adOptional.add("pbAdBidCommonRequestStartMethods")
+                pbAdRequestOptional.add("pbAdBidCommonRequestStartMethods")
             }
             if (symbols.pbAdBidCommonRequestNotifyMethod.isNullOrBlank()) {
-                adOptional.add("pbAdBidCommonRequestNotifyMethod")
+                pbAdRequestOptional.add("pbAdBidCommonRequestNotifyMethod")
             }
             if (symbols.pbAdBidPageBrowserRequestModelClass.isNullOrBlank()) {
-                adOptional.add("pbAdBidPageBrowserRequestModelClass")
+                pbAdRequestOptional.add("pbAdBidPageBrowserRequestModelClass")
             }
             if (symbols.pbAdBidPageBrowserRequestDataMethod.isNullOrBlank()) {
-                adOptional.add("pbAdBidPageBrowserRequestDataMethod")
+                pbAdRequestOptional.add("pbAdBidPageBrowserRequestDataMethod")
             }
         }
-        if (symbols.typeAdapterSetDataMethod.isNullOrBlank()) adOptional.add("typeAdapterSetDataMethod")
-        if (symbols.typeAdapterDataItemClass.isNullOrBlank()) adOptional.add("typeAdapterDataItemClass")
-        if (symbols.typeAdapterDataGetTypeMethod.isNullOrBlank()) {
-            adOptional.add("typeAdapterDataGetTypeMethod")
-        }
-        if (!ForumPageAdSymbolReadiness.evaluate(symbols).any) {
-            adOptional.add("forumPageAdBlock")
-        }
-        out[HookFeatureKey.BLOCK_AD] = if (adOptional.isEmpty()) {
+        val pbRequestStatus = HookFeatureStatus(
+            state = if (pbAdRequestOptional.isEmpty()) HookFeatureState.FULL else HookFeatureState.PARTIAL,
+            missingOptional = pbAdRequestOptional,
+        )
+        out[HookFeatureKey.BLOCK_AD_POST_PAGE] = combineSubFeatureStatuses(
+            listOf(postDataStatus, pbEarlyStatus, pbFallingStatus, pbRequestStatus),
+        )
+
+        out[HookFeatureKey.BLOCK_AD_FORUM_PAGE] = if (ForumPageAdSymbolReadiness.evaluate(symbols).any) {
             HookFeatureStatus(state = HookFeatureState.FULL)
         } else {
-            HookFeatureStatus(state = HookFeatureState.PARTIAL, missingOptional = adOptional)
+            HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = listOf("forumPageAdBlock"),
+            )
         }
+
+        val strategyOptional = ArrayList<String>(8)
+        if (symbols.splashAdHelperClass.isNullOrBlank()) strategyOptional.add("splashAdHelperClass")
+        if (symbols.splashAdHelperMethod.isNullOrBlank()) strategyOptional.add("splashAdHelperMethod")
+        if (symbols.closeAdDataClass.isNullOrBlank()) strategyOptional.add("closeAdDataClass")
+        if (symbols.closeAdDataMethodG1.isNullOrBlank()) strategyOptional.add("closeAdDataMethodG1")
+        if (symbols.closeAdDataMethodJ1.isNullOrBlank()) strategyOptional.add("closeAdDataMethodJ1")
+        if (symbols.zgaClass.isNullOrBlank()) strategyOptional.add("zgaClass")
+        if (symbols.zgaMethods.isNullOrEmpty()) strategyOptional.add("zgaMethods")
+        out[HookFeatureKey.BLOCK_AD_STRATEGY] = HookFeatureStatus(
+            state = if (strategyOptional.isEmpty()) HookFeatureState.FULL else HookFeatureState.PARTIAL,
+            missingOptional = strategyOptional,
+        )
+
+        out[HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT] = statusFromMissing(
+            listOfNotNull(
+                "searchBoxViewClass".takeIf { symbols.searchBoxViewClass.isNullOrBlank() },
+                "searchBoxSetHintMethod".takeIf { symbols.searchBoxSetHintMethod.isNullOrBlank() },
+                "homeSearchBoxOwnerClass".takeIf { symbols.homeSearchBoxOwnerClass.isNullOrBlank() },
+                "homeSearchBoxInitMethod".takeIf { symbols.homeSearchBoxInitMethod.isNullOrBlank() },
+                "homeSearchBoxGetterMethod".takeIf { symbols.homeSearchBoxGetterMethod.isNullOrBlank() },
+            ),
+        )
+
+        out[HookFeatureKey.BLOCK_AD_HOME_TOP_BAR] = statusFromMissing(
+            listOfNotNull(
+                "homePersonalizeAnchorClasses".takeIf { symbols.homePersonalizeAnchorClasses.isNullOrEmpty() },
+                "homeRightSlotClass".takeIf { symbols.homeRightSlotClass.isNullOrBlank() },
+                "homeRightSlotStateMethods".takeIf { symbols.homeRightSlotStateMethods.isNullOrEmpty() },
+            ),
+        )
+
+        out[HookFeatureKey.BLOCK_AD_MINE_TAB_WEB] = HookFeatureStatus(state = HookFeatureState.HARD_CODED)
+        out[HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB] = HookFeatureStatus(state = HookFeatureState.HARD_CODED)
+        out[HookFeatureKey.BLOCK_AD] = combineSubFeatureStatuses(
+            listOf(
+                out.getValue(HookFeatureKey.BLOCK_AD_FEED),
+                out.getValue(HookFeatureKey.BLOCK_AD_POST_PAGE),
+                out.getValue(HookFeatureKey.BLOCK_AD_FORUM_PAGE),
+                out.getValue(HookFeatureKey.BLOCK_AD_STRATEGY),
+                out.getValue(HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT),
+                out.getValue(HookFeatureKey.BLOCK_AD_HOME_TOP_BAR),
+                out.getValue(HookFeatureKey.BLOCK_AD_MINE_TAB_WEB),
+                out.getValue(HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB),
+            ),
+        )
 
         for (key in featureKeys) {
             if (!out.containsKey(key)) out[key] = HookFeatureStatus()
         }
         return out
+    }
+
+    private fun combineSubFeatureStatuses(statuses: List<HookFeatureStatus>): HookFeatureStatus {
+        val supported = statuses.filter { it.isSupported() }
+        val missingCritical = statuses.flatMap { it.missingCritical }.distinct()
+        val missingOptional = statuses.flatMap { it.missingOptional }.distinct()
+        if (supported.isEmpty()) {
+            return HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = missingCritical.ifEmpty { listOf("allSubFeatures") },
+                missingOptional = missingOptional,
+            )
+        }
+        val allComplete = statuses.all {
+            it.state == HookFeatureState.FULL || it.state == HookFeatureState.HARD_CODED
+        }
+        return if (allComplete) {
+            HookFeatureStatus(state = HookFeatureState.FULL)
+        } else {
+            HookFeatureStatus(
+                state = HookFeatureState.PARTIAL,
+                missingCritical = missingCritical,
+                missingOptional = missingOptional,
+            )
+        }
     }
 
 }

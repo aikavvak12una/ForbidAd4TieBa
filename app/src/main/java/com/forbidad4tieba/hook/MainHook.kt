@@ -186,6 +186,11 @@ class MainHook : XposedModule() {
                 }
                 val isMainProcess = HookProcess.isMain(processName)
                 val settingsSnapshot = ConfigManager.snapshot()
+                if (isMainProcess) {
+                    ConfigManager.formatPerformanceStatusLines(settingsSnapshot).forEach { line ->
+                        XposedCompat.log("[MainHook] > $line")
+                    }
+                }
                 if (isMainProcess && shouldMaintainCustomPostModelScoreStats(settingsSnapshot)) {
                     runStartupTask("trim model score stats") {
                         CustomPostModelScoreStats.trimToPostLimitAsync(

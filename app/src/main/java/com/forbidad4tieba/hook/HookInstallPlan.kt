@@ -273,33 +273,16 @@ internal object HookInstallPlanner {
             }
         }
         if (context.canInstallHomeTopTabs(settings)) {
-            val selection = ConfigManager.normalizeHomeTopTabSelection(
-                ConfigManager.HomeTopTabSelection(
-                    materialEnabled = settings.isHomeTopTabMaterialEnabled,
-                    recommendEnabled = settings.isHomeTopTabRecommendEnabled,
-                    liveEnabled = settings.isHomeTopTabLiveEnabled,
-                    followedEnabled = settings.isHomeTopTabFollowedEnabled,
-                ),
-            )
             entries += HookInstallEntry("HomeTabHook") { cl ->
                 HookSymbolResolver.resolveHomeTabSymbols(cl, symbols)?.let { targets ->
-                    HomeTabHook.hook(targets, selection)
+                    HomeTabHook.hook(targets)
                 }
             }
         }
         if (context.canInstallBottomTabs(settings)) {
-            val selection = ConfigManager.normalizeBottomTabSelection(
-                ConfigManager.BottomTabSelection(
-                    homeEnabled = settings.isBottomTabHomeEnabled,
-                    enterForumEnabled = settings.isBottomTabEnterForumEnabled,
-                    retailStoreEnabled = settings.isBottomTabRetailStoreEnabled,
-                    messageEnabled = settings.isBottomTabMessageEnabled,
-                    mineEnabled = settings.isBottomTabMineEnabled,
-                ),
-            )
             entries += HookInstallEntry("MainTabBottomHook") { cl ->
                 HookSymbolResolver.resolveMainTabBottomSymbols(cl, symbols)?.let { targets ->
-                    MainTabBottomHook.hook(targets, selection)
+                    MainTabBottomHook.hook(targets)
                 }
             }
         }

@@ -677,16 +677,12 @@ private class SettingsAccountIdWatermarkDrawable(
         textSize = 9f * density
         typeface = Typeface.MONOSPACE
     }
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = max(0.7f * density, 0.7f)
-        textAlign = Paint.Align.CENTER
-        textSize = 9f * density
-        typeface = Typeface.MONOSPACE
-    }
+    private val fillFontMetrics = fillPaint.fontMetrics
+    private val textCenterOffsetY = (fillFontMetrics.ascent + fillFontMetrics.descent) * 0.5f
+    private val textHeightPx = (fillFontMetrics.descent - fillFontMetrics.ascent).coerceAtLeast(1f)
     private val horizontalGapPx = 64f * density
-    private val minHorizontalStepPx = 180f * density
-    private val verticalStepPx = 72f * density
+    private val minHorizontalStepPx = 126f * density
+    private val verticalStepPx = 80f * density
     private val clipPath = Path()
     private val rectF = RectF()
     private var drawableAlpha = 255
@@ -712,27 +708,35 @@ private class SettingsAccountIdWatermarkDrawable(
         val topLimit = rect.top - diagonalSpan
         val bottomLimit = rect.bottom + diagonalSpan
 
-        strokePaint.color = Color.argb(scaleAlpha(112), 0, 0, 0)
-        fillPaint.color = Color.argb(scaleAlpha(96), 255, 255, 255)
+        fillPaint.color = Color.argb(scaleAlpha(108), 210, 210, 210)
 
         val save = canvas.save()
         rectF.set(rect)
         clipPath.reset()
         clipPath.addRoundRect(rectF, cornerRadiusPx, cornerRadiusPx, Path.Direction.CW)
         canvas.clipPath(clipPath)
-        canvas.rotate(-40f, rect.exactCenterX(), rect.exactCenterY())
+        canvas.rotate(-26f, rect.exactCenterX(), rect.exactCenterY())
         var rowIndex = 0
         var y = topLimit
         while (y <= bottomLimit) {
+            var columnIndex = 0
             var x = leftLimit + if (rowIndex % 2 == 0) 0f else horizontalStep * 0.5f
             while (x <= rightLimit) {
-                canvas.drawText(text, x, y, strokePaint)
+                fillPaint.shader = watermarkTextGradient(
+                    x = x,
+                    baselineY = y,
+                    textWidth = textWidth,
+                    rowIndex = rowIndex,
+                    columnIndex = columnIndex,
+                )
                 canvas.drawText(text, x, y, fillPaint)
+                columnIndex += 1
                 x += horizontalStep
             }
             rowIndex += 1
             y += verticalStepPx
         }
+        fillPaint.shader = null
         canvas.restoreToCount(save)
     }
 
@@ -755,6 +759,75 @@ private class SettingsAccountIdWatermarkDrawable(
 
     private fun scaleAlpha(alpha: Int): Int {
         return (alpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
+    }
+
+    private fun watermarkTextGradient(
+        x: Float,
+        baselineY: Float,
+        textWidth: Float,
+        rowIndex: Int,
+        columnIndex: Int,
+    ): LinearGradient {
+        val variant = watermarkVariant(rowIndex, columnIndex)
+        val alpha = scaleAlpha(96 + variant % 32)
+        val darkGray = 42 + (variant ushr 5) % 58
+        val lightGray = 188 + (variant ushr 11) % 56
+        val startColor = Color.argb(alpha, darkGray, darkGray, darkGray)
+        val endColor = Color.argb(alpha, lightGray, lightGray, lightGray)
+        val halfWidth = textWidth * 0.5f
+        val halfHeight = textHeightPx * 0.5f
+        val centerY = baselineY + textCenterOffsetY
+        val direction = variant % 6
+        val startX: Float
+        val startY: Float
+        val endX: Float
+        val endY: Float
+        when (direction) {
+            0 -> {
+                startX = x - halfWidth
+                startY = centerY
+                endX = x + halfWidth
+                endY = centerY
+            }
+            1 -> {
+                startX = x + halfWidth
+                startY = centerY
+                endX = x - halfWidth
+                endY = centerY
+            }
+            2 -> {
+                startX = x - halfWidth
+                startY = centerY - halfHeight
+                endX = x + halfWidth
+                endY = centerY + halfHeight
+            }
+            3 -> {
+                startX = x + halfWidth
+                startY = centerY - halfHeight
+                endX = x - halfWidth
+                endY = centerY + halfHeight
+            }
+            4 -> {
+                startX = x
+                startY = centerY - halfHeight
+                endX = x
+                endY = centerY + halfHeight
+            }
+            else -> {
+                startX = x - halfWidth
+                startY = centerY + halfHeight
+                endX = x + halfWidth
+                endY = centerY - halfHeight
+            }
+        }
+        return LinearGradient(startX, startY, endX, endY, startColor, endColor, Shader.TileMode.CLAMP)
+    }
+
+    private fun watermarkVariant(rowIndex: Int, columnIndex: Int): Int {
+        var value = watermarkText.hashCode()
+        value = value * 31 + rowIndex * 73856093
+        value = value * 31 + columnIndex * 19349663
+        return value and Int.MAX_VALUE
     }
 }
 
