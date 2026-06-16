@@ -46,7 +46,7 @@ class MainHook : XposedModule() {
 
         if (param.packageName != Constants.TARGET_PACKAGE) return
         // Titan patch loading only runs in the main process.
-        if (processName != Constants.TARGET_PACKAGE) return
+        if (!HookProcess.isMain(processName)) return
         // Install before Application.attach so Titan patch loading can be blocked early.
         TitanPatchBlockHook.hook(param.defaultClassLoader)
     }
@@ -119,7 +119,7 @@ class MainHook : XposedModule() {
                         sAppContext = app
                         ConfigManager.init(app)
                         XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
-                        val isMainProcess = processName == Constants.TARGET_PACKAGE
+                        val isMainProcess = HookProcess.isMain(processName)
                         if (isMainProcess) {
                             ModuleForegroundActivityTracker.register(app)
                             val startupSettings = ConfigManager.snapshot()
@@ -142,8 +142,10 @@ class MainHook : XposedModule() {
                             runStartupTask("restore legacy component state") {
                                 ComponentDisableHook.apply(app)
                             }
-                            runStartupTask("delete Titan patch files") {
-                                TitanPatchBlockHook.deletePatchFiles(app)
+                            if (startupSettings.isTitanPatchBlockEnabled) {
+                                runStartupTask("delete Titan patch files") {
+                                    TitanPatchBlockHook.deletePatchFiles(app)
+                                }
                             }
                             if (startupSettings.isTitanPatchBlockEnabled || startupSettings.isDetailedLoggingEnabled) {
                                 runStartupTask("log Titan startup") {
@@ -209,7 +211,7 @@ class MainHook : XposedModule() {
                     return@intercept result
                 }
 
-                val isMainProcess = processName == Constants.TARGET_PACKAGE
+                val isMainProcess = HookProcess.isMain(processName)
                 val symbolPlan = HookInstallPlanner.symbolPlan(
                     processName = processName,
                     symbols = symbols,
@@ -336,7 +338,7 @@ class MainHook : XposedModule() {
     }
 
     private fun isTargetProcess(name: String): Boolean {
-        return name == Constants.TARGET_PACKAGE || name.startsWith("${Constants.TARGET_PACKAGE}:")
+        return HookProcess.isTargetTiebaProcess(name)
     }
 
     private fun shouldHandleProcess(name: String): Boolean {

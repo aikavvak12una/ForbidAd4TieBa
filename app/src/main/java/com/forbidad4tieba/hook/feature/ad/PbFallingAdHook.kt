@@ -9,8 +9,11 @@ import com.forbidad4tieba.hook.utils.ViewExt
 import java.lang.reflect.Method
 
 /**
- * 灞忚斀 PB 椤电殑鎺夎惤骞垮憡鍜岃泲闆ㄥ眰锛屽綊鍒板箍鍛婂睆钄藉紑鍏抽噷銆? *
- * 澶勭悊鏂瑰紡锛? * 1. 鐩爣绫诲拰鏂规硶涓ユ牸閫氳繃 HookSymbolResolver 瑙ｆ瀽銆? * 2. 娣锋穯鏂规硶涓嶅仛纭紪鐮佹垨缁撴瀯鎺ㄦ柇鍏滃簳銆? * 3. 鎷︽埅鍒濆鍖栥€佹樉绀哄拰娓呯悊鍏ュ彛锛岃鏁村眰涓嶅啀鐢熸晥銆? */
+ * Blocks PB falling ads through the shared ad-block switch.
+ *
+ * Target classes and methods must come from HookSymbolResolver; runtime callbacks only intercept
+ * resolved init/show/clear entry points.
+ */
 object PbFallingAdHook {
     @Volatile private var hooked = false
     @Volatile private var hooking = false

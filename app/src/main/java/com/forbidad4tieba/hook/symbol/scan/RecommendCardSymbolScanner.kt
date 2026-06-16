@@ -2,9 +2,9 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object RecommendCardSymbolScanner {
@@ -16,7 +16,8 @@ internal object RecommendCardSymbolScanner {
             return RecommendCardNestedDataScanSymbols()
         }
         val candidates = ArrayList<RecommendCardNestedDataCandidate>(4)
-        val bindMethods = viewClass.declaredMethods.filter { method ->
+        val bindMethods = declaredMethods("RecommendCardView", viewClass, logger)
+            ?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 !method.isSynthetic &&
                 !method.isBridge &&
@@ -24,11 +25,11 @@ internal object RecommendCardSymbolScanner {
                 method.parameterTypes.size == 1 &&
                 !method.parameterTypes[0].isPrimitive &&
                 method.parameterTypes[0].name.startsWith("com.baidu.tieba.")
-        }
+            } ?: return RecommendCardNestedDataScanSymbols()
         for (bindMethod in bindMethods) {
             val stateClass = bindMethod.parameterTypes[0]
-            val stateFields = collectInstanceFields(stateClass)
-            val stateMethods = collectInstanceMethods(stateClass)
+            val stateFields = instanceFields("State", stateClass, logger) ?: continue
+            val stateMethods = instanceMethods("State", stateClass, logger) ?: continue
             for (method in stateMethods) {
                 if (method.isSynthetic || method.isBridge) continue
                 if (method.parameterTypes.isNotEmpty()) continue
@@ -37,7 +38,7 @@ internal object RecommendCardSymbolScanner {
                 }
                 val nestedDataClass = method.returnType
                 if (stateFields.none { it.type == nestedDataClass }) continue
-                val listFields = collectInstanceFields(nestedDataClass)
+                val listFields = (instanceFields("NestedData", nestedDataClass, logger) ?: continue)
                     .filter { isListType(it.type) }
                 if (listFields.size != 1) continue
                 candidates.add(
@@ -85,16 +86,46 @@ internal object RecommendCardSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
 
     private fun collectInstanceMethods(clazz: Class<*>): List<java.lang.reflect.Method> =
-        HookSymbolResolver.collectInstanceMethods(clazz)
+        ScanReflection.collectInstanceMethods(clazz)
+
+    private fun declaredMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("RecommendCardNestedDataHook.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+    }
+
+    private fun instanceFields(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Field>? {
+        return scanSubStep("RecommendCardNestedDataHook.$label.InstanceFields", logger, null) {
+            collectInstanceFields(clazz)
+        }
+    }
+
+    private fun instanceMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("RecommendCardNestedDataHook.$label.InstanceMethods", logger, null) {
+            collectInstanceMethods(clazz)
+        }
+    }
 
     private fun isListType(type: Class<*>): Boolean =
-        HookSymbolResolver.isListType(type)
+        ScanReflection.isListType(type)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

@@ -5,15 +5,20 @@ import io.github.libxposed.api.XposedModule
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 杩欓噷鏀?API 101 妯″潡鐢熷懡鍛ㄦ湡鎸佹湁澶勫拰宸ュ叿鍑芥暟銆? *
- * 鍔熻兘 hook 鐩存帴浣跨敤 [module] 瀹夎锛? * ```
+ * Holds the API 101 module lifecycle object and shared Xposed helpers.
+ *
+ * Feature hooks install through [module]:
+ * ```
  * XposedCompat.module?.hook(method)?.intercept { chain ->
- *     // 杩欓噷鍙敤 chain.thisObject銆乧hain.args銆乧hain.proceed(args)
+ *     // chain.thisObject, chain.args and chain.proceed(args) are available here.
  * }
  * ```
  *
- * 杩欓噷鎻愪緵杩欎簺宸ュ叿锛? * - 妯″潡寮曠敤绠＄悊
- * - 缁撴瀯鍖栨棩蹇? * - 鍙嶅皠杈呭姪锛屽寘鍚瓧娈点€佹柟娉曞拰绫绘煡鎵? */
+ * This object centralizes:
+ * - module reference management
+ * - structured logging
+ * - reflection helpers for fields, methods, and classes
+ */
 object XposedCompat {
 
     @Volatile
@@ -21,7 +26,7 @@ object XposedCompat {
 
     private val installInfoOnce = ConcurrentHashMap.newKeySet<String>()
 
-    // 鏃ュ織
+    // Logging.
 
     fun log(msg: String) {
         if (isSuccessfulHookInstallLog(msg)) {

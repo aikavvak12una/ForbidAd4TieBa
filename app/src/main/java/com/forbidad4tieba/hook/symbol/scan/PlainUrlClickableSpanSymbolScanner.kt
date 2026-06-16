@@ -2,11 +2,10 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.text.style.ClickableSpan
 import android.view.View
+import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -28,8 +27,10 @@ internal object PlainUrlClickableSpanSymbolScanner {
         logger: ScanLogger?,
     ): PlainUrlClickableSpanScanSymbols {
         val spanClass = resolveSpanClass(candidates, cl, logger) ?: return PlainUrlClickableSpanScanSymbols()
+        val spanMethods = declaredMethodsForScan("SpanClass", spanClass, logger)
+            ?: return PlainUrlClickableSpanScanSymbols()
 
-        val onClickMethod = spanClass.declaredMethods.singleOrNull { method ->
+        val onClickMethod = spanMethods.singleOrNull { method ->
             isOnClickMethod(method, "onClick")
         } ?: run {
             log(logger, "plainUrlClickableSpan: onClick(View) not found in ${spanClass.name}")
@@ -43,12 +44,12 @@ internal object PlainUrlClickableSpanSymbolScanner {
         val urlField = resolvedFields.urlField
         val textField = resolvedFields.textField
 
-        if (!isStructureValid(spanClass, onClickMethod, typeField, urlField, textField)) {
+        if (!isStructureValidForScan(spanClass, onClickMethod, typeField, urlField, textField, logger)) {
             log(logger, "plainUrlClickableSpan: structure mismatch in ${spanClass.name}")
             return PlainUrlClickableSpanScanSymbols()
         }
 
-        val ownerClasses = collectOnClickOwners(candidates, cl, spanClass, onClickMethod.name)
+        val ownerClasses = collectOnClickOwners(candidates, cl, spanClass, onClickMethod.name, logger)
         if (ownerClasses.isEmpty()) {
             log(logger, "plainUrlClickableSpan: no onClick owners found")
             return PlainUrlClickableSpanScanSymbols()
@@ -76,26 +77,38 @@ internal object PlainUrlClickableSpanSymbolScanner {
         logger: ScanLogger?,
     ): Class<*>? {
         safeFindClass(PLAIN_URL_CLICKABLE_SPAN_CLASS, cl)
-            ?.takeIf(::isFixedClassCandidate)
+            ?.takeIf { isFixedClassCandidateForScan(it, logger) }
             ?.let { return it }
 
         val matches = ArrayList<PlainUrlClickableSpanClassMatch>()
         var skippedByReflection = 0
+        var firstReflectionError: String? = null
         for (className in candidates) {
             if (!isCandidateClassName(className)) continue
             val cls = try {
                 safeFindClass(className, cl)
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
                 skippedByReflection++
+                if (firstReflectionError == null) {
+                    firstReflectionError = formatScanException(t)
+                }
                 null
             } ?: continue
-            val score = scoreClass(cls)
+            val score = scoreClassForScan(cls, logger)
+            if (score == null) {
+                skippedByReflection++
+                continue
+            }
             if (score >= 120) {
                 matches.add(PlainUrlClickableSpanClassMatch(cls, score))
             }
         }
         if (skippedByReflection > 0) {
-            log(logger, "plainUrlClickableSpan scan skipped classes by reflection=$skippedByReflection")
+            log(
+                logger,
+                "plainUrlClickableSpan scan skipped classes by reflection=$skippedByReflection" +
+                    (firstReflectionError?.let { ", firstException=$it" } ?: ""),
+            )
         }
         if (matches.isEmpty()) {
             log(logger, "plainUrlClickableSpan: no semantic class match among ${candidates.size} candidates")
@@ -128,13 +141,15 @@ internal object PlainUrlClickableSpanSymbolScanner {
         return best.clazz
     }
 
-    private fun isFixedClassCandidate(cls: Class<*>): Boolean {
+    private fun isFixedClassCandidateForScan(cls: Class<*>, logger: ScanLogger?): Boolean {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return false
         if (!ClickableSpan::class.java.isAssignableFrom(cls)) return false
-        val hasOnClick = cls.declaredMethods.any { method ->
+        val methods = declaredMethodsForScan("FixedClass", cls, logger) ?: return false
+        val constructors = declaredConstructorsForScan("FixedClass", cls, logger) ?: return false
+        val hasOnClick = methods.any { method ->
             isOnClickMethod(method, "onClick")
         }
-        return hasOnClick && hasConstructor(cls)
+        return hasOnClick && hasConstructor(constructors)
     }
 
     private fun isCandidateClassName(className: String): Boolean {
@@ -147,12 +162,14 @@ internal object PlainUrlClickableSpanSymbolScanner {
             shortName.contains("Span", ignoreCase = true)
     }
 
-    private fun scoreClass(cls: Class<*>): Int {
+    private fun scoreClassForScan(cls: Class<*>, logger: ScanLogger?): Int? {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return 0
         if (!ClickableSpan::class.java.isAssignableFrom(cls)) return 0
-        if (!cls.declaredMethods.any { isOnClickMethod(it, "onClick") }) return 0
-        if (!hasConstructor(cls)) return 0
-        val fields = collectInstanceFields(cls)
+        val methods = declaredMethodsForScan("CandidateClass", cls, logger) ?: return null
+        val constructors = declaredConstructorsForScan("CandidateClass", cls, logger) ?: return null
+        if (!methods.any { isOnClickMethod(it, "onClick") }) return 0
+        if (!hasConstructor(constructors)) return 0
+        val fields = instanceFieldsForScan("CandidateClass", cls, logger) ?: return null
         val intFieldCount = fields.count { !Modifier.isStatic(it.modifiers) && isIntType(it.type) }
         val stringFieldCount = fields.count { !Modifier.isStatic(it.modifiers) && it.type == String::class.java }
         if (intFieldCount < 2 || stringFieldCount < 1) return 0
@@ -160,7 +177,7 @@ internal object PlainUrlClickableSpanSymbolScanner {
         var score = 110
         if (cls.name == PLAIN_URL_CLICKABLE_SPAN_CLASS) score += 45
         if (cls.superclass == ClickableSpan::class.java) score += 14
-        if (hasDeclaredCallbackField(cls)) score += 14
+        if (hasDeclaredCallbackFieldForScan(cls, fields, logger)) score += 14
         if (cls.name.startsWith("com.baidu.tieba.")) score += 12
         if (cls.simpleName.length <= 4) score += 8
         if (intFieldCount >= 4) score += 16 else score += intFieldCount * 3
@@ -168,11 +185,11 @@ internal object PlainUrlClickableSpanSymbolScanner {
         if (fields.any { field ->
                 !Modifier.isStatic(field.modifiers) &&
                     field.type.isInterface &&
-                    field.type.declaredMethods.any { method ->
+                    declaredMethodsForScan("CallbackField", field.type, logger)?.any { method ->
                         method.returnType == Void.TYPE &&
                             method.parameterTypes.size == 1 &&
                             method.parameterTypes[0].isAssignableFrom(cls)
-                    }
+                    } == true
             }
         ) {
             score += 18
@@ -183,20 +200,24 @@ internal object PlainUrlClickableSpanSymbolScanner {
         if (fields.any { field -> !Modifier.isStatic(field.modifiers) && field.type.name == "tbclient.ThemeColorInfo" }) {
             score += 8
         }
-        score -= cls.declaredMethods.size / 10
+        score -= methods.size / 10
         score -= fields.size / 8
         return score
     }
 
-    private fun hasDeclaredCallbackField(cls: Class<*>): Boolean {
-        return cls.declaredFields.any { field ->
+    private fun hasDeclaredCallbackFieldForScan(
+        cls: Class<*>,
+        fields: List<Field>,
+        logger: ScanLogger?,
+    ): Boolean {
+        return fields.any { field ->
             !Modifier.isStatic(field.modifiers) &&
                 field.type.isInterface &&
-                field.type.declaredMethods.any { method ->
+                declaredMethodsForScan("DeclaredCallbackField", field.type, logger)?.any { method ->
                     method.returnType == Void.TYPE &&
                         method.parameterTypes.size == 1 &&
                         method.parameterTypes[0] == cls
-                }
+                } == true
         }
     }
 
@@ -205,13 +226,15 @@ internal object PlainUrlClickableSpanSymbolScanner {
         cl: ClassLoader,
         spanClass: Class<*>,
         onClickMethodName: String,
+        logger: ScanLogger?,
     ): List<String> {
         val owners = LinkedHashSet<String>()
 
         fun collect(clazz: Class<*>?) {
             if (clazz == null) return
             if (!spanClass.isAssignableFrom(clazz)) return
-            val hasOnClick = clazz.declaredMethods.any { method ->
+            val methods = declaredMethodsForScan("OnClickOwner", clazz, logger) ?: return
+            val hasOnClick = methods.any { method ->
                 isOnClickMethod(method, onClickMethodName)
             }
             if (hasOnClick) owners.add(clazz.name)
@@ -220,7 +243,8 @@ internal object PlainUrlClickableSpanSymbolScanner {
         collect(spanClass)
         for (containerName in PLAIN_URL_CLICKABLE_SPAN_CONTAINER_CLASSES) {
             val containerClass = safeFindClass(containerName, cl) ?: continue
-            for (nested in containerClass.declaredClasses) {
+            val nestedClasses = declaredClassesForScan("OwnerContainer", containerClass, logger) ?: continue
+            for (nested in nestedClasses) {
                 collect(nested)
             }
         }
@@ -234,25 +258,30 @@ internal object PlainUrlClickableSpanSymbolScanner {
     }
 
     private fun resolveFields(spanClass: Class<*>, logger: ScanLogger?): PlainUrlClickableSpanFieldSymbols? {
-        probeConstructorFields(spanClass, logger)?.let { return it }
-        resolveNamedFields(spanClass)?.let { return it }
-        return resolveOrderedFields(spanClass)
+        val fields = instanceFieldsForScan("SpanClass", spanClass, logger) ?: return null
+        probeConstructorFields(spanClass, fields, logger)?.let { return it }
+        resolveNamedFields(fields)?.let { return it }
+        return resolveOrderedFields(fields)
     }
 
     private fun probeConstructorFields(
         spanClass: Class<*>,
+        fields: List<Field>,
         logger: ScanLogger?,
     ): PlainUrlClickableSpanFieldSymbols? {
-        val constructors = spanClass.declaredConstructors
+        val constructors = declaredConstructorsForScan("SpanClass", spanClass, logger)
+            ?: return null
+        val matchingConstructors = constructors
             .filter { ctor ->
                 ctor.parameterTypes.size <= 5 &&
                     ctor.parameterTypes.any(::isIntType) &&
                     ctor.parameterTypes.any { it == String::class.java }
             }
             .sortedWith(compareBy({ it.parameterTypes.size }, { it.toGenericString() }))
-        val fields = collectInstanceFields(spanClass)
 
-        for (ctor in constructors) {
+        var constructorProbeFailures = 0
+        var firstConstructorProbeError: String? = null
+        for (ctor in matchingConstructors) {
             val paramTypes = ctor.parameterTypes
             val firstIntIndex = paramTypes.indexOfFirst(::isIntType)
             val firstStringIndex = paramTypes.indexOfFirst { it == String::class.java }
@@ -285,28 +314,28 @@ internal object PlainUrlClickableSpanSymbolScanner {
             }
             if (unsupportedPrimitive) continue
 
-            val instance = runCatching {
+            val instance = try {
                 ctor.isAccessible = true
                 ctor.newInstance(*args)
-            }.getOrNull() ?: continue
+            } catch (t: Throwable) {
+                constructorProbeFailures++
+                if (firstConstructorProbeError == null) {
+                    firstConstructorProbeError = formatScanException(t)
+                }
+                continue
+            }
             val typeMarker = intMarkers[firstIntIndex] ?: continue
             val urlMarker = stringMarkers[firstStringIndex] ?: continue
 
             val typeField = fields.singleOrNull { field ->
                 !Modifier.isStatic(field.modifiers) &&
                     isIntType(field.type) &&
-                    runCatching {
-                        field.isAccessible = true
-                        field.get(instance) == typeMarker
-                    }.getOrDefault(false)
+                    fieldValueEquals(field, instance, typeMarker, logger)
             } ?: continue
             val urlField = fields.singleOrNull { field ->
                 !Modifier.isStatic(field.modifiers) &&
                     field.type == String::class.java &&
-                    runCatching {
-                        field.isAccessible = true
-                        field.get(instance) == urlMarker
-                    }.getOrDefault(false)
+                    fieldValueEquals(field, instance, urlMarker, logger)
             } ?: continue
             val textField = pickTextField(fields, urlField)
             return PlainUrlClickableSpanFieldSymbols(
@@ -317,12 +346,35 @@ internal object PlainUrlClickableSpanSymbolScanner {
             )
         }
 
-        log(logger, "plainUrlClickableSpan: constructor probe unavailable in ${spanClass.name}")
+        log(
+            logger,
+            "plainUrlClickableSpan: constructor probe unavailable in ${spanClass.name}" +
+                if (constructorProbeFailures > 0) {
+                    ", failures=$constructorProbeFailures" +
+                        (firstConstructorProbeError?.let { ", firstException=$it" } ?: "")
+                } else {
+                    ""
+                },
+        )
         return null
     }
 
-    private fun resolveNamedFields(spanClass: Class<*>): PlainUrlClickableSpanFieldSymbols? {
-        val fields = collectInstanceFields(spanClass)
+    private fun fieldValueEquals(
+        field: Field,
+        instance: Any,
+        expectedValue: Any,
+        logger: ScanLogger?,
+    ): Boolean {
+        return try {
+            field.isAccessible = true
+            field.get(instance) == expectedValue
+        } catch (t: Throwable) {
+            log(logger, "plainUrlClickableSpan: constructor field probe failed: ${field.name}: ${formatScanException(t)}")
+            false
+        }
+    }
+
+    private fun resolveNamedFields(fields: List<Field>): PlainUrlClickableSpanFieldSymbols? {
         val typeField = fields.singleOrNull { field ->
             field.name == PLAIN_URL_CLICKABLE_SPAN_TYPE_FIELD &&
                 !Modifier.isStatic(field.modifiers) &&
@@ -341,8 +393,7 @@ internal object PlainUrlClickableSpanSymbolScanner {
         )
     }
 
-    private fun resolveOrderedFields(spanClass: Class<*>): PlainUrlClickableSpanFieldSymbols? {
-        val fields = collectInstanceFields(spanClass)
+    private fun resolveOrderedFields(fields: List<Field>): PlainUrlClickableSpanFieldSymbols? {
         val intFields = fields.filter { field ->
             !Modifier.isStatic(field.modifiers) && isIntType(field.type)
         }
@@ -366,6 +417,27 @@ internal object PlainUrlClickableSpanSymbolScanner {
                 !Modifier.isStatic(field.modifiers) &&
                 field.type == String::class.java
         } ?: urlField
+    }
+
+    private fun isStructureValidForScan(
+        spanClass: Class<*>,
+        onClickMethod: Method,
+        typeField: Field,
+        urlField: Field,
+        textField: Field,
+        logger: ScanLogger?,
+    ): Boolean {
+        if (spanClass.isInterface || Modifier.isAbstract(spanClass.modifiers)) return false
+        if (!ClickableSpan::class.java.isAssignableFrom(spanClass)) return false
+        if (!isOnClickMethod(onClickMethod, onClickMethod.name)) return false
+        if (Modifier.isStatic(typeField.modifiers) || !isIntType(typeField.type)) return false
+        if (Modifier.isStatic(urlField.modifiers) || urlField.type != String::class.java) return false
+        if (Modifier.isStatic(textField.modifiers) || textField.type != String::class.java) return false
+        val constructors = declaredConstructorsForScan("SpanClass.Structure", spanClass, logger) ?: return false
+        if (!hasConstructor(constructors)) return false
+        val fields = instanceFieldsForScan("SpanClass.Structure", spanClass, logger) ?: return false
+        return fields.count { isIntType(it.type) } >= 4 &&
+            fields.count { it.type == String::class.java } >= 3
     }
 
     internal fun isOnClickMethod(method: Method, methodName: String): Boolean {
@@ -396,7 +468,13 @@ internal object PlainUrlClickableSpanSymbolScanner {
     }
 
     private fun hasConstructor(spanClass: Class<*>): Boolean {
-        return spanClass.declaredConstructors.any { ctor ->
+        val constructors = declaredConstructorsForScan("SpanClass.Validate", spanClass, null)
+            ?: return false
+        return hasConstructor(constructors)
+    }
+
+    private fun hasConstructor(constructors: List<Constructor<*>>): Boolean {
+        return constructors.any { ctor ->
             ctor.parameterTypes.any(::isIntType) &&
                 ctor.parameterTypes.any { it == String::class.java }
         }
@@ -411,16 +489,59 @@ internal object PlainUrlClickableSpanSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
+
+    private fun declaredClassesForScan(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Class<*>>? {
+        return scanSubStep("PlainUrlClickableSpanHook.$label.Classes", logger, null) {
+            clazz.declaredClasses.toList()
+        }
+    }
+
+    private fun declaredConstructorsForScan(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Constructor<*>>? {
+        return scanSubStep("PlainUrlClickableSpanHook.$label.Constructors", logger, null) {
+            clazz.declaredConstructors.toList()
+        }
+    }
+
+    private fun declaredMethodsForScan(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("PlainUrlClickableSpanHook.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+    }
+
+    private fun instanceFieldsForScan(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Field>? {
+        return scanSubStep("PlainUrlClickableSpanHook.$label.InstanceFields", logger, null) {
+            collectInstanceFields(clazz)
+        }
+    }
 
     private fun isIntType(type: Class<*>): Boolean =
-        HookSymbolResolver.isIntType(type)
+        ScanReflection.isIntType(type)
 
     private fun isBooleanType(type: Class<*>): Boolean =
-        HookSymbolResolver.isBooleanType(type)
+        ScanReflection.isBooleanType(type)
+
+    private fun formatScanException(t: Throwable): String =
+        HookSymbolScanDiagnostics.formatScanException(t)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

@@ -22,8 +22,13 @@ import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
 
 /**
- * 鏍峰紡鍏ュ彛锛岄泦涓鐞嗕寒鏆楁ā寮忚壊鐩樸€佸璇濇瀹瑰櫒鑳屾櫙銆佽繘搴︽潯鍜岃交閲忓姩鏁堛€? *
- * 杩欎簺閫昏緫杩愯鍦?UI 浜嬩欢璺緞涓婏紝姣斿 `onShow`銆佺偣鍑诲拰鎵弿瀹屾垚锛屼笉鍙備笌 hook 鍥炶皟銆? * 姣忔鎸夊綋鍓?`Configuration` 璁＄畻 tokens锛岄伩鍏嶈法 Activity 鍒囨崲涓婚鍚庣姸鎬佽繃鏈熴€? */
+ * Central style entry for settings UI colors, dialog backgrounds, progress bars, and lightweight
+ * animations.
+ *
+ * These helpers run on UI event paths such as dialog display, clicks, and scan completion. Tokens are
+ * recalculated from the current [Configuration] so theme changes across activities do not leave stale
+ * state behind.
+ */
 internal object UiStyle {
     private const val CARD_CORNER_DP = 22f
     private const val CARD_INSET_DP = 14f
@@ -316,7 +321,8 @@ internal object UiStyle {
     }
 
     /**
-     * 寮€鍏宠鍒囨崲鏃剁殑鑳屾櫙鑴夊啿銆?     * 鐭殏鏄剧ず accent 鑹插悗鎭㈠閫忔槑銆?     */
+     * Brief accent pulse for a switched settings row.
+     */
     internal fun animateSwitchPulse(row: View, tokens: Tokens) {
         val from = 0x00000000
         val peak = tokens.accentSoft
@@ -331,7 +337,8 @@ internal object UiStyle {
     }
 
     /**
-     * 鎸夐挳鍚敤鏃剁殑缂╂斁鍔ㄧ敾銆?     */
+     * Pop-in animation when a button becomes enabled.
+     */
     internal fun animateButtonEnable(button: View) {
         button.scaleX = 0.88f
         button.scaleY = 0.88f
@@ -346,7 +353,8 @@ internal object UiStyle {
     }
 
     /**
-     * 鍒楄〃椤归€愭潯鍏ュ満锛岀敤浜庡瓙寮圭獥鐨?switch 琛屻€?     */
+     * Staggered entrance animation for switch rows in subdialogs.
+     */
     internal fun animateListItemsStagger(items: List<View>, density: Float) {
         if (items.isEmpty()) return
         val interp = DecelerateInterpolator(1.4f)
@@ -364,7 +372,8 @@ internal object UiStyle {
     }
 
     /**
-     * 杩涘害鏉″畬鎴愭椂鐨勪寒搴﹁剦鍐层€?     */
+     * Brightness pulse when a progress bar completes.
+     */
     internal fun animateProgressComplete(progressView: View) {
         progressView.animate()
             .alpha(0.5f)
@@ -404,7 +413,8 @@ internal object UiStyle {
     }
 
     /**
-     * 瀵硅瘽妗嗗叧闂椂鐨勯€€鍑哄姩鐢伙紝缂╁皬骞舵贰鍑恒€?     */
+     * Dialog exit animation used before dismiss callbacks run.
+     */
     internal fun animateDialogExit(root: View, density: Float, onEnd: () -> Unit) {
         root.animate()
             .alpha(0f)
@@ -418,7 +428,8 @@ internal object UiStyle {
     }
 
     /**
-     * 鏍囬鍖哄煙鍝佺墝 tag 鐨勪竴娆℃€ф贰鍏ュ姩鐢汇€?     */
+     * One-shot fade-in for the title brand tag.
+     */
     internal fun animateBrandTagShimmer(view: View) {
         view.alpha = 0f
         view.animate()
@@ -430,7 +441,8 @@ internal object UiStyle {
     }
 
     /**
-     * 鎿嶄綔鍥炬爣鎸夊帇缂╂斁锛岀敤浜庡皬鎸夐挳鐐瑰嚮銆?     */
+     * Press feedback for small action icons.
+     */
     internal fun animateActionPress(view: View) {
         view.animate().cancel()
         view.scaleX = 0.82f
@@ -444,7 +456,8 @@ internal object UiStyle {
     }
 
     /**
-     * 灞曞紑鍜屾敹璧风澶寸殑鏃嬭浆鍔ㄧ敾銆?     * 浣跨敤 U+2335 瀛楃锛屽垵濮嬭搴?0 搴︼紝灞曞紑鍚庢棆杞埌 180 搴︺€?     */
+     * Rotation animation for expand/collapse arrows.
+     */
     internal fun animateExpandArrow(view: View, expanding: Boolean) {
         val target = if (expanding) 180f else 0f
         view.animate()
@@ -455,7 +468,8 @@ internal object UiStyle {
     }
 
     /**
-     * 鍗＄墖灞曞紑鍔ㄧ敾锛屼粠楂樺害 0 鍜岄€忔槑鐘舵€佸睍寮€鍒板畬鏁撮珮搴﹀拰涓嶉€忔槑鐘舵€併€?     */
+     * Expands a card from a compressed transparent state.
+     */
     internal fun animateCardExpand(view: View) {
         view.visibility = View.VISIBLE
         view.alpha = 0f
@@ -470,7 +484,8 @@ internal object UiStyle {
     }
 
     /**
-     * 鍗＄墖鏀惰捣鍔ㄧ敾锛岀缉灏忓苟娣″嚭鍚庨殣钘忋€?     */
+     * Collapses a card and hides it after the fade-out.
+     */
     internal fun animateCardCollapse(view: View) {
         view.pivotY = 0f
         view.animate()

@@ -2,20 +2,20 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object HomeTabItemSymbolScanner {
-    fun scan(homeMatch: ScanMatch, cl: ClassLoader, logger: ScanLogger?): HomeTabItemScanSymbols {
-        val homeClass = safeFindClass(homeMatch.className, cl)
+    fun scan(homeTab: HomeTabScanSymbols, cl: ClassLoader, logger: ScanLogger?): HomeTabItemScanSymbols {
+        val homeClassName = homeTab.tabClass ?: return HomeTabItemScanSymbols()
+        val listFieldName = homeTab.listField ?: return HomeTabItemScanSymbols()
+        val homeClass = safeFindClass(homeClassName, cl)
         if (homeClass == null) {
-            log(logger, "home item scan: home class not found ${homeMatch.className}")
+            log(logger, "home item scan: home class not found $homeClassName")
             return HomeTabItemScanSymbols()
         }
-        val itemClass = resolveHomeTabItemClass(homeClass, homeMatch.fieldName)
+        val itemClass = resolveHomeTabItemClass(homeClass, listFieldName)
         if (itemClass == null) {
             log(logger, "home item scan: item class unresolved")
             return HomeTabItemScanSymbols()
@@ -170,13 +170,13 @@ internal object HomeTabItemSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
 
     private fun collectInstanceMethods(clazz: Class<*>): List<Method> =
-        HookSymbolResolver.collectInstanceMethods(clazz)
+        ScanReflection.collectInstanceMethods(clazz)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

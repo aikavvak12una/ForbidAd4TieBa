@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.content.Context
 import android.view.View
@@ -133,10 +131,8 @@ internal object HomeNativeGlassSymbolScanner {
                 )
                 return HomeNativeGlassSortSwitchSymbols()
             }
-        val fields = try {
-            sortSwitchClass.declaredFields.toList()
-        } catch (t: Throwable) {
-            log(logger, "homeNativeGlassSortSwitch: declaredFields failed: ${t.message}")
+        val fields = declaredFields("SortSwitch", sortSwitchClass, logger) ?: run {
+            log(logger, "homeNativeGlassSortSwitch: declaredFields unavailable")
             return HomeNativeGlassSortSwitchSymbols()
         }
         val paintFields = fields.filter { field ->
@@ -177,17 +173,13 @@ internal object HomeNativeGlassSymbolScanner {
             }
             structural
         }
-        val slideDrawCandidates = try {
-            sortSwitchClass.declaredMethods.filter { method ->
+        val slideDrawCandidates = declaredMethods("SortSwitch", sortSwitchClass, logger)
+            ?.filter { method ->
                 !Modifier.isStatic(method.modifiers) &&
                     method.returnType == java.lang.Void.TYPE &&
                     method.parameterTypes.size == 1 &&
                     method.parameterTypes[0].name == "android.graphics.Canvas"
-            }
-        } catch (t: Throwable) {
-            log(logger, "homeNativeGlassSortSwitch: declaredMethods failed: ${t.message}")
-            emptyList()
-        }
+            }.orEmpty()
         val slideDrawInnerCandidates = slideDrawCandidates.filter { method ->
             method.name != "onDraw"
         }
@@ -254,16 +246,12 @@ internal object HomeNativeGlassSymbolScanner {
             log(logger, "homeNativeGlassHostDarkModeSwitch: class missing $BD_SWITCH_VIEW_CLASS")
             return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
-        val switchMethods = try {
-            switchClass.declaredMethods.toList()
-        } catch (t: Throwable) {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: switch declaredMethods failed: ${t.message}")
+        val switchMethods = declaredMethods("HostDarkModeSwitch.Switch", switchClass, logger) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: switch declaredMethods unavailable")
             return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
-        val switchFields = try {
-            collectInstanceFields(switchClass)
-        } catch (t: Throwable) {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: switch fields failed: ${t.message}")
+        val switchFields = collectInstanceFields("HostDarkModeSwitch.Switch", switchClass, logger) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: switch fields unavailable")
             return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
         val stateField = selectHostSwitchStateField(switchFields, logger) ?: run {
@@ -289,24 +277,20 @@ internal object HomeNativeGlassSymbolScanner {
             return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
 
-        val fields = try {
-            collectInstanceFields(moreActivityClass)
-        } catch (t: Throwable) {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: activity fields failed: ${t.message}")
+        val fields = collectInstanceFields("HostDarkModeSwitch.Activity", moreActivityClass, logger) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: activity fields unavailable")
             return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
         val controllerMethodGroups = fields.mapNotNull { field ->
-            val methods = try {
-                collectInstanceMethods(field.type).filter { method ->
+            val methods = collectInstanceMethods("HostDarkModeSwitch.Controller.${field.type.name}", field.type, logger)
+                ?.filter { method ->
                     !Modifier.isStatic(method.modifiers) &&
                         method.parameterTypes.isEmpty() &&
                         switchClass.isAssignableFrom(method.returnType)
-                }
-            } catch (t: Throwable) {
+                } ?: run {
                 log(
                     logger,
-                    "homeNativeGlassHostDarkModeSwitch: controller methods failed " +
-                        "${field.type.name}: ${t.message}",
+                    "homeNativeGlassHostDarkModeSwitch: controller methods unavailable ${field.type.name}",
                 )
                 return@mapNotNull null
             }
@@ -386,10 +370,8 @@ internal object HomeNativeGlassSymbolScanner {
             )
             return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
-        val activityMethods = try {
-            collectInstanceMethods(moreActivityClass)
-        } catch (t: Throwable) {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: activity methods failed: ${t.message}")
+        val activityMethods = collectInstanceMethods("HostDarkModeSwitch.Activity", moreActivityClass, logger) ?: run {
+            log(logger, "homeNativeGlassHostDarkModeSwitch: activity methods unavailable")
             return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
         val callbackMethod = selectHostDarkModeSwitchCallbackMethod(
@@ -524,7 +506,9 @@ internal object HomeNativeGlassSymbolScanner {
             log(logger, "pbCommonLayoutPreloader: class not found: ${StableTiebaHookPoints.PB_COMMON_LAYOUT_PRELOADER_CLASS}")
             return null
         }
-        val candidates = clazz.declaredMethods.filter(::isPbCommonLayoutPreloaderGetOrDefaultMethod)
+        val candidates = declaredMethods("PbCommonLayoutPreloader", clazz, logger)
+            ?.filter(::isPbCommonLayoutPreloaderGetOrDefaultMethod)
+            ?: return null
         val method = candidates.singleOrNull() ?: run {
             log(
                 logger,
@@ -555,8 +539,8 @@ internal object HomeNativeGlassSymbolScanner {
             try {
                 val clazz = safeFindClass(className, cl) ?: continue
                 if (clazz.isInterface || Modifier.isAbstract(clazz.modifiers)) continue
-                val fields = collectInstanceFields(clazz)
-                val methods = collectInstanceMethods(clazz)
+                val fields = collectInstanceFields("EnterForumCapsule.${clazz.name}", clazz, logger) ?: continue
+                val methods = collectInstanceMethods("EnterForumCapsule.${clazz.name}", clazz, logger) ?: continue
                 val scored = scoreEnterForumCapsuleClass(
                     clazz = clazz,
                     fields = fields,
@@ -565,6 +549,7 @@ internal object HomeNativeGlassSymbolScanner {
                     navigationBarClass = navigationBarClass,
                     pbBarImageViewClass = pbBarImageViewClass,
                     emTextViewClass = emTextViewClass,
+                    logger = logger,
                 ) ?: continue
                 out.add(
                     HomeNativeGlassEnterForumCapsuleClassCandidate(
@@ -606,12 +591,9 @@ internal object HomeNativeGlassSymbolScanner {
         navigationBarClass: Class<*>,
         pbBarImageViewClass: Class<*>,
         emTextViewClass: Class<*>,
+        logger: ScanLogger?,
     ): Pair<Int, String>? {
-        val constructors = try {
-            clazz.declaredConstructors.toList()
-        } catch (_: Throwable) {
-            return null
-        }
+        val constructors = declaredConstructors("EnterForumCapsule.${clazz.name}", clazz, logger) ?: return null
         val compatibleCtor = constructors.firstOrNull { ctor ->
             isEnterForumCapsuleConstructor(ctor, baseFragmentClass)
         } ?: return null
@@ -961,19 +943,38 @@ internal object HomeNativeGlassSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
-    private fun collectInstanceFields(clazz: Class<*>): List<Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+    private fun declaredMethods(label: String, clazz: Class<*>, logger: ScanLogger?): List<Method>? =
+        scanSubStep("HomeNativeGlass.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
 
-    private fun collectInstanceMethods(clazz: Class<*>): List<Method> =
-        HookSymbolResolver.collectInstanceMethods(clazz)
+    private fun declaredFields(label: String, clazz: Class<*>, logger: ScanLogger?): List<Field>? =
+        scanSubStep("HomeNativeGlass.$label.Fields", logger, null) {
+            clazz.declaredFields.toList()
+        }
+
+    private fun declaredConstructors(label: String, clazz: Class<*>, logger: ScanLogger?): List<Constructor<*>>? =
+        scanSubStep("HomeNativeGlass.$label.Constructors", logger, null) {
+            clazz.declaredConstructors.toList()
+        }
+
+    private fun collectInstanceFields(label: String, clazz: Class<*>, logger: ScanLogger?): List<Field>? =
+        scanSubStep("HomeNativeGlass.$label.InstanceFields", logger, null) {
+            ScanReflection.collectInstanceFields(clazz)
+        }
+
+    private fun collectInstanceMethods(label: String, clazz: Class<*>, logger: ScanLogger?): List<Method>? =
+        scanSubStep("HomeNativeGlass.$label.InstanceMethods", logger, null) {
+            ScanReflection.collectInstanceMethods(clazz)
+        }
 
     private fun isIntType(type: Class<*>): Boolean =
-        HookSymbolResolver.isIntType(type)
+        ScanReflection.isIntType(type)
 
     private fun isBooleanType(type: Class<*>): Boolean =
-        HookSymbolResolver.isBooleanType(type)
+        ScanReflection.isBooleanType(type)
 
     private fun appSourcePaths(context: Context): List<String> {
         return buildList {

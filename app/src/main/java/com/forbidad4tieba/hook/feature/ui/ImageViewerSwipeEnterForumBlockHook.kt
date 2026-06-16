@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 object ImageViewerSwipeEnterForumBlockHook {
     private val hookInstalled = AtomicBoolean(false)
+    private val booleanType: Class<Boolean> = Boolean::class.javaPrimitiveType!!
 
     fun hook(cl: ClassLoader) {
         val mod = XposedCompat.module ?: return
@@ -20,23 +21,39 @@ object ImageViewerSwipeEnterForumBlockHook {
                 XposedCompat.log("[ImageViewerSwipeEnterForumBlockHook] skipped: class not found")
                 return
             }
-            val method = XposedCompat.findMethodOrNull(
+            val setGuideVisibilityMethod = XposedCompat.findMethodOrNull(
                 targetClass,
                 StableTiebaHookPoints.METHOD_SET_GUIDE_VISIBILITY,
-                Boolean::class.javaPrimitiveType!!,
+                booleanType,
             )
-            if (method == null) {
+            val setGuideTouchingMethod = XposedCompat.findMethodOrNull(
+                targetClass,
+                StableTiebaHookPoints.METHOD_SET_GUIDE_TOUCHING,
+                booleanType,
+            )
+            if (setGuideVisibilityMethod == null && setGuideTouchingMethod == null) {
                 hookInstalled.set(false)
-                XposedCompat.log("[ImageViewerSwipeEnterForumBlockHook] skipped: setGuideVisibility not found")
+                XposedCompat.log("[ImageViewerSwipeEnterForumBlockHook] skipped: guide methods not found")
                 return
             }
 
-            mod.hook(method).intercept { chain ->
-                val view = chain.thisObject as? View
-                if (view != null && isImageViewerScene(view)) {
-                    return@intercept chain.proceed(arrayOf<Any?>(false))
+            setGuideVisibilityMethod?.let { method ->
+                mod.hook(method).intercept { chain ->
+                    val view = chain.thisObject as? View
+                    if (view != null && isImageViewerScene(view)) {
+                        return@intercept chain.proceed(arrayOf<Any?>(false))
+                    }
+                    chain.proceed()
                 }
-                chain.proceed()
+            }
+            setGuideTouchingMethod?.let { method ->
+                mod.hook(method).intercept { chain ->
+                    val view = chain.thisObject as? View
+                    if (view != null && isImageViewerScene(view)) {
+                        return@intercept chain.proceed(arrayOf<Any?>(false))
+                    }
+                    chain.proceed()
+                }
             }
             XposedCompat.log("[ImageViewerSwipeEnterForumBlockHook] hook INSTALLED")
         } catch (t: Throwable) {

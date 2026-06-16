@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.IdentityHashMap
@@ -15,23 +13,23 @@ internal class HookSymbolScanContext(private val classLoader: ClassLoader) {
     var scanErrors: MutableList<String>? = null
 
     fun findClass(name: String, cl: ClassLoader): Class<*>? {
-        if (cl !== classLoader) return HookSymbolResolver.safeFindClassUncached(name, cl)
+        if (cl !== classLoader) return ScanReflection.safeFindClassUncached(name, cl)
         if (classCache.containsKey(name)) return classCache[name]
-        val resolved = HookSymbolResolver.safeFindClassUncached(name, cl)
+        val resolved = ScanReflection.safeFindClassUncached(name, cl)
         classCache[name] = resolved
         return resolved
     }
 
     fun collectInstanceFields(clazz: Class<*>): List<Field> {
         instanceFieldsCache[clazz]?.let { return it }
-        val resolved = HookSymbolResolver.collectInstanceFieldsUncached(clazz)
+        val resolved = ScanReflection.collectInstanceFieldsUncached(clazz)
         instanceFieldsCache[clazz] = resolved
         return resolved
     }
 
     fun collectInstanceMethods(clazz: Class<*>): List<Method> {
         instanceMethodsCache[clazz]?.let { return it }
-        val resolved = HookSymbolResolver.collectInstanceMethodsUncached(clazz)
+        val resolved = ScanReflection.collectInstanceMethodsUncached(clazz)
         instanceMethodsCache[clazz] = resolved
         return resolved
     }

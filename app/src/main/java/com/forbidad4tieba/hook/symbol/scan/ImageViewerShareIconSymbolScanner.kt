@@ -2,11 +2,12 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.content.Context
 import android.widget.ImageView
+import java.lang.reflect.Constructor
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object ImageViewerShareIconSymbolScanner {
@@ -16,7 +17,7 @@ internal object ImageViewerShareIconSymbolScanner {
         cl: ClassLoader,
         logger: ScanLogger?,
     ): Int? {
-        val ownerCandidates = findOwnerCandidates(candidates, cl)
+        val ownerCandidates = findOwnerCandidates(candidates, cl, logger)
         if (ownerCandidates.isEmpty()) {
             log(logger, "imageViewerShareIconDex: owner candidate not found")
             return null
@@ -30,10 +31,7 @@ internal object ImageViewerShareIconSymbolScanner {
 
         val ownerClassNames = ownerCandidates
             .flatMap { owner ->
-                val nested = safeFindClass(owner.className, cl)
-                    ?.declaredClasses
-                    ?.map { it.name }
-                    .orEmpty()
+                val nested = findNestedClassNames(owner.className, cl, logger)
                 listOf(owner.className) + nested
             }
             .distinct()
@@ -57,11 +55,12 @@ internal object ImageViewerShareIconSymbolScanner {
     private fun findOwnerCandidates(
         candidates: List<String>,
         cl: ClassLoader,
+        logger: ScanLogger?,
     ): List<ShareIconOwnerCandidate> {
         return candidates.asSequence()
             .mapNotNull { className ->
                 val cls = safeFindClass(className, cl) ?: return@mapNotNull null
-                val score = scoreOwnerClass(cls)
+                val score = scoreOwnerClass(cls, logger)
                 if (score > 0) ShareIconOwnerCandidate(className, score) else null
             }
             .sortedWith(
@@ -73,43 +72,57 @@ internal object ImageViewerShareIconSymbolScanner {
             .toList()
     }
 
-    private fun scoreOwnerClass(cls: Class<*>): Int {
+    private fun scoreOwnerClass(cls: Class<*>, logger: ScanLogger?): Int {
         if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return 0
         if (!cls.name.startsWith("com.baidu.tieba.")) return 0
 
-        val fields = runCatching { cls.declaredFields }.getOrNull() ?: return 0
-        val constructors = runCatching { cls.declaredConstructors }.getOrNull() ?: return 0
-        val methods = runCatching { cls.declaredMethods }.getOrNull() ?: return 0
-        val nestedClasses = runCatching { cls.declaredClasses }.getOrNull().orEmpty()
+        val shape = scanSubStep(
+            tag = "ImageViewerNativeShareHook.Icon.${cls.name}.OwnerShape",
+            logger = logger,
+            fallback = null,
+        ) {
+            OwnerShape(
+                fields = cls.declaredFields.toList(),
+                constructors = cls.declaredConstructors.toList(),
+                methods = cls.declaredMethods.toList(),
+            )
+        } ?: return 0
+        val nestedClasses = scanSubStep(
+            tag = "ImageViewerNativeShareHook.Icon.${cls.name}.NestedClasses",
+            logger = logger,
+            fallback = emptyList<Class<*>>(),
+        ) {
+            cls.declaredClasses.toList()
+        }
 
-        val hasImageViewField = fields.any { field ->
+        val hasImageViewField = shape.fields.any { field ->
             ImageView::class.java.isAssignableFrom(field.type)
         }
-        val hasHeadImageField = fields.any { field ->
+        val hasHeadImageField = shape.fields.any { field ->
             field.type.name.endsWith(".HeadImageView") ||
                 field.type.name == "com.baidu.tbadk.core.view.HeadImageView"
         }
-        val hasAnimatorField = fields.any { field ->
+        val hasAnimatorField = shape.fields.any { field ->
             field.type.name == "android.animation.ValueAnimator"
         }
-        val hasImageViewCtor = constructors.any { ctor ->
+        val hasImageViewCtor = shape.constructors.any { ctor ->
             ctor.parameterTypes.size == 1 &&
                 ImageView::class.java.isAssignableFrom(ctor.parameterTypes[0])
         }
         val hasRunnableNested = nestedClasses.any { nested ->
             Runnable::class.java.isAssignableFrom(nested)
         }
-        val boolFieldCount = fields.count { field ->
+        val boolFieldCount = shape.fields.count { field ->
             field.type == Boolean::class.javaPrimitiveType || field.type == Boolean::class.java
         }
-        val intFieldCount = fields.count { field ->
+        val intFieldCount = shape.fields.count { field ->
             field.type == Int::class.javaPrimitiveType || field.type == Int::class.java
         }
-        val noArgBooleanMethods = methods.count { method ->
+        val noArgBooleanMethods = shape.methods.count { method ->
             method.parameterTypes.isEmpty() &&
                 (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == Boolean::class.java)
         }
-        val noArgIntMethods = methods.count { method ->
+        val noArgIntMethods = shape.methods.count { method ->
             method.parameterTypes.isEmpty() &&
                 (method.returnType == Int::class.javaPrimitiveType || method.returnType == Int::class.java)
         }
@@ -123,10 +136,25 @@ internal object ImageViewerShareIconSymbolScanner {
         score += intFieldCount.coerceAtMost(2) * 5
         score += noArgBooleanMethods.coerceAtMost(2) * 4
         score += noArgIntMethods.coerceAtMost(1) * 4
-        score -= methods.size / 6
-        score -= fields.size / 4
+        score -= shape.methods.size / 6
+        score -= shape.fields.size / 4
         score -= cls.simpleName.length
         return if (score >= 120) score else 0
+    }
+
+    private fun findNestedClassNames(
+        className: String,
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): List<String> {
+        val cls = safeFindClass(className, cl) ?: return emptyList()
+        return scanSubStep(
+            tag = "ImageViewerNativeShareHook.Icon.$className.OwnerNestedClassNames",
+            logger = logger,
+            fallback = emptyList(),
+        ) {
+            cls.declaredClasses.map { it.name }
+        }
     }
 
     private fun appSourcePaths(context: Context): List<String> {
@@ -139,9 +167,15 @@ internal object ImageViewerShareIconSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)
     }
+
+    private data class OwnerShape(
+        val fields: List<Field>,
+        val constructors: List<Constructor<*>>,
+        val methods: List<Method>,
+    )
 }

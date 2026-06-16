@@ -1,27 +1,16 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import android.app.Activity
-import android.animation.StateListAnimator
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.ColorFilter
-import android.graphics.LinearGradient
-import android.graphics.Matrix
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.PixelFormat
-import android.graphics.Rect
-import android.graphics.RectF
-import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
-import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -43,14 +32,11 @@ import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.util.Collections
-import java.util.LinkedHashMap
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.roundToInt
 
 object HomeNativeGlassHook {
     private const val TAG = "[HomeNativeGlassHook]"
@@ -121,8 +107,7 @@ object HomeNativeGlassHook {
     private val imageContainerRadiusStates = Collections.synchronizedMap(WeakHashMap<View, Float>())
     private val scrollInvalidateScheduled = AtomicBoolean(false)
     private val homeNativeGlassModeReapplyScheduled = AtomicBoolean(false)
-    @Volatile private var runtimeStyle: HomeNativeGlassRuntimeStyle = HomeNativeGlassRuntimeStyle.EMPTY
-    @Volatile private var runtimeStyleSnapshotVersion: Long = -1L
+    private val runtimeStyleStore = HomeNativeGlassRuntimeStyleStore(::scheduleHomeNativeGlassModeReapply)
     private val chromeDynamicTintBackgroundWriteDepth = object : ThreadLocal<Int>() {
         override fun initialValue(): Int = 0
     }
@@ -137,7 +122,10 @@ object HomeNativeGlassHook {
         Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
 
     @Volatile private var recyclerViewClass: Class<*>? = null
-    private val cachedBackgroundBitmaps = LinkedHashMap<String, CachedBackgroundBitmap>(4, 0.75f, true)
+    private val backgroundStore = HomeNativeGlassBackgroundStore(
+        maxCachedBytes = MAX_CACHED_BACKGROUND_BITMAP_BYTES,
+        metadataCheckIntervalMs = BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS,
+    )
     private val backgroundDecodeKeys = Collections.synchronizedSet(mutableSetOf<String>())
     private val backgroundDecodeExecutor by lazy {
         Executors.newSingleThreadExecutor { runnable ->
@@ -153,239 +141,27 @@ object HomeNativeGlassHook {
     @Volatile private var pbEnterForumCapsuleViewField: Field? = null
     @Volatile private var pbEnterForumCapsuleTitleField: Field? = null
 
-    private data class BackgroundRequest(
-        val path: String,
-        val blurCachePath: String,
-        val blurPercent: Int,
-        val targetWidth: Int,
-        val targetHeight: Int,
-    ) {
-        val cacheKey: String = listOf(
-            path,
-            blurCachePath,
-            blurPercent.toString(),
-            targetWidth.toString(),
-            targetHeight.toString(),
-        ).joinToString("|")
-    }
-
-    private data class CachedBackgroundBitmap(
-        val cacheKey: String,
-        val path: String,
-        val lastModified: Long,
-        val length: Long,
-        val blurCachePath: String,
-        val blurCacheLastModified: Long,
-        val blurCacheLength: Long,
-        val blurPercent: Int,
-        val targetWidth: Int,
-        val targetHeight: Int,
-        val bitmap: Bitmap?,
-        val blurredBitmap: Bitmap?,
-        val memoryBytes: Long,
-        var metadataCheckedAt: Long,
-    )
-
-    private data class BackgroundFileMetadata(
-        val lastModified: Long,
-        val length: Long,
-    )
-
-    private data class HomeNativeGlassRuntimeStyle(
-        val darkMode: Boolean,
-        val backgroundImagePath: String,
-        val blurCacheImagePath: String,
-        val tintColor: Int,
-        val autoTintColor: Int,
-        val tintAlphaPercent: Int,
-        val cardBlurPercent: Int,
-        val cardRadiusDp: Int,
-        val strokeEnabled: Boolean,
-        val shadowStrengthPercent: Int,
-    ) {
-        val hasBackgroundImage: Boolean get() = backgroundImagePath.isNotBlank()
-
-        companion object {
-            val EMPTY = HomeNativeGlassRuntimeStyle(
-                darkMode = false,
-                backgroundImagePath = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-                blurCacheImagePath = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-                tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
-                autoTintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
-                tintAlphaPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                cardBlurPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                cardRadiusDp = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-                strokeEnabled = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
-                shadowStrengthPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-            )
-        }
-    }
-
-    private data class RuntimeTargets(
-        val homeTabItemTypeField: String?,
-        val homeTabItemCodeField: String?,
-        val searchBoxClass: String?,
-        val homeSearchBoxOwnerClass: String?,
-        val homeSearchBoxInitMethod: String?,
-        val homeSearchBoxGetterMethod: String?,
-        val subPbNextPageMoreViewId: Int?,
-        val pbReplyTitleDividerViewId: Int?,
-        val dynamicBackgroundColorIds: Set<Int>,
-        val sortSwitchBackgroundPaintField: String?,
-        val sortSwitchSlideDrawMethod: String?,
-        val sortSwitchSlidePathField: String?,
-        val enterForumCapsuleControllerClass: String?,
-        val enterForumCapsuleInitMethod: String?,
-        val enterForumCapsuleRefreshMethod: String?,
-        val enterForumCapsuleViewField: String?,
-        val enterForumCapsuleTitleField: String?,
-        val pbCommonLayoutPreloaderGetOrDefaultMethod: String?,
-    )
-
-    private data class HomeFeedCardStyleState(
-        val page: View?,
-        val width: Int,
-        val height: Int,
-        val childCount: Int,
-        val sourcePath: String,
-        val blurCachePath: String,
-        val sourceLastModified: Long,
-        val sourceLength: Long,
-        val blurCacheLastModified: Long,
-        val blurCacheLength: Long,
-        val tintAlphaPercent: Int,
-        val cardBlurPercent: Int,
-        val cardRadiusDp: Int,
-        val strokeEnabled: Boolean,
-        val shadowStrengthPercent: Int,
-    )
-
-    private data class ChromeGlassOriginalState(
-        val background: Drawable?,
-        val foreground: Drawable?,
-        val stateListAnimator: StateListAnimator?,
-        val elevation: Float,
-        val translationZ: Float,
-    )
-
-    private data class PbCommentBackgroundState(
-        val blurCachePath: String,
-        val sourcePath: String,
-        val tintAlphaPercent: Int,
-    )
-
-    private data class PbActivityType(
-        val isPb: Boolean,
-        val isSubPbReplyHost: Boolean,
-    )
-
-    private enum class PbCommentBackgroundWriteRole {
-        IGNORE,
-        CLEAR,
-        SORT_SWITCH,
-        SUB_PB_LAYOUT,
-        HOST,
-        KEEP,
-    }
-
-    private data class PbSortSwitchTintState(
-        val sourcePath: String,
-        val blurCachePath: String,
-        val blurPercent: Int,
-        val tintColor: Int,
-        val autoTintColor: Int,
-        val pinnedReplyTitle: Boolean,
-        val backgroundColor: Int?,
-        val selectedColor: Int?,
-    )
-
-    private data class PbCommentDynamicTintState(
-        val tintColor: Int,
-        val autoTintColor: Int,
-        val lightColor: Int,
-    )
-
-    private data class PbSubPbLayoutCardState(
-        val host: View,
-        val blurCachePath: String,
-        val sourcePath: String,
-        val tintAlphaPercent: Int,
-        val cardBlurPercent: Int,
-        val cardRadiusDp: Int,
-        val strokeEnabled: Boolean,
-        val shadowStrengthPercent: Int,
-    )
-
-    private data class PbSubPbLayoutPaddingState(
-        val left: Int,
-        val top: Int,
-        val right: Int,
-        val bottom: Int,
-    )
-
-    private data class SubPbInputBarMatch(
-        val root: ViewGroup,
-        val capsule: View,
-        val container: View?,
-    )
-
-    private data class EnterForumCapsuleOriginalState(
-        val background: Drawable?,
-        val left: Int,
-        val top: Int,
-        val right: Int,
-        val bottom: Int,
-    )
-
-    private class PendingViewGroupApply(parent: ViewGroup?) {
-        var parentRef: WeakReference<ViewGroup>? = parent?.let(::WeakReference)
-    }
-
-    private class HomeRecyclerFrameState {
-        var initialized: Boolean = false
-        var recyclerX: Int = 0
-        var recyclerY: Int = 0
-        var firstChildX: Int = 0
-        var firstChildY: Int = 0
-        var canScrollUp: Boolean = false
-        val location: IntArray = IntArray(2)
-    }
-
-    private class PbSubPbLayoutFrameState {
-        var initialized: Boolean = false
-        var x: Int = 0
-        var y: Int = 0
-        var width: Int = 0
-        var height: Int = 0
-        val location: IntArray = IntArray(2)
-    }
-
     fun hook(cl: ClassLoader, symbols: HookSymbols) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !ConfigManager.hasAnyHomeNativeGlassBackgroundImage) return
         val mod = XposedCompat.module ?: return
-        val bindMethodName = symbols.feedCardBindMethod?.takeIf { it.isNotBlank() }
-        val hasHomeFeedTargets = hasHomeNativeGlassFeedTargets(symbols, bindMethodName)
+        val feedPlan = resolveHomeNativeGlassFeedInstallPlan(symbols)
         if (!installed.compareAndSet(false, true)) return
         HomeNativeGlassHostDarkModeBridge.addDarkModeChangeListener(::onHostDarkModeChanged)
         refreshHomeNativeGlassRuntimeStyle(forceHostRead = true, scheduleReapply = false)
 
         try {
             recyclerViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
-            runtimeTargets = resolveRuntimeTargets(symbols)
+            runtimeTargets = resolveHomeNativeGlassRuntimeTargets(symbols)
             prewarmBackgroundCacheIfNeeded()
-            if (!hasHomeFeedTargets) {
-                XposedCompat.logD {
-                    "$TAG home feed glass SKIP: pageClass=" +
-                        "${symbols.homePersonalizeAnchorClasses?.contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS) == true}, " +
-                        "feedCardBind=${bindMethodName != null}"
-                }
+            if (!feedPlan.hasHomeFeedTargets) {
+                XposedCompat.logD { feedPlan.formatSkipLog(TAG) }
             }
-            val pageConstructors = if (hasHomeFeedTargets) installPageConstructors(cl) else 0
+            val pageConstructors = if (feedPlan.hasHomeFeedTargets) installPageConstructors(cl) else 0
             val hostSkinTypeHooks = installHostSkinTypeChangeHooks(cl)
-            val bindHooks = if (hasHomeFeedTargets && bindMethodName != null) {
-                installFeedCardBind(cl, bindMethodName)
+            val bindHooks = if (feedPlan.hasHomeFeedTargets && feedPlan.bindMethodName != null) {
+                installFeedCardBind(cl, feedPlan.bindMethodName)
             } else {
-                if (hasHomeFeedTargets) {
+                if (feedPlan.shouldLogMissingBindMethod) {
                     XposedCompat.log("$TAG recommend card SKIP: feedCardBindMethod not resolved")
                 }
                 0
@@ -406,7 +182,7 @@ object HomeNativeGlassHook {
             val dynamicColorHooks = installPbDynamicBackgroundColorHooks(cl)
             val sortSwitchHooks = installPbSortSwitchButtonDynamicTintHooks(cl)
             val enterForumCapsuleHooks = installPbEnterForumCapsuleDynamicTintHooks(cl)
-            val tabDynamicTintEnabled = hasHomeFeedTargets && ConfigManager.isHomeTabDynamicTintEnabled
+            val tabDynamicTintEnabled = feedPlan.hasHomeFeedTargets && ConfigManager.isHomeTabDynamicTintEnabled
             val topTabObservers = if (tabDynamicTintEnabled) installHomeTopTabObservers(cl) else 0
             val bottomTabDynamicTintHooks = if (tabDynamicTintEnabled) {
                 installHomeBottomTabDynamicTintHooks(cl)
@@ -419,75 +195,36 @@ object HomeNativeGlassHook {
                 0
             }
             val searchBoxHooks = if (tabDynamicTintEnabled) installHomeSearchBoxHooks(cl) else 0
-            if ((pageConstructors == 0 || bindHooks == 0) && pbCommentHooks == 0) {
+            val installReport = HomeNativeGlassInstallReport(
+                pageConstructors = pageConstructors,
+                bindHooks = bindHooks,
+                touchHooks = touchHooks,
+                componentHooks = componentHooks,
+                pbCommentHooks = pbCommentHooks,
+                dynamicColorHooks = dynamicColorHooks,
+                sortSwitchHooks = sortSwitchHooks,
+                enterForumCapsuleHooks = enterForumCapsuleHooks,
+                hostSkinTypeHooks = hostSkinTypeHooks,
+                topTabObservers = topTabObservers,
+                bottomTabDynamicTintHooks = bottomTabDynamicTintHooks,
+                chromeDirectBackgroundBlock = chromeDirectBackgroundBlock,
+                searchBoxHooks = searchBoxHooks,
+                bindMethodName = feedPlan.bindMethodName,
+            )
+            if (!installReport.hasRequiredHooks) {
                 installed.set(false)
-                XposedCompat.log(
-                    "$TAG no hooks installed: pages=$pageConstructors " +
-                        "cards=$bindHooks pbComments=$pbCommentHooks"
-                )
+                XposedCompat.log(installReport.formatNoHooksLog(TAG))
                 return
             }
             (ConfigManager.getAppContext() as? android.app.Application)?.let { app ->
                 SystemBarCompatHook.register(app)
             }
-            XposedCompat.log(
-                "$TAG hook INSTALLED: pages=$pageConstructors, " +
-                    "cards=$bindHooks, touches=$touchHooks, " +
-                    "components=$componentHooks, pbComments=$pbCommentHooks, " +
-                    "dynamicColors=$dynamicColorHooks, sortSwitch=$sortSwitchHooks, " +
-                    "enterForumCapsule=$enterForumCapsuleHooks, " +
-                    "hostSkinType=$hostSkinTypeHooks, " +
-                    "topTabObservers=$topTabObservers, " +
-                    "bottomTabDynamicTint=$bottomTabDynamicTintHooks, " +
-                    "chromeDirectBackgroundBlock=$chromeDirectBackgroundBlock, searchBox=$searchBoxHooks, " +
-                    "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.$bindMethodName"
-            )
+            XposedCompat.log(installReport.formatInstalledLog(TAG))
         } catch (t: Throwable) {
             installed.set(false)
             XposedCompat.log("$TAG install FAILED: ${t.message}")
             XposedCompat.log(t)
         }
-    }
-
-    private fun hasHomeNativeGlassFeedTargets(symbols: HookSymbols, bindMethodName: String?): Boolean {
-        return bindMethodName != null &&
-            symbols.homePersonalizeAnchorClasses
-                .orEmpty()
-                .contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS)
-    }
-
-    private fun resolveRuntimeTargets(symbols: HookSymbols): RuntimeTargets {
-        return RuntimeTargets(
-            homeTabItemTypeField = symbols.homeTabItemTypeField?.takeIf { it.isNotBlank() },
-            homeTabItemCodeField = symbols.homeTabItemCodeField?.takeIf { it.isNotBlank() },
-            searchBoxClass = symbols.searchBoxViewClass?.takeIf { it.isNotBlank() },
-            homeSearchBoxOwnerClass = symbols.homeSearchBoxOwnerClass?.takeIf { it.isNotBlank() },
-            homeSearchBoxInitMethod = symbols.homeSearchBoxInitMethod?.takeIf { it.isNotBlank() },
-            homeSearchBoxGetterMethod = symbols.homeSearchBoxGetterMethod?.takeIf { it.isNotBlank() },
-            subPbNextPageMoreViewId = symbols.homeNativeGlassSubPbNextPageMoreViewId?.takeIf { it != 0 },
-            pbReplyTitleDividerViewId = symbols.homeNativeGlassPbReplyTitleDividerViewId?.takeIf { it != 0 },
-            dynamicBackgroundColorIds = symbols.homeNativeGlassDynamicBackgroundColorIds
-                .filter { it != 0 }
-                .toSet(),
-            sortSwitchBackgroundPaintField =
-                symbols.homeNativeGlassSortSwitchBackgroundPaintField?.takeIf { it.isNotBlank() },
-            sortSwitchSlideDrawMethod =
-                symbols.homeNativeGlassSortSwitchSlideDrawMethod?.takeIf { it.isNotBlank() },
-            sortSwitchSlidePathField =
-                symbols.homeNativeGlassSortSwitchSlidePathField?.takeIf { it.isNotBlank() },
-            enterForumCapsuleControllerClass =
-                symbols.homeNativeGlassEnterForumCapsuleControllerClass?.takeIf { it.isNotBlank() },
-            enterForumCapsuleInitMethod =
-                symbols.homeNativeGlassEnterForumCapsuleInitMethod?.takeIf { it.isNotBlank() },
-            enterForumCapsuleRefreshMethod =
-                symbols.homeNativeGlassEnterForumCapsuleRefreshMethod?.takeIf { it.isNotBlank() },
-            enterForumCapsuleViewField =
-                symbols.homeNativeGlassEnterForumCapsuleViewField?.takeIf { it.isNotBlank() },
-            enterForumCapsuleTitleField =
-                symbols.homeNativeGlassEnterForumCapsuleTitleField?.takeIf { it.isNotBlank() },
-            pbCommonLayoutPreloaderGetOrDefaultMethod =
-                symbols.pbCommonLayoutPreloaderGetOrDefaultMethod?.takeIf { it.isNotBlank() },
-        )
     }
 
     private fun installHostSkinTypeChangeHooks(cl: ClassLoader): Int {
@@ -2317,22 +2054,9 @@ object HomeNativeGlassHook {
 
     private fun applyHomeNativePageFallbackBackground(page: View) {
         if (page.background is CenterCropBitmapDrawable) return
-        val color = resolveHomeNativePageFallbackColor(page)
+        val color = homeNativePageFallbackColor()
         if ((page.background as? ColorDrawable)?.color == color) return
         page.background = ColorDrawable(color)
-    }
-
-    private fun resolveHomeNativePageFallbackColor(view: View): Int {
-        return Color.rgb(246, 248, 250)
-    }
-
-    private fun blendOpaqueColor(base: Int, overlay: Int, overlayAlpha: Int): Int {
-        val inv = 255 - overlayAlpha
-        return Color.rgb(
-            (Color.red(base) * inv + Color.red(overlay) * overlayAlpha) / 255,
-            (Color.green(base) * inv + Color.green(overlay) * overlayAlpha) / 255,
-            (Color.blue(base) * inv + Color.blue(overlay) * overlayAlpha) / 255,
-        )
     }
 
     private fun applyHomeFeedImageContainerRadius(card: View) {
@@ -3582,11 +3306,6 @@ object HomeNativeGlassHook {
         return decorations
     }
 
-    private fun findViewByResolvedId(root: View, viewId: Int): View? {
-        if (viewId <= 0 || viewId == View.NO_ID) return null
-        return runCatching { root.findViewById<View>(viewId) }.getOrNull()
-    }
-
     private fun resolvePbReplyTitleDividerViewId(): Int {
         return runtimeTargets?.pbReplyTitleDividerViewId ?: 0
     }
@@ -3636,18 +3355,6 @@ object HomeNativeGlassHook {
         view.requestLayout()
     }
 
-    private fun setTransparentBackgroundIfNeeded(view: View) {
-        val background = view.background ?: return
-        if ((background as? ColorDrawable)?.color == Color.TRANSPARENT) return
-        view.setBackgroundColor(Color.TRANSPARENT)
-    }
-
-    private fun setTransparentBackgroundPreservingPaddingIfNeeded(view: View) {
-        val background = view.background ?: return
-        if ((background as? ColorDrawable)?.color == Color.TRANSPARENT) return
-        setBackgroundColorPreservingPadding(view, Color.TRANSPARENT)
-    }
-
     private fun keepPbSortSwitchComponentTransparent(
         view: View,
         keepSortSwitchComponent: Boolean = true,
@@ -3680,17 +3387,6 @@ object HomeNativeGlassHook {
         }
         clearForeground(view)
         clearElevation(view)
-    }
-
-    private fun setBackgroundColorPreservingPadding(view: View, color: Int) {
-        if ((view.background as? ColorDrawable)?.color == color) return
-        val left = view.paddingLeft
-        val top = view.paddingTop
-        val right = view.paddingRight
-        val bottom = view.paddingBottom
-        view.background = ColorDrawable(color)
-        view.setPadding(left, top, right, bottom)
-        view.invalidate()
     }
 
     private fun setChromeDynamicTintBackgroundColor(view: View, color: Int) {
@@ -4009,15 +3705,6 @@ object HomeNativeGlassHook {
             isNearRootBottom(root, view)
     }
 
-    private fun isAncestorOf(candidate: View, descendant: View): Boolean {
-        var current = descendant.parent as? View
-        while (current != null) {
-            if (current === candidate) return true
-            current = current.parent as? View
-        }
-        return false
-    }
-
     private fun hasBottomAlignedAncestor(view: View, root: ViewGroup): Boolean {
         var current: View? = view
         var depth = 0
@@ -4085,16 +3772,6 @@ object HomeNativeGlassHook {
         }
         view.setPadding(left, top, right, bottom)
         view.invalidate()
-    }
-
-    private fun offsetSubPbInputCapsuleColor(color: Int): Int {
-        val target = 0
-        val alpha = SUB_PB_INPUT_CAPSULE_COLOR_SHIFT_ALPHA
-        return Color.rgb(
-            blendPbCommentReplyBoxOverlayChannel(Color.red(color), target, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.green(color), target, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.blue(color), target, alpha),
-        )
     }
 
     private fun resolveSubPbInputCapsuleRadius(view: View): Float {
@@ -4202,16 +3879,6 @@ object HomeNativeGlassHook {
         )
         pbSortSwitchTintStates[view] = state
         return state
-    }
-
-    private fun applyPbSortSwitchSelectedTintOverlay(color: Int): Int {
-        val overlay = 0
-        val alpha = PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA
-        return Color.rgb(
-            blendPbCommentReplyBoxOverlayChannel(Color.red(color), overlay, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.green(color), overlay, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.blue(color), overlay, alpha),
-        )
     }
 
     private fun PbSortSwitchTintState.matchesPbSortSwitchTintState(view: View): Boolean {
@@ -4479,16 +4146,6 @@ object HomeNativeGlassHook {
         val height = max(view.height, view.measuredHeight)
         if (height > 0) return height / 2f
         return view.resources.displayMetrics.density * PB_REPLY_BAR_INPUT_CAPSULE_FALLBACK_RADIUS_DP
-    }
-
-    private fun offsetPbReplyBarInputCapsuleColor(color: Int): Int {
-        val target = 0
-        val alpha = PB_REPLY_BAR_INPUT_CAPSULE_COLOR_SHIFT_ALPHA
-        return Color.rgb(
-            blendPbCommentReplyBoxOverlayChannel(Color.red(color), target, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.green(color), target, alpha),
-            blendPbCommentReplyBoxOverlayChannel(Color.blue(color), target, alpha),
-        )
     }
 
     private fun isInsideSubPbView(view: View): Boolean {
@@ -4790,34 +4447,6 @@ object HomeNativeGlassHook {
         return method
     }
 
-    private fun findFieldInHierarchy(clazz: Class<*>, name: String): java.lang.reflect.Field? {
-        var current: Class<*>? = clazz
-        while (current != null && current != Any::class.java) {
-            try {
-                return current.getDeclaredField(name).apply { isAccessible = true }
-            } catch (_: NoSuchFieldException) {
-                current = current.superclass
-            }
-        }
-        return null
-    }
-
-    private fun findMethodInHierarchy(
-        clazz: Class<*>,
-        name: String,
-        vararg paramTypes: Class<*>,
-    ): Method? {
-        var current: Class<*>? = clazz
-        while (current != null && current != Any::class.java) {
-            try {
-                return current.getDeclaredMethod(name, *paramTypes).apply { isAccessible = true }
-            } catch (_: NoSuchMethodException) {
-                current = current.superclass
-            }
-        }
-        return null
-    }
-
     private fun resolvePbCommentDynamicTintColor(view: View): Int {
         return resolveCachedPbCommentDynamicTintColor(view)
     }
@@ -4843,7 +4472,7 @@ object HomeNativeGlassHook {
         ) {
             return cached.lightColor
         }
-        val baseColor = configuredPbCommentTintColor() ?: return null
+        val baseColor = style.configuredPbCommentTintColor() ?: return null
         val state = PbCommentDynamicTintState(
             tintColor = tintColor,
             autoTintColor = autoTintColor,
@@ -4851,22 +4480,6 @@ object HomeNativeGlassHook {
         )
         pbCommentDynamicTintState = state
         return state.lightColor
-    }
-
-    private fun pbCommentBaseRgb(color: Int): Int {
-        return Color.rgb(Color.red(color), Color.green(color), Color.blue(color))
-    }
-
-    private fun blendPbCommentReplyBoxOverlayChannel(base: Int, overlay: Int, alpha: Int): Int {
-        return ((base * (255 - alpha)) + (overlay * alpha)) / 255
-    }
-
-    private fun configuredPbCommentTintColor(): Int? {
-        val style = currentHomeNativeGlassRuntimeStyle()
-        val tintColor = style.tintColor
-        if (tintColor != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR) return tintColor
-        val autoTintColor = style.autoTintColor
-        return autoTintColor.takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
     }
 
     private fun isPbCommentItemFrame(view: View): Boolean {
@@ -5009,13 +4622,6 @@ object HomeNativeGlassHook {
         keepSortSwitchComponent: Boolean = true,
     ): Boolean {
         return keepSortSwitchComponent && (isPbSortSwitchButton(view) || isPbSortSwitchComponent(view))
-    }
-
-    private fun isTouchInsideView(view: View, event: MotionEvent): Boolean {
-        return event.x >= 0f &&
-            event.y >= 0f &&
-            event.x <= view.width.toFloat() &&
-            event.y <= view.height.toFloat()
     }
 
     private fun rememberHomeSearchBox(view: View) {
@@ -5855,17 +5461,8 @@ object HomeNativeGlassHook {
         clearElevation(view)
     }
 
-    private fun clearForeground(view: View) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (view.foreground != null) {
-                view.foreground = null
-            }
-        }
-    }
-
     private fun currentHomeNativeGlassRuntimeStyle(): HomeNativeGlassRuntimeStyle {
-        refreshHomeNativeGlassRuntimeStyle()
-        return runtimeStyle
+        return runtimeStyleStore.current()
     }
 
     private fun onHostDarkModeChanged(@Suppress("UNUSED_PARAMETER") darkMode: Boolean) {
@@ -5878,70 +5475,7 @@ object HomeNativeGlassHook {
         forceHostRead: Boolean = false,
         scheduleReapply: Boolean = true,
     ): Boolean {
-        val snapshotVersion = ConfigManager.snapshotVersion()
-        if (!ConfigManager.isHomeNativeGlassEnabled) {
-            val changed = updateHomeNativeGlassRuntimeStyle(HomeNativeGlassRuntimeStyle.EMPTY, scheduleReapply)
-            runtimeStyleSnapshotVersion = snapshotVersion
-            return changed
-        }
-        val darkMode = if (forceHostRead) {
-            HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled()
-        } else {
-            HomeNativeGlassHostDarkModeBridge.currentKnownDarkMode()
-        }
-        if (darkMode == null) {
-            val changed = updateHomeNativeGlassRuntimeStyle(HomeNativeGlassRuntimeStyle.EMPTY, scheduleReapply)
-            runtimeStyleSnapshotVersion = -1L
-            return changed
-        }
-        ConfigManager.setHomeNativeGlassDarkModeActive(darkMode)
-        if (
-            !forceHostRead &&
-            runtimeStyleSnapshotVersion == snapshotVersion &&
-            runtimeStyle.darkMode == darkMode
-        ) {
-            return false
-        }
-        val activeStyle = ConfigManager.activeHomeNativeGlassStyle()
-        val next = HomeNativeGlassRuntimeStyle(
-            darkMode = darkMode,
-            backgroundImagePath = activeStyle.backgroundImagePath.trim(),
-            blurCacheImagePath = activeStyle.blurCacheImagePath.trim(),
-            tintColor = activeStyle.tintColor,
-            autoTintColor = activeStyle.autoTintColor,
-            tintAlphaPercent = activeStyle.tintAlphaPercent.coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ),
-            cardBlurPercent = activeStyle.cardBlurPercent.coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            ),
-            cardRadiusDp = activeStyle.cardRadiusDp.coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-            ),
-            strokeEnabled = activeStyle.strokeEnabled,
-            shadowStrengthPercent = activeStyle.shadowStrengthPercent.coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-            ),
-        )
-        val changed = updateHomeNativeGlassRuntimeStyle(next, scheduleReapply)
-        runtimeStyleSnapshotVersion = snapshotVersion
-        return changed
-    }
-
-    private fun updateHomeNativeGlassRuntimeStyle(
-        next: HomeNativeGlassRuntimeStyle,
-        scheduleReapply: Boolean,
-    ): Boolean {
-        if (runtimeStyle == next) return false
-        runtimeStyle = next
-        if (scheduleReapply) {
-            scheduleHomeNativeGlassModeReapply()
-        }
-        return true
+        return runtimeStyleStore.refresh(forceHostRead, scheduleReapply)
     }
 
     private fun scheduleHomeNativeGlassModeReapply() {
@@ -6051,18 +5585,6 @@ object HomeNativeGlassHook {
         return CenterCropBitmapDrawable(bitmap)
     }
 
-    private fun backgroundDecodeSizeForMaxEdge(width: Int, height: Int, maxEdge: Int): Pair<Int, Int> {
-        val normalizedWidth = width.coerceAtLeast(1)
-        val normalizedHeight = height.coerceAtLeast(1)
-        val maxDimension = max(normalizedWidth, normalizedHeight)
-        if (maxDimension <= maxEdge) return normalizedWidth to normalizedHeight
-        return (
-            normalizedWidth.toLong() * maxEdge / maxDimension
-            ).toInt().coerceAtLeast(1) to (
-            normalizedHeight.toLong() * maxEdge / maxDimension
-            ).toInt().coerceAtLeast(1)
-    }
-
     private fun prewarmBackgroundCacheIfNeeded() {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         val style = currentHomeNativeGlassRuntimeStyle()
@@ -6096,63 +5618,8 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun backgroundRequestForStyle(
-        style: HomeNativeGlassRuntimeStyle,
-        targetWidth: Int,
-        targetHeight: Int,
-    ): BackgroundRequest? {
-        if (!style.hasBackgroundImage) return null
-        return BackgroundRequest(
-            path = style.backgroundImagePath,
-            blurCachePath = style.blurCacheImagePath,
-            blurPercent = style.cardBlurPercent,
-            targetWidth = targetWidth.coerceAtLeast(1),
-            targetHeight = targetHeight.coerceAtLeast(1),
-        )
-    }
-
     private fun findCachedBackgroundEntry(request: BackgroundRequest): CachedBackgroundBitmap? {
-        val cached = synchronized(cachedBackgroundBitmaps) {
-            cachedBackgroundBitmaps[request.cacheKey]
-                ?: cachedBackgroundBitmaps.values.firstOrNull { it.matchesBackground(request) }?.also {
-                    cachedBackgroundBitmaps[it.cacheKey]
-                }
-        } ?: return null
-        return cached.takeIf { isCachedBackgroundMetadataCurrent(it) }
-    }
-
-    private fun isCachedBackgroundMetadataCurrent(cached: CachedBackgroundBitmap): Boolean {
-        val now = SystemClock.uptimeMillis()
-        if (now - cached.metadataCheckedAt < BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS) {
-            return true
-        }
-        return synchronized(cachedBackgroundBitmaps) {
-            if (cachedBackgroundBitmaps[cached.cacheKey] !== cached) return@synchronized false
-            val source = readBackgroundFileMetadata(cached.path)
-            val blurCache = readBackgroundFileMetadata(cached.blurCachePath)
-            cached.metadataCheckedAt = now
-            val fresh = cached.lastModified == source.lastModified &&
-                cached.length == source.length &&
-                cached.blurCacheLastModified == blurCache.lastModified &&
-                cached.blurCacheLength == blurCache.length
-            if (!fresh) {
-                cachedBackgroundBitmaps.remove(cached.cacheKey)
-            }
-            fresh
-        }
-    }
-
-    private fun readBackgroundFileMetadata(path: String): BackgroundFileMetadata {
-        val trimmed = path.trim()
-        if (trimmed.isEmpty()) return BackgroundFileMetadata(0L, 0L)
-        return runCatching {
-            val file = java.io.File(trimmed)
-            if (file.isFile) {
-                BackgroundFileMetadata(file.lastModified(), file.length())
-            } else {
-                BackgroundFileMetadata(0L, 0L)
-            }
-        }.getOrDefault(BackgroundFileMetadata(0L, 0L))
+        return backgroundStore.find(request)
     }
 
     private fun scheduleBackgroundDecode(
@@ -6199,130 +5666,11 @@ object HomeNativeGlassHook {
     }
 
     private fun decodeBackgroundEntry(request: BackgroundRequest): CachedBackgroundBitmap? {
-        val file = java.io.File(request.path)
-        val lastModified = runCatching { file.lastModified() }.getOrDefault(0L)
-        val length = runCatching { file.length() }.getOrDefault(0L)
-        val blurCacheFile = java.io.File(request.blurCachePath)
-        val blurCacheLastModified = runCatching { blurCacheFile.lastModified() }.getOrDefault(0L)
-        val blurCacheLength = runCatching { blurCacheFile.length() }.getOrDefault(0L)
-        findCachedBackgroundEntry(request)?.let { cached ->
-            if (cached.lastModified == lastModified && cached.length == length) return cached
-        }
-
-        val canDecode = runCatching { file.isFile && length > 0L }.getOrDefault(false)
-        val bitmap = if (canDecode) {
-            runCatching {
-                HomeNativeGlassImageCache.decodeSampledBitmap(
-                    request.path,
-                    request.targetWidth,
-                    request.targetHeight,
-                )
-            }.getOrNull()
-        } else {
-            null
-        }
-        val blurredBitmap = if (
-            request.blurCachePath.isNotBlank() &&
-            runCatching { blurCacheFile.isFile && blurCacheLength > 0L }.getOrDefault(false)
-        ) {
-            HomeNativeGlassImageCache.decodeBitmap(request.blurCachePath)
-        } else {
-            null
-        }
-        val entry = CachedBackgroundBitmap(
-            cacheKey = request.cacheKey,
-            path = request.path,
-            lastModified = lastModified,
-            length = length,
-            blurCachePath = request.blurCachePath,
-            blurCacheLastModified = blurCacheLastModified,
-            blurCacheLength = blurCacheLength,
-            blurPercent = request.blurPercent,
-            targetWidth = request.targetWidth,
-            targetHeight = request.targetHeight,
-            bitmap = bitmap,
-            blurredBitmap = blurredBitmap,
-            memoryBytes = backgroundEntryMemoryBytes(bitmap, blurredBitmap),
-            metadataCheckedAt = SystemClock.uptimeMillis(),
-        )
-        val cachedEntry = storeCachedBackgroundEntry(entry)
-        if (bitmap == null && firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
+        val cachedEntry = backgroundStore.decode(request)
+        if (cachedEntry.bitmap == null && firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
             XposedCompat.logD { "$TAG background image unavailable: ${request.path}" }
         }
         return cachedEntry
-    }
-
-    private fun storeCachedBackgroundEntry(entry: CachedBackgroundBitmap): CachedBackgroundBitmap {
-        return synchronized(cachedBackgroundBitmaps) {
-            val existing = cachedBackgroundBitmaps.values.firstOrNull { cached ->
-                cached.path == entry.path &&
-                    cached.lastModified == entry.lastModified &&
-                    cached.length == entry.length &&
-                    cached.blurCachePath == entry.blurCachePath &&
-                    cached.blurCacheLastModified == entry.blurCacheLastModified &&
-                    cached.blurCacheLength == entry.blurCacheLength &&
-                    cached.blurPercent == entry.blurPercent &&
-                    cached.targetWidth >= entry.targetWidth &&
-                    cached.targetHeight >= entry.targetHeight
-            }
-            if (existing != null) {
-                cachedBackgroundBitmaps[existing.cacheKey]
-                recycleBackgroundEntryBitmaps(entry)
-                return@synchronized existing
-            }
-            cachedBackgroundBitmaps[entry.cacheKey] = entry
-            trimCachedBackgroundEntriesLocked()
-            entry
-        }
-    }
-
-    private fun trimCachedBackgroundEntriesLocked() {
-        var totalBytes = 0L
-        cachedBackgroundBitmaps.values.forEach { entry ->
-            totalBytes += entry.memoryBytes
-        }
-        val iterator = cachedBackgroundBitmaps.entries.iterator()
-        while (
-            totalBytes > MAX_CACHED_BACKGROUND_BITMAP_BYTES &&
-            cachedBackgroundBitmaps.size > 1 &&
-            iterator.hasNext()
-        ) {
-            val entry = iterator.next()
-            totalBytes -= entry.value.memoryBytes
-            iterator.remove()
-        }
-    }
-
-    private fun backgroundEntryMemoryBytes(bitmap: Bitmap?, blurredBitmap: Bitmap?): Long {
-        val bitmapBytes = bitmapMemoryBytes(bitmap)
-        val blurredBytes = if (blurredBitmap === bitmap) 0L else bitmapMemoryBytes(blurredBitmap)
-        return bitmapBytes + blurredBytes
-    }
-
-    private fun bitmapMemoryBytes(bitmap: Bitmap?): Long {
-        if (bitmap == null) return 0L
-        return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                bitmap.allocationByteCount.toLong()
-            } else {
-                bitmap.byteCount.toLong()
-            }
-        }.getOrDefault(0L)
-    }
-
-    private fun CachedBackgroundBitmap.matchesBackground(request: BackgroundRequest): Boolean {
-        return path == request.path &&
-            blurCachePath == request.blurCachePath &&
-            blurPercent == request.blurPercent &&
-            targetWidth >= request.targetWidth &&
-            targetHeight >= request.targetHeight
-    }
-
-    private fun recycleBackgroundEntryBitmaps(entry: CachedBackgroundBitmap) {
-        runCatching { entry.bitmap?.recycle() }
-        if (entry.blurredBitmap !== entry.bitmap) {
-            runCatching { entry.blurredBitmap?.recycle() }
-        }
     }
 
     private fun installScrollInvalidation(recycler: View) {
@@ -6480,32 +5828,6 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun isViewWithinAncestor(view: View, ancestor: View): Boolean {
-        if (view === ancestor) return true
-        var current = view.parent
-        var depth = 0
-        while (current is View && depth < GLASS_INVALIDATE_PARENT_SCAN_DEPTH) {
-            if (current === ancestor) return true
-            current = current.parent
-            depth++
-        }
-        return false
-    }
-
-    private fun clearElevation(view: View) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            if (view.stateListAnimator != null) {
-                view.stateListAnimator = null
-            }
-            if (view.elevation != 0f) {
-                view.elevation = 0f
-            }
-            if (view.translationZ != 0f) {
-                view.translationZ = 0f
-            }
-        }
-    }
-
     private fun isRecyclerView(view: View): Boolean {
         val cls = recyclerViewClass
         return cls?.isInstance(view) == true ||
@@ -6531,675 +5853,4 @@ object HomeNativeGlassHook {
         return null
     }
 
-    private val FEED_CARD_TOUCH_METHODS = arrayOf(
-        "dispatchTouchEvent",
-        "onInterceptTouchEvent",
-        "onTouchEvent",
-    )
-    private val HOME_TOP_CHROME_CLASSES = arrayOf(
-        StableTiebaHookPoints.HOME_SCROLL_TAB_BAR_LAYOUT_CLASS,
-        StableTiebaHookPoints.HOME_FIXED_APP_BAR_LAYOUT_CLASS,
-    )
-    private val HOME_BOTTOM_TAB_HOST_CLASSES = arrayOf(
-        StableTiebaHookPoints.FRAGMENT_TAB_HOST_CLASS,
-        StableTiebaHookPoints.FRAGMENT_TAB_WIDGET_CLASS,
-    )
-    private val HOST_SKIN_TYPE_CHANGE_METHODS = arrayOf(
-        "setSkinType",
-        "setSkinTypeValue",
-    )
-    private const val HOME_RECOMMEND_CONTROL_FRAGMENT_CLASS =
-        "com.baidu.tieba.homepage.framework.RecommendFrsControlFragment"
-    private val CARD_COMPONENT_GLASS_CLASSES = arrayOf(
-        StableTiebaHookPoints.FEED_CARD_REPLY_VIEW_CLASS,
-        StableTiebaHookPoints.FEED_CARD_VOTE_VIEW_CLASS,
-        StableTiebaHookPoints.FEED_CARD_INPUT_GUIDE_VIEW_CLASS,
-        StableTiebaHookPoints.FEED_CARD_ORIGIN_MOUNT_VIEW_CLASS,
-    )
-    private val PB_COMMENT_SURFACE_CLASSES = arrayOf(
-        StableTiebaHookPoints.PB_EXTENSION_PB_VIEW_CLASS,
-        StableTiebaHookPoints.PB_ITEM_RELATIVE_VIEW_CLASS,
-        StableTiebaHookPoints.PB_PAGE_BROWSER_RECYCLER_VIEW_CLASS,
-        StableTiebaHookPoints.PB_COMMENT_RECYCLER_VIEW_CLASS,
-        StableTiebaHookPoints.PB_COMMENT_FLOOR_VIEW_CLASS,
-        StableTiebaHookPoints.PB_COMMENT_FLOOR_SUB_VIEW_CLASS,
-    )
-    private val PB_COMMENT_ROOT_SURFACE_CLASSES = arrayOf(
-        StableTiebaHookPoints.PB_EXTENSION_PB_VIEW_CLASS,
-        StableTiebaHookPoints.PB_ITEM_RELATIVE_VIEW_CLASS,
-        StableTiebaHookPoints.PB_PAGE_BROWSER_RECYCLER_VIEW_CLASS,
-        StableTiebaHookPoints.PB_COMMENT_RECYCLER_VIEW_CLASS,
-    )
-    private val PB_COMMENT_ITEM_SURFACE_CLASSES = arrayOf(
-        StableTiebaHookPoints.PB_COMMENT_FLOOR_VIEW_CLASS,
-        StableTiebaHookPoints.PB_COMMENT_FLOOR_SUB_VIEW_CLASS,
-    )
-    private val SHARE_DIALOG_MARKER_CLASSES = arrayOf(
-        "com.baidu.tieba.transmitShare.ShareScrollableLayout",
-        "com.baidu.tieba.transmitShare.ShareGridLayout",
-        "com.baidu.tieba.sharesdk.view.ShareDialogItemView",
-    )
-    private const val HOME_SEARCH_BOX_HEADER_CONTAINER_CLASS =
-        "androidx.coordinatorlayout.widget.CoordinatorLayout"
-    private const val TB_RICH_TEXT_MODEL_CLASS = "com.baidu.tbadk.widget.richText.TbRichText"
-    private val HOME_SEARCH_BOX_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 160L)
-    private val CARD_COMPONENT_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 160L)
-    private const val HOME_BOTTOM_TAB_BOUNDARY_PARENT_DEPTH = 4
-    private const val HOME_TOP_TAB_RECOMMEND_TYPE = 1
-    private const val HOME_TOP_TAB_RECOMMEND_CODE = "recommend"
-    private const val CARD_RUNTIME_TINT_ALPHA_SCALE = 1.5f
-    private const val CARD_ZERO_TINT_DARK_MODE_PERCENT = -20
-    private const val CARD_ZERO_TINT_LIGHT_MODE_PERCENT = 20
-    private const val PB_SUB_PB_SHADOW_ELEVATION_DP = 4.5f
-    private const val PB_SUB_PB_SHADOW_TRANSLATION_Z_DP = 1.5f
-    private const val PB_SUB_PB_SHADOW_PARENT_DEPTH = 3
-    private const val PB_SUB_PB_SCROLL_CACHE_PARENT_DEPTH = 6
-    private const val PB_SUB_PB_CONTENT_CLEAR_DEPTH = 3
-    private const val PB_SUB_PB_EXTRA_VERTICAL_PADDING_DP = 4f
-    private const val SUB_PB_REPLY_ITEM_CONTENT_CLEAR_DEPTH = 2
-    private const val SUB_PB_NAVIGATION_BAR_BACKGROUND_CLEAR_DEPTH = 3
-    private const val SUB_PB_NAVIGATION_BAR_REAPPLY_DELAY_MS = 160L
-    private const val APPLE_NOISE_ALPHA = 52
-    private const val APPLE_STROKE_ALPHA = 56
-    private const val APPLE_EDGE_HIGHLIGHT_ALPHA = 86
-    private const val APPLE_INNER_SHADOW_ALPHA = 22
-    private const val APPLE_AMBIENT_SHADOW_ALPHA = 18
-    private const val NOISE_TEXTURE_SIZE = 64
-    private const val HOME_TOP_BACKGROUND_CLEAR_DEPTH = 2
-    private const val HOME_TOP_RECYCLER_CHILD_CLEAR_DEPTH = 1
-    private const val HOME_FEED_CARD_BACKGROUND_PARENT_SCAN_DEPTH = 4
-    private const val HOME_IMAGE_CONTAINER_RADIUS_SCAN_DEPTH = 8
-    private const val PB_COMMENT_TOP_CONTAINER_CLEAR_DEPTH = 2
-    private const val PB_COMMENT_HOST_CLEAR_DEPTH = 5
-    private const val PB_COMMENT_BACKGROUND_PATH_CLEAR_DEPTH = 18
-    private const val PB_COMMENT_BACKGROUND_WRITE_PARENT_SCAN_DEPTH = 8
-    private const val PB_COMMENT_LIST_ITEM_CLEAR_DEPTH = 4
-    private const val SHARE_DIALOG_MARKER_SCAN_DEPTH = 8
-    private const val BACKGROUND_CACHE_SAMPLE_EDGE = 48
-    private const val PAGE_BACKGROUND_MAX_DECODE_EDGE = 1440
-    private const val MAX_CACHED_BACKGROUND_BITMAP_BYTES = 18L * 1024L * 1024L
-    private const val BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS = 1500L
-    private const val GLASS_INVALIDATE_PARENT_SCAN_DEPTH = 24
-    private const val PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA = 28
-    private const val IMAGE_CONTAINER_RADIUS_CHILD_DEPTH = 3
-    private const val IMAGE_CONTAINER_RADIUS_SCALE = 0.75f
-    private const val PB_SORT_SWITCH_COMPONENT_CHECK_DEPTH = 4
-    private const val PB_SORT_SWITCH_PARENT_SCAN_DEPTH = 16
-    private const val PB_REPLY_TITLE_SORT_SEARCH_DEPTH = 8
-    private const val PB_REPLY_TITLE_DYNAMIC_TINT_DEPTH = 8
-    private const val PB_REPLY_TITLE_DECORATIVE_CLEAR_DEPTH = 6
-    private const val PB_REPLY_TITLE_DECORATIVE_MAX_HEIGHT_DP = 2
-    private const val PB_REPLY_TITLE_DECORATIVE_MIN_HEIGHT_PX = 2
-    private const val PB_REPLY_BAR_INPUT_PARENT_SCAN_DEPTH = 4
-    private const val PB_REPLY_BAR_INPUT_SEARCH_DEPTH = 8
-    private const val PB_REPLY_BAR_INPUT_CAPSULE_MIN_SCORE = 5
-    private const val PB_REPLY_BAR_INPUT_CAPSULE_MAX_HEIGHT_DP = 72f
-    private const val PB_REPLY_BAR_INPUT_BOTTOM_TOLERANCE_DP = 180f
-    private const val PB_REPLY_BAR_INPUT_CAPSULE_FALLBACK_RADIUS_DP = 16f
-    private const val PB_REPLY_BAR_INPUT_CAPSULE_COLOR_SHIFT_ALPHA = 28
-    private const val PB_ENTER_FORUM_CAPSULE_FALLBACK_RADIUS_DP = 14f
-    private const val SUB_PB_INPUT_ROOT_PARENT_SCAN_DEPTH = 12
-    private const val SUB_PB_INPUT_CAPSULE_SCAN_DEPTH = 8
-    private const val SUB_PB_INPUT_CAPSULE_MIN_SCORE = 8
-    private const val SUB_PB_INPUT_FRAME_PARENT_CLEAR_DEPTH = 5
-    private const val SUB_PB_INPUT_FRAME_MAX_HEIGHT_DP = 96f
-    private const val SUB_PB_INPUT_FRAME_BOTTOM_TOLERANCE_DP = 112f
-    private const val SUB_PB_INPUT_CAPSULE_FALLBACK_RADIUS_DP = 16f
-    private const val SUB_PB_INPUT_CAPSULE_COLOR_SHIFT_ALPHA = 18
-    private const val SUB_PB_INPUT_BAR_REAPPLY_DELAY_MS = 160L
-
-    private class CenterCropBitmapDrawable(
-        private val bitmap: Bitmap,
-    ) : Drawable() {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
-        private val src = Rect()
-        private val dst = Rect()
-
-        override fun draw(canvas: Canvas) {
-            dst.set(bounds)
-            val viewWidth = dst.width()
-            val viewHeight = dst.height()
-            val bitmapWidth = bitmap.width
-            val bitmapHeight = bitmap.height
-            if (viewWidth <= 0 || viewHeight <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return
-
-            if (bitmapWidth.toLong() * viewHeight > viewWidth.toLong() * bitmapHeight) {
-                val srcWidth = (bitmapHeight.toLong() * viewWidth / viewHeight)
-                    .toInt()
-                    .coerceIn(1, bitmapWidth)
-                val left = (bitmapWidth - srcWidth) / 2
-                src.set(left, 0, left + srcWidth, bitmapHeight)
-            } else {
-                val srcHeight = (bitmapWidth.toLong() * viewHeight / viewWidth)
-                    .toInt()
-                    .coerceIn(1, bitmapHeight)
-                val top = (bitmapHeight - srcHeight) / 2
-                src.set(0, top, bitmapWidth, top + srcHeight)
-            }
-            canvas.drawBitmap(bitmap, src, dst, paint)
-        }
-
-        override fun setAlpha(alpha: Int) {
-            paint.alpha = alpha
-            invalidateSelf()
-        }
-
-        override fun setColorFilter(colorFilter: ColorFilter?) {
-            paint.colorFilter = colorFilter
-            invalidateSelf()
-        }
-
-        @Suppress("OVERRIDE_DEPRECATION")
-        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-
-        override fun getIntrinsicWidth(): Int = bitmap.width
-
-        override fun getIntrinsicHeight(): Int = bitmap.height
-    }
-
-    private class EnterForumCapsuleTintDrawable(
-        val appliedColor: Int,
-        val appliedRadius: Float,
-    ) : GradientDrawable()
-
-    private class PbReplyBarInputCapsuleTintDrawable(
-        val appliedColor: Int,
-        val appliedRadius: Float,
-    ) : GradientDrawable()
-
-    private class SubPbInputCapsuleTintDrawable(
-        val appliedColor: Int,
-        val appliedRadius: Float,
-    ) : GradientDrawable()
-
-    private class PbCommentGlassBackgroundDrawable(
-        private val bitmap: Bitmap,
-        tintAlphaPercent: Int,
-    ) : Drawable() {
-        private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
-        private val overlayPaint = Paint()
-        private val src = Rect()
-        private val dst = Rect()
-        private val baseTintAlpha = tintAlphaPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-        )
-        private var drawableAlpha = 255
-
-        override fun draw(canvas: Canvas) {
-            dst.set(bounds)
-            val viewWidth = dst.width()
-            val viewHeight = dst.height()
-            val bitmapWidth = bitmap.width
-            val bitmapHeight = bitmap.height
-            if (viewWidth <= 0 || viewHeight <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return
-
-            if (bitmapWidth.toLong() * viewHeight > viewWidth.toLong() * bitmapHeight) {
-                val srcWidth = (bitmapHeight.toLong() * viewWidth / viewHeight)
-                    .toInt()
-                    .coerceIn(1, bitmapWidth)
-                val left = (bitmapWidth - srcWidth) / 2
-                src.set(left, 0, left + srcWidth, bitmapHeight)
-            } else {
-                val srcHeight = (bitmapWidth.toLong() * viewHeight / viewWidth)
-                    .toInt()
-                    .coerceIn(1, bitmapHeight)
-                val top = (bitmapHeight - srcHeight) / 2
-                src.set(0, top, bitmapWidth, top + srcHeight)
-            }
-
-            bitmapPaint.alpha = drawableAlpha
-            canvas.drawBitmap(bitmap, src, dst, bitmapPaint)
-            val overlayAlpha = overlayAlpha()
-            if (overlayAlpha <= 0) return
-            overlayPaint.color = Color.argb(overlayAlpha, 255, 255, 255)
-            canvas.drawRect(dst, overlayPaint)
-        }
-
-        override fun setAlpha(alpha: Int) {
-            drawableAlpha = alpha.coerceIn(0, 255)
-            invalidateSelf()
-        }
-
-        override fun setColorFilter(colorFilter: ColorFilter?) {
-            bitmapPaint.colorFilter = colorFilter
-            invalidateSelf()
-        }
-
-        @Suppress("OVERRIDE_DEPRECATION")
-        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-
-        override fun getIntrinsicWidth(): Int = bitmap.width
-
-        override fun getIntrinsicHeight(): Int = bitmap.height
-
-        private fun overlayAlpha(): Int {
-            val alpha = 0
-            return (alpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
-        }
-    }
-
-    private class CardGlassDrawable(
-        target: View,
-        page: View,
-        private val bitmap: Bitmap,
-        private val radius: Float,
-        tintAlphaPercent: Int,
-        private val extraTintEnabled: Boolean,
-        private val darkMode: Boolean,
-        blurPercent: Int,
-        private val strokeEnabled: Boolean,
-        shadowStrengthPercent: Int,
-    ) : Drawable() {
-        private val targetRef = WeakReference(target)
-        private val pageRef = WeakReference(page)
-        private val shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-        private val noiseShader = BitmapShader(noiseBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
-        private val shaderMatrix = Matrix()
-        private val noiseMatrix = Matrix()
-        private val baseTintAlpha = tintAlphaPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-        )
-        private val cardBlurPercent = blurPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-        )
-        private val shadowStrengthPercent = shadowStrengthPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-        )
-        private val runtimeTintAlphaPercent = runtimeTintAlphaPercent(baseTintAlpha, darkMode)
-        private val materialIntensity = cardBlurPercent / 100f
-        private val strokeWidthPx = (1.0f + materialIntensity * 0.8f).coerceIn(1f, 1.8f)
-        private val ambientShadowStrokeWidthPx = (2.2f + materialIntensity * 2.4f).coerceIn(2f, 4.6f)
-        private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
-            this.shader = this@CardGlassDrawable.shader
-        }
-        private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-        }
-        private val edgeHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-        }
-        private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val ambientShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-        }
-        private val noisePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
-            shader = noiseShader
-        }
-        private val rect = RectF()
-        private val insetRect = RectF()
-        private val targetLocation = IntArray(2)
-        private val pageLocation = IntArray(2)
-        private var lastPageWidth = -1
-        private var lastPageHeight = -1
-        private var lastRelativeX = Int.MIN_VALUE
-        private var lastRelativeY = Int.MIN_VALUE
-        private var lastNoiseLeft = Float.NaN
-        private var lastNoiseTop = Float.NaN
-        private var cachedSoftShadowShader: LinearGradient? = null
-        private var softShadowTop = Float.NaN
-        private var softShadowBottom = Float.NaN
-        private var softShadowAlpha = -1
-        private var cachedAmbientShadowShader: LinearGradient? = null
-        private var ambientShadowTop = Float.NaN
-        private var ambientShadowBottom = Float.NaN
-        private var ambientShadowAlpha = -1
-        private var ambientShadowStrokeWidth = Float.NaN
-        private var cachedEdgeHighlightShader: LinearGradient? = null
-        private var edgeHighlightTop = Float.NaN
-        private var edgeHighlightBottom = Float.NaN
-        private var edgeHighlightAlpha = -1
-        private var edgeHighlightStrokeWidth = Float.NaN
-        private var drawableAlpha = 255
-        private var pressTintEnabled = false
-
-        override fun draw(canvas: Canvas) {
-            rect.set(bounds)
-            if (rect.width() <= 0f || rect.height() <= 0f) return
-
-            val target = targetRef.get()
-            val page = pageRef.get()
-            if (target != null && page != null && page.width > 0 && page.height > 0) {
-                updateBitmapShader(target, page)
-                canvas.drawRoundRect(rect, radius, radius, bitmapPaint)
-                drawMaterialOverlay(canvas)
-                drawNoise(canvas)
-                if (this@CardGlassDrawable.shadowStrengthPercent > 0) {
-                    drawSoftShadow(canvas)
-                    drawAmbientShadow(canvas)
-                }
-                if (strokeEnabled) {
-                    drawStroke(canvas)
-                    drawEdgeHighlight(canvas)
-                }
-            }
-        }
-
-        override fun setAlpha(alpha: Int) {
-            drawableAlpha = alpha.coerceIn(0, 255)
-            bitmapPaint.alpha = drawableAlpha
-            invalidateSelf()
-        }
-
-        override fun setColorFilter(colorFilter: ColorFilter?) {
-            bitmapPaint.colorFilter = colorFilter
-            invalidateSelf()
-        }
-
-        @Suppress("OVERRIDE_DEPRECATION")
-        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-
-        fun setPressedTintEnabled(pressed: Boolean) {
-            if (pressTintEnabled == pressed) return
-            pressTintEnabled = pressed
-            invalidateSelf()
-        }
-
-        fun matches(
-            page: View,
-            bitmap: Bitmap,
-            radius: Float,
-            tintAlphaPercent: Int,
-            extraTintEnabled: Boolean,
-            darkMode: Boolean,
-            blurPercent: Int,
-            strokeEnabled: Boolean,
-            shadowStrengthPercent: Int,
-        ): Boolean {
-            return pageRef.get() === page &&
-                this.bitmap === bitmap &&
-                this.radius == radius &&
-                baseTintAlpha == tintAlphaPercent.coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                ) &&
-                this.extraTintEnabled == extraTintEnabled &&
-                this.darkMode == darkMode &&
-                cardBlurPercent == blurPercent.coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                ) &&
-                this.strokeEnabled == strokeEnabled &&
-                this.shadowStrengthPercent == shadowStrengthPercent.coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-                )
-        }
-
-        private fun updateBitmapShader(target: View, page: View) {
-            target.getLocationInWindow(targetLocation)
-            page.getLocationInWindow(pageLocation)
-            val relativeX = targetLocation[0] - pageLocation[0]
-            val relativeY = targetLocation[1] - pageLocation[1]
-            val pageWidth = page.width
-            val pageHeight = page.height
-            if (
-                pageWidth == lastPageWidth &&
-                pageHeight == lastPageHeight &&
-                relativeX == lastRelativeX &&
-                relativeY == lastRelativeY
-            ) {
-                return
-            }
-            val scale = max(
-                pageWidth.toFloat() / bitmap.width.toFloat(),
-                pageHeight.toFloat() / bitmap.height.toFloat(),
-            )
-            val dx = (pageWidth - bitmap.width * scale) * 0.5f - relativeX
-            val dy = (pageHeight - bitmap.height * scale) * 0.5f - relativeY
-            shaderMatrix.reset()
-            shaderMatrix.setScale(scale, scale)
-            shaderMatrix.postTranslate(dx, dy)
-            shader.setLocalMatrix(shaderMatrix)
-            lastPageWidth = pageWidth
-            lastPageHeight = pageHeight
-            lastRelativeX = relativeX
-            lastRelativeY = relativeY
-        }
-
-        private fun drawMaterialOverlay(canvas: Canvas) {
-            val overlayPercent = overlayTintAlphaPercent()
-            val overlayAlpha = overlayAlpha(overlayPercent)
-            if (overlayAlpha <= 0) return
-            val materialOverlayRgb = if (overlayPercent < 0) Color.BLACK else Color.WHITE
-            overlayPaint.color = Color.argb(
-                overlayAlpha,
-                Color.red(materialOverlayRgb),
-                Color.green(materialOverlayRgb),
-                Color.blue(materialOverlayRgb),
-            )
-            canvas.drawRoundRect(rect, radius, radius, overlayPaint)
-        }
-
-        private fun drawSoftShadow(canvas: Canvas) {
-            val alpha = shadowAlpha(APPLE_INNER_SHADOW_ALPHA)
-            if (alpha <= 0) return
-            shadowPaint.shader = softShadowShader(alpha)
-            canvas.drawRoundRect(rect, radius, radius, shadowPaint)
-        }
-
-        private fun drawAmbientShadow(canvas: Canvas) {
-            val alpha = shadowAlpha(APPLE_AMBIENT_SHADOW_ALPHA)
-            if (alpha <= 0) return
-            val strokeWidth = ambientShadowStrokeWidthPx
-            insetRect.set(rect)
-            val inset = strokeWidth * 0.5f
-            insetRect.inset(inset, inset)
-            ambientShadowPaint.strokeWidth = strokeWidth
-            ambientShadowPaint.shader = ambientShadowShader(alpha, strokeWidth)
-            val insetRadius = (radius - inset).coerceAtLeast(0f)
-            canvas.drawRoundRect(insetRect, insetRadius, insetRadius, ambientShadowPaint)
-        }
-
-        private fun drawNoise(canvas: Canvas) {
-            val alpha = materialAlpha(APPLE_NOISE_ALPHA)
-            if (alpha <= 0) return
-            if (rect.left != lastNoiseLeft || rect.top != lastNoiseTop) {
-                noiseMatrix.reset()
-                noiseMatrix.setTranslate(rect.left, rect.top)
-                noiseShader.setLocalMatrix(noiseMatrix)
-                lastNoiseLeft = rect.left
-                lastNoiseTop = rect.top
-            }
-            noisePaint.alpha = alpha
-            canvas.drawRoundRect(rect, radius, radius, noisePaint)
-        }
-
-        private fun drawStroke(canvas: Canvas) {
-            val strokeWidth = strokeWidth()
-            if (strokeWidth <= 0f) return
-            val alpha = materialAlpha(APPLE_STROKE_ALPHA)
-            if (alpha <= 0) return
-            insetRect.set(rect)
-            val inset = strokeWidth * 0.5f
-            insetRect.inset(inset, inset)
-            strokePaint.strokeWidth = strokeWidth
-            strokePaint.shader = null
-            strokePaint.color = Color.argb(alpha, 255, 255, 255)
-            val insetRadius = (radius - inset).coerceAtLeast(0f)
-            canvas.drawRoundRect(insetRect, insetRadius, insetRadius, strokePaint)
-        }
-
-        private fun drawEdgeHighlight(canvas: Canvas) {
-            val strokeWidth = strokeWidth()
-            if (strokeWidth <= 0f) return
-            val alpha = materialAlpha(APPLE_EDGE_HIGHLIGHT_ALPHA)
-            if (alpha <= 0) return
-            insetRect.set(rect)
-            val inset = strokeWidth * 0.5f
-            insetRect.inset(inset, inset)
-            edgeHighlightPaint.strokeWidth = strokeWidth
-            edgeHighlightPaint.shader = edgeHighlightShader(alpha, strokeWidth)
-            val insetRadius = (radius - inset).coerceAtLeast(0f)
-            canvas.drawRoundRect(insetRect, insetRadius, insetRadius, edgeHighlightPaint)
-        }
-
-        private fun overlayTintAlphaPercent(): Int {
-            var layerCount = 0
-            if (extraTintEnabled) layerCount++
-            if (pressTintEnabled) layerCount++
-            if (layerCount <= 0) return 0
-            return (runtimeTintAlphaPercent * layerCount).coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            )
-        }
-
-        private fun overlayAlpha(overlayPercent: Int): Int {
-            val alpha = abs(overlayPercent).coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ) * 255 / 100f
-            return (alpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
-        }
-
-        private fun runtimeTintAlphaPercent(basePercent: Int, darkMode: Boolean): Int {
-            val normalized = basePercent.coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            )
-            val percent = if (normalized == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT) {
-                if (darkMode) CARD_ZERO_TINT_DARK_MODE_PERCENT else CARD_ZERO_TINT_LIGHT_MODE_PERCENT
-            } else {
-                (normalized * CARD_RUNTIME_TINT_ALPHA_SCALE).roundToInt()
-            }
-            return percent.coerceIn(
-                ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            )
-        }
-
-        private fun materialAlpha(appleAlpha: Int): Int {
-            return (appleAlpha * drawableAlpha / 255f).toInt().coerceIn(0, 255)
-        }
-
-        private fun shadowAlpha(appleAlpha: Int): Int {
-            return (appleAlpha * shadowStrengthPercent / 100f * drawableAlpha / 255f)
-                .toInt()
-                .coerceIn(0, 255)
-        }
-
-        private fun strokeWidth(): Float {
-            return strokeWidthPx
-        }
-
-        private fun softShadowShader(alpha: Int): LinearGradient {
-            val cached = cachedSoftShadowShader
-            if (
-                cached != null &&
-                softShadowAlpha == alpha &&
-                softShadowTop == rect.top &&
-                softShadowBottom == rect.bottom
-            ) {
-                return cached
-            }
-            return LinearGradient(
-                0f,
-                rect.top,
-                0f,
-                rect.bottom,
-                intArrayOf(
-                    Color.TRANSPARENT,
-                    Color.TRANSPARENT,
-                    Color.argb(alpha, 0, 0, 0),
-                ),
-                floatArrayOf(0f, 0.58f, 1f),
-                Shader.TileMode.CLAMP,
-            ).also {
-                cachedSoftShadowShader = it
-                softShadowAlpha = alpha
-                softShadowTop = rect.top
-                softShadowBottom = rect.bottom
-            }
-        }
-
-        private fun ambientShadowShader(alpha: Int, strokeWidth: Float): LinearGradient {
-            val cached = cachedAmbientShadowShader
-            if (
-                cached != null &&
-                ambientShadowAlpha == alpha &&
-                ambientShadowStrokeWidth == strokeWidth &&
-                ambientShadowTop == insetRect.top &&
-                ambientShadowBottom == insetRect.bottom
-            ) {
-                return cached
-            }
-            return LinearGradient(
-                0f,
-                insetRect.top,
-                0f,
-                insetRect.bottom,
-                intArrayOf(
-                    Color.TRANSPARENT,
-                    Color.TRANSPARENT,
-                    Color.argb((alpha * 0.52f).toInt().coerceIn(0, 255), 0, 0, 0),
-                    Color.argb(alpha, 0, 0, 0),
-                ),
-                floatArrayOf(0f, 0.48f, 0.82f, 1f),
-                Shader.TileMode.CLAMP,
-            ).also {
-                cachedAmbientShadowShader = it
-                ambientShadowAlpha = alpha
-                ambientShadowStrokeWidth = strokeWidth
-                ambientShadowTop = insetRect.top
-                ambientShadowBottom = insetRect.bottom
-            }
-        }
-
-        private fun edgeHighlightShader(alpha: Int, strokeWidth: Float): LinearGradient {
-            val cached = cachedEdgeHighlightShader
-            if (
-                cached != null &&
-                edgeHighlightAlpha == alpha &&
-                edgeHighlightStrokeWidth == strokeWidth &&
-                edgeHighlightTop == insetRect.top &&
-                edgeHighlightBottom == insetRect.bottom
-            ) {
-                return cached
-            }
-            return LinearGradient(
-                0f,
-                insetRect.top,
-                0f,
-                insetRect.bottom,
-                intArrayOf(
-                    Color.argb(alpha, 255, 255, 255),
-                    Color.argb((alpha * 0.28f).toInt().coerceIn(0, 255), 255, 255, 255),
-                    Color.TRANSPARENT,
-                ),
-                floatArrayOf(0f, 0.34f, 1f),
-                Shader.TileMode.CLAMP,
-            ).also {
-                cachedEdgeHighlightShader = it
-                edgeHighlightAlpha = alpha
-                edgeHighlightStrokeWidth = strokeWidth
-                edgeHighlightTop = insetRect.top
-                edgeHighlightBottom = insetRect.bottom
-            }
-        }
-
-        companion object {
-            private val noiseBitmap: Bitmap by lazy { createNoiseBitmap() }
-
-            private fun createNoiseBitmap(): Bitmap {
-                val pixels = IntArray(NOISE_TEXTURE_SIZE * NOISE_TEXTURE_SIZE)
-                var seed = 0x13579BDF
-                for (index in pixels.indices) {
-                    seed = seed * 1103515245 + 23126
-                    val alpha = 5 + (seed ushr 24 and 0x07)
-                    pixels[index] = Color.argb(alpha, 255, 255, 255)
-                }
-                return Bitmap.createBitmap(
-                    pixels,
-                    NOISE_TEXTURE_SIZE,
-                    NOISE_TEXTURE_SIZE,
-                    Bitmap.Config.ARGB_8888,
-                )
-            }
-        }
-    }
 }

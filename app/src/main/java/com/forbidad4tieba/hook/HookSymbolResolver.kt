@@ -16,11 +16,8 @@ import android.text.style.ClickableSpan
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.RelativeLayout
 import android.widget.AbsListView
 import android.widget.TextView
 import android.widget.Toast
@@ -28,9 +25,9 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.config.ModuleUserDataCleaner
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.TitanRuntimeState
+import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.utils.ReflectionUtils
-import dalvik.system.DexFile
 import com.forbidad4tieba.hook.core.XposedCompat
 import org.json.JSONObject
 import java.io.File
@@ -38,9 +35,6 @@ import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
-import java.lang.reflect.ParameterizedType
-import java.lang.reflect.Type
-import java.lang.reflect.WildcardType
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
 import kotlin.concurrent.thread
@@ -66,37 +60,24 @@ internal object HookSymbolResolver {
     private const val PLAIN_URL_RESPONSED_MESSAGE_CLASS = "com.baidu.adp.framework.message.ResponsedMessage"
     private const val PLAIN_URL_CUSTOM_RESPONSED_MESSAGE_CLASS = "com.baidu.adp.framework.message.CustomResponsedMessage"
     private const val PLAIN_URL_APPLICATION_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
-    private const val PLAIN_URL_MESSAGE_DISPATCH_METHOD = "dispatchResponsedMessage"
     private const val PLAIN_URL_GET_CMD_METHOD = "getCmd"
     private const val PLAIN_URL_GET_DATA_METHOD = "getData"
     private const val PLAIN_URL_GET_INST_METHOD = "getInst"
     private const val SEARCH_BOX_HEADER_CONTAINER_CLASS = "androidx.coordinatorlayout.widget.CoordinatorLayout"
-    private const val ENTER_FORUM_INIT_INFO_DATA_CLASS = "com.baidu.tbadk.coreExtra.data.InitInfoData"
-    private const val ENTER_FORUM_INIT_INFO_GET_URL_METHOD = "getForumEnterUrl"
     private const val AI_SPRITE_MEME_PAN_CONTROLLER_CLASS =
         "com.baidu.tbadk.editortools.meme.pan.SpriteMemePanController"
-    private const val AI_SPRITE_MEME_ENABLE_METHOD = "s"
     private const val AI_SPRITE_MEME_PAN_CLASS =
         "com.baidu.tbadk.editortools.meme.pan.SpriteMemePan"
     private const val AI_PB_NEW_INPUT_CONTAINER_CLASS =
         "com.baidu.tbadk.editortools.pb.PbNewInputContainer"
     private const val AI_PB_NEW_EDITOR_INPUT_SHOW_TYPE_CLASS =
         "com.baidu.tbadk.editortools.pb.PbNewEditorTool\$InputShowType"
-    private const val AI_PB_NEW_INPUT_INIT_SPRITE_MEME_METHOD = "e0"
-    private const val AI_PB_NEW_INPUT_INIT_AI_WRITE_METHOD = "X"
     private const val AI_IMAGE_JUMP_BUTTON_LAYOUT_CLASS =
         "com.baidu.tbadk.coreExtra.view.ImageJumpButtonLayout"
-    private const val AI_IMAGE_VIEWER_BOTTOM_LAYOUT_CLASS =
-        "com.baidu.tbadk.coreExtra.view.ImageViewerBottomLayout"
-    private const val AI_IMAGE_VIEWER_ABS_FLOOR_IMAGE_TEXT_VIEW_CLASS =
-        "com.baidu.tbadk.coreExtra.view.AbsFloorImageTextView"
-    private const val AI_IMAGE_VIEWER_FACE_GROUP_DOWNLOAD_LAYOUT_CLASS =
-        "com.baidu.tbadk.coreExtra.view.FaceGroupDownloadLayout"
     private const val AI_PB_AI_EMOJI_CREATION_VIEW_CLASS =
         "com.baidu.tieba.pb.view.PbAiEmojiCreationView"
     private const val AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS =
         "com.baidu.tieba.pb.pagebrowser.comment.floor.meme.CommentFloorAiEmojiCreationView"
-    private const val AI_SPRITE_MEME_INFO_CLASS = "tbclient.SpriteMemeInfo"
     private const val REPLY_SERVER_RESPONSE_CLASS = "com.baidu.tieba.write.message.AddPostHttpResponse"
     private const val REPLY_SERVER_RESPONSE_DECODE_METHOD = "decodeInBackGround"
     private const val REPLY_SERVER_RESPONSE_RESULT_JSON_FIELD = "resultJSON"
@@ -210,7 +191,6 @@ internal object HookSymbolResolver {
         "com.baidu.tbadk.core.view.commonMountCard.TbMountCardLinkLayout"
     private const val MOUNT_CARD_LINK_INFO_DATA_CLASS = "com.baidu.tbadk.data.CardLinkInfoData"
     private const val MOUNT_CARD_LINK_LAYOUT_ON_CLICK_METHOD = "onClick"
-    private const val MOUNT_CARD_LINK_LAYOUT_DATA_FIELD = "b"
     private const val MOUNT_CARD_LINK_INFO_GET_URL_METHOD = "getUrl"
     private val PLAIN_URL_CLICKABLE_SPAN_CONTAINER_CLASSES = listOf(
         "com.baidu.tieba.si7",
@@ -231,9 +211,9 @@ internal object HookSymbolResolver {
         "com.baidu.tbadk.data.CloseAdData",
         FREE_COPY_POPUP_MENU_CLASS,
 
-        "com.baidu.tbadk.widget.TbSearchBoxView",
-        HOME_RIGHT_SLOT_CLASS,
-        "com.baidu.tieba.pb.view.PbFallingView",
+        StableTiebaHookPoints.TB_SEARCH_BOX_VIEW_CLASS,
+        StableTiebaHookPoints.HOME_TAB_BAR_RIGHT_SLOT_CLASS,
+        StableTiebaHookPoints.PB_FALLING_VIEW_CLASS,
         PB_AD_INSERT_CLASS,
         PLAIN_URL_CLICKABLE_SPAN_CLASS,
         "com.baidu.tbadk.mainTab.MaintabAddResponedData",
@@ -249,54 +229,9 @@ internal object HookSymbolResolver {
         StableTiebaHookPoints.AGREE_VIEW_CLASS,
         StableTiebaHookPoints.AGREE_DATA_CLASS,
         StableTiebaHookPoints.PB_NEW_INPUT_CONTAINER_CLASS,
-        FORUM_BOTTOM_SHEET_VIEW_CLASS,
+        StableTiebaHookPoints.FORUM_BOTTOM_SHEET_VIEW_CLASS,
         AI_SPRITE_MEME_PAN_CONTROLLER_CLASS,
         AI_PB_NEW_INPUT_CONTAINER_CLASS,
-    )
-
-    private val EXPANDED_SCAN_PACKAGE_PREFIXES = listOf(
-        "com.baidu.tieba.ad.",
-        "com.baidu.tieba.browser.",
-        "com.baidu.tieba.card.",
-        "com.baidu.tieba.feed.",
-        "com.baidu.tieba.feedlog.",
-        "com.baidu.tieba.forum.",
-        "com.baidu.tieba.funad.",
-        "com.baidu.tieba.home.",
-        "com.baidu.tieba.homepage.",
-        "com.baidu.tieba.immessagecenter.",
-        "com.baidu.tieba.myCollection.",
-        "com.baidu.tieba.pb.",
-        "com.baidu.tieba.sharesdk.",
-        "com.baidu.tbadk.core.atomData.",
-        "com.baidu.tbadk.core.sharedPref.",
-        "com.baidu.tbadk.core.util.",
-        "com.baidu.tbadk.core.view.",
-        "com.baidu.tbadk.coreExtra.",
-        "com.baidu.tbadk.data.",
-        "com.baidu.tbadk.editortools.",
-        "com.baidu.tbadk.mainTab.",
-        "com.baidu.tbadk.widget.",
-        "com.baidu.adp.widget.ListView.",
-        "com.baidu.searchbox.task.view.mainactivity.",
-    )
-
-    private val EXPANDED_SCAN_CLASS_MARKERS = listOf(
-        "Adapter",
-        "Config",
-        "Controller",
-        "Data",
-        "Delegate",
-        "Helper",
-        "Kt",
-        "Manager",
-        "Parser",
-        "Presenter",
-        "Share",
-        "State",
-        "Util",
-        "View",
-        "ViewModel",
     )
 
     private val memoryCache = HookSymbolMemoryCache()
@@ -406,11 +341,7 @@ internal object HookSymbolResolver {
     }
 
     fun featureStatusMap(symbols: HookSymbols?): Map<String, HookFeatureStatus> {
-        val source = symbols ?: HookSymbols.unsupported()
-        if (source.featureStatusMap.isEmpty()) return HookFeatureStatusDeriver.derive(source)
-        return LinkedHashMap<String, HookFeatureStatus>(HookFeatureStatusDeriver.derive(source)).apply {
-            putAll(source.featureStatusMap)
-        }
+        return HookFeatureStatusDeriver.deriveWithOverrides(symbols)
     }
 
     fun isScanVersionCheckFailed(symbols: HookSymbols?): Boolean {
@@ -603,7 +534,7 @@ internal object HookSymbolResolver {
             val applicationClass = safeFindClass(applicationClassName, cl) ?: return null
             val dispatchMethod = messageManagerClass.declaredMethods.singleOrNull { method ->
                 method.name == dispatchMethodName &&
-                    isPlainUrlMessageDispatchMethod(method, responsedMessageClass)
+                    ScanReflection.isPlainUrlMessageDispatchMethod(method, responsedMessageClass)
             } ?: return null
             val getCmdMethod = responsedMessageClass.declaredMethods.singleOrNull { method ->
                 method.name == getCmdMethodName &&
@@ -967,12 +898,12 @@ internal object HookSymbolResolver {
                 return null
             }
             val onClickMethod = layoutClass.declaredMethods.singleOrNull { method ->
-                isMountCardLinkLayoutOnClickMethod(method, onClickMethodName)
+                ScanReflection.isMountCardLinkLayoutOnClickMethod(method, onClickMethodName)
             } ?: run {
                 XposedCompat.log("[PlainUrlDirectBrowserHook] mount card skipped: onClick mismatch: $layoutClassName.$onClickMethodName")
                 return null
             }
-            val dataField = resolveMountCardLinkLayoutDataField(layoutClass, dataClass)
+            val dataField = ScanReflection.resolveMountCardLinkLayoutDataField(layoutClass, dataClass)
                 ?.takeIf { it.name == dataFieldName } ?: run {
                 XposedCompat.log("[PlainUrlDirectBrowserHook] mount card skipped: data field mismatch: $layoutClassName.$dataFieldName")
                 return null
@@ -986,7 +917,7 @@ internal object HookSymbolResolver {
                 XposedCompat.log("[PlainUrlDirectBrowserHook] mount card skipped: getUrl mismatch: $dataClassName.$getUrlMethodName")
                 return null
             }
-            if (!isMountCardLinkLayoutStructureValid(layoutClass, onClickMethod, dataClass, dataField, getUrlMethod)) {
+            if (!ScanReflection.isMountCardLinkLayoutStructureValid(layoutClass, onClickMethod, dataClass, dataField, getUrlMethod)) {
                 XposedCompat.log("[PlainUrlDirectBrowserHook] mount card skipped: structure mismatch: $layoutClassName")
                 return null
             }
@@ -1664,8 +1595,11 @@ internal object HookSymbolResolver {
                 XposedCompat.log("[AutoRefreshHook] skipped: missing autoRefreshTriggerMethod")
                 return null
             }
-            val pageClass = safeFindClass(PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: run {
-                XposedCompat.log("[AutoRefreshHook] skipped: class not found: $PERSONALIZE_PAGE_VIEW_CLASS")
+            val pageClass = safeFindClass(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: run {
+                XposedCompat.log(
+                    "[AutoRefreshHook] skipped: class not found: " +
+                        StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS,
+                )
                 return null
             }
             val method = collectInstanceMethods(pageClass).singleOrNull { candidate ->
@@ -1673,7 +1607,10 @@ internal object HookSymbolResolver {
                     candidate.returnType == Void.TYPE &&
                     candidate.parameterTypes.isEmpty()
             } ?: run {
-                XposedCompat.log("[AutoRefreshHook] skipped: method mismatch: $PERSONALIZE_PAGE_VIEW_CLASS.$methodName()")
+                XposedCompat.log(
+                    "[AutoRefreshHook] skipped: method mismatch: " +
+                        "${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.$methodName()",
+                )
                 return null
             }
             method.isAccessible = true
@@ -2701,7 +2638,7 @@ internal object HookSymbolResolver {
                 return null
             }
             val decodeMethod = responseClass.declaredMethods.singleOrNull { method ->
-                isReplyServerResponseDecodeMethod(method, decodeMethodName)
+                ReplyVisibilityProbeSymbolScanner.isReplyServerResponseDecodeMethod(method, decodeMethodName)
             } ?: run {
                 XposedCompat.log("[ReplyServerResponseLogHook] skipped: method not found: $className.$decodeMethodName")
                 return null
@@ -2750,7 +2687,7 @@ internal object HookSymbolResolver {
                 return null
             }
             val decodeLogicMethod = responseClass.declaredMethods.singleOrNull { method ->
-                isAgreeServerResponseDecodeLogicMethod(method, decodeLogicMethodName)
+                ReplyVisibilityProbeSymbolScanner.isAgreeServerResponseDecodeLogicMethod(method, decodeLogicMethodName)
             } ?: run {
                 XposedCompat.log(
                     "[AgreeServerResponseLogHook] skipped: method not found: " +
@@ -2957,13 +2894,14 @@ internal object HookSymbolResolver {
             }
 
             val replyDecodeMethod = replyResponseClass.declaredMethods.singleOrNull { method ->
-                isReplyServerResponseDecodeMethod(method, replyDecodeMethodName)
+                ReplyVisibilityProbeSymbolScanner.isReplyServerResponseDecodeMethod(method, replyDecodeMethodName)
             } ?: error("method not found: $replyResponseClassName.$replyDecodeMethodName(int,byte[])")
             val replyResultJsonField = replyResponseClass.declaredFields.singleOrNull { field ->
                 field.name == replyResultJsonFieldName && JSONObject::class.java.isAssignableFrom(field.type)
             } ?: error("field not found: $replyResponseClassName.$replyResultJsonFieldName")
             val addPostRequestDataField = addPostRequestClass.declaredFields.singleOrNull { field ->
-                field.name == addPostRequestDataFieldName && isStringMapField(field)
+                field.name == addPostRequestDataFieldName &&
+                    ReplyVisibilityProbeSymbolScanner.isStringMapField(field)
             } ?: error("field not found: $addPostRequestClassName.$addPostRequestDataFieldName")
             val getOriginalMessageMethod = responsedMessageClass.declaredMethods.singleOrNull { method ->
                 method.name == getOriginalMessageMethodName &&
@@ -3077,7 +3015,10 @@ internal object HookSymbolResolver {
                     isIntType(field.type)
             } ?: error("field not found: $cmdConfigHttpClassName.$cmdPbFloorAgreeFieldName")
             val agreeDecodeLogicMethod = agreeResponseClass.declaredMethods.singleOrNull { method ->
-                isAgreeServerResponseDecodeLogicMethod(method, agreeDecodeLogicMethodName)
+                ReplyVisibilityProbeSymbolScanner.isAgreeServerResponseDecodeLogicMethod(
+                    method,
+                    agreeDecodeLogicMethodName,
+                )
             } ?: error("method not found: $agreeResponseClassName.$agreeDecodeLogicMethodName(int,JSONObject)")
 
             listOf(
@@ -4088,7 +4029,8 @@ internal object HookSymbolResolver {
             val spriteMemePanClass = safeFindClass(AI_SPRITE_MEME_PAN_CLASS, cl)
 
             val enableMethod = controllerClass.declaredMethods.singleOrNull { method ->
-                method.name == enableMethodName && isAiSpriteMemeEnableMethod(method, inputShowTypeClass)
+                method.name == enableMethodName &&
+                    AiComponentSymbolScanner.isAiSpriteMemeEnableMethod(method, inputShowTypeClass)
             } ?: run {
                 XposedCompat.log(
                     "[AiComponentDisableHook] skipped: method mismatch: " +
@@ -4097,7 +4039,8 @@ internal object HookSymbolResolver {
                 return null
             }
             val initSpriteMemeMethod = inputContainerClass.declaredMethods.singleOrNull { method ->
-                method.name == initSpriteMemeMethodName && isPbNewInputContextInitMethod(method)
+                method.name == initSpriteMemeMethodName &&
+                    AiComponentSymbolScanner.isPbNewInputContextInitMethod(method)
             } ?: run {
                 XposedCompat.log(
                     "[AiComponentDisableHook] skipped: method mismatch: " +
@@ -4106,7 +4049,8 @@ internal object HookSymbolResolver {
                 return null
             }
             val initAiWriteMethod = inputContainerClass.declaredMethods.singleOrNull { method ->
-                method.name == initAiWriteMethodName && isPbNewInputContextInitMethod(method)
+                method.name == initAiWriteMethodName &&
+                    AiComponentSymbolScanner.isPbNewInputContextInitMethod(method)
             } ?: run {
                 XposedCompat.log(
                     "[AiComponentDisableHook] skipped: method mismatch: " +
@@ -4114,7 +4058,7 @@ internal object HookSymbolResolver {
                 )
                 return null
             }
-            if (!isAiPbNewInputContainerClassValid(inputContainerClass, spriteMemePanClass)) {
+            if (!AiComponentSymbolScanner.isAiPbNewInputContainerClassValid(inputContainerClass, spriteMemePanClass)) {
                 XposedCompat.log("[AiComponentDisableHook] skipped: input container structure mismatch")
                 return null
             }
@@ -4160,7 +4104,7 @@ internal object HookSymbolResolver {
             val methodName = symbols.aiPbAiEmojiCreationViewBindMethod?.takeIf { it.isNotBlank() } ?: return null
             val viewClass = safeFindClass(AI_PB_AI_EMOJI_CREATION_VIEW_CLASS, cl) ?: return null
             viewClass.declaredMethods.singleOrNull { method ->
-                method.name == methodName && isAiPbEmojiCreationViewBindMethod(method, cl)
+                method.name == methodName && AiComponentSymbolScanner.isAiPbEmojiCreationViewBindMethod(method, cl)
             }
         } catch (t: Throwable) {
             XposedCompat.log("[AiComponentDisableHook] AI emoji creation view bind resolve FAILED: ${t.message}")
@@ -4177,7 +4121,7 @@ internal object HookSymbolResolver {
             val methodName = symbols.aiPbPageBrowserAiEmojiCreationBindMethod?.takeIf { it.isNotBlank() } ?: return null
             val viewClass = safeFindClass(AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS, cl) ?: return null
             viewClass.declaredMethods.singleOrNull { method ->
-                method.name == methodName && isPbPageBrowserAiEmojiCreationBindMethod(method)
+                method.name == methodName && AiComponentSymbolScanner.isPbPageBrowserAiEmojiCreationBindMethod(method)
             }
         } catch (t: Throwable) {
             XposedCompat.log("[AiComponentDisableHook] page browser AI emoji creation bind resolve FAILED: ${t.message}")
@@ -4211,12 +4155,12 @@ internal object HookSymbolResolver {
                 )
                 return null
             }
-            if (scoreImageViewerJumpButtonOwnerClass(ownerClass, layoutClass) <= 0) {
+            if (AiComponentSymbolScanner.scoreImageViewerJumpButtonOwnerClass(ownerClass, layoutClass) <= 0) {
                 XposedCompat.log("[AiComponentDisableHook] image viewer skipped: owner structure mismatch")
                 return null
             }
             val initMethod = ownerClass.declaredMethods.singleOrNull { method ->
-                method.name == initMethodName && isImageViewerJumpButtonInitMethod(method)
+                method.name == initMethodName && AiComponentSymbolScanner.isImageViewerJumpButtonInitMethod(method)
             } ?: run {
                 XposedCompat.log(
                     "[AiComponentDisableHook] image viewer skipped: method mismatch: " +
@@ -4566,7 +4510,7 @@ internal object HookSymbolResolver {
     private fun scanInternal(context: Context, cl: ClassLoader, logger: ScanLogger?): HookSymbols {
         val scanErrors = ArrayList<String>()
         HookSymbolScanSession.get()?.scanErrors = scanErrors
-        val scanCandidates = listScanCandidateClasses(context, cl, logger)
+        val scanCandidates = ScanCandidateCollector.collect(context, cl, logger)
         val lifeLineCandidates = scanCandidates.obfuscated.ifEmpty { scanCandidates.all }
         val obfuscatedWithWhitelist = (lifeLineCandidates + SCAN_WHITELIST_CLASSES).distinct()
         val candidatesWithWhitelist = (scanCandidates.all + SCAN_WHITELIST_CLASSES).distinct()
@@ -4580,21 +4524,26 @@ internal object HookSymbolResolver {
             return unsupported.withFeatureStatusMap(HookFeatureStatusDeriver.derive(unsupported))
         }
 
-        val navClass = safeFindClass(NAV_CLASS, cl)
-        if (navClass == null) {
-            recordScanIssue(logger, "SettingsMenuHook", scanErrors, "nav class not found: $NAV_CLASS")
+        val settingsScan = runScanStep(
+            "SettingsMenuHook",
+            logger,
+            scanErrors,
+            SettingsScanSymbols(),
+        ) {
+            SettingsSymbolScanner.scan(lifeLineCandidates, cl, logger)
         }
-
-        val settingsMatch = navClass?.let {
-            val settingsRules = listOf(SettingsLevel1Rule(it))
-            runRules(lifeLineCandidates, cl, settingsRules, logger, "settings")
-        }
-        if (settingsMatch == null) {
+        if (settingsScan.settingsClass == null) {
             log(logger, "settings match not found, SettingsMenuHook disabled, continuing remaining scan")
         }
 
-        val homeRules = listOf(HomeTabsLevel1Rule())
-        val homeMatch = runRules(lifeLineCandidates, cl, homeRules, logger, "home")
+        val homeTabScan = runScanStep(
+            "HomeTabHook",
+            logger,
+            scanErrors,
+            HomeTabScanSymbols(),
+        ) {
+            HomeTabSymbolScanner.scan(lifeLineCandidates, cl, logger)
+        }
 
         // Dynamic obfuscated symbols used by ad and UI scans.
         var feedKeyMethod: String? = null
@@ -4618,14 +4567,7 @@ internal object HookSymbolResolver {
         var closeAdDataMethodJ1: String? = null
         var zgaClass: String? = null
         var zgaMethodsList: List<String>? = null
-        var searchBoxViewClass: String? = null
-        var searchBoxSetHintMethod: String? = null
-        var homeSearchBoxOwnerClass: String? = null
-        var homeSearchBoxInitMethod: String? = null
-        var homeSearchBoxGetterMethod: String? = null
         var homePersonalizeAnchorClasses: List<String>? = null
-        var homeRightSlotClass: String? = null
-        var homeRightSlotStateMethods: List<String>? = null
         var pbFallingViewClass: String? = null
         var pbFallingInitMethod: String? = null
         var pbFallingShowMethod: String? = null
@@ -4814,31 +4756,17 @@ internal object HookSymbolResolver {
         var aiImageViewerJumpButtonOwnerClass: String? = null
         var aiImageViewerJumpButtonInitMethod: String? = null
 
-        fun unpack(raw: String, expectedParts: Int): List<String?> {
-            val parts = ArrayList<String?>(expectedParts)
-            var start = 0
-            while (parts.size < expectedParts - 1) {
-                val idx = raw.indexOf(',', start)
-                if (idx < 0) break
-                val token = raw.substring(start, idx).trim()
-                parts.add(token.ifEmpty { null })
-                start = idx + 1
-            }
-            val tail = raw.substring(start).trim()
-            parts.add(tail.ifEmpty { null })
-            while (parts.size < expectedParts) {
-                parts.add(null)
-            }
-            return parts
-        }
-
         val homeItemScan = runScanStep(
             "HomeTabHook.Item",
             logger,
             scanErrors,
             HomeTabItemScanSymbols(),
         ) {
-            homeMatch?.let { HomeTabItemSymbolScanner.scan(it, cl, logger) } ?: HomeTabItemScanSymbols()
+            if (homeTabScan.tabClass != null) {
+                HomeTabItemSymbolScanner.scan(homeTabScan, cl, logger)
+            } else {
+                HomeTabItemScanSymbols()
+            }
         }
         homeTabItemTypeField = homeItemScan.typeField
         homeTabItemCodeField = homeItemScan.codeField
@@ -4848,46 +4776,37 @@ internal object HookSymbolResolver {
         homeTabItemMainIntField = homeItemScan.mainIntField
         homeTabItemMainBooleanField = homeItemScan.mainBooleanField
 
-        val feedKeyMatch = runRules(candidatesWithWhitelist, cl, listOf(FeedTemplateKeyRule()), logger, "feedKey")
-        if (feedKeyMatch != null) {
-            feedKeyMethod = feedKeyMatch.methodName
-            feedPayloadMethod = feedKeyMatch.fieldName.takeIf { it.isNotBlank() }
+        val feedTemplateScan = runScanStep(
+            "FeedTemplateHook",
+            logger,
+            scanErrors,
+            FeedTemplateScanSymbols(),
+        ) {
+            FeedTemplateSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
         }
+        feedKeyMethod = feedTemplateScan.keyMethod
+        feedPayloadMethod = feedTemplateScan.payloadMethod
+        feedLoadMoreMethod = feedTemplateScan.loadMoreMethod
 
-        val feedLoadMoreMatch = runRules(candidatesWithWhitelist, cl, listOf(FeedTemplateLoadMoreRule()), logger, "feedLoadMore")
-        if (feedLoadMoreMatch != null) {
-            feedLoadMoreMethod = feedLoadMoreMatch.methodName
-        } else {
-            logFeedLoadMoreDiagnostics(cl, logger)
+        val feedCardScan = runScanStep(
+            "FeedInfoLogHook.Bind",
+            logger,
+            scanErrors,
+            FeedCardScanSymbols(),
+        ) {
+            FeedCardSymbolScanner.scanBind(candidatesWithWhitelist, cl, logger)
         }
-
-        runScanStep("FeedInfoLogHook.Bind", logger, scanErrors, Unit) {
-            val feedCardBindMatch = runRules(candidatesWithWhitelist, cl, listOf(FeedCardBindRule()), logger, "feedCardBind")
-            if (feedCardBindMatch != null) {
-                feedCardBindMethod = feedCardBindMatch.methodName
-                val feedCardClass = safeFindClass("com.baidu.tieba.feed.card.FeedCardView", cl)
-                val bindMethod = feedCardClass?.declaredMethods?.firstOrNull { method ->
-                    method.name == feedCardBindMethod &&
-                        method.returnType == Void.TYPE &&
-                        method.parameterTypes.size == 1 &&
-                        !method.parameterTypes[0].isPrimitive
-                }
-                val cardDataClass = bindMethod?.parameterTypes?.firstOrNull()
-                feedCardDataListField = cardDataClass
-                    ?.let(::collectInstanceFields)
-                    ?.firstOrNull { isListType(it.type) }
-                    ?.name
-            }
-        }
+        feedCardBindMethod = feedCardScan.bindMethod
+        feedCardDataListField = feedCardScan.dataListField
         runScanStep("ReplyServerResponseLogHook", logger, scanErrors, Unit) {
-            scanReplyServerResponseLogSymbols(cl, logger)?.let { scan ->
+            ReplyVisibilityProbeSymbolScanner.scanReplyServerResponseLog(cl, logger)?.let { scan ->
                 replyServerResponseClass = scan.responseClass
                 replyServerResponseDecodeMethod = scan.decodeMethod
                 replyServerResponseResultJsonField = scan.resultJsonField
             }
         }
         runScanStep("AgreeServerResponseLogHook", logger, scanErrors, Unit) {
-            scanAgreeServerResponseLogSymbols(cl, logger)?.let { scan ->
+            ReplyVisibilityProbeSymbolScanner.scanAgreeServerResponseLog(cl, logger)?.let { scan ->
                 agreeServerResponseClass = scan.responseClass
                 agreeServerResponseDecodeLogicMethod = scan.decodeLogicMethod
             }
@@ -4898,19 +4817,18 @@ internal object HookSymbolResolver {
             scanErrors,
             ReplyVisibilityProbeScanSymbols(),
         ) {
-            scanReplyVisibilityProbeSymbols(cl, logger)
+            ReplyVisibilityProbeSymbolScanner.scan(cl, logger)
         }
 
-        val feedHeadParamsMatch = runRules(
-            candidatesWithWhitelist,
-            cl,
-            listOf(FeedHeadParamsFieldRule()),
+        val feedHeadParamsScan = runScanStep(
+            "CustomPostCardBlockHook.FeedHeadParams",
             logger,
-            "feedHeadParams",
-        )
-        if (feedHeadParamsMatch != null) {
-            feedHeadParamsField = feedHeadParamsMatch.fieldName
+            scanErrors,
+            FeedCardScanSymbols(),
+        ) {
+            FeedCardSymbolScanner.scanHeadParams(candidatesWithWhitelist, cl, logger)
         }
+        feedHeadParamsField = feedHeadParamsScan.feedHeadParamsField
 
         val recommendCardNestedDataScan = runScanStep(
             "CustomPostCardBlockHook.RecommendCard",
@@ -4923,92 +4841,42 @@ internal object HookSymbolResolver {
         feedRecommendCardNestedDataMethod = recommendCardNestedDataScan.nestedDataMethod
         feedRecommendCardNestedDataListField = recommendCardNestedDataScan.nestedDataListField
 
-        val splashAdMatch = runRules(candidatesWithWhitelist, cl, listOf(SplashAdHelperRule()), logger, "splashAdHelper")
-        if (splashAdMatch != null) {
-            splashAdHelperClass = splashAdMatch.className
-            splashAdHelperMethod = splashAdMatch.methodName
-        }
-
-        val closeAdMatch = runRules(
-            listOf("com.baidu.tbadk.data.CloseAdData"),
-            cl,
-            listOf(CloseAdDataRule()),
+        val strategyAdScan = runScanStep(
+            "StrategyAdHook",
             logger,
-            "closeAdData",
-        )
-        if (closeAdMatch != null) {
-            closeAdDataClass = closeAdMatch.className
-            val parts = closeAdMatch.methodName.split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-            if (parts.size >= 2) {
-                closeAdDataMethodG1 = parts[0]
-                closeAdDataMethodJ1 = parts.drop(1).joinToString(",")
-            }
+            scanErrors,
+            StrategyAdScanSymbols(),
+        ) {
+            StrategyAdSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
         }
+        splashAdHelperClass = strategyAdScan.splashAdHelperClass
+        splashAdHelperMethod = strategyAdScan.splashAdHelperMethod
+        closeAdDataClass = strategyAdScan.closeAdDataClass
+        closeAdDataMethodG1 = strategyAdScan.closeAdDataMethodG1
+        closeAdDataMethodJ1 = strategyAdScan.closeAdDataMethodJ1
+        zgaClass = strategyAdScan.zgaClass
+        zgaMethodsList = strategyAdScan.zgaMethods
 
-
-        val zgaMatch = runRules(candidatesWithWhitelist, cl, listOf(ZgaRule()), logger, "zga")
-        if (zgaMatch != null) {
-            val candidateMethods = zgaMatch.methodName.split(",").filter { it.isNotBlank() }.distinct()
-            if (isZgaScanResultValid(cl, zgaMatch.className, candidateMethods)) {
-                zgaClass = zgaMatch.className
-                zgaMethodsList = candidateMethods
-            } else {
-                log(
-                    logger,
-                    "zga scan rejected: class=${zgaMatch.className}, methods=${candidateMethods.joinToString(",")}",
-                )
-            }
-        }
-
-        val searchBoxMatch = runRules(candidatesWithWhitelist, cl, listOf(SearchBoxSetHintRule()), logger, "searchBoxHint")
-        if (searchBoxMatch != null) {
-            searchBoxViewClass = searchBoxMatch.className
-            searchBoxSetHintMethod = searchBoxMatch.methodName
-        }
-        val resolvedSearchBoxViewClass = searchBoxViewClass
-        if (resolvedSearchBoxViewClass != null) {
-            val homeSearchBoxOwnerMatch = runRules(
-                listOf(HOME_SEARCH_BOX_OWNER_CLASS),
-                cl,
-                listOf(HomeSearchBoxOwnerRule(HOME_SEARCH_BOX_OWNER_CLASS, resolvedSearchBoxViewClass)),
-                logger,
-                "homeSearchBoxOwner",
-            )
-            if (homeSearchBoxOwnerMatch != null) {
-                homeSearchBoxOwnerClass = homeSearchBoxOwnerMatch.className
-                homeSearchBoxInitMethod = homeSearchBoxOwnerMatch.methodName
-                homeSearchBoxGetterMethod = homeSearchBoxOwnerMatch.fieldName
-            }
-        }
-
-        val homeRightSlotMatch = runRules(
-            listOf(HOME_RIGHT_SLOT_CLASS),
-            cl,
-            listOf(HomeTopBarRightSlotRule(HOME_RIGHT_SLOT_CLASS)),
+        val homeHeaderScan = runScanStep(
+            "HomeHeaderHooks",
             logger,
-            "homeRightSlot",
-        )
-        if (homeRightSlotMatch != null) {
-            homeRightSlotClass = homeRightSlotMatch.className
-            homeRightSlotStateMethods = homeRightSlotMatch.methodName
-                .split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .distinct()
+            scanErrors,
+            HomeHeaderScanSymbols(),
+        ) {
+            HomeHeaderSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
         }
-
-        val pbFallingMatch = runRules(candidatesWithWhitelist, cl, listOf(PbFallingViewRule()), logger, "pbFalling")
-        if (pbFallingMatch != null) {
-            pbFallingViewClass = pbFallingMatch.className
-            val parts = pbFallingMatch.methodName.split(",")
-            if (parts.size >= 3) {
-                pbFallingInitMethod = parts[0]
-                pbFallingShowMethod = parts[1]
-                pbFallingClearMethod = parts[2]
-            }
+        val pbFallingScan = runScanStep(
+            "PbFallingAdHook",
+            logger,
+            scanErrors,
+            PbFallingScanSymbols(),
+        ) {
+            PbFallingSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
         }
+        pbFallingViewClass = pbFallingScan.viewClass
+        pbFallingInitMethod = pbFallingScan.initMethod
+        pbFallingShowMethod = pbFallingScan.showMethod
+        pbFallingClearMethod = pbFallingScan.clearMethod
 
         val pbEarlyAdInsertScan = runScanStep(
             "PbEarlyAdBlockHook",
@@ -5029,7 +4897,7 @@ internal object HookSymbolResolver {
             scanErrors,
             PbAdBidScanSymbols(),
         ) {
-            scanPbAdBidSymbols(context, candidatesWithWhitelist, cl, logger)
+            PbAdBidSymbolScanner.scan(context, candidatesWithWhitelist, cl, logger)
         }
         pbAdBidCommonRequestModelClass = pbAdBidScan.commonRequestModelClass
         pbAdBidCommonRequestStartMethods = pbAdBidScan.commonRequestStartMethods.takeIf { it.isNotEmpty() }
@@ -5058,35 +4926,18 @@ internal object HookSymbolResolver {
             ForumPageAdSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
         }
 
-        val tbWebViewClass = safeFindClass(TB_WEB_VIEW_CLASS, cl)
-        if (tbWebViewClass == null) {
-            log(logger, "enterForumWeb: TbWebView class not found")
-        } else {
-            val enterForumWebMatch = runRules(
-                obfuscatedWithWhitelist,
-                cl,
-                listOf(EnterForumWebControllerRule(tbWebViewClass)),
-                logger,
-                "enterForumWeb",
-            )
-            if (enterForumWebMatch != null) {
-                enterForumWebControllerClass = enterForumWebMatch.className
-                enterForumWebLoadMethod = enterForumWebMatch.methodName
-            }
-        }
-
-        val enterForumInitInfoDataMatch = runScanStep(
-            "EnterForumWebHook.InitInfoData",
+        val enterForumWebScan = runScanStep(
+            "EnterForumWebHook",
             logger,
             scanErrors,
-            null as Pair<String, String>?,
+            EnterForumWebScanSymbols(),
         ) {
-            EnterForumWebSymbolScanner.scanInitInfoData(cl, logger)
+            EnterForumWebSymbolScanner.scan(obfuscatedWithWhitelist, cl, logger)
         }
-        if (enterForumInitInfoDataMatch != null) {
-            enterForumInitInfoDataClass = enterForumInitInfoDataMatch.first
-            enterForumInitInfoGetUrlMethod = enterForumInitInfoDataMatch.second
-        }
+        enterForumWebControllerClass = enterForumWebScan.controllerClass
+        enterForumWebLoadMethod = enterForumWebScan.webLoadMethod
+        enterForumInitInfoDataClass = enterForumWebScan.initInfoDataClass
+        enterForumInitInfoGetUrlMethod = enterForumWebScan.initInfoGetUrlMethod
 
         val plainUrlSpanScan = runScanStep(
             "PlainUrlDirectBrowserHook.Direct",
@@ -5166,17 +5017,16 @@ internal object HookSymbolResolver {
         mountCardLinkInfoDataClass = mountCardLinkScan.dataClass
         mountCardLinkInfoGetUrlMethod = mountCardLinkScan.getUrlMethod
 
-        val forumBottomSheetMatch = runRules(
-            listOf(FORUM_BOTTOM_SHEET_VIEW_CLASS),
-            cl,
-            listOf(ForumBottomSheetInitScrollRule(FORUM_BOTTOM_SHEET_VIEW_CLASS)),
+        val forumBottomSheetScan = runScanStep(
+            "ForumNativeTopShiftBlockHook",
             logger,
-            "forumBottomSheet",
-        )
-        if (forumBottomSheetMatch != null) {
-            forumBottomSheetViewClass = forumBottomSheetMatch.className
-            forumBottomSheetInitScrollMethod = forumBottomSheetMatch.methodName
+            scanErrors,
+            ForumBottomSheetScanSymbols(),
+        ) {
+            ForumBottomSheetSymbolScanner.scan(cl, logger)
         }
+        forumBottomSheetViewClass = forumBottomSheetScan.viewClass
+        forumBottomSheetInitScrollMethod = forumBottomSheetScan.initScrollMethod
 
         autoRefreshTriggerMethod = runScanStep(
             "AutoRefreshHook",
@@ -5187,83 +5037,41 @@ internal object HookSymbolResolver {
             AutoRefreshSymbolScanner.scan(context, cl, logger)
         }
 
-        val autoLoadMoreMatch = runRules(
-            listOf(HOME_PRELOAD_CONFIG_COMPANION_CLASS),
-            cl,
-            listOf(AutoLoadMoreConfigRule(HOME_PRELOAD_CONFIG_PARSER_CLASS)),
+        val autoLoadMoreScan = runScanStep(
+            "AutoLoadMoreHook.Config",
             logger,
-            "autoLoadMore",
-        )
-        if (autoLoadMoreMatch != null) {
-            autoLoadMoreConfigClass = autoLoadMoreMatch.className
-            autoLoadMoreConfigMethod = autoLoadMoreMatch.methodName
+            scanErrors,
+            AutoLoadMoreConfigScanSymbols(),
+        ) {
+            AutoRefreshSymbolScanner.scanLoadMoreConfig(cl, logger)
         }
+        autoLoadMoreConfigClass = autoLoadMoreScan.configClass
+        autoLoadMoreConfigMethod = autoLoadMoreScan.configMethod
 
-        val pbCommentScrollMatch = runRules(
-            candidatesWithWhitelist,
-            cl,
-            listOf(PbCommentScrollRule(PB_FRAGMENT_CLASS)),
+        val pbCommentInteractionScan = runScanStep(
+            "PbCommentInteractionHooks",
             logger,
-            "pbCommentScroll",
-        )
-        if (pbCommentScrollMatch != null) {
-            pbCommentScrollListenerClass = pbCommentScrollMatch.className
-            pbCommentScrollMethod = pbCommentScrollMatch.methodName
-            val fields = unpack(pbCommentScrollMatch.fieldName, 3)
-            pbCommentScrollFragmentField = fields[0]
-            pbCommentScrollBottomListenerField = fields[1]
-            pbCommentScrollBottomMethod = fields[2]
+            scanErrors,
+            PbCommentInteractionScanSymbols(),
+        ) {
+            PbCommentInteractionSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
         }
-
-        fun bottomMechanismCandidates(ownerClassName: String): List<String> {
-            val nestedPrefix = "$ownerClassName\$"
-            val nested = candidatesWithWhitelist
-                .filter { it.startsWith(nestedPrefix) }
-                .distinct()
-            return if (nested.isNotEmpty()) nested else listOf(ownerClassName)
-        }
-
-        val pbCommentBottomListMatch = runRules(
-            bottomMechanismCandidates(StableTiebaHookPoints.BD_LIST_VIEW_CLASS),
-            cl,
-            listOf(BdListViewBottomScrollRule(StableTiebaHookPoints.BD_LIST_VIEW_CLASS)),
-            logger,
-            "pbCommentBottomList",
-        )
-        if (pbCommentBottomListMatch != null) {
-            pbCommentBottomListScrollClass = pbCommentBottomListMatch.className
-            pbCommentBottomListScrollMethod = pbCommentBottomListMatch.methodName
-            pbCommentBottomListOwnerField = pbCommentBottomListMatch.fieldName
-        }
-
-        val pbCommentBottomRecyclerMatch = runRules(
-            bottomMechanismCandidates(StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS),
-            cl,
-            listOf(BdRecyclerViewBottomScrollRule(StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS)),
-            logger,
-            "pbCommentBottomRecycler",
-        )
-        if (pbCommentBottomRecyclerMatch != null) {
-            pbCommentBottomRecyclerScrollClass = pbCommentBottomRecyclerMatch.className
-            pbCommentBottomRecyclerScrollMethod = pbCommentBottomRecyclerMatch.methodName
-            pbCommentBottomRecyclerOwnerField = pbCommentBottomRecyclerMatch.fieldName
-        }
-
-        val pbGestureScaleMatch = runRules(
-            candidatesWithWhitelist,
-            cl,
-            listOf(PbGestureScaleRule()),
-            logger,
-            "pbGestureScale",
-        )
-        if (pbGestureScaleMatch != null) {
-            pbGestureScaleManagerClass = pbGestureScaleMatch.className
-            pbGestureScaleListenerClass = pbGestureScaleMatch.fieldName.ifBlank { null }
-            val methods = unpack(pbGestureScaleMatch.methodName, 3)
-            pbGestureScaleDispatchMethod = methods[0]
-            pbGestureScaleListenerSetterMethod = methods[1]
-            pbGestureScaleListenerOnScaleMethod = methods[2]
-        }
+        pbCommentScrollListenerClass = pbCommentInteractionScan.scrollListenerClass
+        pbCommentScrollMethod = pbCommentInteractionScan.scrollMethod
+        pbCommentScrollFragmentField = pbCommentInteractionScan.scrollFragmentField
+        pbCommentScrollBottomListenerField = pbCommentInteractionScan.scrollBottomListenerField
+        pbCommentScrollBottomMethod = pbCommentInteractionScan.scrollBottomMethod
+        pbCommentBottomListScrollClass = pbCommentInteractionScan.bottomListScrollClass
+        pbCommentBottomListScrollMethod = pbCommentInteractionScan.bottomListScrollMethod
+        pbCommentBottomListOwnerField = pbCommentInteractionScan.bottomListOwnerField
+        pbCommentBottomRecyclerScrollClass = pbCommentInteractionScan.bottomRecyclerScrollClass
+        pbCommentBottomRecyclerScrollMethod = pbCommentInteractionScan.bottomRecyclerScrollMethod
+        pbCommentBottomRecyclerOwnerField = pbCommentInteractionScan.bottomRecyclerOwnerField
+        pbGestureScaleManagerClass = pbCommentInteractionScan.gestureScaleManagerClass
+        pbGestureScaleDispatchMethod = pbCommentInteractionScan.gestureScaleDispatchMethod
+        pbGestureScaleListenerSetterMethod = pbCommentInteractionScan.gestureScaleListenerSetterMethod
+        pbGestureScaleListenerClass = pbCommentInteractionScan.gestureScaleListenerClass
+        pbGestureScaleListenerOnScaleMethod = pbCommentInteractionScan.gestureScaleListenerOnScaleMethod
 
         val pbLikeAutoReplyScan = runScanStep(
             "PbLikeAutoReplyHook",
@@ -5284,100 +5092,38 @@ internal object HookSymbolResolver {
         pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyScan.inputContainerGetInputViewMethod
         pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyScan.inputContainerGetSendViewMethod
 
-        val shareTrackMatch = runRules(candidatesWithWhitelist, cl, listOf(ShareTrackUrlBuilderRule()), logger, "shareTrack")
-        if (shareTrackMatch != null) {
-            shareTrackBuilderClass = shareTrackMatch.className
-            val parts = shareTrackMatch.methodName.split(",")
-            if (parts.isNotEmpty()) {
-                shareTrackBuildUrlMethod = parts[0]
-            }
-            if (parts.size >= 2) {
-                shareTrackAppendQueryMethod = parts[1]
-            }
-        }
-
-        val imageViewerShareItemMatch = runRules(
-            listOf("com.baidu.tbadk.coreExtra.share.ShareItem"),
-            cl,
-            listOf(ImageViewerShareItemRule()),
+        val imageViewerShareScan = runScanStep(
+            "ImageViewerShareHooks",
             logger,
-            "imageViewerShareItem",
-        )
-        if (imageViewerShareItemMatch != null) {
-            imageViewerShareItemClass = imageViewerShareItemMatch.className
-            val itemFields = unpack(imageViewerShareItemMatch.fieldName, 6)
-            imageViewerShareItemTitleField = itemFields[0]
-            imageViewerShareItemContentField = itemFields[1]
-            imageViewerShareItemLinkUrlField = itemFields[2]
-            imageViewerShareItemImageUriField = itemFields[3]
-            imageViewerShareItemImageUrlField = itemFields[4]
-            imageViewerShareItemLocalFileField = itemFields[5]
+            scanErrors,
+            ImageViewerShareScanSymbols(),
+        ) {
+            ImageViewerShareSymbolScanner.scan(context, candidatesWithWhitelist, cl, logger)
         }
-
-        val shareItemClassName = imageViewerShareItemClass
-        if (!shareItemClassName.isNullOrBlank()) {
-            val imageViewerShareConfigMatch = runRules(
-                candidatesWithWhitelist,
-                cl,
-                listOf(ImageViewerShareConfigRule(shareItemClassName)),
-                logger,
-                "imageViewerShareConfig",
-            )
-            if (imageViewerShareConfigMatch != null) {
-                imageViewerShareConfigClass = imageViewerShareConfigMatch.className
-                val configMethods = unpack(imageViewerShareConfigMatch.methodName, 4)
-                imageViewerShareAddOutsideMethod = configMethods[0]
-                imageViewerShareGetRequestDataMethod = configMethods[1]
-                imageViewerShareSetRequestDataMethod = configMethods[2]
-                imageViewerShareGetContextMethod = configMethods[3]
-
-                val configFields = unpack(imageViewerShareConfigMatch.fieldName, 2)
-                imageViewerShareIsDialogField = configFields[0]
-                imageViewerShareItemField = configFields[1]
-            }
-        }
-
-        val imageViewerShareItemViewMatch = runRules(
-            candidatesWithWhitelist,
-            cl,
-            listOf(ImageViewerShareItemViewRule()),
-            logger,
-            "imageViewerShareItemView",
-        )
-        if (imageViewerShareItemViewMatch != null) {
-            imageViewerShareItemViewClass = imageViewerShareItemViewMatch.className
-            val itemViewMethods = unpack(imageViewerShareItemViewMatch.methodName, 2)
-            imageViewerShareItemNameByResMethod = itemViewMethods[0]
-            imageViewerShareItemNameByTextMethod = itemViewMethods[1]
-        }
-
-        val imageViewerShareIconMatch = runRules(
-            listOf("com.baidu.tieba.R\$drawable"),
-            cl,
-            listOf(ImageViewerShareIconResourceRule()),
-            logger,
-            "imageViewerShareIcon",
-        )
-        if (imageViewerShareIconMatch != null) {
-            imageViewerShareIconResId = imageViewerShareIconMatch.fieldName.toIntOrNull()
-        } else {
-            imageViewerShareIconResId = runScanStep(
-                "ImageViewerNativeShareHook.Icon",
-                logger,
-                scanErrors,
-                null as Int?,
-            ) {
-                ImageViewerShareIconSymbolScanner.scanFromDex(
-                    context = context,
-                    candidates = candidatesWithWhitelist,
-                    cl = cl,
-                    logger = logger,
-                )
-            }
-        }
+        shareTrackBuilderClass = imageViewerShareScan.shareTrackBuilderClass
+        shareTrackBuildUrlMethod = imageViewerShareScan.shareTrackBuildUrlMethod
+        shareTrackAppendQueryMethod = imageViewerShareScan.shareTrackAppendQueryMethod
+        imageViewerShareItemClass = imageViewerShareScan.itemClass
+        imageViewerShareItemTitleField = imageViewerShareScan.itemTitleField
+        imageViewerShareItemContentField = imageViewerShareScan.itemContentField
+        imageViewerShareItemLinkUrlField = imageViewerShareScan.itemLinkUrlField
+        imageViewerShareItemImageUriField = imageViewerShareScan.itemImageUriField
+        imageViewerShareItemImageUrlField = imageViewerShareScan.itemImageUrlField
+        imageViewerShareItemLocalFileField = imageViewerShareScan.itemLocalFileField
+        imageViewerShareConfigClass = imageViewerShareScan.configClass
+        imageViewerShareAddOutsideMethod = imageViewerShareScan.addOutsideMethod
+        imageViewerShareGetRequestDataMethod = imageViewerShareScan.getRequestDataMethod
+        imageViewerShareSetRequestDataMethod = imageViewerShareScan.setRequestDataMethod
+        imageViewerShareGetContextMethod = imageViewerShareScan.getContextMethod
+        imageViewerShareIsDialogField = imageViewerShareScan.isDialogField
+        imageViewerShareItemField = imageViewerShareScan.itemField
+        imageViewerShareItemViewClass = imageViewerShareScan.itemViewClass
+        imageViewerShareItemNameByResMethod = imageViewerShareScan.itemNameByResMethod
+        imageViewerShareItemNameByTextMethod = imageViewerShareScan.itemNameByTextMethod
+        imageViewerShareIconResId = imageViewerShareScan.iconResId
 
         val anchorCandidates = listOf(
-            HOME_SEARCH_BOX_OWNER_CLASS,
+            StableTiebaHookPoints.HOME_SEARCH_BOX_OWNER_CLASS,
             "com.baidu.tieba.homepage.personalize.PersonalizePageView",
             "com.baidu.searchbox.task.view.mainactivity.InitPersonalizeViewTask",
         )
@@ -5518,18 +5264,17 @@ internal object HookSymbolResolver {
         msgTabContainerSelectMethod = msgTabScan.containerSelectMethod
         msgTabContainerExtDataField = msgTabScan.containerExtDataField
 
-        val freeCopyPopupMatch = runRules(
-            candidatesWithWhitelist,
-            cl,
-            listOf(FreeCopyPopupRule()),
+        val freeCopyPopupScan = runScanStep(
+            "FreeCopyHook.Popup",
             logger,
-            "freeCopyPopup",
-        )
-        if (freeCopyPopupMatch != null) {
-            freeCopyPopupMenuClass = freeCopyPopupMatch.className
-            freeCopyPopupContentViewMethod = freeCopyPopupMatch.methodName
-            freeCopyPopupTextField = freeCopyPopupMatch.fieldName
+            scanErrors,
+            FreeCopyPopupScanSymbols(),
+        ) {
+            FreeCopyPopupSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
         }
+        freeCopyPopupMenuClass = freeCopyPopupScan.menuClass
+        freeCopyPopupContentViewMethod = freeCopyPopupScan.contentViewMethod
+        freeCopyPopupTextField = freeCopyPopupScan.textField
 
         val mainTabBottomScan = runScanStep(
             "MainTabBottomHook",
@@ -5561,7 +5306,7 @@ internal object HookSymbolResolver {
             scanErrors,
             AiComponentScanSymbols(),
         ) {
-            scanAiComponentSymbols(context, cl, candidatesWithWhitelist, logger)
+            AiComponentSymbolScanner.scan(context, cl, candidatesWithWhitelist, logger)
         }
         aiSpriteMemePanControllerClass = aiComponentScan.spriteMemePanControllerClass
         aiSpriteMemeEnableMethod = aiComponentScan.spriteMemeEnableMethod
@@ -5573,12 +5318,12 @@ internal object HookSymbolResolver {
         aiImageViewerJumpButtonOwnerClass = aiComponentScan.imageViewerJumpButtonOwnerClass
         aiImageViewerJumpButtonInitMethod = aiComponentScan.imageViewerJumpButtonInitMethod
         val scanned = buildHookSymbols {
-            settingsClass = settingsMatch?.className
-            settingsInitMethod = settingsMatch?.methodName
-            settingsContainerField = settingsMatch?.fieldName
-            homeTabClass = homeMatch?.className
-            homeTabRebuildMethod = homeMatch?.methodName
-            homeTabListField = homeMatch?.fieldName
+            settingsClass = settingsScan.settingsClass
+            settingsInitMethod = settingsScan.initMethod
+            settingsContainerField = settingsScan.containerField
+            homeTabClass = homeTabScan.tabClass
+            homeTabRebuildMethod = homeTabScan.rebuildMethod
+            homeTabListField = homeTabScan.listField
             this.homeTabItemTypeField = homeTabItemTypeField
             this.homeTabItemCodeField = homeTabItemCodeField
             this.homeTabItemNameField = homeTabItemNameField
@@ -5653,14 +5398,8 @@ internal object HookSymbolResolver {
             this.closeAdDataMethodJ1 = closeAdDataMethodJ1
             this.zgaClass = zgaClass
             zgaMethods = zgaMethodsList
-            this.searchBoxViewClass = searchBoxViewClass
-            this.searchBoxSetHintMethod = searchBoxSetHintMethod
-            this.homeSearchBoxOwnerClass = homeSearchBoxOwnerClass
-            this.homeSearchBoxInitMethod = homeSearchBoxInitMethod
-            this.homeSearchBoxGetterMethod = homeSearchBoxGetterMethod
+            applyHomeHeaderScan(homeHeaderScan)
             this.homePersonalizeAnchorClasses = homePersonalizeAnchorClasses
-            this.homeRightSlotClass = homeRightSlotClass
-            this.homeRightSlotStateMethods = homeRightSlotStateMethods
             this.pbFallingViewClass = pbFallingViewClass
             this.pbFallingInitMethod = pbFallingInitMethod
             this.pbFallingShowMethod = pbFallingShowMethod
@@ -5860,37 +5599,29 @@ internal object HookSymbolResolver {
             this.imageViewerShareItemNameByResMethod = imageViewerShareItemNameByResMethod
             this.imageViewerShareItemNameByTextMethod = imageViewerShareItemNameByTextMethod
             this.imageViewerShareIconResId = imageViewerShareIconResId
-            this.homeNativeGlassSubPbNextPageMoreViewId = homeNativeGlassSubPbNextPageMoreViewId
-            this.homeNativeGlassPbReplyTitleDividerViewId = homeNativeGlassPbReplyTitleDividerViewId
-            this.homeNativeGlassDynamicBackgroundColorIds = homeNativeGlassDynamicBackgroundColorIds
-            this.homeNativeGlassSortSwitchBackgroundPaintField = homeNativeGlassSortSwitchBackgroundPaintField
-            this.homeNativeGlassSortSwitchSlideDrawMethod = homeNativeGlassSortSwitchSlideDrawMethod
-            this.homeNativeGlassSortSwitchSlidePathField = homeNativeGlassSortSwitchSlidePathField
-            this.homeNativeGlassEnterForumCapsuleControllerClass =
-                homeNativeGlassEnterForumCapsuleControllerClass
-            this.homeNativeGlassEnterForumCapsuleInitMethod =
-                homeNativeGlassEnterForumCapsuleInitMethod
-            this.homeNativeGlassEnterForumCapsuleRefreshMethod =
-                homeNativeGlassEnterForumCapsuleRefreshMethod
-            this.homeNativeGlassEnterForumCapsuleViewField =
-                homeNativeGlassEnterForumCapsuleViewField
-            this.homeNativeGlassEnterForumCapsuleTitleField =
-                homeNativeGlassEnterForumCapsuleTitleField
-            this.homeNativeGlassHostDarkModeMoreActivityClass =
-                homeNativeGlassHostDarkModeMoreActivityClass
-            this.homeNativeGlassHostDarkModeControllerField =
-                homeNativeGlassHostDarkModeControllerField
-            this.homeNativeGlassHostDarkModeSwitchGetterMethod =
-                homeNativeGlassHostDarkModeSwitchGetterMethod
-            this.homeNativeGlassHostDarkModeSwitchStateField =
-                homeNativeGlassHostDarkModeSwitchStateField
-            this.homeNativeGlassHostDarkModeSwitchSetOnMethod =
-                homeNativeGlassHostDarkModeSwitchSetOnMethod
-            this.homeNativeGlassHostDarkModeSwitchSetOffMethod =
-                homeNativeGlassHostDarkModeSwitchSetOffMethod
-            this.homeNativeGlassHostDarkModeSwitchCallbackMethod =
-                homeNativeGlassHostDarkModeSwitchCallbackMethod
-            this.pbCommonLayoutPreloaderGetOrDefaultMethod = pbCommonLayoutPreloaderGetOrDefaultMethod
+            applyHomeNativeGlassScan(
+                HomeNativeGlassScanSymbols(
+                    subPbNextPageMoreViewId = homeNativeGlassSubPbNextPageMoreViewId,
+                    pbReplyTitleDividerViewId = homeNativeGlassPbReplyTitleDividerViewId,
+                    dynamicBackgroundColorIds = homeNativeGlassDynamicBackgroundColorIds,
+                    sortSwitchBackgroundPaintField = homeNativeGlassSortSwitchBackgroundPaintField,
+                    sortSwitchSlideDrawMethod = homeNativeGlassSortSwitchSlideDrawMethod,
+                    sortSwitchSlidePathField = homeNativeGlassSortSwitchSlidePathField,
+                    enterForumCapsuleControllerClass = homeNativeGlassEnterForumCapsuleControllerClass,
+                    enterForumCapsuleInitMethod = homeNativeGlassEnterForumCapsuleInitMethod,
+                    enterForumCapsuleRefreshMethod = homeNativeGlassEnterForumCapsuleRefreshMethod,
+                    enterForumCapsuleViewField = homeNativeGlassEnterForumCapsuleViewField,
+                    enterForumCapsuleTitleField = homeNativeGlassEnterForumCapsuleTitleField,
+                    hostDarkModeMoreActivityClass = homeNativeGlassHostDarkModeMoreActivityClass,
+                    hostDarkModeControllerField = homeNativeGlassHostDarkModeControllerField,
+                    hostDarkModeSwitchGetterMethod = homeNativeGlassHostDarkModeSwitchGetterMethod,
+                    hostDarkModeSwitchStateField = homeNativeGlassHostDarkModeSwitchStateField,
+                    hostDarkModeSwitchSetOnMethod = homeNativeGlassHostDarkModeSwitchSetOnMethod,
+                    hostDarkModeSwitchSetOffMethod = homeNativeGlassHostDarkModeSwitchSetOffMethod,
+                    hostDarkModeSwitchCallbackMethod = homeNativeGlassHostDarkModeSwitchCallbackMethod,
+                    pbCommonLayoutPreloaderGetOrDefaultMethod = pbCommonLayoutPreloaderGetOrDefaultMethod,
+                ),
+            )
             this.aiSpriteMemePanControllerClass = aiSpriteMemePanControllerClass
             this.aiSpriteMemeEnableMethod = aiSpriteMemeEnableMethod
             this.aiPbNewInputContainerClass = aiPbNewInputContainerClass
@@ -5902,2041 +5633,35 @@ internal object HookSymbolResolver {
             this.aiImageViewerJumpButtonInitMethod = aiImageViewerJumpButtonInitMethod
 
             this.scanErrors = scanErrors
-            source = if (homeMatch != null) "scan" else "partial"
+            source = if (homeTabScan.tabClass != null) "scan" else "partial"
             createdAt = System.currentTimeMillis()
         }
         return scanned.withFeatureStatusMap(HookFeatureStatusDeriver.derive(scanned))
     }
 
-    private fun scanReplyServerResponseLogSymbols(
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): ReplyServerResponseLogScanSymbols? {
-        val responseClass = safeFindClass(REPLY_SERVER_RESPONSE_CLASS, cl) ?: run {
-            log(logger, "replyServerResponseLog: class missing $REPLY_SERVER_RESPONSE_CLASS")
-            return null
-        }
-        val decodeCandidates = try {
-            responseClass.declaredMethods.filter { method ->
-                isReplyServerResponseDecodeMethod(method, REPLY_SERVER_RESPONSE_DECODE_METHOD)
-            }
-        } catch (t: Throwable) {
-            log(logger, "replyServerResponseLog: declaredMethods failed: ${t.message}")
-            return null
-        }
-        val decodeMethod = decodeCandidates.singleOrNull() ?: run {
-            log(
-                logger,
-                "replyServerResponseLog: decode method candidates=" +
-                    decodeCandidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
-            )
-            return null
-        }
-        val resultJsonField = try {
-            responseClass.declaredFields.singleOrNull { field ->
-                field.name == REPLY_SERVER_RESPONSE_RESULT_JSON_FIELD &&
-                    JSONObject::class.java.isAssignableFrom(field.type)
-            }
-        } catch (t: Throwable) {
-            log(logger, "replyServerResponseLog: declaredFields failed: ${t.message}")
-            return null
-        } ?: run {
-            log(logger, "replyServerResponseLog: result JSON field missing")
-            return null
-        }
-        log(
-            logger,
-            "replyServerResponseLog matched: " +
-                "${responseClass.name}.${decodeMethod.name}[${resultJsonField.name}]",
-        )
-        return ReplyServerResponseLogScanSymbols(
-            responseClass = responseClass.name,
-            decodeMethod = decodeMethod.name,
-            resultJsonField = resultJsonField.name,
-        )
-    }
+    internal fun collectInstanceFields(clazz: Class<*>): List<Field> =
+        ScanReflection.collectInstanceFields(clazz)
 
-    private fun isReplyServerResponseDecodeMethod(method: Method, methodName: String): Boolean {
-        return method.name == methodName &&
-            method.returnType == Void.TYPE &&
-            method.parameterTypes.size == 2 &&
-            isIntType(method.parameterTypes[0]) &&
-            method.parameterTypes[1] == ByteArray::class.java
-    }
+    internal fun collectInstanceFieldsUncached(clazz: Class<*>): List<Field> =
+        ScanReflection.collectInstanceFieldsUncached(clazz)
 
-    private fun scanAgreeServerResponseLogSymbols(
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): AgreeServerResponseLogScanSymbols? {
-        val responseClass = safeFindClass(AGREE_SERVER_RESPONSE_CLASS, cl) ?: run {
-            log(logger, "agreeServerResponseLog: class missing $AGREE_SERVER_RESPONSE_CLASS")
-            return null
-        }
-        val jsonResponseClass = safeFindClass(JSON_HTTP_RESPONSED_MESSAGE_CLASS, cl) ?: run {
-            log(logger, "agreeServerResponseLog: base class missing $JSON_HTTP_RESPONSED_MESSAGE_CLASS")
-            return null
-        }
-        if (!jsonResponseClass.isAssignableFrom(responseClass)) {
-            log(
-                logger,
-                "agreeServerResponseLog: $AGREE_SERVER_RESPONSE_CLASS is not a JsonHttpResponsedMessage",
-            )
-            return null
-        }
-        val decodeCandidates = try {
-            responseClass.declaredMethods.filter { method ->
-                isAgreeServerResponseDecodeLogicMethod(method, AGREE_SERVER_RESPONSE_DECODE_LOGIC_METHOD)
-            }
-        } catch (t: Throwable) {
-            log(logger, "agreeServerResponseLog: declaredMethods failed: ${t.message}")
-            return null
-        }
-        val decodeLogicMethod = decodeCandidates.singleOrNull() ?: run {
-            log(
-                logger,
-                "agreeServerResponseLog: decode logic method candidates=" +
-                    decodeCandidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
-            )
-            return null
-        }
-        log(
-            logger,
-            "agreeServerResponseLog matched: ${responseClass.name}.${decodeLogicMethod.name}",
-        )
-        return AgreeServerResponseLogScanSymbols(
-            responseClass = responseClass.name,
-            decodeLogicMethod = decodeLogicMethod.name,
-        )
-    }
+    internal fun collectInstanceMethods(clazz: Class<*>): List<Method> =
+        ScanReflection.collectInstanceMethods(clazz)
 
-    private fun isAgreeServerResponseDecodeLogicMethod(method: Method, methodName: String): Boolean {
-        return method.name == methodName &&
-            method.returnType == Void.TYPE &&
-            method.parameterTypes.size == 2 &&
-            isIntType(method.parameterTypes[0]) &&
-            JSONObject::class.java.isAssignableFrom(method.parameterTypes[1])
-    }
+    internal fun collectInstanceMethodsUncached(clazz: Class<*>): List<Method> =
+        ScanReflection.collectInstanceMethodsUncached(clazz)
 
-    private fun scanReplyVisibilityProbeSymbols(
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): ReplyVisibilityProbeScanSymbols {
-        fun findClass(label: String, className: String): Class<*>? {
-            return safeFindClass(className, cl) ?: run {
-                log(logger, "replyVisibilityProbe: $label class missing $className")
-                null
-            }
-        }
+    internal fun isListType(type: Class<*>): Boolean = ScanReflection.isListType(type)
 
-        fun logMissing(label: String, candidates: List<Method> = emptyList()) {
-            val suffix = if (candidates.isEmpty()) {
-                ""
-            } else {
-                " candidates=${candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" }}"
-            }
-            log(logger, "replyVisibilityProbe: $label missing$suffix")
-        }
+    internal fun isBooleanType(type: Class<*>): Boolean = ScanReflection.isBooleanType(type)
 
-        val replyResponseClass = findClass("reply response", REPLY_SERVER_RESPONSE_CLASS)
-        val addPostRequestClass = findClass("add post request", ADD_POST_REQUEST_CLASS)
-        val responsedMessageClass = findClass("responsed message", RESPONSED_MESSAGE_CLASS)
-        val messageClass = findClass("message", MESSAGE_CLASS)
-        val httpMessageClass = findClass("http message", HTTP_MESSAGE_CLASS)
-        val messageManagerClass = findClass("message manager", MESSAGE_MANAGER_CLASS)
-        val messageTaskClass = findClass("message task", MESSAGE_TASK_CLASS)
-        val httpMessageTaskClass = findClass("http message task", HTTP_MESSAGE_TASK_CLASS)
-        val tbHttpMessageTaskClass = findClass("tb http message task", TB_HTTP_MESSAGE_TASK_CLASS)
-        val bdUniqueIdClass = findClass("bd unique id", BD_UNIQUE_ID_CLASS)
-        val tbadkCoreApplicationClass = findClass("tbadk core application", TBADK_CORE_APPLICATION_CLASS)
-        val tbConfigClass = findClass("tb config", TB_CONFIG_CLASS)
-        val cmdConfigHttpClass = findClass("cmd config http", CMD_CONFIG_HTTP_CLASS)
-        val agreeResponseClass = findClass("agree response", AGREE_SERVER_RESPONSE_CLASS)
-        val jsonResponseClass = findClass("json response", JSON_HTTP_RESPONSED_MESSAGE_CLASS)
+    internal fun isIntType(type: Class<*>): Boolean = ScanReflection.isIntType(type)
 
-        val replyDecodeMethod = replyResponseClass?.declaredMethods
-            ?.filter { method -> isReplyServerResponseDecodeMethod(method, REPLY_SERVER_RESPONSE_DECODE_METHOD) }
-            ?.singleOrNull()
-            ?: run {
-                val candidates = replyResponseClass?.declaredMethods
-                    ?.filter { it.name == REPLY_SERVER_RESPONSE_DECODE_METHOD }
-                    .orEmpty()
-                if (replyResponseClass != null) logMissing("reply decode method", candidates)
-                null
-            }
-        val replyResultJsonField = replyResponseClass?.declaredFields?.singleOrNull { field ->
-            field.name == REPLY_SERVER_RESPONSE_RESULT_JSON_FIELD &&
-                JSONObject::class.java.isAssignableFrom(field.type)
-        } ?: run {
-            if (replyResponseClass != null) log(logger, "replyVisibilityProbe: reply result JSON field missing")
-            null
-        }
-        val addPostRequestDataField = addPostRequestClass?.declaredFields?.singleOrNull { field ->
-            field.name == ADD_POST_REQUEST_DATA_FIELD && isStringMapField(field)
-        } ?: run {
-            if (addPostRequestClass != null) log(logger, "replyVisibilityProbe: add post requestData field missing")
-            null
-        }
-        val getOriginalMessageMethod = if (responsedMessageClass != null && messageClass != null) {
-            responsedMessageClass.declaredMethods.singleOrNull { method ->
-                method.name == RESPONSED_MESSAGE_GET_ORIGINAL_METHOD &&
-                    method.parameterTypes.isEmpty() &&
-                    messageClass.isAssignableFrom(method.returnType)
-            } ?: run {
-                logMissing("get original message method")
-                null
-            }
-        } else {
-            null
-        }
-        val messageGetExtraMethod = messageClass?.declaredMethods?.singleOrNull { method ->
-            method.name == MESSAGE_GET_EXTRA_METHOD &&
-                method.parameterTypes.isEmpty() &&
-                method.returnType == Any::class.java
-        } ?: run {
-            if (messageClass != null) logMissing("message getExtra method")
-            null
-        }
-        val messageGetTagMethod = if (messageClass != null && bdUniqueIdClass != null) {
-            messageClass.declaredMethods.singleOrNull { method ->
-                method.name == MESSAGE_GET_TAG_METHOD &&
-                    method.parameterTypes.isEmpty() &&
-                    bdUniqueIdClass.isAssignableFrom(method.returnType)
-            } ?: run {
-                logMissing("message getTag method")
-                null
-            }
-        } else {
-            null
-        }
-        val messageSetTagMethod = if (messageClass != null && bdUniqueIdClass != null) {
-            messageClass.declaredMethods.singleOrNull { method ->
-                method.name == MESSAGE_SET_TAG_METHOD &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 1 &&
-                    method.parameterTypes[0] == bdUniqueIdClass
-            } ?: run {
-                logMissing("message setTag method")
-                null
-            }
-        } else {
-            null
-        }
-        val httpMessageConstructor = httpMessageClass?.declaredConstructors?.singleOrNull { constructor ->
-            constructor.parameterTypes.size == 1 && isIntType(constructor.parameterTypes[0])
-        } ?: run {
-            if (httpMessageClass != null) log(logger, "replyVisibilityProbe: HttpMessage(int) constructor missing")
-            null
-        }
-        val httpMessageAddParamMethod = httpMessageClass?.declaredMethods?.singleOrNull { method ->
-            method.name == HTTP_MESSAGE_ADD_PARAM_METHOD &&
-                method.parameterTypes.size == 2 &&
-                method.parameterTypes[0] == String::class.java &&
-                method.parameterTypes[1] == Any::class.java
-        } ?: run {
-            if (httpMessageClass != null) logMissing("HttpMessage addParam(String,Object) method")
-            null
-        }
-        val httpMessageAddHeaderMethod = httpMessageClass?.declaredMethods?.singleOrNull { method ->
-            method.name == HTTP_MESSAGE_ADD_HEADER_METHOD &&
-                method.returnType == String::class.java &&
-                method.parameterTypes.contentEquals(arrayOf(String::class.java, String::class.java))
-        } ?: run {
-            if (httpMessageClass != null) logMissing("HttpMessage addHeader(String,String) method")
-            null
-        }
-        val messageManagerGetInstanceMethod = messageManagerClass?.declaredMethods?.singleOrNull { method ->
-            method.name == MESSAGE_MANAGER_GET_INSTANCE_METHOD &&
-                Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                messageManagerClass.isAssignableFrom(method.returnType)
-        } ?: run {
-            if (messageManagerClass != null) logMissing("MessageManager getInstance method")
-            null
-        }
-        val messageManagerFindTaskMethod = if (messageManagerClass != null && messageTaskClass != null) {
-            messageManagerClass.declaredMethods.singleOrNull { method ->
-                method.name == MESSAGE_MANAGER_FIND_TASK_METHOD &&
-                    method.parameterTypes.size == 1 &&
-                    isIntType(method.parameterTypes[0]) &&
-                    messageTaskClass.isAssignableFrom(method.returnType)
-            } ?: run {
-                logMissing("MessageManager findTask method")
-                null
-            }
-        } else {
-            null
-        }
-        val messageManagerRegisterTaskMethod = if (messageManagerClass != null && messageTaskClass != null) {
-            messageManagerClass.declaredMethods.singleOrNull { method ->
-                method.name == MESSAGE_MANAGER_REGISTER_TASK_METHOD &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 1 &&
-                    method.parameterTypes[0] == messageTaskClass
-            } ?: run {
-                logMissing("MessageManager registerTask method")
-                null
-            }
-        } else {
-            null
-        }
-        val messageManagerSendMethod = if (messageManagerClass != null && messageClass != null) {
-            messageManagerClass.declaredMethods.singleOrNull { method ->
-                method.name == MESSAGE_MANAGER_SEND_MESSAGE_METHOD &&
-                    method.returnType == Boolean::class.javaPrimitiveType &&
-                    method.parameterTypes.size == 1 &&
-                    method.parameterTypes[0] == messageClass
-            } ?: run {
-                logMissing("MessageManager sendMessage(Message) method")
-                null
-            }
-        } else {
-            null
-        }
-        val tbHttpMessageTaskConstructor = tbHttpMessageTaskClass?.declaredConstructors?.singleOrNull { constructor ->
-            constructor.parameterTypes.size == 2 &&
-                isIntType(constructor.parameterTypes[0]) &&
-                constructor.parameterTypes[1] == String::class.java
-        } ?: run {
-            if (tbHttpMessageTaskClass != null) {
-                log(logger, "replyVisibilityProbe: TbHttpMessageTask(int,String) constructor missing")
-            }
-            null
-        }
-        val httpMessageTaskSetResponsedClassMethod = httpMessageTaskClass?.declaredMethods?.singleOrNull { method ->
-            method.name == HTTP_MESSAGE_TASK_SET_RESPONSE_CLASS_METHOD &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                method.parameterTypes[0] == Class::class.java
-        } ?: run {
-            if (httpMessageTaskClass != null) logMissing("HttpMessageTask setResponsedClass method")
-            null
-        }
-        val tbHttpMessageTaskSetIsNeedTbsMethod = tbHttpMessageTaskClass?.declaredMethods?.singleOrNull { method ->
-            method.name == TB_HTTP_MESSAGE_TASK_SET_NEED_TBS_METHOD &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                method.parameterTypes[0] == Boolean::class.javaPrimitiveType
-        } ?: run {
-            if (tbHttpMessageTaskClass != null) logMissing("TbHttpMessageTask setIsNeedTbs method")
-            null
-        }
-        val bdUniqueIdGenMethod = bdUniqueIdClass?.declaredMethods?.singleOrNull { method ->
-            method.name == BD_UNIQUE_ID_GEN_METHOD &&
-                Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                bdUniqueIdClass.isAssignableFrom(method.returnType)
-        } ?: run {
-            if (bdUniqueIdClass != null) logMissing("BdUniqueId gen method")
-            null
-        }
-        val tbadkCoreApplicationGetInstMethod = tbadkCoreApplicationClass?.declaredMethods?.singleOrNull { method ->
-            method.name == TBADK_CORE_APPLICATION_GET_INST_METHOD &&
-                Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                tbadkCoreApplicationClass.isAssignableFrom(method.returnType)
-        } ?: run {
-            if (tbadkCoreApplicationClass != null) logMissing("TbadkCoreApplication getInst method")
-            null
-        }
-        val tbadkCoreApplicationGetZidMethod = tbadkCoreApplicationClass?.declaredMethods?.singleOrNull { method ->
-            method.name == TBADK_CORE_APPLICATION_GET_ZID_METHOD &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                method.returnType == String::class.java
-        } ?: run {
-            if (tbadkCoreApplicationClass != null) logMissing("TbadkCoreApplication getZid method")
-            null
-        }
-        val tbConfigServerAddressField = tbConfigClass?.declaredFields?.singleOrNull { field ->
-            field.name == TB_CONFIG_SERVER_ADDRESS_FIELD &&
-                Modifier.isStatic(field.modifiers) &&
-                field.type == String::class.java
-        } ?: run {
-            if (tbConfigClass != null) log(logger, "replyVisibilityProbe: TbConfig SERVER_ADDRESS field missing")
-            null
-        }
-        val tbConfigPbFloorAgreeUrlField = tbConfigClass?.declaredFields?.singleOrNull { field ->
-            field.name == TB_CONFIG_PB_FLOOR_AGREE_URL_FIELD &&
-                Modifier.isStatic(field.modifiers) &&
-                field.type == String::class.java
-        } ?: run {
-            if (tbConfigClass != null) log(logger, "replyVisibilityProbe: TbConfig PB_FLOOR_AGREE_URL field missing")
-            null
-        }
-        val cmdPbFloorAgreeField = cmdConfigHttpClass?.declaredFields?.singleOrNull { field ->
-            field.name == CMD_CONFIG_HTTP_PB_FLOOR_AGREE_FIELD &&
-                Modifier.isStatic(field.modifiers) &&
-                isIntType(field.type)
-        } ?: run {
-            if (cmdConfigHttpClass != null) {
-                log(logger, "replyVisibilityProbe: CmdConfigHttp CMD_PB_FLOOR_AGREE field missing")
-            }
-            null
-        }
-        val agreeDecodeLogicMethod = if (agreeResponseClass != null) {
-            if (jsonResponseClass != null && !jsonResponseClass.isAssignableFrom(agreeResponseClass)) {
-                log(logger, "replyVisibilityProbe: agree response is not JsonHttpResponsedMessage")
-                null
-            } else {
-                val candidates = agreeResponseClass.declaredMethods.filter { method ->
-                    isAgreeServerResponseDecodeLogicMethod(method, AGREE_SERVER_RESPONSE_DECODE_LOGIC_METHOD)
-                }
-                candidates.singleOrNull() ?: run {
-                    logMissing("agree decode logic method", candidates)
-                    null
-                }
-            }
-        } else {
-            null
-        }
+    internal fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
+        ScanReflection.safeFindClass(name, cl)
 
-        log(
-            logger,
-            "replyVisibilityProbe matched: " +
-                "${replyResponseClass?.name}.${replyDecodeMethod?.name} -> " +
-                "${httpMessageClass?.name} / ${agreeResponseClass?.name}.${agreeDecodeLogicMethod?.name}",
-        )
-        return ReplyVisibilityProbeScanSymbols(
-            replyResponseClass = replyResponseClass?.name,
-            replyDecodeMethod = replyDecodeMethod?.name,
-            replyResultJsonField = replyResultJsonField?.name,
-            addPostRequestClass = addPostRequestClass?.name,
-            addPostRequestDataField = addPostRequestDataField?.name,
-            responsedMessageClass = responsedMessageClass?.name,
-            getOriginalMessageMethod = getOriginalMessageMethod?.name,
-            messageClass = messageClass?.name,
-            messageGetExtraMethod = messageGetExtraMethod?.name,
-            messageGetTagMethod = messageGetTagMethod?.name,
-            messageSetTagMethod = messageSetTagMethod?.name,
-            httpMessageClass = httpMessageClass?.name,
-            httpMessageConstructor = httpMessageConstructor?.let { "<init>(int)" },
-            httpMessageAddParamMethod = httpMessageAddParamMethod?.name,
-            httpMessageAddHeaderMethod = httpMessageAddHeaderMethod?.name,
-            messageManagerClass = messageManagerClass?.name,
-            messageManagerGetInstanceMethod = messageManagerGetInstanceMethod?.name,
-            messageManagerFindTaskMethod = messageManagerFindTaskMethod?.name,
-            messageManagerRegisterTaskMethod = messageManagerRegisterTaskMethod?.name,
-            messageManagerSendMethod = messageManagerSendMethod?.name,
-            tbHttpMessageTaskClass = tbHttpMessageTaskClass?.name,
-            tbHttpMessageTaskConstructor = tbHttpMessageTaskConstructor?.let { "<init>(int,String)" },
-            httpMessageTaskSetResponsedClassMethod = httpMessageTaskSetResponsedClassMethod?.name,
-            tbHttpMessageTaskSetIsNeedTbsMethod = tbHttpMessageTaskSetIsNeedTbsMethod?.name,
-            bdUniqueIdClass = bdUniqueIdClass?.name,
-            bdUniqueIdGenMethod = bdUniqueIdGenMethod?.name,
-            tbadkCoreApplicationClass = tbadkCoreApplicationClass?.name,
-            tbadkCoreApplicationGetInstMethod = tbadkCoreApplicationGetInstMethod?.name,
-            tbadkCoreApplicationGetZidMethod = tbadkCoreApplicationGetZidMethod?.name,
-            tbConfigClass = tbConfigClass?.name,
-            tbConfigServerAddressField = tbConfigServerAddressField?.name,
-            tbConfigPbFloorAgreeUrlField = tbConfigPbFloorAgreeUrlField?.name,
-            cmdConfigHttpClass = cmdConfigHttpClass?.name,
-            cmdPbFloorAgreeField = cmdPbFloorAgreeField?.name,
-            agreeResponseClass = agreeResponseClass?.name,
-            agreeDecodeLogicMethod = agreeDecodeLogicMethod?.name,
-        )
-    }
-
-    private fun isStringMapField(field: Field): Boolean {
-        if (!Map::class.java.isAssignableFrom(field.type)) return false
-        val type = field.genericType
-        if (type !is ParameterizedType) return true
-        val args = type.actualTypeArguments
-        return args.size == 2 && args.all(::isStringTypeArgument)
-    }
-
-    private fun isStringTypeArgument(type: Type): Boolean {
-        return when (type) {
-            String::class.java -> true
-            is WildcardType -> type.upperBounds.any { it == String::class.java }
-            else -> false
-        }
-    }
-
-    private fun scanAiComponentSymbols(
-        context: Context,
-        cl: ClassLoader,
-        candidateClassNames: List<String>,
-        logger: ScanLogger?,
-    ): AiComponentScanSymbols {
-        val imageViewerJumpButtonScan = scanImageViewerJumpButtonSymbols(context, cl, candidateClassNames, logger)
-        val emojiCreationScan = scanPbAiEmojiCreationSymbols(cl, logger)
-        val optionalScan = imageViewerJumpButtonScan.copy(
-            pbAiEmojiCreationViewBindMethod = emojiCreationScan.pbAiEmojiCreationViewBindMethod,
-            pbPageBrowserAiEmojiCreationBindMethod = emojiCreationScan.pbPageBrowserAiEmojiCreationBindMethod,
-        )
-        val controllerClass = safeFindClass(AI_SPRITE_MEME_PAN_CONTROLLER_CLASS, cl) ?: run {
-            log(logger, "aiComponent: class not found: $AI_SPRITE_MEME_PAN_CONTROLLER_CLASS")
-            return optionalScan
-        }
-        val inputContainerClass = safeFindClass(AI_PB_NEW_INPUT_CONTAINER_CLASS, cl) ?: run {
-            log(logger, "aiComponent: class not found: $AI_PB_NEW_INPUT_CONTAINER_CLASS")
-            return optionalScan.copy(
-                spriteMemePanControllerClass = controllerClass.name,
-                spriteMemeEnableMethod = resolveAiSpriteMemeEnableMethod(controllerClass, cl, logger)?.name,
-            )
-        }
-        val spriteMemePanClass = safeFindClass(AI_SPRITE_MEME_PAN_CLASS, cl)
-        val enableMethod = resolveAiSpriteMemeEnableMethod(controllerClass, cl, logger)
-        val initSpriteMemeMethod = scanSpriteMemeInitMethodFromDex(context, inputContainerClass, logger)
-            ?: resolveNamedPbNewInputContextInitMethod(
-                inputContainerClass,
-                AI_PB_NEW_INPUT_INIT_SPRITE_MEME_METHOD,
-                logger,
-            )
-        val initAiWriteMethod = scanAiWriteInitMethodFromDex(context, inputContainerClass, logger)
-            ?: resolveNamedPbNewInputContextInitMethod(
-                inputContainerClass,
-                AI_PB_NEW_INPUT_INIT_AI_WRITE_METHOD,
-                logger,
-            )
-
-        if (!isAiPbNewInputContainerClassValid(inputContainerClass, spriteMemePanClass)) {
-            log(logger, "aiComponent: PbNewInputContainer structure mismatch")
-            return optionalScan.copy(
-                spriteMemePanControllerClass = controllerClass.name,
-                spriteMemeEnableMethod = enableMethod?.name,
-                pbNewInputContainerClass = inputContainerClass.name,
-                pbInitSpriteMemeMethod = initSpriteMemeMethod?.name,
-                pbInitAiWriteMethod = initAiWriteMethod?.name,
-            )
-        }
-
-        log(
-            logger,
-            "aiComponent matched: " +
-                "${controllerClass.name}.${enableMethod?.name} / " +
-                "${inputContainerClass.name}.{${initSpriteMemeMethod?.name},${initAiWriteMethod?.name}}",
-        )
-        return optionalScan.copy(
-            spriteMemePanControllerClass = controllerClass.name,
-            spriteMemeEnableMethod = enableMethod?.name,
-            pbNewInputContainerClass = inputContainerClass.name,
-            pbInitSpriteMemeMethod = initSpriteMemeMethod?.name,
-            pbInitAiWriteMethod = initAiWriteMethod?.name,
-        )
-    }
-
-    private fun scanPbAiEmojiCreationSymbols(
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): AiComponentScanSymbols {
-        val viewBindMethod = scanPbAiEmojiCreationViewBindMethod(cl, logger)
-        val pageBrowserBindMethod = scanPbPageBrowserAiEmojiCreationBindMethod(cl, logger)
-        log(
-            logger,
-            "aiComponent.pbAiEmojiCreation matched: " +
-                "bind=${viewBindMethod?.name ?: "-"}, pageBrowser=${pageBrowserBindMethod?.name ?: "-"}",
-        )
-        return AiComponentScanSymbols(
-            pbAiEmojiCreationViewBindMethod = viewBindMethod?.name,
-            pbPageBrowserAiEmojiCreationBindMethod = pageBrowserBindMethod?.name,
-        )
-    }
-
-    private fun scanPbAiEmojiCreationViewBindMethod(
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): Method? {
-        return try {
-            val viewClass = safeFindClass(AI_PB_AI_EMOJI_CREATION_VIEW_CLASS, cl) ?: run {
-                log(logger, "aiComponent.pbAiEmojiCreation: view class not found")
-                return null
-            }
-            viewClass.declaredMethods.singleOrNull { method ->
-                isAiPbEmojiCreationViewBindMethod(method, cl)
-            } ?: run {
-                log(logger, "aiComponent.pbAiEmojiCreation: view bind method not found")
-                null
-            }
-        } catch (t: Throwable) {
-            log(logger, "aiComponent.pbAiEmojiCreation: view bind error: ${formatScanException(t)}")
-            null
-        }
-    }
-
-    private fun scanPbPageBrowserAiEmojiCreationBindMethod(
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): Method? {
-        return try {
-            val viewClass = safeFindClass(AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS, cl) ?: run {
-                log(logger, "aiComponent.pbAiEmojiCreation: page browser view class not found")
-                return null
-            }
-            viewClass.declaredMethods.singleOrNull { method ->
-                isPbPageBrowserAiEmojiCreationBindMethod(method)
-            } ?: run {
-                log(logger, "aiComponent.pbAiEmojiCreation: page browser bind method not found")
-                null
-            }
-        } catch (t: Throwable) {
-            log(logger, "aiComponent.pbAiEmojiCreation: page browser bind error: ${formatScanException(t)}")
-            null
-        }
-    }
-
-    private fun scanImageViewerJumpButtonSymbols(
-        context: Context,
-        cl: ClassLoader,
-        candidateClassNames: List<String>,
-        logger: ScanLogger?,
-    ): AiComponentScanSymbols {
-        val layoutClass = safeFindClass(AI_IMAGE_JUMP_BUTTON_LAYOUT_CLASS, cl) ?: run {
-            log(logger, "aiComponent.imageViewerJumpButton: class not found: $AI_IMAGE_JUMP_BUTTON_LAYOUT_CLASS")
-            return AiComponentScanSymbols()
-        }
-        val ownerClass = resolveImageViewerJumpButtonOwnerClass(candidateClassNames, cl, layoutClass, logger)
-            ?: return AiComponentScanSymbols()
-        val initMethod = scanImageViewerJumpButtonInitMethodFromDex(context, ownerClass, logger)
-        if (initMethod == null) {
-            log(logger, "aiComponent.imageViewerJumpButton: init method missing: ${ownerClass.name}")
-            return AiComponentScanSymbols(imageViewerJumpButtonOwnerClass = ownerClass.name)
-        }
-        log(logger, "aiComponent.imageViewerJumpButton matched: ${ownerClass.name}.${initMethod.name}")
-        return AiComponentScanSymbols(
-            imageViewerJumpButtonOwnerClass = ownerClass.name,
-            imageViewerJumpButtonInitMethod = initMethod.name,
-        )
-    }
-
-    private fun resolveImageViewerJumpButtonOwnerClass(
-        candidateClassNames: List<String>,
-        cl: ClassLoader,
-        layoutClass: Class<*>,
-        logger: ScanLogger?,
-    ): Class<*>? {
-        var skippedByReflection = 0
-        var firstReflectionError: String? = null
-        val matches = candidateClassNames
-            .distinct()
-            .mapNotNull { className ->
-                try {
-                    val clazz = safeFindClass(className, cl) ?: return@mapNotNull null
-                    val score = scoreImageViewerJumpButtonOwnerClass(clazz, layoutClass)
-                    if (score > 0) clazz to score else null
-                } catch (t: Throwable) {
-                    skippedByReflection++
-                    if (firstReflectionError == null) {
-                        firstReflectionError = sanitizeScanStatusText(formatScanException(t))
-                    }
-                    null
-                }
-            }
-            .sortedWith(
-                compareByDescending<Pair<Class<*>, Int>> { it.second }
-                    .thenBy { it.first.name.length }
-                    .thenBy { it.first.name },
-            )
-
-        if (skippedByReflection > 0) {
-            val line = "aiComponent.imageViewerJumpButton: skipped classes by reflection=$skippedByReflection" +
-                (firstReflectionError?.let { ", firstException=$it" } ?: "")
-            try {
-                XposedCompat.logD("$TAG: $line")
-            } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
-            try {
-                logger?.log(line)
-            } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
-        }
-        val best = matches.firstOrNull() ?: run {
-            log(logger, "aiComponent.imageViewerJumpButton: owner class not found")
-            return null
-        }
-        val second = matches.getOrNull(1)
-        if (second != null && best.second - second.second < 20) {
-            log(
-                logger,
-                "aiComponent.imageViewerJumpButton: owner ambiguous: " +
-                    "best=${best.first.name}:${best.second}, second=${second.first.name}:${second.second}",
-            )
-            return null
-        }
-        return best.first
-    }
-
-    internal fun scoreImageViewerJumpButtonOwnerClass(clazz: Class<*>, layoutClass: Class<*>): Int {
-        if (clazz.isInterface || Modifier.isAbstract(clazz.modifiers)) return 0
-        if (!clazz.name.startsWith("com.baidu.tieba.")) return 0
-        val fields = collectInstanceFields(clazz)
-        if (fields.none { layoutClass.isAssignableFrom(it.type) }) return 0
-
-        val constructors = runCatching { clazz.declaredConstructors }.getOrNull() ?: return 0
-        val methods = runCatching { clazz.declaredMethods }.getOrNull() ?: return 0
-        val hasContextRelativeCtor = constructors.any { ctor ->
-            val params = ctor.parameterTypes
-            params.size == 2 &&
-                Context::class.java.isAssignableFrom(params[0]) &&
-                RelativeLayout::class.java.isAssignableFrom(params[1])
-        }
-        if (!hasContextRelativeCtor) return 0
-
-        var score = 150
-        if (clazz.interfaces.any { it.name == "com.baidu.tieba.np6" }) score += 18
-        if (fields.any { it.type == Context::class.java }) score += 10
-        if (fields.any { it.type == LinearLayout::class.java }) score += 10
-        if (fields.any { it.type.name == AI_IMAGE_VIEWER_BOTTOM_LAYOUT_CLASS }) score += 14
-        if (fields.any { it.type.name == AI_IMAGE_VIEWER_ABS_FLOOR_IMAGE_TEXT_VIEW_CLASS }) score += 10
-        if (fields.any { it.type.name == AI_IMAGE_VIEWER_FACE_GROUP_DOWNLOAD_LAYOUT_CLASS }) score += 10
-        if (methods.any { method -> method.parameterTypes.isEmpty() && layoutClass.isAssignableFrom(method.returnType) }) {
-            score += 12
-        }
-        score -= fields.size / 3
-        score -= methods.size / 6
-        score -= clazz.simpleName.length
-        return if (score >= 145) score else 0
-    }
-
-    private fun scanImageViewerJumpButtonInitMethodFromDex(
-        context: Context,
-        ownerClass: Class<*>,
-        logger: ScanLogger?,
-    ): Method? {
-        val sourcePaths = appSourcePaths(context)
-        if (sourcePaths.isEmpty()) {
-            log(logger, "aiComponent.imageViewerJumpButtonDex: apk source path unavailable")
-            return null
-        }
-        val matches = DexShareIconScanner.scanImageViewerJumpButtonInit(
-            sourcePaths = sourcePaths,
-            ownerClassName = ownerClass.name,
-            logger = logger,
-        )
-            .filter { isImageViewerJumpButtonInitMethodName(ownerClass, it.ownerMethodName) }
-            .groupBy { it.ownerMethodName }
-            .mapNotNull { (_, methodMatches) -> methodMatches.maxByOrNull { it.score } }
-            .sortedWith(
-                compareByDescending<DexAiComponentInitMatch> { it.score }
-                    .thenBy { it.ownerMethodName.length }
-                    .thenBy { it.ownerMethodName },
-            )
-        return pickImageViewerJumpButtonInitDexMatch(ownerClass, matches, logger)
-    }
-
-    private fun pickImageViewerJumpButtonInitDexMatch(
-        ownerClass: Class<*>,
-        matches: List<DexAiComponentInitMatch>,
-        logger: ScanLogger?,
-    ): Method? {
-        val best = matches.firstOrNull() ?: run {
-            log(logger, "aiComponent.imageViewerJumpButtonDex: no semantic match")
-            return null
-        }
-        val second = matches.getOrNull(1)
-        if (second != null && best.score - second.score < 20) {
-            log(
-                logger,
-                "aiComponent.imageViewerJumpButtonDex ambiguous: " +
-                    "best=${best.ownerMethodName}:${best.score}[${best.evidence}], " +
-                    "second=${second.ownerMethodName}:${second.score}[${second.evidence}]",
-            )
-            return null
-        }
-        val method = ownerClass.declaredMethods.singleOrNull { method ->
-            method.name == best.ownerMethodName && isImageViewerJumpButtonInitMethod(method)
-        } ?: run {
-            log(logger, "aiComponent.imageViewerJumpButtonDex: reflection mismatch: ${ownerClass.name}.${best.ownerMethodName}")
-            return null
-        }
-        log(
-            logger,
-            "aiComponent.imageViewerJumpButtonDex matched: ${ownerClass.name}.${method.name} " +
-                "score=${best.score} evidence=${best.evidence}",
-        )
-        return method
-    }
-
-    internal fun isImageViewerJumpButtonInitMethodName(ownerClass: Class<*>, methodName: String): Boolean {
-        return ownerClass.declaredMethods.any { method ->
-            method.name == methodName && isImageViewerJumpButtonInitMethod(method)
-        }
-    }
-
-    internal fun isImageViewerJumpButtonInitMethod(method: Method): Boolean {
-        return !Modifier.isStatic(method.modifiers) &&
-            method.returnType == Void.TYPE &&
-            method.parameterTypes.isEmpty()
-    }
-
-    internal fun isAiPbEmojiCreationViewBindMethod(method: Method, cl: ClassLoader): Boolean {
-        if (Modifier.isStatic(method.modifiers) || method.returnType != Void.TYPE) return false
-        val spriteMemeInfoClass = safeFindClass(AI_SPRITE_MEME_INFO_CLASS, cl) ?: return false
-        val params = method.parameterTypes
-        return params.size == 3 &&
-            spriteMemeInfoClass.isAssignableFrom(params[0]) &&
-            isIntType(params[1]) &&
-            Map::class.java.isAssignableFrom(params[2])
-    }
-
-    internal fun isPbPageBrowserAiEmojiCreationBindMethod(method: Method): Boolean {
-        return !Modifier.isStatic(method.modifiers) &&
-            method.returnType == Void.TYPE &&
-            method.parameterTypes.size == 1
-    }
-
-    private fun scanAiWriteInitMethodFromDex(
-        context: Context,
-        inputContainerClass: Class<*>,
-        logger: ScanLogger?,
-    ): Method? {
-        val sourcePaths = appSourcePaths(context)
-        if (sourcePaths.isEmpty()) {
-            log(logger, "aiComponent.aiWriteDex: apk source path unavailable")
-            return null
-        }
-        val dexMatches = DexShareIconScanner.scanAiWriteInit(
-            sourcePaths = sourcePaths,
-            ownerClassName = inputContainerClass.name,
-            logger = logger,
-        )
-            .filter { isPbNewInputContextInitMethodName(inputContainerClass, it.ownerMethodName) }
-        val matches = dexMatches
-            .filter { it.strong }
-            .groupBy { it.ownerMethodName }
-            .mapNotNull { (_, methodMatches) -> methodMatches.maxByOrNull { it.score } }
-            .sortedWith(
-                compareByDescending<DexAiComponentInitMatch> { it.score }
-                    .thenBy { it.ownerMethodName.length }
-                    .thenBy { it.ownerMethodName },
-            )
-        if (matches.isEmpty()) {
-            logAiComponentInitDexDiagnostics(logger, "aiWriteDex", dexMatches)
-        }
-        return pickAiComponentInitDexMatch(
-            ownerClass = inputContainerClass,
-            matches = matches,
-            logger = logger,
-            tag = "aiWriteDex",
-        )
-    }
-
-    private fun scanSpriteMemeInitMethodFromDex(
-        context: Context,
-        inputContainerClass: Class<*>,
-        logger: ScanLogger?,
-    ): Method? {
-        val sourcePaths = appSourcePaths(context)
-        if (sourcePaths.isEmpty()) {
-            log(logger, "aiComponent.spriteInitDex: apk source path unavailable")
-            return null
-        }
-        val matches = DexShareIconScanner.scanSpriteMemeInit(
-            sourcePaths = sourcePaths,
-            ownerClassName = inputContainerClass.name,
-            logger = logger,
-        )
-            .filter { isPbNewInputContextInitMethodName(inputContainerClass, it.ownerMethodName) }
-            .groupBy { it.ownerMethodName }
-            .mapNotNull { (_, methodMatches) -> methodMatches.maxByOrNull { it.score } }
-            .sortedWith(
-                compareByDescending<DexAiComponentInitMatch> { it.score }
-                    .thenBy { it.ownerMethodName.length }
-                    .thenBy { it.ownerMethodName },
-            )
-        return pickAiComponentInitDexMatch(
-            ownerClass = inputContainerClass,
-            matches = matches,
-            logger = logger,
-            tag = "spriteInitDex",
-        )
-    }
-
-    private fun logAiComponentInitDexDiagnostics(
-        logger: ScanLogger?,
-        tag: String,
-        matches: List<DexAiComponentInitMatch>,
-    ) {
-        if (matches.isEmpty()) return
-        val summary = matches
-            .sortedWith(
-                compareByDescending<DexAiComponentInitMatch> { it.score }
-                    .thenBy { it.ownerMethodName.length }
-                    .thenBy { it.ownerMethodName },
-            )
-            .take(3)
-            .joinToString(";") { match ->
-                "${match.ownerMethodName}:${match.score}[${match.evidence}]"
-            }
-        log(logger, "aiComponent.$tag partial candidates: $summary")
-    }
-
-    private fun pickAiComponentInitDexMatch(
-        ownerClass: Class<*>,
-        matches: List<DexAiComponentInitMatch>,
-        logger: ScanLogger?,
-        tag: String,
-    ): Method? {
-        val best = matches.firstOrNull() ?: run {
-            log(logger, "aiComponent.$tag: no semantic match")
-            return null
-        }
-        val second = matches.getOrNull(1)
-        if (second != null && best.score - second.score < 20) {
-            log(
-                logger,
-                "aiComponent.$tag ambiguous: best=${best.ownerMethodName}:${best.score}[${best.evidence}], " +
-                    "second=${second.ownerMethodName}:${second.score}[${second.evidence}]",
-            )
-            return null
-        }
-        val method = ownerClass.declaredMethods.singleOrNull { method ->
-            method.name == best.ownerMethodName && isPbNewInputContextInitMethod(method)
-        } ?: run {
-            log(logger, "aiComponent.$tag: reflection mismatch: ${ownerClass.name}.${best.ownerMethodName}")
-            return null
-        }
-        log(
-            logger,
-            "aiComponent.$tag matched: ${ownerClass.name}.${method.name} " +
-                "score=${best.score} evidence=${best.evidence}",
-        )
-        return method
-    }
-
-    private fun resolveAiSpriteMemeEnableMethod(
-        controllerClass: Class<*>,
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): Method? {
-        val inputShowTypeClass = safeFindClass(AI_PB_NEW_EDITOR_INPUT_SHOW_TYPE_CLASS, cl)
-        val candidates = controllerClass.declaredMethods.filter { method ->
-            isAiSpriteMemeEnableMethod(method, inputShowTypeClass)
-        }
-        if (candidates.size == 1) return candidates.first()
-        val preferred = candidates.singleOrNull { it.name == AI_SPRITE_MEME_ENABLE_METHOD }
-        if (preferred != null) return preferred
-        log(
-            logger,
-            "aiComponent: SpriteMeme enable method " +
-                "candidates=${candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" }}",
-        )
-        return null
-    }
-
-    private fun resolveNamedPbNewInputContextInitMethod(
-        inputContainerClass: Class<*>,
-        methodName: String,
-        logger: ScanLogger?,
-    ): Method? {
-        val candidates = inputContainerClass.declaredMethods.filter { method ->
-            method.name == methodName && isPbNewInputContextInitMethod(method)
-        }
-        val method = candidates.singleOrNull()
-        if (method != null) return method
-        log(
-            logger,
-            "aiComponent: PbNewInputContainer.$methodName candidates=" +
-                candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
-        )
-        return null
-    }
-
-    internal fun isAiSpriteMemeEnableMethod(method: Method, inputShowTypeClass: Class<*>?): Boolean {
-        val params = method.parameterTypes
-        return Modifier.isStatic(method.modifiers) &&
-            method.returnType == Boolean::class.javaPrimitiveType &&
-            params.size == 2 &&
-            Context::class.java.isAssignableFrom(params[0]) &&
-            (inputShowTypeClass?.let { params[1] == it } ?: (params[1].name == AI_PB_NEW_EDITOR_INPUT_SHOW_TYPE_CLASS))
-    }
-
-    internal fun isPbNewInputContextInitMethod(method: Method): Boolean {
-        val params = method.parameterTypes
-        return !Modifier.isStatic(method.modifiers) &&
-            method.returnType == Void.TYPE &&
-            params.size == 1 &&
-            Context::class.java.isAssignableFrom(params[0])
-    }
-
-    internal fun isPbNewInputContextInitMethodName(inputContainerClass: Class<*>, methodName: String): Boolean {
-        return inputContainerClass.declaredMethods.any { method ->
-            method.name == methodName && isPbNewInputContextInitMethod(method)
-        }
-    }
-
-    internal fun isAiPbNewInputContainerClassValid(
-        inputContainerClass: Class<*>,
-        spriteMemePanClass: Class<*>?,
-    ): Boolean {
-        if (!LinearLayout::class.java.isAssignableFrom(inputContainerClass)) return false
-        val fields = collectInstanceFields(inputContainerClass)
-        val hasAiWriteFrame = fields.any { field -> FrameLayout::class.java.isAssignableFrom(field.type) }
-        if (!hasAiWriteFrame) return false
-        if (spriteMemePanClass == null) return true
-        return fields.any { field -> spriteMemePanClass.isAssignableFrom(field.type) }
-    }
-
-    private fun scanPbAdBidSymbols(
-        context: Context,
-        candidates: List<String>,
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): PbAdBidScanSymbols {
-        val commonBaseClass = safeFindClass(PB_COMMON_REQUEST_MODEL_CLASS, cl)
-        val pageBrowserBaseClass = safeFindClass(PB_PAGE_BROWSER_REQUEST_MODEL_CLASS, cl)
-        val adBidResClass = safeFindClass(PB_AD_BID_RES_IDL_CLASS, cl)
-        val httpMessageClass = safeFindClass(HTTP_MESSAGE_CLASS, cl)
-        val requestClass = safeFindClass(TIEBA_REQUEST_INTERFACE_CLASS, cl)
-        val continuationClass = safeFindClass(KOTLIN_CONTINUATION_CLASS, cl)
-
-        if (commonBaseClass == null) {
-            log(logger, "pbAdBid: common base class not found: $PB_COMMON_REQUEST_MODEL_CLASS")
-        }
-        if (pageBrowserBaseClass == null) {
-            log(logger, "pbAdBid: pagebrowser base class not found: $PB_PAGE_BROWSER_REQUEST_MODEL_CLASS")
-        }
-        if (adBidResClass == null) {
-            log(logger, "pbAdBid: AdBidResIdl class not found: $PB_AD_BID_RES_IDL_CLASS")
-        }
-        if (requestClass == null) {
-            log(logger, "pbAdBid: request interface not found: $TIEBA_REQUEST_INTERFACE_CLASS")
-        }
-        if (httpMessageClass == null) {
-            log(logger, "pbAdBid: HttpMessage class not found: $HTTP_MESSAGE_CLASS")
-        }
-
-        val commonStartMethods = commonBaseClass
-            ?.let { resolvePbAdBidCommonStartMethods(it, logger) }
-            .orEmpty()
-        val commonNotifyMethod = commonBaseClass
-            ?.let { resolvePbAdBidCommonNotifyMethod(it, logger) }
-        val pageBrowserBaseRequestDataMethod = if (continuationClass != null) {
-            pageBrowserBaseClass?.let { resolvePbAdBidPageBrowserRequestDataMethod(it, continuationClass, logger) }
-        } else {
-            log(logger, "pbAdBid: continuation class not found: $KOTLIN_CONTINUATION_CLASS")
-            null
-        }
-
-        val targetClassNames = candidates
-            .filter(::isPbAdBidCandidateClassName)
-            .distinct()
-        var skippedByReflection = 0
-
-        val commonMatches = ArrayList<ScanMatch>()
-        val pageBrowserMatches = ArrayList<ScanMatch>()
-        if (adBidResClass != null && requestClass != null) {
-            for (className in targetClassNames) {
-                val cls = try {
-                    safeFindClass(className, cl)
-                } catch (t: Throwable) {
-                    skippedByReflection++
-                    log(
-                        logger,
-                        "pbAdBid: skip class=$className reflection failed: " +
-                            "${t.javaClass.simpleName}:${t.message}",
-                    )
-                    null
-                } ?: continue
-
-                if (commonBaseClass != null) {
-                    try {
-                        scorePbAdBidCommonModelClass(
-                            cls,
-                            commonBaseClass,
-                            adBidResClass,
-                            httpMessageClass,
-                            requestClass,
-                        )?.let(commonMatches::add)
-                    } catch (t: Throwable) {
-                        skippedByReflection++
-                        log(
-                            logger,
-                            "pbAdBid.common: skip class=$className scoring failed: " +
-                                "${t.javaClass.simpleName}:${t.message}",
-                        )
-                    }
-                }
-                if (continuationClass != null) {
-                    try {
-                        scorePbAdBidPageBrowserModelClass(
-                            cls,
-                            pageBrowserBaseClass,
-                            adBidResClass,
-                            requestClass,
-                            continuationClass,
-                            pageBrowserBaseRequestDataMethod,
-                        )?.let(pageBrowserMatches::add)
-                    } catch (t: Throwable) {
-                        skippedByReflection++
-                        log(
-                            logger,
-                            "pbAdBid.pageBrowser: skip class=$className scoring failed: " +
-                                "${t.javaClass.simpleName}:${t.message}",
-                        )
-                    }
-                }
-            }
-        }
-        if (skippedByReflection > 0) {
-            log(logger, "pbAdBid scan skipped classes by reflection=$skippedByReflection")
-        }
-
-        val commonMatch = chooseUniqueScanMatch(
-            tag = "pbAdBid.common",
-            ruleName = "PbAdBidCommonModelRule",
-            matches = commonMatches,
-            logger = logger,
-            minScore = 150,
-            minScoreGap = 20,
-        )
-        val pageBrowserMatch = chooseUniqueScanMatch(
-            tag = "pbAdBid.pageBrowser",
-            ruleName = "PbAdBidPageBrowserModelRule",
-            matches = pageBrowserMatches,
-            logger = logger,
-            minScore = 140,
-            minScoreGap = 20,
-        )
-
-        if (commonMatch == null) {
-            log(logger, "pbAdBid.common: no complete unique match, scanned=${targetClassNames.size}")
-        }
-        if (pageBrowserMatch == null) {
-            log(logger, "pbAdBid.pageBrowser: no complete unique match, scanned=${targetClassNames.size}")
-        }
-
-        val dexScan = if (
-            commonMatch == null ||
-            pageBrowserMatch == null ||
-            pageBrowserBaseRequestDataMethod == null
-        ) {
-            scanPbAdBidSymbolsFromDex(context, logger)
-        } else {
-            DexPbAdBidScanSymbols()
-        }
-
-        return PbAdBidScanSymbols(
-            commonRequestModelClass = commonMatch?.className ?: dexScan.commonModelClassName,
-            commonRequestStartMethods = commonStartMethods,
-            commonRequestNotifyMethod = commonNotifyMethod?.name,
-            pageBrowserRequestModelClass = pageBrowserMatch?.className ?: dexScan.pageBrowserModelClassName,
-            pageBrowserRequestDataMethod = pageBrowserBaseRequestDataMethod?.name
-                ?: pageBrowserMatch?.fieldName?.takeIf { it.isNotBlank() }
-                ?: dexScan.pageBrowserRequestDataMethodName,
-        )
-    }
-
-    private fun scanPbAdBidSymbolsFromDex(
-        context: Context,
-        logger: ScanLogger?,
-    ): DexPbAdBidScanSymbols {
-        val sourcePaths = appSourcePaths(context)
-        if (sourcePaths.isEmpty()) {
-            log(logger, "pbAdBidDex: apk source path unavailable")
-            return DexPbAdBidScanSymbols()
-        }
-
-        val rawDexScan = DexShareIconScanner.scanPbAdBid(sourcePaths, logger)
-        val matches = rawDexScan.modelMatches
-        val commonMatch = chooseUniquePbAdBidDexMatch(
-            tag = "pbAdBid.commonDex",
-            matches = matches.filter { it.kind == PB_AD_BID_DEX_KIND_COMMON },
-            logger = logger,
-        )
-        val pageBrowserMatch = chooseUniquePbAdBidDexMatch(
-            tag = "pbAdBid.pageBrowserDex",
-            matches = matches.filter { it.kind == PB_AD_BID_DEX_KIND_PAGE_BROWSER },
-            logger = logger,
-        )
-        val requestDataMethod = rawDexScan.pageBrowserRequestDataMethodName
-        if (requestDataMethod == null && pageBrowserMatch != null) {
-            log(logger, "pbAdBid.pageBrowserDex: requestData method not found in dex base model")
-        }
-        return DexPbAdBidScanSymbols(
-            commonModelClassName = commonMatch?.className,
-            pageBrowserModelClassName = pageBrowserMatch?.className,
-            pageBrowserRequestDataMethodName = requestDataMethod,
-        )
-    }
-
-    private fun chooseUniquePbAdBidDexMatch(
-        tag: String,
-        matches: List<DexPbAdBidModelMatch>,
-        logger: ScanLogger?,
-    ): DexPbAdBidModelMatch? {
-        if (matches.isEmpty()) {
-            log(logger, "$tag: no semantic match")
-            return null
-        }
-        val sorted = matches.sortedWith(
-            compareByDescending<DexPbAdBidModelMatch> { it.score }
-                .thenBy { it.className }
-                .thenBy { it.requestImplMethodName },
-        )
-        val best = sorted.first()
-        val sameScore = sorted.filter { it.score == best.score }
-        if (sameScore.size > 1) {
-            log(
-                logger,
-                "$tag ambiguous top score=${best.score}: " +
-                    sameScore.take(5).joinToString("; ") {
-                        "${it.className}.${it.requestImplMethodName}[${it.evidence}]"
-                    },
-            )
-            return null
-        }
-        val second = sorted.getOrNull(1)
-        if (second != null && best.score - second.score < 16) {
-            log(
-                logger,
-                "$tag ambiguous close score: best=${best.className}.${best.requestImplMethodName}:${best.score}, " +
-                    "second=${second.className}.${second.requestImplMethodName}:${second.score}",
-            )
-            return null
-        }
-        log(
-            logger,
-            "$tag matched: ${best.className}.${best.requestImplMethodName} " +
-                "score=${best.score} evidence=${best.evidence}",
-        )
-        return best
-    }
-
-    private fun isPbAdBidCandidateClassName(className: String): Boolean {
-        if (!className.startsWith("com.baidu.tieba.")) return false
-        val shortName = className.substringAfterLast('.')
-        return isLikelyObfuscatedShortName(shortName) ||
-            className.startsWith("com.baidu.tieba.pb.")
-    }
-
-    private fun resolvePbAdBidCommonStartMethods(
-        commonBaseClass: Class<*>,
-        logger: ScanLogger?,
-    ): List<String> {
-        val methods = commonBaseClass.declaredMethods
-            .filter { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    !Modifier.isAbstract(method.modifiers) &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.isEmpty()
-            }
-            .map { it.name }
-            .distinct()
-            .sorted()
-        if (methods.isEmpty()) {
-            log(logger, "pbAdBid.common: no no-arg request start methods in ${commonBaseClass.name}")
-        }
-        return methods
-    }
-
-    private fun resolvePbAdBidCommonNotifyMethod(
-        commonBaseClass: Class<*>,
-        logger: ScanLogger?,
-    ): Method? {
-        val methods = commonBaseClass.declaredMethods.filter { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                !Modifier.isAbstract(method.modifiers) &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                isIntType(method.parameterTypes[0])
-        }
-        val resolved = methods.singleOrNull()
-        if (resolved == null) {
-            log(
-                logger,
-                "pbAdBid.common: notify method mismatch candidates=" +
-                    methods.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
-            )
-        }
-        return resolved
-    }
-
-    private fun resolvePbAdBidPageBrowserRequestDataMethod(
-        pageBrowserBaseClass: Class<*>,
-        continuationClass: Class<*>,
-        logger: ScanLogger?,
-    ): Method? {
-        val methods = pageBrowserBaseClass.declaredMethods.filter { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                !Modifier.isAbstract(method.modifiers) &&
-                method.returnType == Any::class.java &&
-                method.parameterTypes.size == 1 &&
-                continuationClass.isAssignableFrom(method.parameterTypes[0])
-        }
-        val resolved = methods.singleOrNull()
-        if (resolved == null) {
-            log(
-                logger,
-                "pbAdBid.pageBrowser: requestData method mismatch candidates=" +
-                    methods.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
-            )
-        }
-        return resolved
-    }
-
-    private fun scorePbAdBidCommonModelClass(
-        cls: Class<*>,
-        commonBaseClass: Class<*>,
-        adBidResClass: Class<*>,
-        httpMessageClass: Class<*>?,
-        requestClass: Class<*>,
-    ): ScanMatch? {
-        if (cls == commonBaseClass || cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
-        if (!commonBaseClass.isAssignableFrom(cls)) return null
-        val hasGenericAdBidType = hasGenericSuperclassArgument(cls, commonBaseClass, adBidResClass)
-        val hasStructuralAdBidType = !hasGenericAdBidType &&
-            referencesClassInMembersOrNestedClasses(cls, adBidResClass)
-        if (!hasGenericAdBidType && !hasStructuralAdBidType) return null
-
-        val requestMethods = cls.declaredMethods.filter { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                requestClass.isAssignableFrom(method.returnType)
-        }
-        val requestMethod = requestMethods.singleOrNull() ?: return null
-
-        val setterMethods = if (httpMessageClass != null) {
-            cls.declaredMethods.filter { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 1 &&
-                    httpMessageClass.isAssignableFrom(method.parameterTypes[0])
-            }
-        } else {
-            emptyList()
-        }
-        val setterMethod = setterMethods.singleOrNull()
-
-        var score = 150
-        if (hasGenericAdBidType) score += 34
-        if (hasStructuralAdBidType) score += 24
-        if (cls.superclass == commonBaseClass) score += 18
-        if (cls.declaredConstructors.any { it.parameterTypes.isEmpty() }) score += 12
-        if (httpMessageClass != null && cls.declaredFields.any { field ->
-                !Modifier.isStatic(field.modifiers) && httpMessageClass.isAssignableFrom(field.type)
-            }
-        ) {
-            score += 20
-        }
-        if (setterMethod != null) score += 16
-        if (cls.declaredMethods.any { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 1 &&
-                    method.parameterTypes[0].name == TIEBA_REQUEST_CALLBACK_CLASS
-            }
-        ) {
-            score += 12
-        }
-        score -= cls.declaredMethods.size / 8
-        score -= cls.declaredFields.size / 6
-        return ScanMatch(cls.name, requestMethod.name, setterMethod?.name.orEmpty(), score)
-    }
-
-    private fun scorePbAdBidPageBrowserModelClass(
-        cls: Class<*>,
-        pageBrowserBaseClass: Class<*>?,
-        adBidResClass: Class<*>,
-        requestClass: Class<*>,
-        continuationClass: Class<*>,
-        pageBrowserBaseRequestDataMethod: Method?,
-    ): ScanMatch? {
-        if (cls == pageBrowserBaseClass || cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
-        val resolvedBaseClass = pageBrowserBaseClass?.takeIf { it.isAssignableFrom(cls) }
-            ?: resolvePbAdBidPageBrowserBaseFromCandidate(cls, continuationClass)
-            ?: return null
-        val hasGenericAdBidType = hasGenericSuperclassArgument(cls, resolvedBaseClass, adBidResClass)
-        val hasStructuralAdBidType = !hasGenericAdBidType &&
-            referencesClassInMembersOrNestedClasses(cls, adBidResClass)
-        if (!hasGenericAdBidType && !hasStructuralAdBidType) return null
-
-        val requestMethods = cls.declaredMethods.filter { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                requestClass.isAssignableFrom(method.returnType)
-        }
-        val requestMethod = requestMethods.singleOrNull() ?: return null
-        val requestDataMethod = pageBrowserBaseRequestDataMethod
-            ?.takeIf { it.declaringClass.isAssignableFrom(cls) }
-            ?: findPbAdBidPageBrowserRequestDataMethodInHierarchy(cls, continuationClass)
-            ?: return null
-
-        var score = 140
-        if (hasGenericAdBidType) score += 34
-        if (hasStructuralAdBidType) score += 24
-        if (cls.superclass == resolvedBaseClass) score += 18
-        if (cls.declaredConstructors.any { ctor ->
-                ctor.parameterTypes.size == 1 && isIntType(ctor.parameterTypes[0])
-            }
-        ) {
-            score += 24
-        }
-        if (cls.declaredFields.any { field -> !Modifier.isStatic(field.modifiers) && isIntType(field.type) }) {
-            score += 12
-        }
-        score -= cls.declaredMethods.size / 8
-        score -= cls.declaredFields.size / 6
-        return ScanMatch(cls.name, requestMethod.name, requestDataMethod.name, score)
-    }
-
-    private fun resolvePbAdBidPageBrowserBaseFromCandidate(
-        cls: Class<*>,
-        continuationClass: Class<*>,
-    ): Class<*>? {
-        var current: Class<*>? = cls.superclass
-        while (current != null && current != Any::class.java) {
-            if (findPbAdBidPageBrowserRequestDataMethod(current, continuationClass) != null) {
-                return current
-            }
-            current = current.superclass
-        }
-        return null
-    }
-
-    internal fun findPbAdBidPageBrowserRequestDataMethodInHierarchy(
-        cls: Class<*>,
-        continuationClass: Class<*>,
-    ): Method? {
-        var current: Class<*>? = cls
-        while (current != null && current != Any::class.java) {
-            findPbAdBidPageBrowserRequestDataMethod(current, continuationClass)?.let { return it }
-            current = current.superclass
-        }
-        return null
-    }
-
-    private fun findPbAdBidPageBrowserRequestDataMethod(
-        cls: Class<*>,
-        continuationClass: Class<*>,
-    ): Method? {
-        val methods = cls.declaredMethods.filter { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                !Modifier.isAbstract(method.modifiers) &&
-                method.returnType == Any::class.java &&
-                method.parameterTypes.size == 1 &&
-                continuationClass.isAssignableFrom(method.parameterTypes[0])
-        }
-        return methods.singleOrNull()
-    }
-
-    private fun referencesClassInMembersOrNestedClasses(
-        cls: Class<*>,
-        targetClass: Class<*>,
-        maxDepth: Int = 1,
-    ): Boolean {
-        for (method in cls.declaredMethods) {
-            if (typeReferencesClass(method.genericReturnType, targetClass.name)) return true
-            if (method.genericParameterTypes.any { typeReferencesClass(it, targetClass.name) }) return true
-            if (method.returnType == targetClass || method.parameterTypes.any { it == targetClass }) return true
-        }
-        for (field in cls.declaredFields) {
-            if (typeReferencesClass(field.genericType, targetClass.name) || field.type == targetClass) return true
-        }
-        if (maxDepth <= 0) return false
-        for (nested in cls.declaredClasses) {
-            if (referencesClassInMembersOrNestedClasses(nested, targetClass, maxDepth - 1)) return true
-        }
-        return false
-    }
-
-    private fun hasGenericSuperclassArgument(
-        cls: Class<*>,
-        expectedRawType: Class<*>,
-        expectedArgument: Class<*>,
-    ): Boolean {
-        var current: Class<*>? = cls
-        while (current != null && current != Any::class.java) {
-            val generic = current.genericSuperclass
-            if (generic is ParameterizedType) {
-                val rawClass = generic.rawType as? Class<*>
-                if (rawClass != null && expectedRawType.isAssignableFrom(rawClass)) {
-                    return generic.actualTypeArguments.any { type ->
-                        typeReferencesClass(type, expectedArgument.name)
-                    }
-                }
-            }
-            current = current.superclass
-        }
-        return false
-    }
-
-    private fun typeReferencesClass(type: Type, className: String): Boolean {
-        return when (type) {
-            is Class<*> -> type.name == className
-            is ParameterizedType -> {
-                typeReferencesClass(type.rawType, className) ||
-                    type.actualTypeArguments.any { typeReferencesClass(it, className) }
-            }
-            else -> type.typeName == className
-        }
-    }
-
-    internal fun isPlainUrlMessageDispatchMethod(method: Method, responsedMessageClass: Class<*>): Boolean {
-        return method.name == PLAIN_URL_MESSAGE_DISPATCH_METHOD &&
-            !Modifier.isStatic(method.modifiers) &&
-            method.returnType == Void.TYPE &&
-            method.parameterTypes.size == 1 &&
-            responsedMessageClass.isAssignableFrom(method.parameterTypes[0])
-    }
-
-    internal fun isMountCardLinkLayoutOnClickMethod(method: Method, methodName: String): Boolean {
-        return method.name == methodName &&
-            !Modifier.isStatic(method.modifiers) &&
-            method.returnType == Void.TYPE &&
-            method.parameterTypes.size == 1 &&
-            method.parameterTypes[0] == View::class.java
-    }
-
-    internal fun resolveMountCardLinkLayoutDataField(layoutClass: Class<*>, dataClass: Class<*>): Field? {
-        val candidates = collectInstanceFields(layoutClass).filter { field ->
-            !Modifier.isStatic(field.modifiers) && dataClass.isAssignableFrom(field.type)
-        }
-        return candidates.firstOrNull { it.name == MOUNT_CARD_LINK_LAYOUT_DATA_FIELD }
-            ?: candidates.singleOrNull()
-    }
-
-    internal fun isMountCardLinkLayoutStructureValid(
-        layoutClass: Class<*>,
-        onClickMethod: Method,
-        dataClass: Class<*>,
-        dataField: Field,
-        getUrlMethod: Method,
-    ): Boolean {
-        if (!View.OnClickListener::class.java.isAssignableFrom(layoutClass)) return false
-        if (!View::class.java.isAssignableFrom(layoutClass)) return false
-        if (!isMountCardLinkLayoutOnClickMethod(onClickMethod, onClickMethod.name)) return false
-        if (Modifier.isStatic(dataField.modifiers) || !dataClass.isAssignableFrom(dataField.type)) return false
-        if (Modifier.isStatic(getUrlMethod.modifiers)) return false
-        return getUrlMethod.returnType == String::class.java && getUrlMethod.parameterTypes.isEmpty()
-    }
-
-    private fun kotlinMetadataStrings(targetClass: Class<*>): List<String> {
-        val metadata = targetClass.getAnnotation(kotlin.Metadata::class.java) ?: return emptyList()
-        return (
-            readMetadataStringArray(metadata, "d1") +
-                readMetadataStringArray(metadata, "d2") +
-                readMetadataStringArray(metadata, "data1") +
-                readMetadataStringArray(metadata, "data2")
-            )
-            .filter { it.isNotBlank() }
-            .distinct()
-    }
-
-    private fun readMetadataStringArray(metadata: Annotation, methodName: String): List<String> {
-        val value = runCatching {
-            metadata.javaClass.getMethod(methodName).invoke(metadata)
-        }.getOrNull() as? Array<*> ?: return emptyList()
-        return value.mapNotNull { it as? String }
-    }
-
-    private fun logFeedLoadMoreDiagnostics(cl: ClassLoader, logger: ScanLogger?) {
-        val adapterClassName = "com.baidu.tieba.feed.list.FeedTemplateAdapter"
-        val adapterClass = safeFindClass(adapterClassName, cl)
-        if (adapterClass == null) {
-            log(logger, "feedLoadMore diag: class not found: $adapterClassName")
-            logTemplateAdapterDiagnostics(cl, logger)
-            return
-        }
-
-        val metadata = kotlinMetadataStrings(adapterClass)
-        val metadataHints = metadata
-            .flatMap { text ->
-                listOf("loadMore", "refreshList", "setList", "List").filter { text.contains(it) }
-            }
-            .distinct()
-            .joinToString(",")
-            .ifBlank { "-" }
-        val listMethods = adapterClass.declaredMethods
-            .filter { method ->
-                method.returnType == Void.TYPE &&
-                    method.parameterTypes.any { type ->
-                        List::class.java.isAssignableFrom(type) ||
-                            java.util.Collection::class.java.isAssignableFrom(type)
-                    }
-            }
-            .sortedWith(compareBy<Method>({ it.parameterTypes.size }, { it.name }))
-            .take(12)
-            .joinToString("; ") { describeMethodShape(it) }
-            .ifBlank { "-" }
-        val voidMethods = adapterClass.declaredMethods
-            .filter { it.returnType == Void.TYPE && it.parameterTypes.size <= 2 }
-            .sortedWith(compareBy<Method>({ it.parameterTypes.size }, { it.name }))
-            .take(16)
-            .joinToString("; ") { describeMethodShape(it) }
-            .ifBlank { "-" }
-
-        log(
-            logger,
-            "feedLoadMore diag: class=$adapterClassName, super=${adapterClass.superclass?.name}, " +
-                "metadataHints=$metadataHints, listMethods=$listMethods, voidMethods=$voidMethods",
-        )
-        logTemplateAdapterDiagnostics(cl, logger)
-    }
-
-    private fun logTemplateAdapterDiagnostics(cl: ClassLoader, logger: ScanLogger?) {
-        val templateClassName = "com.baidu.tieba.feed.list.TemplateAdapter"
-        val templateClass = safeFindClass(templateClassName, cl) ?: run {
-            log(logger, "feedLoadMore diag: class not found: $templateClassName")
-            return
-        }
-        val listMethods = templateClass.declaredMethods
-            .filter { method ->
-                method.returnType == Void.TYPE &&
-                    method.parameterTypes.any { type ->
-                        List::class.java.isAssignableFrom(type) ||
-                            java.util.Collection::class.java.isAssignableFrom(type)
-                    }
-            }
-            .sortedWith(compareBy<Method>({ it.parameterTypes.size }, { it.name }))
-            .take(12)
-            .joinToString("; ") { describeMethodShape(it) }
-            .ifBlank { "-" }
-        log(logger, "feedLoadMore diag: class=$templateClassName, listMethods=$listMethods")
-    }
-
-    private fun describeMethodShape(method: Method): String {
-        val params = method.parameterTypes.joinToString(",") { it.name.substringAfterLast('.') }
-        val ret = method.returnType.name.substringAfterLast('.')
-        val staticPrefix = if (Modifier.isStatic(method.modifiers)) "static " else ""
-        return "$staticPrefix${method.name}($params):$ret"
-    }
-
-    private fun appSourcePaths(context: Context): List<String> {
-        return buildList {
-            context.applicationInfo?.sourceDir?.takeIf { it.isNotBlank() }?.let(::add)
-            context.applicationInfo?.splitSourceDirs?.forEach { path ->
-                if (!path.isNullOrBlank()) add(path)
-            }
-        }.distinct()
-    }
-
-    internal fun resolveHistoryDataStringGetterName(methods: List<Method>, vararg candidateNames: String): String? {
-        for (name in candidateNames) {
-            val method = methods.firstOrNull { method ->
-                method.name == name &&
-                    method.parameterTypes.isEmpty() &&
-                    (method.returnType == String::class.java || CharSequence::class.java.isAssignableFrom(method.returnType))
-            }
-            if (method != null) return method.name
-        }
-        return null
-    }
-
-    internal fun resolveListSetterMethodName(clazz: Class<*>, preferredName: String): String? {
-        val candidates = collectInstanceMethods(clazz).filter { method ->
-            method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                isListType(method.parameterTypes[0])
-        }
-        return pickMethodName(candidates, preferredName)
-    }
-
-    internal fun resolveListGetterMethodName(clazz: Class<*>, preferredName: String): String? {
-        val candidates = collectInstanceMethods(clazz).filter { method ->
-            method.parameterTypes.isEmpty() && isListType(method.returnType)
-        }
-        return pickMethodName(candidates, preferredName)
-    }
-
-    internal fun resolveParseMethodName(clazz: Class<*>, preferredName: String): String? {
-        val candidates = collectInstanceMethods(clazz).filter { method ->
-            method.returnType != Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                method.parameterTypes[0] == String::class.java &&
-                isListType(method.returnType)
-        }
-        return pickMethodName(candidates, preferredName)
-    }
-
-    internal fun resolveListFieldName(clazz: Class<*>, preferredName: String): String? {
-        val candidates = collectInstanceFields(clazz).filter { isListType(it.type) }
-        return candidates.minWithOrNull(
-            compareBy<java.lang.reflect.Field>(
-                { if (it.name == preferredName) 0 else 1 },
-                { it.name.length },
-                { it.name },
-            ),
-        )?.name
-    }
-
-    internal fun pickMethodName(methods: List<java.lang.reflect.Method>, preferredName: String): String? {
-        if (methods.isEmpty()) return null
-        methods.firstOrNull { it.name == preferredName }?.let { return it.name }
-        return methods.minWithOrNull(
-            compareBy<java.lang.reflect.Method>(
-                { it.name.length },
-                { it.name },
-            ),
-        )?.name
-    }
-
-    internal fun pickMethod(
-        methods: List<java.lang.reflect.Method>,
-        preferredName: String?,
-    ): java.lang.reflect.Method? {
-        if (methods.isEmpty()) return null
-        if (!preferredName.isNullOrBlank()) {
-            methods.firstOrNull { it.name == preferredName }?.let { return it }
-        }
-        return methods.minWithOrNull(
-            compareBy<java.lang.reflect.Method>(
-                { it.name.length },
-                { it.name },
-            ),
-        )
-    }
-
-    internal fun pickFieldName(fields: List<java.lang.reflect.Field>, preferredName: String?): String? {
-        if (fields.isEmpty()) return null
-        if (!preferredName.isNullOrBlank()) {
-            fields.firstOrNull { it.name == preferredName }?.let { return it.name }
-        }
-        return fields.minWithOrNull(
-            compareBy<java.lang.reflect.Field>(
-                { it.name.length },
-                { it.name },
-            ),
-        )?.name
-    }
-
-    internal fun isFragmentLikeType(type: Class<*>): Boolean {
-        var current: Class<*>? = type
-        while (current != null && current != Any::class.java) {
-            if (current.name == "androidx.fragment.app.Fragment") return true
-            current = current.superclass
-        }
-        return false
-    }
-
-    internal fun collectInstanceFields(clazz: Class<*>): List<Field> {
-        HookSymbolScanSession.get()?.let { return it.collectInstanceFields(clazz) }
-        return collectInstanceFieldsUncached(clazz)
-    }
-
-    internal fun collectInstanceFieldsUncached(clazz: Class<*>): List<Field> {
-        val out = ArrayList<Field>(16)
-        var current: Class<*>? = clazz
-        while (current != null && current != Any::class.java) {
-            for (field in current.declaredFields) {
-                if (Modifier.isStatic(field.modifiers)) continue
-                out.add(field)
-            }
-            current = current.superclass
-        }
-        return out
-    }
-
-    internal fun collectInstanceMethods(clazz: Class<*>): List<Method> {
-        HookSymbolScanSession.get()?.let { return it.collectInstanceMethods(clazz) }
-        return collectInstanceMethodsUncached(clazz)
-    }
-
-    internal fun collectInstanceMethodsUncached(clazz: Class<*>): List<Method> {
-        val out = ArrayList<Method>(24)
-        var current: Class<*>? = clazz
-        while (current != null && current != Any::class.java) {
-            for (method in current.declaredMethods) {
-                if (Modifier.isStatic(method.modifiers)) continue
-                out.add(method)
-            }
-            current = current.superclass
-        }
-        return out
-    }
-
-    internal fun isListType(type: Class<*>): Boolean {
-        return List::class.java.isAssignableFrom(type) || ArrayList::class.java.isAssignableFrom(type)
-    }
-
-    internal fun isBooleanType(type: Class<*>): Boolean {
-        return type == Boolean::class.javaPrimitiveType || type == Boolean::class.javaObjectType
-    }
-
-    internal fun isIntType(type: Class<*>): Boolean {
-        return type == Int::class.javaPrimitiveType || type == Int::class.javaObjectType
-    }
-
-    internal fun isAdapterLike(type: Class<*>): Boolean {
-        val methods = collectInstanceMethods(type)
-        val hasGetCount = methods.any {
-            it.name == "getCount" &&
-                it.parameterTypes.isEmpty() &&
-                (it.returnType == Int::class.javaPrimitiveType || it.returnType == Int::class.java)
-        }
-        if (!hasGetCount) return false
-        return methods.any {
-            it.name == "notifyDataSetChanged" && it.parameterTypes.isEmpty() && it.returnType == Void.TYPE
-        }
-    }
-
-    private fun isZgaScanResultValid(
-        cl: ClassLoader,
-        className: String,
-        methodNames: List<String>,
-    ): Boolean {
-        if (methodNames.isEmpty()) return false
-        return try {
-            val cls = safeFindClass(className, cl) ?: return false
-            if (cls.isInterface || java.lang.reflect.Modifier.isAbstract(cls.modifiers)) return false
-            val hasIoException = methodNames.any { methodName ->
-                cls.declaredMethods.any { method ->
-                    method.name == methodName &&
-                        java.lang.reflect.Modifier.isStatic(method.modifiers) &&
-                        !java.lang.reflect.Modifier.isAbstract(method.modifiers) &&
-                        method.returnType == String::class.java &&
-                        method.parameterTypes.size == 1 &&
-                        method.parameterTypes[0] == String::class.java &&
-                        method.exceptionTypes.any { ex -> ex == java.io.IOException::class.java }
-                }
-            }
-            if (!hasIoException) return false
-            methodNames.all { methodName ->
-                cls.declaredMethods.any { method ->
-                    method.name == methodName &&
-                        java.lang.reflect.Modifier.isStatic(method.modifiers) &&
-                        !java.lang.reflect.Modifier.isAbstract(method.modifiers) &&
-                        method.returnType == String::class.java &&
-                        method.parameterTypes.size == 1 &&
-                        method.parameterTypes[0] == String::class.java
-                }
-            }
-        } catch (t: Throwable) {
-            XposedCompat.logD("$TAG: pbLikeAutoReply validate failed: ${sanitizeScanStatusText(formatScanException(t))}")
-            false
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun listScanCandidateClasses(context: Context, cl: ClassLoader, logger: ScanLogger?): ScanCandidateSet {
-        val obfuscated = ArrayList<String>(512)
-        val expanded = ArrayList<String>(1024)
-
-        fun collect(name: String) {
-            if (!isTargetAppClassName(name)) return
-            val shortName = name.substringAfterLast('.')
-            if (isLikelyObfuscatedShortName(shortName)) {
-                obfuscated.add(name)
-            }
-            if (isExpandedScanClassName(name)) {
-                expanded.add(name)
-            }
-        }
-
-        try {
-            var currentCl: ClassLoader? = cl
-            while (currentCl != null) {
-                if (currentCl is dalvik.system.BaseDexClassLoader) {
-                    val pathListField = XposedCompat.findField(currentCl::class.java, "pathList")
-                    val pathList = pathListField.get(currentCl)!!
-                    val dexElementsField = XposedCompat.findField(pathList::class.java, "dexElements")
-                    val dexElements = dexElementsField.get(pathList) as Array<*>
-
-                    for (element in dexElements) {
-                        if (element == null) continue
-                        val dexFileField = try { XposedCompat.findField(element::class.java, "dexFile") } catch (_: Throwable) { null } ?: continue
-                        val dexFile = dexFileField.get(element) as? DexFile ?: continue
-                        val entries = dexFile.entries()
-                        while (entries.hasMoreElements()) {
-                            collect(entries.nextElement())
-                        }
-                    }
-                }
-                currentCl = currentCl.parent
-            }
-        } catch (t: Throwable) {
-            log(logger, "list classes from dex path list failed: ${t.message}")
-            XposedCompat.log(t)
-        }
-
-        if (obfuscated.isNotEmpty() || expanded.isNotEmpty()) {
-            val result = ScanCandidateSet(
-                obfuscated = obfuscated.distinct(),
-                expanded = expanded.distinct(),
-            )
-            log(logger, "obfuscated root classes listed: ${result.obfuscated.size}")
-            log(logger, "expanded scan classes listed: ${result.expanded.size}")
-            return result
-        }
-
-        val sourceDir = context.applicationInfo?.sourceDir ?: return ScanCandidateSet(emptyList(), emptyList())
-        var dexFile: DexFile? = null
-        try {
-            dexFile = DexFile(sourceDir)
-            val entries = dexFile.entries()
-            while (entries.hasMoreElements()) {
-                collect(entries.nextElement())
-            }
-        } catch (t: Throwable) {
-            XposedCompat.log("$TAG: list classes fallback failed: ${t.message}")
-            log(logger, "list classes fallback failed: ${t.message}")
-            XposedCompat.log(t)
-        } finally {
-            try {
-                dexFile?.close()
-            } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
-        }
-        val result = ScanCandidateSet(
-            obfuscated = obfuscated.distinct(),
-            expanded = expanded.distinct(),
-        )
-        log(logger, "obfuscated root classes listed: ${result.obfuscated.size}")
-        log(logger, "expanded scan classes listed: ${result.expanded.size}")
-        return result
-    }
-
-    private fun isTargetAppClassName(name: String): Boolean {
-        return name.startsWith("com.baidu.tieba.") ||
-            name.startsWith("com.baidu.tbadk.") ||
-            name.startsWith("com.baidu.adp.widget.ListView.") ||
-            name.startsWith("com.baidu.searchbox.task.view.mainactivity.")
-    }
-
-    private fun isExpandedScanClassName(name: String): Boolean {
-        val shortName = name.substringAfterLast('.')
-        if (shortName == "BuildConfig" || shortName == "R" || shortName.startsWith("R\$")) return false
-        if (EXPANDED_SCAN_PACKAGE_PREFIXES.any { name.startsWith(it) }) return true
-        return EXPANDED_SCAN_CLASS_MARKERS.any { shortName.contains(it) }
-    }
-
-    private fun isLikelyObfuscatedShortName(name: String): Boolean {
-        if (name.isEmpty() || name.length > 6) return false
-        for (c in name) {
-            if (!(c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9')) return false
-        }
-        return true
-    }
-
-    internal fun runRules(
-        candidates: List<String>,
-        cl: ClassLoader,
-        rules: List<ScanRule>,
-        logger: ScanLogger?,
-        tag: String
-    ): ScanMatch? {
-        for (rule in rules) {
-            val matches = ArrayList<ScanMatch>()
-            var skippedByReflection = 0
-            var firstReflectionError: String? = null
-            for (className in candidates) {
-                try {
-                    val cls = safeFindClass(className, cl) ?: continue
-                    val match = rule.match(cls, cl)
-                    if (match != null) {
-                        matches.add(match)
-                    }
-                } catch (t: Throwable) {
-                    skippedByReflection++
-                    if (firstReflectionError == null) {
-                        firstReflectionError = sanitizeScanStatusText(formatScanException(t))
-                    }
-                }
-            }
-            if (skippedByReflection > 0) {
-                val line = "$tag scan rule ${rule.javaClass.simpleName} skipped classes by reflection=$skippedByReflection" +
-                    (firstReflectionError?.let { ", firstException=$it" } ?: "")
-                try {
-                    XposedCompat.logD("$TAG: $line")
-                } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
-                try {
-                    logger?.log(line)
-                } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
-            }
-            if (matches.isEmpty()) {
-                if (skippedByReflection > 0) {
-                    HookSymbolScanSession.get()?.scanErrors?.let { errors ->
-                        recordScanIssue(
-                            logger = logger,
-                            tag = tag,
-                            errors = errors,
-                            detail = "rule ${rule.javaClass.simpleName} no semantic match; " +
-                                "reflectionFailures=$skippedByReflection" +
-                                (firstReflectionError?.let { ", firstException=$it" } ?: ""),
-                        )
-                    }
-                }
-                log(
-                    logger,
-                    "$tag scan rule ${rule.javaClass.simpleName} no semantic match among ${candidates.size} candidates",
-                )
-                continue
-            }
-            val match = chooseUniqueScanMatch(
-                tag = tag,
-                ruleName = rule.javaClass.simpleName,
-                matches = matches,
-                logger = logger,
-                minScore = rule.minScore,
-                minScoreGap = rule.minScoreGap,
-            )
-            if (match != null) {
-                return match
-            }
-        }
-        return null
-    }
-
-    internal fun chooseUniqueScanMatch(
-        tag: String,
-        ruleName: String,
-        matches: List<ScanMatch>,
-        logger: ScanLogger?,
-        minScore: Int,
-        minScoreGap: Int,
-    ): ScanMatch? {
-        if (matches.isEmpty()) return null
-        val sorted = matches.sortedWith(
-            compareByDescending<ScanMatch> { it.score }
-                .thenBy { it.className }
-                .thenBy { it.methodName }
-                .thenBy { it.fieldName },
-        )
-        val best = sorted.first()
-        if (best.score < minScore) {
-            log(
-                logger,
-                "$tag scan rule $ruleName rejected: best score=${best.score} < minScore=$minScore, " +
-                    "best=${describeScanMatch(best)}",
-            )
-            return null
-        }
-
-        val topScoreMatches = sorted.filter { it.score == best.score }
-        if (topScoreMatches.size > 1) {
-            val sample = describeScanMatches(topScoreMatches)
-            log(
-                logger,
-                "$tag scan rule $ruleName ambiguous top score=${best.score}, " +
-                    "candidates=${topScoreMatches.size}: $sample",
-            )
-            return null
-        }
-
-        val second = sorted.getOrNull(1)
-        if (second != null && minScoreGap > 0) {
-            val gap = best.score - second.score
-            if (gap < minScoreGap) {
-                log(
-                    logger,
-                    "$tag scan rule $ruleName ambiguous close score: best=${describeScanMatch(best)}, " +
-                        "second=${describeScanMatch(second)}, gap=$gap < minGap=$minScoreGap",
-                )
-                return null
-            }
-        }
-
-        log(logger, "$tag matched by $ruleName: ${best.className}.${best.methodName} score=${best.score}")
-        return best
-    }
-
-    private fun describeScanMatches(matches: List<ScanMatch>): String {
-        return matches.take(5).joinToString("; ") { describeScanMatch(it) }
-    }
-
-    private fun describeScanMatch(match: ScanMatch): String {
-        return "${match.className}.${match.methodName}/${match.fieldName}:${match.score}"
-    }
-
-    internal fun safeFindClass(name: String, cl: ClassLoader): Class<*>? {
-        HookSymbolScanSession.get()?.let { return it.findClass(name, cl) }
-        return safeFindClassUncached(name, cl)
-    }
-
-    internal fun safeFindClassUncached(name: String, cl: ClassLoader): Class<*>? {
-        return try {
-            XposedCompat.findClassOrNull(name, cl)
-        } catch (_: Throwable) {
-            null
-        }
-    }
+    internal fun safeFindClassUncached(name: String, cl: ClassLoader): Class<*>? =
+        ScanReflection.safeFindClassUncached(name, cl)
 
     private fun applyScanSupportCheck(
         context: Context,
@@ -8047,18 +5772,11 @@ internal object HookSymbolResolver {
 
 
     private fun log(logger: ScanLogger?, line: String) {
-        try {
-            XposedCompat.log("$TAG: $line")
-        } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
-        try {
-            logger?.log(line)
-        } catch (t: Throwable) { XposedCompat.logD("HookSymbolResolver: ${t.message}") }
+        HookSymbolScanDiagnostics.log(logger, line)
     }
 
     fun formatScanException(t: Throwable): String {
-        val type = t::class.java.name
-        val message = t.message?.trim().orEmpty()
-        return if (message.isNotEmpty()) "$type: $message" else type
+        return HookSymbolScanDiagnostics.formatScanException(t)
     }
 
     private fun buildScanError(tag: String, t: Throwable): String {
@@ -8066,20 +5784,11 @@ internal object HookSymbolResolver {
     }
 
     private fun splitScanError(error: String): Pair<String, String> {
-        val separator = " :: "
-        val idx = error.indexOf(separator)
-        if (idx <= 0) return "ScanException" to sanitizeScanStatusText(error)
-        val tag = error.substring(0, idx).trim().ifEmpty { "ScanException" }
-        val detail = error.substring(idx + separator.length).trim().ifEmpty { "unknown" }
-        return tag to sanitizeScanStatusText(detail)
+        return HookSymbolScanDiagnostics.splitScanError(error)
     }
 
     private fun sanitizeScanStatusText(raw: String): String {
-        return raw
-            .replace('\n', ' ')
-            .replace('\r', ' ')
-            .take(240)
-            .ifBlank { "unknown" }
+        return HookSymbolScanDiagnostics.sanitizeScanStatusText(raw)
     }
 
     private fun logScanException(
@@ -8102,257 +5811,23 @@ internal object HookSymbolResolver {
         errors: MutableList<String>,
         detail: String,
     ) {
-        val error = "${tag.trim()} :: ${sanitizeScanStatusText(detail)}"
-        if (!errors.contains(error)) {
-            errors.add(error)
-        }
-        log(logger, "$tag scan exception: ${splitScanError(error).second}")
+        HookSymbolScanDiagnostics.recordScanIssue(logger, tag, errors, detail)
     }
 
-    private fun describeSymbols(context: Context, symbols: HookSymbols): String {
-        val appMeta = describeAppMetaFull(context)
-        val modVersion = runtimeModuleVersionName()
+    private fun describeSymbols(context: Context, symbols: HookSymbols): String =
+        HookSymbolDiagnostics.describeSymbols(context, symbols)
 
-        fun fmt(name: String, value: String?): String {
-            val isNull = value == null ||
-                         value == "null" ||
-                         value.contains("null.") ||
-                         value.contains(".null") ||
-                         value.contains("[null]")
+    private fun describeAppMeta(context: Context): String =
+        HookSymbolDiagnostics.describeAppMeta(context)
 
-            return if (!isNull) {
-                "闂?[$name: $value]"
-            } else {
-                "闂?[$name: NOT FOUND]"
-            }
-        }
+    fun runtimeModuleVersionName(): String =
+        HookSymbolDiagnostics.runtimeModuleVersionName()
 
-        val imageViewerShareValue = if (
-            !symbols.imageViewerShareConfigClass.isNullOrBlank() &&
-            !symbols.imageViewerShareIsDialogField.isNullOrBlank() &&
-            !symbols.imageViewerShareItemField.isNullOrBlank() &&
-            !symbols.imageViewerShareAddOutsideMethod.isNullOrBlank() &&
-            !symbols.imageViewerShareGetRequestDataMethod.isNullOrBlank() &&
-            !symbols.imageViewerShareSetRequestDataMethod.isNullOrBlank() &&
-            !symbols.imageViewerShareGetContextMethod.isNullOrBlank() &&
-            !symbols.imageViewerShareItemClass.isNullOrBlank() &&
-            !symbols.imageViewerShareItemImageUriField.isNullOrBlank() &&
-            !symbols.imageViewerShareItemViewClass.isNullOrBlank() &&
-            !symbols.imageViewerShareItemNameByResMethod.isNullOrBlank() &&
-            !symbols.imageViewerShareItemNameByTextMethod.isNullOrBlank() &&
-            symbols.imageViewerShareIconResId != null
-        ) {
-            "${symbols.imageViewerShareConfigClass}[${symbols.imageViewerShareIsDialogField},${symbols.imageViewerShareItemField}].{${symbols.imageViewerShareAddOutsideMethod},${symbols.imageViewerShareGetRequestDataMethod},${symbols.imageViewerShareSetRequestDataMethod},${symbols.imageViewerShareGetContextMethod}} / ${symbols.imageViewerShareItemClass}[${symbols.imageViewerShareItemTitleField},${symbols.imageViewerShareItemContentField},${symbols.imageViewerShareItemLinkUrlField},${symbols.imageViewerShareItemImageUriField},${symbols.imageViewerShareItemImageUrlField},${symbols.imageViewerShareItemLocalFileField}] / ${symbols.imageViewerShareItemViewClass}.{${symbols.imageViewerShareItemNameByResMethod},${symbols.imageViewerShareItemNameByTextMethod}} icon=${symbols.imageViewerShareIconResId}"
-        } else {
-            null
-        }
-
-        val originalImageValue = if (
-            !symbols.origImageUrlDragImageViewClass.isNullOrBlank() &&
-            !symbols.origImageDataClass.isNullOrBlank() &&
-            !symbols.origImageTriggerMethod.isNullOrBlank() &&
-            !symbols.origImageAssistDataMethod.isNullOrBlank() &&
-            !symbols.origImageShowButtonField.isNullOrBlank() &&
-            !symbols.origImageBlockedField.isNullOrBlank() &&
-            !symbols.origImageOriginalProcessField.isNullOrBlank() &&
-            !symbols.origImageOriginalUrlField.isNullOrBlank()
-        ) {
-            "${symbols.origImageUrlDragImageViewClass}.{${symbols.origImagePrimaryReadyMethod},${symbols.origImageTriggerMethod},${symbols.origImageDirectStartMethod}} assist=${symbols.origImageSetAssistUrlMethod}/${symbols.origImageAssistDataMethod}/${symbols.origImageOriginTextMethod} data=${symbols.origImageDataClass}[${symbols.origImageShowButtonField},${symbols.origImageBlockedField},${symbols.origImageOriginalProcessField},${symbols.origImageOriginalUrlField}] primary=${symbols.origImagePagerAdapterClass}.${symbols.origImageSetPrimaryItemMethod}"
-        } else {
-            null
-        }
-
-        val plainUrlClickableSpanOnClickOwnerClasses = symbols.plainUrlClickableSpanOnClickOwnerClasses
-        val plainUrlValue = when {
-            !plainUrlClickableSpanOnClickOwnerClasses.isNullOrEmpty() &&
-                !symbols.plainUrlClickableSpanOnClickMethod.isNullOrBlank() &&
-                !symbols.plainUrlClickableSpanTypeField.isNullOrBlank() &&
-                !symbols.plainUrlClickableSpanUrlField.isNullOrBlank() &&
-                !symbols.plainUrlClickableSpanTextField.isNullOrBlank() -> {
-                "${plainUrlClickableSpanOnClickOwnerClasses.joinToString(",")}.${symbols.plainUrlClickableSpanOnClickMethod}[${symbols.plainUrlClickableSpanTypeField},${symbols.plainUrlClickableSpanUrlField},${symbols.plainUrlClickableSpanTextField}]"
-            }
-            !symbols.plainUrlMessageManagerClass.isNullOrBlank() &&
-                !symbols.plainUrlMessageDispatchMethod.isNullOrBlank() &&
-                !symbols.plainUrlResponsedMessageClass.isNullOrBlank() &&
-                !symbols.plainUrlResponsedMessageGetCmdMethod.isNullOrBlank() &&
-                !symbols.plainUrlCustomResponsedMessageClass.isNullOrBlank() &&
-                !symbols.plainUrlCustomResponsedMessageGetDataMethod.isNullOrBlank() &&
-                !symbols.plainUrlApplicationClass.isNullOrBlank() &&
-                !symbols.plainUrlApplicationGetInstMethod.isNullOrBlank() -> {
-                "${symbols.plainUrlMessageManagerClass}.${symbols.plainUrlMessageDispatchMethod}(${symbols.plainUrlResponsedMessageClass}) cmd=${symbols.plainUrlResponsedMessageGetCmdMethod} data=${symbols.plainUrlCustomResponsedMessageClass}.${symbols.plainUrlCustomResponsedMessageGetDataMethod} app=${symbols.plainUrlApplicationClass}.${symbols.plainUrlApplicationGetInstMethod}"
-            }
-            else -> null
-        }
-
-        val aiComponentValue = if (
-            !symbols.aiSpriteMemePanControllerClass.isNullOrBlank() &&
-            !symbols.aiSpriteMemeEnableMethod.isNullOrBlank() &&
-            !symbols.aiPbNewInputContainerClass.isNullOrBlank() &&
-            !symbols.aiPbNewInputContainerInitSpriteMemeMethod.isNullOrBlank() &&
-            !symbols.aiPbNewInputContainerInitAiWriteMethod.isNullOrBlank()
-        ) {
-            val imageViewerJumpButton = if (
-                !symbols.aiImageViewerJumpButtonOwnerClass.isNullOrBlank() &&
-                !symbols.aiImageViewerJumpButtonInitMethod.isNullOrBlank()
-            ) {
-                " / ${symbols.aiImageViewerJumpButtonOwnerClass}.${symbols.aiImageViewerJumpButtonInitMethod}"
-            } else {
-                ""
-            }
-            "${symbols.aiSpriteMemePanControllerClass}.${symbols.aiSpriteMemeEnableMethod} / " +
-                "${symbols.aiPbNewInputContainerClass}.{${symbols.aiPbNewInputContainerInitSpriteMemeMethod},${symbols.aiPbNewInputContainerInitAiWriteMethod}}" +
-                imageViewerJumpButton
-        } else {
-            null
-        }
-
-        val pbAdBidCommonReady =
-            !symbols.pbAdBidCommonRequestModelClass.isNullOrBlank() &&
-                !symbols.pbAdBidCommonRequestStartMethods.isNullOrEmpty() &&
-                !symbols.pbAdBidCommonRequestNotifyMethod.isNullOrBlank()
-        val pbAdBidPageBrowserReady =
-            !symbols.pbAdBidPageBrowserRequestModelClass.isNullOrBlank() &&
-                !symbols.pbAdBidPageBrowserRequestDataMethod.isNullOrBlank()
-        val pbAdBidValue = when {
-            pbAdBidCommonReady || pbAdBidPageBrowserReady -> buildString {
-                if (pbAdBidCommonReady) {
-                    append("common=")
-                    append(symbols.pbAdBidCommonRequestModelClass)
-                    append(".{")
-                    append(symbols.pbAdBidCommonRequestStartMethods?.joinToString(";"))
-                    append("}#")
-                    append(symbols.pbAdBidCommonRequestNotifyMethod)
-                } else {
-                    append("common=optional-absent")
-                }
-                append(" pageBrowser=")
-                if (pbAdBidPageBrowserReady) {
-                    append(symbols.pbAdBidPageBrowserRequestModelClass)
-                    append(".")
-                    append(symbols.pbAdBidPageBrowserRequestDataMethod)
-                } else {
-                    append("optional-absent")
-                }
-            }
-            else -> null
-        }
-
-        return """
-            ========== TBHook Match Status ==========
-            App Version   : $appMeta
-            Module Version: $modVersion
-            Match Result  :
-            ${fmt("Home", "${symbols.homeTabClass}.${symbols.homeTabRebuildMethod}[${symbols.homeTabListField}] item={${symbols.homeTabItemTypeField},${symbols.homeTabItemCodeField},${symbols.homeTabItemNameField},${symbols.homeTabItemUrlField}} main={${symbols.homeTabItemMainSetterMethod},${symbols.homeTabItemMainIntField},${symbols.homeTabItemMainBooleanField}}")}
-            ${fmt("Settings", "${symbols.settingsClass}.${symbols.settingsInitMethod}[${symbols.settingsContainerField}]")}
-            ${fmt("Zga", symbols.zgaClass)}
-            ${fmt("Splash", "${symbols.splashAdHelperClass}.${symbols.splashAdHelperMethod}")}
-            ${fmt("FeedKey", symbols.feedTemplateKeyMethod)}
-            ${fmt("FeedPayload", symbols.feedTemplatePayloadMethod)}
-            ${fmt("FeedLoadMore", symbols.feedTemplateLoadMoreMethod)}
-            ${fmt("SearchBoxHint", "${symbols.searchBoxViewClass}.${symbols.searchBoxSetHintMethod} owner=${symbols.homeSearchBoxOwnerClass}.{${symbols.homeSearchBoxInitMethod},${symbols.homeSearchBoxGetterMethod}}")}
-            ${fmt("HomeRightSlot", "${symbols.homeRightSlotClass}.{${symbols.homeRightSlotStateMethods?.joinToString(",")}}")}
-            ${fmt("PbFalling", "${symbols.pbFallingViewClass}.{${symbols.pbFallingInitMethod},${symbols.pbFallingShowMethod},${symbols.pbFallingClearMethod}}")}
-            ${fmt("PbEarlyAdInsert", "${symbols.pbEarlyAdInsertClass}.{${symbols.pbEarlyAdInsertMethodSpecs?.joinToString(";")}}")}
-            ${fmt("EnterForumWeb", "source=${symbols.enterForumInitInfoDataClass}.${symbols.enterForumInitInfoGetUrlMethod} webLoad=${symbols.enterForumWebControllerClass}.${symbols.enterForumWebLoadMethod}")}
-            ${fmt("PlainUrlClickableSpan", plainUrlValue)}
-            ${fmt("MountCardLink", "${symbols.mountCardLinkLayoutClass}.${symbols.mountCardLinkLayoutOnClickMethod}[${symbols.mountCardLinkLayoutDataField}->${symbols.mountCardLinkInfoDataClass}.${symbols.mountCardLinkInfoGetUrlMethod}]")}
-            ${fmt("ForumTopShift", "${symbols.forumBottomSheetViewClass}.${symbols.forumBottomSheetInitScrollMethod}")}
-            ${fmt("AutoRefresh", "${PERSONALIZE_PAGE_VIEW_CLASS}.${symbols.autoRefreshTriggerMethod}")}
-            ${fmt("AutoLoadMore", "${symbols.autoLoadMoreConfigClass}.${symbols.autoLoadMoreConfigMethod}")}
-            ${fmt("PbCommentBottom", "${symbols.pbCommentBottomListScrollClass}.${symbols.pbCommentBottomListScrollMethod}[${symbols.pbCommentBottomListOwnerField}] / ${symbols.pbCommentBottomRecyclerScrollClass}.${symbols.pbCommentBottomRecyclerScrollMethod}[${symbols.pbCommentBottomRecyclerOwnerField}]")}
-            ${fmt("PbGestureScale", "${symbols.pbGestureScaleManagerClass}.${symbols.pbGestureScaleDispatchMethod}/${symbols.pbGestureScaleListenerSetterMethod} -> ${symbols.pbGestureScaleListenerClass}.${symbols.pbGestureScaleListenerOnScaleMethod}")}
-            ${fmt("PbLikeAutoReply", "${symbols.pbLikeAutoReplyAgreeViewClass}.${symbols.pbLikeAutoReplyAgreeClickMethod}/${symbols.pbLikeAutoReplyAgreeViewGetDataMethod}[${symbols.pbLikeAutoReplyAgreeDataHasAgreeField},${symbols.pbLikeAutoReplyAgreeDataAgreeTypeField},${symbols.pbLikeAutoReplyAgreeDataIsInThreadField}] -> ${symbols.pbLikeAutoReplyInputContainerClass}.{${symbols.pbLikeAutoReplyInputContainerGetInputViewMethod},${symbols.pbLikeAutoReplyInputContainerGetSendViewMethod}}")}
-            ${fmt("CollectionCore", "${symbols.collectionPresenterField}.${symbols.collectionPresenterListSetterMethod} / ${symbols.collectionModelField}.${symbols.collectionModelListGetterMethod}/${symbols.collectionModelParseMethod}")}
-            ${fmt("CollectionAdapter", "${symbols.collectionPresenterAdapterField}.{${symbols.collectionAdapterShowFooterMethod},${symbols.collectionAdapterLoadingMethod},${symbols.collectionAdapterHasMoreMethod}}")}
-            ${fmt("CollectionListField", "${symbols.collectionModelListField}/${symbols.collectionFragmentDisplayListField} nav={${symbols.collectionActivityNavControllerField},${symbols.collectionNavBarField}}")}
-            ${fmt("CollectionEditMode", symbols.collectionEditModeMethod)}
-            ${fmt("HistorySearch", "${symbols.historyAdapterField}.${symbols.historyAdapterSetListMethod}[${symbols.historyListField}]#${symbols.historyActivityListUpdateMethod} nav=${symbols.historyActivityNavBarField} getters={${symbols.historyThreadNameMethod},${symbols.historyForumNameMethod},${symbols.historyUserNameMethod},${symbols.historyDescriptionMethod},${symbols.historyThreadIdMethod},${symbols.historyPostIdMethod},${symbols.historyLiveIdMethod}}")}
-            ${fmt("MsgTabNotify", "${symbols.msgTabLocateToTabMethod}/${symbols.msgTabContainerSelectMethod}[${symbols.msgTabContainerExtDataField}]")}
-            ${fmt("PrivateReadReceipt", "${symbols.privateReadReceiptModelClass}.${symbols.privateReadReceiptModelReadDispatchMethod}[${symbols.privateReadReceiptModelDataField}->${symbols.privateReadReceiptPageDataClass}.${symbols.privateReadReceiptPageDataChatListMethod}] ack=${symbols.privateReadReceiptModelBaseClass}.${symbols.privateReadReceiptProcessAckMethod}(${symbols.privateReadReceiptCommitResponseClass}).${symbols.privateReadReceiptResponseErrorMethod} / ${symbols.privateReadReceiptMessageManagerClass}.${symbols.privateReadReceiptMessageManagerGetInstanceMethod}.${symbols.privateReadReceiptMessageSendMethod}(${symbols.privateReadReceiptMessageBaseClass}) request=${symbols.privateReadReceiptRequestClass}[${symbols.privateReadReceiptRequestMsgIdField},${symbols.privateReadReceiptRequestToUidField}]")}
-            ${fmt("FreeCopyPopup", "${symbols.freeCopyPopupMenuClass}.${symbols.freeCopyPopupContentViewMethod}[${symbols.freeCopyPopupTextField}]")}
-            ${fmt("BottomTab", "${symbols.mainTabDataClass}.${symbols.mainTabAddMethod}/${symbols.mainTabGetListMethod}->${symbols.mainTabDelegateGetStructureMethod}[${symbols.mainTabStructureTypeField},${symbols.mainTabStructureDynamicIconField},${symbols.mainTabStructureFragmentField}]")}
-            ${fmt("DefaultOriginalImage", originalImageValue)}
-            ${fmt("ImageViewerShare", imageViewerShareValue)}
-            ${fmt("FeedCardBind", "FeedCardView.${symbols.feedCardBindMethod}")}
-            ${fmt("FeedCardDataList", symbols.feedCardDataListField)}
-            ${fmt("FeedHeadParams", symbols.feedHeadParamsField)}
-            ${fmt("RecommendCardNestedData", "${symbols.feedRecommendCardNestedDataMethod}[${symbols.feedRecommendCardNestedDataListField}]")}
-            ${fmt("PbAdBid", pbAdBidValue)}
-            ${fmt("PostAdDataFilter", "${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}.${symbols.typeAdapterSetDataMethod} item=${symbols.typeAdapterDataItemClass}.${symbols.typeAdapterDataGetTypeMethod}")}
-            ${fmt("AiComponents", aiComponentValue)}
-
-            Source        : ${symbols.source}
-            Scan Errors   : ${symbols.scanErrors.joinToString(" | ").ifEmpty { "-" }}
-            =========================================
-        """.trimIndent()
-    }
-
-    private fun describeAppMetaFull(context: Context): String {
-        return try {
-            val info = context.packageManager.getPackageInfo(context.packageName, 0)
-            @Suppress("DEPRECATION")
-            val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                info.longVersionCode
-            } else {
-                info.versionCode.toLong()
-            }
-            "${info.versionName} ($vCode)"
-        } catch (_: Throwable) {
-            "Unknown"
-        }
-    }
-
-    private fun describeAppMeta(context: Context): String {
-        return try {
-            val info = context.packageManager.getPackageInfo(context.packageName, 0)
-            @Suppress("DEPRECATION")
-            val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                info.longVersionCode
-            } else {
-                info.versionCode.toLong()
-            }
-            "pkg=${context.packageName}, verCode=$vCode, update=${info.lastUpdateTime}"
-        } catch (_: Throwable) {
-            "pkg=${context.packageName}"
-        }
-    }
-
-    fun runtimeModuleVersionName(): String {
-        return readRuntimeBuildConfigField("VERSION_NAME") as? String ?: BuildConfig.VERSION_NAME
-    }
-
-    private fun runtimeModuleVersionCodeLabel(): String {
-        return "${runtimeModuleVersionName()}:${runtimeModuleVersionCode()}"
-    }
-
-    private fun runtimeModuleVersionCode(): Long {
-        return when (val value = readRuntimeBuildConfigField("VERSION_CODE")) {
-            is Int -> value.toLong()
-            is Long -> value
-            is Number -> value.toLong()
-            else -> BuildConfig.VERSION_CODE.toLong()
-        }
-    }
-
-    private fun readRuntimeBuildConfigField(fieldName: String): Any? {
-        return try {
-            val buildConfigClass = Class.forName(
-                "$MODULE_PACKAGE_NAME.BuildConfig",
-                false,
-                HookSymbolResolver::class.java.classLoader,
-            )
-            buildConfigClass.getField(fieldName).get(null)
-        } catch (_: Throwable) {
-            null
-        }
-    }
+    private fun runtimeModuleVersionCodeLabel(): String =
+        HookSymbolDiagnostics.runtimeModuleVersionCodeLabel()
 }
 
-private const val MODULE_PACKAGE_NAME = "com.forbidad4tieba.hook"
-private const val NAV_CLASS = StableTiebaHookPoints.NAVIGATION_BAR_CLASS
-private const val TB_WEB_VIEW_CLASS = "com.baidu.tieba.browser.TbWebView"
 private const val IMAGE_VIEWER_NATIVE_SHARE_FILE_PROVIDER_CLASS = "androidx.core.content.FileProvider"
-private const val FORUM_BOTTOM_SHEET_VIEW_CLASS = "com.baidu.tieba.forum.widget.TbBottomSheetView"
 private const val PB_COMMENT_BOTTOM_LISTENER_FIELD = "mOnScrollToBottomListener"
 private const val PB_COMMENT_BOTTOM_METHOD = "onScrollToBottom"
 private const val PB_AD_INSERT_CLASS = "com.baidu.tieba.pb.pb.main.underlayer.PbAdapterManagerInsertUtilKt"
@@ -8364,29 +5839,8 @@ private const val PB_LIST_DATA_REQ_BUILDER_CLASS = "tbclient.PbList.DataReq\$Bui
 private const val POST_AD_ADVERT_APP_INFO_CLASS = "com.baidu.tbadk.core.data.AdvertAppInfo"
 private const val PB_COMMON_REQUEST_MODEL_CLASS = "com.baidu.tieba.pb.pb.main.newmodel.CommonRequestModel"
 private const val PB_PAGE_BROWSER_REQUEST_MODEL_CLASS = "com.baidu.tieba.pb.pagebrowser.model.BaseRequestModel"
-private const val PB_AD_BID_RES_IDL_CLASS = "tbclient.AdBid.AdBidResIdl"
-private const val PB_AD_BID_DEX_KIND_COMMON = "common"
-private const val PB_AD_BID_DEX_KIND_PAGE_BROWSER = "pageBrowser"
-private const val HTTP_MESSAGE_CLASS = "com.baidu.adp.framework.message.HttpMessage"
-private const val TIEBA_REQUEST_INTERFACE_CLASS = "com.baidu.tieba.u3b"
-private const val TIEBA_REQUEST_CALLBACK_CLASS = "com.baidu.tieba.d8d"
 private const val KOTLIN_CONTINUATION_CLASS = "kotlin.coroutines.Continuation"
-private const val BD_UNIQUE_ID_CLASS = "com.baidu.adp.BdUniqueId"
-private const val PB_DATA_CLASS = "com.baidu.tieba.iic"
-private const val PB_FRAGMENT_CLASS = StableTiebaHookPoints.PB_FRAGMENT_CLASS
-private const val PB_ADAPTER_DATA_CLASS = "com.baidu.tieba.yf"
-private const val THREAD_DATA_CLASS = "com.baidu.tbadk.core.data.ThreadData"
 private const val RECOMMEND_CARD_VIEW_CLASS = "com.baidu.tieba.feed.component.RecommendCardView"
-private const val PERSONALIZE_PAGE_VIEW_CLASS =
-    "com.baidu.tieba.homepage.personalize.PersonalizePageView"
-private const val HOME_SEARCH_BOX_OWNER_CLASS =
-    "com.baidu.tieba.homepage.personalize.PersonalizeHeaderViewController"
-private const val HOME_RIGHT_SLOT_CLASS =
-    "com.baidu.tieba.homepage.personalize.view.HomeTabBarRightSlot"
-private const val HOME_PRELOAD_CONFIG_PARSER_CLASS =
-    "com.baidu.tieba.homepage.switchs.HomePreloadMoreConfigParser"
-private const val HOME_PRELOAD_CONFIG_COMPANION_CLASS =
-    "com.baidu.tieba.homepage.switchs.HomePreloadMoreConfigParser\$a"
 private val POST_AD_ADVERT_APP_TYPE_FIELDS = arrayOf(
     "TYPE_FRS_ADVERT_APP_EMPTY",
     "TYPE_FRS_ADVERT_APP_SINGLE_PIC",

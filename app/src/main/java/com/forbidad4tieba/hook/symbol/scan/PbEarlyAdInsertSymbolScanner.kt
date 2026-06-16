@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -11,6 +9,7 @@ import java.lang.reflect.Modifier
 internal object PbEarlyAdInsertSymbolScanner {
     private const val PB_AD_INSERT_CLASS = "com.baidu.tieba.pb.pb.main.underlayer.PbAdapterManagerInsertUtilKt"
     private const val MIN_METHOD_COUNT = 2
+    // Sample obfuscated type names are kept only for the exact fast path.
     private const val PB_DATA_CLASS = "com.baidu.tieba.iic"
     private const val PB_FRAGMENT_CLASS = "com.baidu.tieba.pb.pb.main.PbFragment"
     private const val PB_ADAPTER_DATA_CLASS = "com.baidu.tieba.yf"
@@ -29,10 +28,15 @@ internal object PbEarlyAdInsertSymbolScanner {
                 val targetClass = safeFindClass(className, cl) ?: continue
                 fixedClassFound = fixedClassFound || className == PB_AD_INSERT_CLASS
                 if (targetClass.isInterface || Modifier.isAbstract(targetClass.modifiers)) continue
-                buildDiagnosticMatch(targetClass)?.let(diagnostics::add)
+                val targetMethods = declaredMethods("Candidate", targetClass, logger) ?: run {
+                    skippedByReflection++
+                    continue
+                }
+                buildDiagnosticMatch(targetClass, targetMethods, logger)?.let(diagnostics::add)
 
                 val specs = scanMethodSpecs(
                     targetClass,
+                    targetMethods,
                     cl,
                     logger = null,
                     logExactMismatch = false,
@@ -44,7 +48,7 @@ internal object PbEarlyAdInsertSymbolScanner {
                     continue
                 }
 
-                val score = scoreCandidate(targetClass, specs)
+                val score = scoreCandidate(targetClass, targetMethods, specs, logger)
                 matches.add(ScanMatch(className, specs.joinToString(";"), "", score))
             } catch (t: Throwable) {
                 skippedByReflection++
@@ -64,7 +68,7 @@ internal object PbEarlyAdInsertSymbolScanner {
             log(logger, "pbEarlyAdInsert: fixed class not found: $PB_AD_INSERT_CLASS")
         }
 
-        val match = HookSymbolResolver.chooseUniqueScanMatch(
+        val match = ScanReflection.chooseUniqueScanMatch(
             tag = "pbEarlyAdInsert",
             ruleName = "PbEarlyAdInsertSemanticRule",
             matches = matches,
@@ -100,8 +104,12 @@ internal object PbEarlyAdInsertSymbolScanner {
             isLikelyObfuscatedShortName(shortName)
     }
 
-    private fun buildDiagnosticMatch(targetClass: Class<*>): ScanMatch? {
-        val metadata = kotlinMetadataStrings(targetClass)
+    private fun buildDiagnosticMatch(
+        targetClass: Class<*>,
+        targetMethods: List<Method>,
+        logger: ScanLogger?,
+    ): ScanMatch? {
+        val metadata = kotlinMetadataStrings(targetClass, logger)
         val metadataScore = metadata.count { text ->
             text.contains("Ad") ||
                 text.contains("Advert") ||
@@ -109,13 +117,11 @@ internal object PbEarlyAdInsertSymbolScanner {
                 text.contains("FunAd") ||
                 text.contains("insert", ignoreCase = true)
         }
-        val interestingMethods = targetClass.declaredMethods.mapNotNull { method ->
+        val interestingMethods = targetMethods.mapNotNull { method ->
             if (!Modifier.isStatic(method.modifiers) || Modifier.isAbstract(method.modifiers)) return@mapNotNull null
             val typeNames = method.parameterTypes.map { it.name } + method.returnType.name
             var score = 0
-            if (typeNames.any { it == PB_DATA_CLASS }) score += 5
             if (typeNames.any { it == PB_FRAGMENT_CLASS }) score += 4
-            if (typeNames.any { it == PB_ADAPTER_DATA_CLASS }) score += 4
             if (typeNames.any { it == THREAD_DATA_CLASS }) score += 3
             if (typeNames.any { it == android.util.SparseArray::class.java.name }) score += 4
             if (typeNames.any { it == ArrayList::class.java.name }) score += 2
@@ -129,7 +135,7 @@ internal object PbEarlyAdInsertSymbolScanner {
         if (targetClass.name.contains("underlayer", ignoreCase = true)) score += 10
         if (targetClass.simpleName.endsWith("Kt")) score += 8
         score += interestingMethods.sumOf { it.second }.coerceAtMost(80)
-        score -= targetClass.declaredMethods.size / 12
+        score -= targetMethods.size / 12
         val methodText = interestingMethods
             .sortedWith(compareByDescending<Pair<Method, Int>> { it.second }.thenBy { it.first.name })
             .take(6)
@@ -139,7 +145,7 @@ internal object PbEarlyAdInsertSymbolScanner {
 
     private fun logDiagnostics(diagnostics: List<ScanMatch>, logger: ScanLogger?) {
         if (diagnostics.isEmpty()) {
-            log(logger, "pbEarlyAdInsert diag: no partial candidates with PbData/PbFragment/list signatures")
+            log(logger, "pbEarlyAdInsert diag: no partial candidates with PbFragment/list signatures")
             return
         }
         val sample = diagnostics
@@ -149,8 +155,13 @@ internal object PbEarlyAdInsertSymbolScanner {
         log(logger, "pbEarlyAdInsert diag top partial candidates: $sample")
     }
 
-    private fun scoreCandidate(targetClass: Class<*>, specs: List<String>): Int {
-        val metadata = kotlinMetadataStrings(targetClass)
+    private fun scoreCandidate(
+        targetClass: Class<*>,
+        targetMethods: List<Method>,
+        specs: List<String>,
+        logger: ScanLogger?,
+    ): Int {
+        val metadata = kotlinMetadataStrings(targetClass, logger)
         val specText = specs.joinToString(";")
         var score = 120
         if (targetClass.name == PB_AD_INSERT_CLASS) score += 80
@@ -162,13 +173,14 @@ internal object PbEarlyAdInsertSymbolScanner {
         if (specText.contains(android.util.SparseArray::class.java.name)) score += 35
         if (specText.contains(PB_FRAGMENT_CLASS) && specText.contains(ArrayList::class.java.name)) score += 10
         score += specs.size * 8
-        score -= targetClass.declaredMethods.size / 10
+        score -= targetMethods.size / 10
         score -= targetClass.simpleName.length / 4
         return score
     }
 
     private fun scanMethodSpecs(
         targetClass: Class<*>,
+        targetMethods: List<Method>,
         cl: ClassLoader,
         logger: ScanLogger?,
         logExactMismatch: Boolean = true,
@@ -180,7 +192,7 @@ internal object PbEarlyAdInsertSymbolScanner {
         val specs = ArrayList<String>(4)
         specs.addAll(
             findMethodSpecs(
-                targetClass = targetClass,
+                targetMethods = targetMethods,
                 cl = cl,
                 logger = logger,
                 label = "pbCommentAd",
@@ -192,7 +204,7 @@ internal object PbEarlyAdInsertSymbolScanner {
         )
         specs.addAll(
             findMethodSpecs(
-                targetClass = targetClass,
+                targetMethods = targetMethods,
                 cl = cl,
                 logger = logger,
                 label = "pbCommentFunAd",
@@ -210,7 +222,7 @@ internal object PbEarlyAdInsertSymbolScanner {
         )
         specs.addAll(
             findMethodSpecs(
-                targetClass = targetClass,
+                targetMethods = targetMethods,
                 cl = cl,
                 logger = logger,
                 label = "pbFunBannerAd",
@@ -229,14 +241,13 @@ internal object PbEarlyAdInsertSymbolScanner {
 
         val exactSpecs = specs.distinct()
         if (exactSpecs.size >= 4) return exactSpecs
-        return scanFlexibleMethodSpecs(targetClass, cl)
+        return scanFlexibleMethodSpecs(targetMethods, cl)
     }
 
-    private fun scanFlexibleMethodSpecs(targetClass: Class<*>, cl: ClassLoader): List<String> {
+    private fun scanFlexibleMethodSpecs(targetMethods: List<Method>, cl: ClassLoader): List<String> {
         val pbFragmentClass = resolveType(PB_FRAGMENT_CLASS, cl) ?: return emptyList()
         val threadDataClass = resolveType(THREAD_DATA_CLASS, cl)
-        val adapterDataClass = resolveType(PB_ADAPTER_DATA_CLASS, cl)
-        val methods = targetClass.declaredMethods.filter { method ->
+        val methods = targetMethods.filter { method ->
             Modifier.isStatic(method.modifiers) && !Modifier.isAbstract(method.modifiers)
         }
         if (methods.size < MIN_METHOD_COUNT) return emptyList()
@@ -286,8 +297,7 @@ internal object PbEarlyAdInsertSymbolScanner {
                     (threadDataClass == null || threadDataClass.isAssignableFrom(method.parameterTypes[3])) &&
                     method.parameterTypes[4] == pbFragmentClass &&
                     !method.returnType.isPrimitive &&
-                    method.returnType != Void.TYPE &&
-                    (adapterDataClass == null || adapterDataClass.isAssignableFrom(method.returnType))
+                    method.returnType != Void.TYPE
             }
             if (commentAd.size != 2 || commentFunAd.size != 1 || bannerAd.size != 1) continue
 
@@ -309,8 +319,7 @@ internal object PbEarlyAdInsertSymbolScanner {
                 .sortedBy { it.name }
                 .map(::encodeMethodSpec)
                 .distinct()
-            val score = candidateSpecs.size * 10 +
-                if (dataType.name == PB_DATA_CLASS) 20 else 0
+            val score = candidateSpecs.size * 10
             if (candidateSpecs.size >= 4 && score > bestScore) {
                 bestSpecs = candidateSpecs
                 bestScore = score
@@ -389,7 +398,7 @@ internal object PbEarlyAdInsertSymbolScanner {
     }
 
     private fun findMethodSpecs(
-        targetClass: Class<*>,
+        targetMethods: List<Method>,
         cl: ClassLoader,
         logger: ScanLogger?,
         label: String,
@@ -408,7 +417,7 @@ internal object PbEarlyAdInsertSymbolScanner {
                 return emptyList()
             }
         }
-        val matches = targetClass.declaredMethods.filter { method ->
+        val matches = targetMethods.filter { method ->
             Modifier.isStatic(method.modifiers) &&
                 !Modifier.isAbstract(method.modifiers) &&
                 (method.returnType == returnType || returnType.isAssignableFrom(method.returnType)) &&
@@ -438,22 +447,27 @@ internal object PbEarlyAdInsertSymbolScanner {
         return "${method.name}|${method.returnType.name}|$params"
     }
 
-    private fun kotlinMetadataStrings(targetClass: Class<*>): List<String> {
+    private fun kotlinMetadataStrings(targetClass: Class<*>, logger: ScanLogger?): List<String> {
         val metadata = targetClass.getAnnotation(kotlin.Metadata::class.java) ?: return emptyList()
         return (
-            readMetadataStringArray(metadata, "d1") +
-                readMetadataStringArray(metadata, "d2") +
-                readMetadataStringArray(metadata, "data1") +
-                readMetadataStringArray(metadata, "data2")
+            readMetadataStringArray(targetClass, metadata, "d1", logger) +
+                readMetadataStringArray(targetClass, metadata, "d2", logger) +
+                readMetadataStringArray(targetClass, metadata, "data1", logger) +
+                readMetadataStringArray(targetClass, metadata, "data2", logger)
             )
             .filter { it.isNotBlank() }
             .distinct()
     }
 
-    private fun readMetadataStringArray(metadata: Annotation, methodName: String): List<String> {
-        val value = runCatching {
+    private fun readMetadataStringArray(
+        targetClass: Class<*>,
+        metadata: Annotation,
+        methodName: String,
+        logger: ScanLogger?,
+    ): List<String> {
+        val value = scanSubStep("PbEarlyAdInsertHook.${targetClass.name}.Metadata.$methodName", logger, null) {
             metadata.javaClass.getMethod(methodName).invoke(metadata)
-        }.getOrNull() as? Array<*> ?: return emptyList()
+        } as? Array<*> ?: return emptyList()
         return value.mapNotNull { it as? String }
     }
 
@@ -473,7 +487,17 @@ internal object PbEarlyAdInsertSymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
+
+    private fun declaredMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("PbEarlyAdBlockHook.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+    }
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

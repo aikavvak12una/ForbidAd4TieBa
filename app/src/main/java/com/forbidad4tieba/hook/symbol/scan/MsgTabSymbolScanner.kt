@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 
@@ -58,16 +56,16 @@ internal object MsgTabSymbolScanner {
 
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
 
     private fun collectInstanceMethods(clazz: Class<*>): List<java.lang.reflect.Method> =
-        HookSymbolResolver.collectInstanceMethods(clazz)
+        ScanReflection.collectInstanceMethods(clazz)
 
     private fun pickMethodName(methods: List<java.lang.reflect.Method>, preferredName: String): String? =
-        HookSymbolResolver.pickMethodName(methods, preferredName)
+        ScanReflection.pickMethodName(methods, preferredName)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

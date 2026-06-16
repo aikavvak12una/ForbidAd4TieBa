@@ -24,10 +24,49 @@ internal data class PbAdBidScanSymbols(
     val pageBrowserRequestDataMethod: String? = null,
 )
 
+internal data class PbFallingScanSymbols(
+    val viewClass: String? = null,
+    val initMethod: String? = null,
+    val showMethod: String? = null,
+    val clearMethod: String? = null,
+)
+
 internal data class TypeAdapterDataFilterScanSymbols(
     val setDataMethod: String? = null,
     val dataItemClass: String? = null,
     val dataGetTypeMethod: String? = null,
+)
+
+internal data class StrategyAdScanSymbols(
+    val splashAdHelperClass: String? = null,
+    val splashAdHelperMethod: String? = null,
+    val closeAdDataClass: String? = null,
+    val closeAdDataMethodG1: String? = null,
+    val closeAdDataMethodJ1: String? = null,
+    val zgaClass: String? = null,
+    val zgaMethods: List<String>? = null,
+)
+
+internal data class SettingsScanSymbols(
+    val settingsClass: String? = null,
+    val initMethod: String? = null,
+    val containerField: String? = null,
+)
+
+internal data class HomeHeaderScanSymbols(
+    val searchBoxViewClass: String? = null,
+    val searchBoxSetHintMethod: String? = null,
+    val homeSearchBoxOwnerClass: String? = null,
+    val homeSearchBoxInitMethod: String? = null,
+    val homeSearchBoxGetterMethod: String? = null,
+    val homeRightSlotClass: String? = null,
+    val homeRightSlotStateMethods: List<String>? = null,
+)
+
+internal data class HomeTabScanSymbols(
+    val tabClass: String? = null,
+    val rebuildMethod: String? = null,
+    val listField: String? = null,
 )
 
 internal data class ForumPageAdScanSymbols(
@@ -56,9 +95,28 @@ internal data class ForumPageAdScanSymbols(
     val businessPromotJumpMethod: String? = null,
 )
 
+internal data class EnterForumWebScanSymbols(
+    val controllerClass: String? = null,
+    val webLoadMethod: String? = null,
+    val initInfoDataClass: String? = null,
+    val initInfoGetUrlMethod: String? = null,
+)
+
 internal data class RecommendCardNestedDataScanSymbols(
     val nestedDataMethod: String? = null,
     val nestedDataListField: String? = null,
+)
+
+internal data class FeedTemplateScanSymbols(
+    val keyMethod: String? = null,
+    val payloadMethod: String? = null,
+    val loadMoreMethod: String? = null,
+)
+
+internal data class FeedCardScanSymbols(
+    val bindMethod: String? = null,
+    val dataListField: String? = null,
+    val feedHeadParamsField: String? = null,
 )
 
 internal data class ReplyServerResponseLogScanSymbols(
@@ -184,6 +242,65 @@ internal data class MountCardLinkLayoutScanSymbols(
     val dataField: String? = null,
     val dataClass: String? = null,
     val getUrlMethod: String? = null,
+)
+
+internal data class FreeCopyPopupScanSymbols(
+    val menuClass: String? = null,
+    val contentViewMethod: String? = null,
+    val textField: String? = null,
+)
+
+internal data class ForumBottomSheetScanSymbols(
+    val viewClass: String? = null,
+    val initScrollMethod: String? = null,
+)
+
+internal data class AutoLoadMoreConfigScanSymbols(
+    val configClass: String? = null,
+    val configMethod: String? = null,
+)
+
+internal data class PbCommentInteractionScanSymbols(
+    val scrollListenerClass: String? = null,
+    val scrollMethod: String? = null,
+    val scrollFragmentField: String? = null,
+    val scrollBottomListenerField: String? = null,
+    val scrollBottomMethod: String? = null,
+    val bottomListScrollClass: String? = null,
+    val bottomListScrollMethod: String? = null,
+    val bottomListOwnerField: String? = null,
+    val bottomRecyclerScrollClass: String? = null,
+    val bottomRecyclerScrollMethod: String? = null,
+    val bottomRecyclerOwnerField: String? = null,
+    val gestureScaleManagerClass: String? = null,
+    val gestureScaleDispatchMethod: String? = null,
+    val gestureScaleListenerSetterMethod: String? = null,
+    val gestureScaleListenerClass: String? = null,
+    val gestureScaleListenerOnScaleMethod: String? = null,
+)
+
+internal data class ImageViewerShareScanSymbols(
+    val shareTrackBuilderClass: String? = null,
+    val shareTrackBuildUrlMethod: String? = null,
+    val shareTrackAppendQueryMethod: String? = null,
+    val itemClass: String? = null,
+    val itemTitleField: String? = null,
+    val itemContentField: String? = null,
+    val itemLinkUrlField: String? = null,
+    val itemImageUriField: String? = null,
+    val itemImageUrlField: String? = null,
+    val itemLocalFileField: String? = null,
+    val configClass: String? = null,
+    val addOutsideMethod: String? = null,
+    val getRequestDataMethod: String? = null,
+    val setRequestDataMethod: String? = null,
+    val getContextMethod: String? = null,
+    val isDialogField: String? = null,
+    val itemField: String? = null,
+    val itemViewClass: String? = null,
+    val itemNameByResMethod: String? = null,
+    val itemNameByTextMethod: String? = null,
+    val iconResId: Int? = null,
 )
 
 internal data class AiComponentScanSymbols(

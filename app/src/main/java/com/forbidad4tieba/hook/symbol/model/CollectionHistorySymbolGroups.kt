@@ -11,7 +11,18 @@ data class CollectionSymbolsGroup(
     val model: CollectionModelSymbolsGroup = CollectionModelSymbolsGroup(),
     val fragment: CollectionFragmentSymbolsGroup = CollectionFragmentSymbolsGroup(),
     val adapter: CollectionAdapterSymbolsGroup = CollectionAdapterSymbolsGroup(),
-)
+) {
+    fun isSearchComplete(): Boolean = hasRequired(
+        presenter.collectionPresenterField,
+        presenter.collectionPresenterListSetterMethod,
+        model.collectionModelField,
+        model.collectionModelListGetterMethod,
+        model.collectionModelParseMethod,
+        model.collectionModelListField,
+        fragment.collectionFragmentDisplayListField,
+        fragment.collectionNavBarField,
+    )
+}
 
 data class CollectionPresenterSymbolsGroup(
     val collectionPresenterField: String? = null,
@@ -42,7 +53,21 @@ data class CollectionAdapterSymbolsGroup(
 data class HistorySymbolsGroup(
     val activity: HistoryActivitySymbolsGroup = HistoryActivitySymbolsGroup(),
     val threadData: HistoryThreadDataSymbolsGroup = HistoryThreadDataSymbolsGroup(),
-)
+) {
+    fun isSearchComplete(): Boolean = hasRequired(
+        activity.historyAdapterField,
+        activity.historyAdapterSetListMethod,
+        activity.historyListField,
+        activity.historyActivityNavBarField,
+        threadData.historyThreadNameMethod,
+        threadData.historyForumNameMethod,
+        threadData.historyUserNameMethod,
+        threadData.historyDescriptionMethod,
+        threadData.historyThreadIdMethod,
+        threadData.historyPostIdMethod,
+        threadData.historyLiveIdMethod,
+    )
+}
 
 data class HistoryActivitySymbolsGroup(
     val historyAdapterField: String? = null,
@@ -67,3 +92,7 @@ data class FreeCopySymbolsGroup(
     val freeCopyPopupContentViewMethod: String? = null,
     val freeCopyPopupTextField: String? = null,
 )
+
+private fun hasRequired(vararg values: String?): Boolean {
+    return values.all { !it.isNullOrBlank() }
+}

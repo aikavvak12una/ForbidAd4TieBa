@@ -18,9 +18,11 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 闅愯棌璐村惂 369492229 鍙婁箣鍚庣増鏈?WebView 鎴戠殑椤甸噷鐨勫箍鍛婂拰鎺ㄥ箍鍧椼€? *
- * 杩欓噷 hook TbWebView.loadUrl锛岃€屼笉鏄?android.webkit.WebView.loadUrl銆? * 鐩爣 TbWebView 鍙兘鐩存帴鏄剧ず鍐呴儴 MonitorWebView 鏉ヤ娇鐢ㄩ娓叉煋鎴栭€氱敤缂撳瓨椤碉紝
- * 杩欐牱浼氱粫杩囧唴閮?WebView 鐨?load 鍜?page-finished 璺緞銆? */
+ * Hides ad and promotion blocks in the Mine tab WebView for supported host versions.
+ *
+ * This hooks TbWebView.loadUrl rather than android.webkit.WebView.loadUrl because the host can show
+ * an internal MonitorWebView or cached page directly, bypassing the inner WebView load callbacks.
+ */
 object MineTabWebBlockHook {
     private const val MIN_WEB_MINE_TAB_VERSION_CODE = 369491968L
     private const val MINE_TAB_PATH = "/mo/q/hybrid-main-forumtab/mineTab"

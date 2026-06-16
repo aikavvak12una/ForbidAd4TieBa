@@ -2,10 +2,10 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.view.ViewGroup
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object OriginalImageSymbolScanner {
@@ -26,7 +26,12 @@ internal object OriginalImageSymbolScanner {
     if (urlDragClass == null) log(logger, "origImage: class not found: $URL_DRAG_IMAGE_VIEW_CLASS")
     if (dataClass == null) log(logger, "origImage: class not found: $IMAGE_URL_DATA_CLASS")
 
-    val setPrimaryItemMethod = adapterClass?.declaredMethods?.firstOrNull { method ->
+    val adapterMethods = adapterClass?.let { declaredMethods("ImagePagerAdapter", it, logger) }
+    val urlDragMethods = urlDragClass?.let { declaredMethods("UrlDragImageView", it, logger) }
+    val sharedPrefMethods = sharedPrefClass?.let { declaredMethods("SharedPrefHelper", it, logger) }
+    val md5Methods = md5Class?.let { declaredMethods("TbMd5", it, logger) }
+
+    val setPrimaryItemMethod = adapterMethods?.firstOrNull { method ->
         method.name == "setPrimaryItem" &&
             method.returnType == Void.TYPE &&
             method.parameterTypes.size == 3 &&
@@ -36,7 +41,11 @@ internal object OriginalImageSymbolScanner {
     }?.name
 
     val originalMethods = urlDragClass
-        ?.let { runCatching { OriginalImageMethodsRule().match(it, cl) }.getOrNull() }
+        ?.let {
+            scanSubStep("DefaultOriginalImageHook.MethodsRule", logger, null as ScanMatch?) {
+                OriginalImageMethodsRule().match(it, cl)
+            }
+        }
         ?.methodName
         ?.split(",")
         ?.map { it.trim().ifEmpty { null } }
@@ -44,7 +53,7 @@ internal object OriginalImageSymbolScanner {
     fun originalMethodPart(index: Int): String? = originalMethods.getOrNull(index)
 
     val setAssistUrlMethod = if (urlDragClass != null && dataClass != null) {
-        val candidates = urlDragClass.declaredMethods.filter { method ->
+        val candidates = urlDragMethods.orEmpty().filter { method ->
             method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 1 &&
                 method.parameterTypes[0] == dataClass &&
@@ -55,21 +64,21 @@ internal object OriginalImageSymbolScanner {
     } else {
         null
     }
-    val assistDataCandidates = urlDragClass?.declaredMethods?.filter { method ->
+    val assistDataCandidates = urlDragMethods?.filter { method ->
         method.parameterTypes.isEmpty() &&
             method.returnType == dataClass &&
             !Modifier.isStatic(method.modifiers)
     }.orEmpty()
     val assistDataMethod = assistDataCandidates.firstOrNull { it.name == "getmAssistUrlData" }?.name
         ?: assistDataCandidates.singleOrNull()?.name
-    val originTextMethod = urlDragClass?.declaredMethods?.firstOrNull { method ->
+    val originTextMethod = urlDragMethods?.firstOrNull { method ->
         method.parameterTypes.isEmpty() &&
             method.returnType == String::class.java &&
             !Modifier.isStatic(method.modifiers) &&
             method.name == "getmCheckOriginPicText"
     }?.name
 
-    val dataFields = dataClass?.let(::collectInstanceFields).orEmpty()
+    val dataFields = dataClass?.let { instanceFields("ImageUrlData", it, logger) }.orEmpty()
     val showButtonField = dataFields.firstOrNull {
         it.name == "mIsShowOrigonButton" && isBooleanType(it.type)
     }?.name
@@ -83,20 +92,20 @@ internal object OriginalImageSymbolScanner {
         it.name == "originalUrl" && it.type == String::class.java
     }?.name
 
-    val sharedPrefGetInstanceMethod = sharedPrefClass?.declaredMethods?.firstOrNull { method ->
+    val sharedPrefGetInstanceMethod = sharedPrefMethods?.firstOrNull { method ->
         method.name == "getInstance" &&
             Modifier.isStatic(method.modifiers) &&
             method.parameterTypes.isEmpty() &&
             method.returnType.name == SHARED_PREF_HELPER_CLASS
     }?.name
-    val sharedPrefPutBooleanMethod = sharedPrefClass?.declaredMethods?.firstOrNull { method ->
+    val sharedPrefPutBooleanMethod = sharedPrefMethods?.firstOrNull { method ->
         method.name == "putBoolean" &&
             method.returnType == Void.TYPE &&
             method.parameterTypes.size == 2 &&
             method.parameterTypes[0] == String::class.java &&
             method.parameterTypes[1] == Boolean::class.javaPrimitiveType
     }?.name
-    val md5Method = md5Class?.declaredMethods?.firstOrNull { method ->
+    val md5Method = md5Methods?.firstOrNull { method ->
         method.name == "getNameMd5FromUrl" &&
             Modifier.isStatic(method.modifiers) &&
             method.returnType == String::class.java &&
@@ -136,14 +145,34 @@ internal object OriginalImageSymbolScanner {
 
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
 
-    private fun isBooleanType(type: Class<*>): Boolean = HookSymbolResolver.isBooleanType(type)
+    private fun declaredMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("DefaultOriginalImageHook.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+    }
 
-    private fun isIntType(type: Class<*>): Boolean = HookSymbolResolver.isIntType(type)
+    private fun instanceFields(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Field>? {
+        return scanSubStep("DefaultOriginalImageHook.$label.InstanceFields", logger, null) {
+            collectInstanceFields(clazz)
+        }
+    }
+
+    private fun isBooleanType(type: Class<*>): Boolean = ScanReflection.isBooleanType(type)
+
+    private fun isIntType(type: Class<*>): Boolean = ScanReflection.isIntType(type)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

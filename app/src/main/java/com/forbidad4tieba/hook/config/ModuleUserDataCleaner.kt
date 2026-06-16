@@ -6,7 +6,9 @@ import java.io.File
 
 internal object ModuleUserDataCleaner {
     private const val SHARED_PREFS_DIR = "shared_prefs"
-    private const val ABOUT_CACHE_FILE_NAME = "tbhook_about_cache.json"
+    private const val LEGACY_ABOUT_CACHE_FILE_NAME = "tbhook_about_cache.json"
+    private const val ABOUT_CACHE_DIR_NAME = "tbhook"
+    private const val ABOUT_CACHE_FILE_NAME = "about_info_cache.json"
     private const val COLLECTION_CACHE_DIR_NAME = "tbhook_cache"
     private const val SHARE_STAGING_PARENT_DIR = "com_qq_e_download"
     private const val SHARE_STAGING_DIR_NAME = "tbhook_share"
@@ -33,8 +35,15 @@ internal object ModuleUserDataCleaner {
         deleteSharedPrefs(appCtx, ConfigManager.LEGACY_MIXED_PREFS_NAME, deleted, failed)
         deleteOwnedFile(
             parent = appCtx.filesDir,
+            name = LEGACY_ABOUT_CACHE_FILE_NAME,
+            label = "files/$LEGACY_ABOUT_CACHE_FILE_NAME",
+            deleted = deleted,
+            failed = failed,
+        )
+        deleteOwnedFile(
+            parent = File(appCtx.filesDir, ABOUT_CACHE_DIR_NAME),
             name = ABOUT_CACHE_FILE_NAME,
-            label = "files/$ABOUT_CACHE_FILE_NAME",
+            label = "files/$ABOUT_CACHE_DIR_NAME/$ABOUT_CACHE_FILE_NAME",
             deleted = deleted,
             failed = failed,
         )

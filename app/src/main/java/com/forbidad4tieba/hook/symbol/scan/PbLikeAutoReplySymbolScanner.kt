@@ -2,13 +2,13 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.content.Context
 import android.view.View
 import android.widget.EditText
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object PbLikeAutoReplySymbolScanner {
@@ -19,7 +19,9 @@ internal object PbLikeAutoReplySymbolScanner {
             return PbLikeAutoReplyScanSymbols()
         }
 
-        val getDataMethod = collectInstanceMethods(agreeViewClass).firstOrNull { method ->
+        val agreeViewMethods = instanceMethods("AgreeView", agreeViewClass, logger)
+            ?: return PbLikeAutoReplyScanSymbols(agreeViewClass = agreeViewClass.name)
+        val getDataMethod = agreeViewMethods.firstOrNull { method ->
             method.name == StableTiebaHookPoints.METHOD_GET_DATA &&
                 method.parameterTypes.isEmpty() &&
                 method.returnType.name == StableTiebaHookPoints.AGREE_DATA_CLASS
@@ -30,7 +32,7 @@ internal object PbLikeAutoReplySymbolScanner {
         }
 
         val agreeDataClass = getDataMethod.returnType
-        val agreeDataFields = collectInstanceFields(agreeDataClass)
+        val agreeDataFields = instanceFields("AgreeData", agreeDataClass, logger).orEmpty()
         val hasAgreeField = agreeDataFields.firstOrNull { field ->
             field.name == "hasAgree" && isBooleanType(field.type)
         }
@@ -67,7 +69,7 @@ internal object PbLikeAutoReplySymbolScanner {
             )
         }
 
-        val inputMethods = collectInstanceMethods(inputContainerClass)
+        val inputMethods = instanceMethods("PbNewInputContainer", inputContainerClass, logger).orEmpty()
         val getInputViewMethod = inputMethods.firstOrNull { method ->
             method.name == StableTiebaHookPoints.METHOD_GET_INPUT_VIEW &&
                 method.parameterTypes.isEmpty() &&
@@ -125,7 +127,7 @@ internal object PbLikeAutoReplySymbolScanner {
             ownerClassName = agreeViewClass.name,
             logger = logger,
         )
-            .filter { match -> isAgreeClickMethodNameValid(agreeViewClass, match.ownerMethodName) }
+            .filter { match -> isAgreeClickMethodNameValid(agreeViewClass, match.ownerMethodName, logger) }
             .groupBy { it.ownerMethodName }
             .mapNotNull { (_, methodMatches) -> methodMatches.maxByOrNull { it.score } }
             .sortedWith(
@@ -155,8 +157,13 @@ internal object PbLikeAutoReplySymbolScanner {
         return best.ownerMethodName
     }
 
-    private fun isAgreeClickMethodNameValid(agreeViewClass: Class<*>, methodName: String): Boolean {
-        return agreeViewClass.declaredMethods.any { method ->
+    private fun isAgreeClickMethodNameValid(
+        agreeViewClass: Class<*>,
+        methodName: String,
+        logger: ScanLogger?,
+    ): Boolean {
+        val methods = declaredMethods("AgreeView.ValidateClick", agreeViewClass, logger) ?: return false
+        return methods.any { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.name == methodName &&
                 method.returnType == Void.TYPE &&
@@ -175,19 +182,49 @@ internal object PbLikeAutoReplySymbolScanner {
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
 
     private fun collectInstanceMethods(clazz: Class<*>): List<java.lang.reflect.Method> =
-        HookSymbolResolver.collectInstanceMethods(clazz)
+        ScanReflection.collectInstanceMethods(clazz)
+
+    private fun declaredMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("PbLikeAutoReplyHook.$label.Methods", logger, null) {
+            clazz.declaredMethods.toList()
+        }
+    }
+
+    private fun instanceFields(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Field>? {
+        return scanSubStep("PbLikeAutoReplyHook.$label.InstanceFields", logger, null) {
+            collectInstanceFields(clazz)
+        }
+    }
+
+    private fun instanceMethods(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Method>? {
+        return scanSubStep("PbLikeAutoReplyHook.$label.InstanceMethods", logger, null) {
+            collectInstanceMethods(clazz)
+        }
+    }
 
     private fun isBooleanType(type: Class<*>): Boolean =
-        HookSymbolResolver.isBooleanType(type)
+        ScanReflection.isBooleanType(type)
 
     private fun isIntType(type: Class<*>): Boolean =
-        HookSymbolResolver.isIntType(type)
+        ScanReflection.isIntType(type)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

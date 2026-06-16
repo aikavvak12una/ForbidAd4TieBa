@@ -42,6 +42,31 @@ object HookFeatureKey {
     const val CLEAN_SHARE_TRACKING_PARAMS = "clean_share_tracking_params"
     const val DISABLE_AI_COMPONENTS = "disable_ai_components"
     const val VERIFY_REPLY_AFTER_POST = "verify_reply_after_post"
+
+    val orderedKeys = listOf(
+        BLOCK_AD,
+        ENABLE_CUSTOM_POST_FILTER,
+        SIMPLIFY_HOME_TOP_TABS,
+        SIMPLIFY_BOTTOM_TABS,
+        HIDE_PB_BOTTOM_BANNER,
+        FILTER_ENTER_FORUM_WEB,
+        OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
+        HOME_NATIVE_GLASS,
+        AUTO_LOAD_MORE,
+        ENABLE_PB_LIKE_AUTO_REPLY,
+        DISABLE_AUTO_REFRESH,
+        ENABLE_PB_SCROLL_COALESCE,
+        DISABLE_PB_GESTURE_FONT_SCALE,
+        DISABLE_FORUM_NATIVE_TOP_SHIFT,
+        FREE_COPY,
+        DEFAULT_NOTIFY_TAB,
+        DEFAULT_ORIGINAL_IMAGE,
+        AUTO_SIGN_IN,
+        PRIVATE_READ_RECEIPT_INVISIBLE,
+        CLEAN_SHARE_TRACKING_PARAMS,
+        DISABLE_AI_COMPONENTS,
+        VERIFY_REPLY_AFTER_POST,
+    )
 }
 
 data class HookFeatureStatus(

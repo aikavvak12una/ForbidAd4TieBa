@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.validation
 
 import com.forbidad4tieba.hook.symbol.model.*
 
-import com.forbidad4tieba.hook.HookSymbolResolver
-
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.content.Context
 import android.view.View
@@ -13,9 +11,12 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.symbol.scan.AiComponentSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.HomeTabItemSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.PbAdBidSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbEarlyAdInsertSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlClickableSpanSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -1865,19 +1866,19 @@ private fun isDrawableResId(value: Int): Boolean {
 }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
-        HookSymbolResolver.safeFindClass(name, cl)
+        ScanReflection.safeFindClass(name, cl)
 
     private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
-        HookSymbolResolver.collectInstanceFields(clazz)
+        ScanReflection.collectInstanceFields(clazz)
 
     private fun collectInstanceMethods(clazz: Class<*>): List<Method> =
-        HookSymbolResolver.collectInstanceMethods(clazz)
+        ScanReflection.collectInstanceMethods(clazz)
 
-    private fun isListType(type: Class<*>): Boolean = HookSymbolResolver.isListType(type)
+    private fun isListType(type: Class<*>): Boolean = ScanReflection.isListType(type)
 
-    private fun isBooleanType(type: Class<*>): Boolean = HookSymbolResolver.isBooleanType(type)
+    private fun isBooleanType(type: Class<*>): Boolean = ScanReflection.isBooleanType(type)
 
-    private fun isIntType(type: Class<*>): Boolean = HookSymbolResolver.isIntType(type)
+    private fun isIntType(type: Class<*>): Boolean = ScanReflection.isIntType(type)
 
     private fun resolveHomeTabItemClass(homeClass: Class<*>, listFieldName: String): Class<*>? =
         HomeTabItemSymbolScanner.resolveHomeTabItemClass(homeClass, listFieldName)
@@ -1888,7 +1889,7 @@ private fun isDrawableResId(value: Int): Boolean {
     private fun findPbAdBidPageBrowserRequestDataMethodInHierarchy(
         cls: Class<*>,
         continuationClass: Class<*>,
-    ): Method? = HookSymbolResolver.findPbAdBidPageBrowserRequestDataMethodInHierarchy(cls, continuationClass)
+    ): Method? = PbAdBidSymbolScanner.findPageBrowserRequestDataMethodInHierarchy(cls, continuationClass)
 
     private fun isPlainUrlClickableSpanOnClickMethod(method: Method, methodName: String): Boolean =
         PlainUrlClickableSpanSymbolScanner.isOnClickMethod(method, methodName)
@@ -1908,13 +1909,13 @@ private fun isDrawableResId(value: Int): Boolean {
     )
 
     private fun isPlainUrlMessageDispatchMethod(method: Method, responsedMessageClass: Class<*>): Boolean =
-        HookSymbolResolver.isPlainUrlMessageDispatchMethod(method, responsedMessageClass)
+        ScanReflection.isPlainUrlMessageDispatchMethod(method, responsedMessageClass)
 
     private fun isMountCardLinkLayoutOnClickMethod(method: Method, methodName: String): Boolean =
-        HookSymbolResolver.isMountCardLinkLayoutOnClickMethod(method, methodName)
+        ScanReflection.isMountCardLinkLayoutOnClickMethod(method, methodName)
 
     private fun resolveMountCardLinkLayoutDataField(layoutClass: Class<*>, dataClass: Class<*>): java.lang.reflect.Field? =
-        HookSymbolResolver.resolveMountCardLinkLayoutDataField(layoutClass, dataClass)
+        ScanReflection.resolveMountCardLinkLayoutDataField(layoutClass, dataClass)
 
     private fun isMountCardLinkLayoutStructureValid(
         layoutClass: Class<*>,
@@ -1922,7 +1923,7 @@ private fun isDrawableResId(value: Int): Boolean {
         dataClass: Class<*>,
         dataField: Field,
         getUrlMethod: Method,
-    ): Boolean = HookSymbolResolver.isMountCardLinkLayoutStructureValid(
+    ): Boolean = ScanReflection.isMountCardLinkLayoutStructureValid(
         layoutClass,
         onClickMethod,
         dataClass,
@@ -1933,28 +1934,28 @@ private fun isDrawableResId(value: Int): Boolean {
     private fun isAiPbNewInputContainerClassValid(
         inputContainerClass: Class<*>,
         spriteMemePanClass: Class<*>?,
-    ): Boolean = HookSymbolResolver.isAiPbNewInputContainerClassValid(
+    ): Boolean = AiComponentSymbolScanner.isAiPbNewInputContainerClassValid(
         inputContainerClass,
         spriteMemePanClass,
     )
 
     private fun isAiSpriteMemeEnableMethod(method: Method, inputShowTypeClass: Class<*>?): Boolean =
-        HookSymbolResolver.isAiSpriteMemeEnableMethod(method, inputShowTypeClass)
+        AiComponentSymbolScanner.isAiSpriteMemeEnableMethod(method, inputShowTypeClass)
 
     private fun isPbNewInputContextInitMethod(method: Method): Boolean =
-        HookSymbolResolver.isPbNewInputContextInitMethod(method)
+        AiComponentSymbolScanner.isPbNewInputContextInitMethod(method)
 
     private fun scoreImageViewerJumpButtonOwnerClass(clazz: Class<*>, layoutClass: Class<*>): Int =
-        HookSymbolResolver.scoreImageViewerJumpButtonOwnerClass(clazz, layoutClass)
+        AiComponentSymbolScanner.scoreImageViewerJumpButtonOwnerClass(clazz, layoutClass)
 
     private fun isImageViewerJumpButtonInitMethod(method: Method): Boolean =
-        HookSymbolResolver.isImageViewerJumpButtonInitMethod(method)
+        AiComponentSymbolScanner.isImageViewerJumpButtonInitMethod(method)
 
     private fun isAiPbEmojiCreationViewBindMethod(method: Method, cl: ClassLoader): Boolean =
-        HookSymbolResolver.isAiPbEmojiCreationViewBindMethod(method, cl)
+        AiComponentSymbolScanner.isAiPbEmojiCreationViewBindMethod(method, cl)
 
     private fun isPbPageBrowserAiEmojiCreationBindMethod(method: Method): Boolean =
-        HookSymbolResolver.isPbPageBrowserAiEmojiCreationBindMethod(method)
+        AiComponentSymbolScanner.isPbPageBrowserAiEmojiCreationBindMethod(method)
 
     private fun sanitizeScanStatusText(raw: String): String =
         HookSymbolScanDiagnostics.sanitizeScanStatusText(raw)

@@ -8,7 +8,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 鍙湪鍘熺敓璇勮闀挎寜寮圭獥閲屽惎鐢ㄦ枃鏈€夋嫨銆? */
+ * Enables text selection only inside the native comment long-press popup.
+ */
 object FreeCopyHook {
     private const val MAX_PATCH_TRACE_LOG = 2
     private const val FORCED_HIGHLIGHT_COLOR = 0x6633B5E5

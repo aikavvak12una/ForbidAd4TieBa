@@ -27,8 +27,10 @@ import java.util.Locale
 import java.util.WeakHashMap
 
 /**
- * 鍘嗗彶椤?PbHistoryActivity 鐨勬湰鍦版悳绱€? *
- * 杩欎釜 hook 鍙繃婊ゅ凡缁忓姞杞界殑鏈湴鍘嗗彶鍒楄〃銆? * 涓嶈Е鍙戠綉缁滆姹傘€? */
+ * Adds local search to PbHistoryActivity.
+ *
+ * Only already-loaded local history items are filtered; this hook does not trigger network requests.
+ */
 object HistorySearchHook {
     private val MULTI_SPACE_REGEX = Regex("\\s+")
 

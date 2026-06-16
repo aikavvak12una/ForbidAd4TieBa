@@ -6,31 +6,15 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 internal object HookFeatureStatusDeriver {
     private const val PB_EARLY_AD_INSERT_MIN_METHOD_COUNT = 2
 
-    val featureKeys = listOf(
-        HookFeatureKey.BLOCK_AD,
-        HookFeatureKey.ENABLE_CUSTOM_POST_FILTER,
+    val featureKeys: List<String> = HookFeatureKey.orderedKeys
 
-        HookFeatureKey.SIMPLIFY_HOME_TOP_TABS,
-        HookFeatureKey.SIMPLIFY_BOTTOM_TABS,
-        HookFeatureKey.HIDE_PB_BOTTOM_BANNER,
-        HookFeatureKey.FILTER_ENTER_FORUM_WEB,
-        HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
-        HookFeatureKey.HOME_NATIVE_GLASS,
-        HookFeatureKey.AUTO_LOAD_MORE,
-        HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY,
-        HookFeatureKey.DISABLE_AUTO_REFRESH,
-        HookFeatureKey.ENABLE_PB_SCROLL_COALESCE,
-        HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE,
-        HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT,
-        HookFeatureKey.FREE_COPY,
-        HookFeatureKey.DEFAULT_NOTIFY_TAB,
-        HookFeatureKey.DEFAULT_ORIGINAL_IMAGE,
-        HookFeatureKey.AUTO_SIGN_IN,
-        HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE,
-        HookFeatureKey.CLEAN_SHARE_TRACKING_PARAMS,
-        HookFeatureKey.DISABLE_AI_COMPONENTS,
-        HookFeatureKey.VERIFY_REPLY_AFTER_POST,
-    )
+    fun deriveWithOverrides(symbols: HookSymbols?): Map<String, HookFeatureStatus> {
+        val source = symbols ?: HookSymbols.unsupported()
+        if (source.featureStatusMap.isEmpty()) return derive(source)
+        return LinkedHashMap<String, HookFeatureStatus>(derive(source)).apply {
+            putAll(source.featureStatusMap)
+        }
+    }
 
     fun derive(symbols: HookSymbols): Map<String, HookFeatureStatus> {
         val out = LinkedHashMap<String, HookFeatureStatus>(featureKeys.size)
@@ -564,10 +548,27 @@ internal object HookFeatureStatusDeriver {
         if (symbols.pbCommentScrollMethod.isNullOrBlank()) {
             pbScrollCoalesceCritical.add("pbCommentScrollMethod")
         }
-        out[HookFeatureKey.ENABLE_PB_SCROLL_COALESCE] = if (pbScrollCoalesceCritical.isEmpty()) {
-            HookFeatureStatus(state = HookFeatureState.FULL)
-        } else {
-            HookFeatureStatus(state = HookFeatureState.DISABLED, missingCritical = pbScrollCoalesceCritical)
+        val pbScrollCoalesceOptional = ArrayList<String>(3)
+        if (symbols.pbCommentScrollFragmentField.isNullOrBlank()) {
+            pbScrollCoalesceOptional.add("pbCommentScrollFragmentField")
+        }
+        if (symbols.pbCommentScrollBottomListenerField.isNullOrBlank()) {
+            pbScrollCoalesceOptional.add("pbCommentScrollBottomListenerField")
+        }
+        if (symbols.pbCommentScrollBottomMethod.isNullOrBlank()) {
+            pbScrollCoalesceOptional.add("pbCommentScrollBottomMethod")
+        }
+        out[HookFeatureKey.ENABLE_PB_SCROLL_COALESCE] = when {
+            pbScrollCoalesceCritical.isNotEmpty() -> HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = pbScrollCoalesceCritical,
+                missingOptional = pbScrollCoalesceOptional,
+            )
+            pbScrollCoalesceOptional.isNotEmpty() -> HookFeatureStatus(
+                state = HookFeatureState.PARTIAL,
+                missingOptional = pbScrollCoalesceOptional,
+            )
+            else -> HookFeatureStatus(state = HookFeatureState.FULL)
         }
 
         val notifyMissingCritical = ArrayList<String>(1)
@@ -707,9 +708,12 @@ internal object HookFeatureStatusDeriver {
         if (symbols.aiPbNewInputContainerInitAiWriteMethod.isNullOrBlank()) {
             aiComponentCritical.add("aiPbNewInputContainerInitAiWriteMethod")
         }
-        val aiComponentOptional = ArrayList<String>(3)
+        val aiComponentOptional = ArrayList<String>(4)
         if (symbols.aiPbAiEmojiCreationViewBindMethod.isNullOrBlank()) {
             aiComponentOptional.add("aiPbAiEmojiCreationViewBindMethod")
+        }
+        if (symbols.aiPbPageBrowserAiEmojiCreationBindMethod.isNullOrBlank()) {
+            aiComponentOptional.add("aiPbPageBrowserAiEmojiCreationBindMethod")
         }
         if (symbols.aiImageViewerJumpButtonOwnerClass.isNullOrBlank()) {
             aiComponentOptional.add("aiImageViewerJumpButtonOwnerClass")

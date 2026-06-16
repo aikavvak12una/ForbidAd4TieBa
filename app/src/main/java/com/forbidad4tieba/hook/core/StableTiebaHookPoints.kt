@@ -1,8 +1,21 @@
 package com.forbidad4tieba.hook.core
 
 /**
- * 鐩爣搴旂敤閲屾寜绋冲畾涓旀湭娣锋穯澶勭悊鐨勭被鍚嶅拰鏂规硶鍚嶃€? * 娣锋穯绗﹀彿浠嶇劧瑕侀€氳繃 HookSymbolResolver 瑙ｆ瀽銆? */
+ * Stable target-app symbols that are intentionally kept out of obfuscation scanning.
+ *
+ * Allowed evidence:
+ * - AndroidX / Android framework classes: public SDK or library APIs shipped by the host.
+ * - Tieba public package classes: readable package names that have stayed stable across inspected
+ *   host versions and are still verified by install-time class/method lookup.
+ * - Version-risk host classes: readable package names used as anchors only. When one of these
+ *   becomes ambiguous, obfuscated, or repeatedly missing, migrate that hook point into
+ *   HookSymbolResolver and expose it through HookPoint[...] status instead of adding fallbacks here.
+ *
+ * Obfuscated classes, fields, methods, target resource IDs, and version-specific guesses do not
+ * belong in this file.
+ */
 object StableTiebaHookPoints {
+    // Host activity, tab, feed, forum, and post-browser view classes with readable package names.
     const val MAIN_TAB_ACTIVITY_CLASS = "com.baidu.tieba.tblauncher.MainTabActivity"
     const val FRAGMENT_TAB_HOST_CLASS = "com.baidu.tbadk.core.tabHost.FragmentTabHost"
     const val FRAGMENT_TAB_WIDGET_CLASS = "com.baidu.tbadk.core.tabHost.FragmentTabWidget"
@@ -18,6 +31,7 @@ object StableTiebaHookPoints {
     const val FEED_CARD_ORIGIN_MOUNT_VIEW_CLASS =
         "com.baidu.tieba.feed.component.mount.CardOriginMountView"
     const val FORUM_ACTIVITY_CLASS = "com.baidu.tieba.forum.ForumActivity"
+    const val FORUM_BOTTOM_SHEET_VIEW_CLASS = "com.baidu.tieba.forum.widget.TbBottomSheetView"
     const val TYPE_ADAPTER_CLASS = "com.baidu.adp.widget.ListView.TypeAdapter"
     const val TYPE_ADAPTER_VIEW_HOLDER_CLASS = "$TYPE_ADAPTER_CLASS\$ViewHolder"
     const val BD_LIST_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdListView"
@@ -27,6 +41,9 @@ object StableTiebaHookPoints {
         "com.baidu.tieba.pb.widget.adapter.PbFirstFloorRecommendAdapter"
     const val PB_FIRST_FLOOR_RECOMMEND_DATA_CLASS =
         "com.baidu.tieba.pb.data.PbFirstFloorRecommendData"
+
+    // PB page and comment UI classes. These are version-risk anchors; hook-specific methods still
+    // need structural verification or HookSymbolResolver status when they are not stable by name.
     const val PB_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.main.PbActivity"
     const val PB_ABS_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.main.AbsPbActivity"
     const val PB_FRAGMENT_CLASS = "com.baidu.tieba.pb.pb.main.PbFragment"
@@ -44,8 +61,11 @@ object StableTiebaHookPoints {
         "com.baidu.tieba.pb.pagebrowser.comment.floor.sub.CommentFloorSubView"
     const val PB_REPLY_TITLE_VIEW_HOLDER_CLASS =
         "com.baidu.tieba.pb.pb.main.PbReplyTitleViewHolder"
+    const val PB_FALLING_VIEW_CLASS = "com.baidu.tieba.pb.view.PbFallingView"
     const val PB_COMMON_LAYOUT_PRELOADER_CLASS =
         "com.baidu.tieba.pb.preload.CommonLayoutPreloader"
+
+    // tbadk core widgets and utilities that are referenced by public package/class names.
     const val AGREE_VIEW_CLASS = "com.baidu.tbadk.core.view.AgreeView"
     const val AGREE_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.AgreeData"
     const val PB_NEW_INPUT_CONTAINER_CLASS = "com.baidu.tbadk.editortools.pb.PbNewInputContainer"
@@ -59,12 +79,23 @@ object StableTiebaHookPoints {
     const val SKIN_MANAGER_CLASS = "com.baidu.tbadk.core.util.SkinManager"
     const val EM_MANAGER_CLASS = "com.baidu.tbadk.core.elementsMaven.EMManager"
     const val CORE_DIALOG_ROUND_LINEAR_LAYOUT_CLASS = "com.baidu.tbadk.core.dialog.RoundLinearLayout"
+
+    // Home page anchors. Class names are readable, but method/field details should stay in
+    // HookSymbolResolver unless the host exposes a stable public method name.
     const val HOME_PERSONALIZE_PAGE_VIEW_CLASS =
         "com.baidu.tieba.homepage.personalize.PersonalizePageView"
+    const val HOME_SEARCH_BOX_OWNER_CLASS =
+        "com.baidu.tieba.homepage.personalize.PersonalizeHeaderViewController"
+    const val HOME_PRELOAD_CONFIG_PARSER_CLASS =
+        "com.baidu.tieba.homepage.switchs.HomePreloadMoreConfigParser"
+    const val HOME_PRELOAD_CONFIG_COMPANION_CLASS =
+        "$HOME_PRELOAD_CONFIG_PARSER_CLASS\$a"
     const val HOME_SCROLL_TAB_BAR_LAYOUT_CLASS =
         "com.baidu.tieba.homepage.framework.indicator.ScrollTabBarLayout"
     const val HOME_FIXED_APP_BAR_LAYOUT_CLASS =
         "com.baidu.tieba.homepage.framework.indicator.FixedAppBarLayout"
+
+    // Host widgets plus AndroidX / support-library classes bundled by the host.
     const val TB_SEARCH_BOX_VIEW_CLASS = "com.baidu.tbadk.widget.TbSearchBoxView"
     const val CUSTOM_VIEW_PAGER_CLASS = "com.baidu.tbadk.widget.CustomViewPager"
     const val VIEW_PAGER_CLASS = "androidx.viewpager.widget.ViewPager"
@@ -93,6 +124,9 @@ object StableTiebaHookPoints {
     const val TBADK_CORE_APPLICATION_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
     const val NAVIGATION_BAR_CLASS = "com.baidu.tbadk.core.view.NavigationBar"
     const val NAV_CONTROL_ALIGN_CLASS = "$NAVIGATION_BAR_CLASS\$ControlAlign"
+
+    // Miscellaneous host anchors used by small, focused feature hooks. Treat newly drifting entries
+    // as candidates for HookSymbolResolver-backed HookPoint[...] reporting.
     const val HOME_TAB_BAR_RIGHT_SLOT_CLASS =
         "com.baidu.tieba.homepage.personalize.view.HomeTabBarRightSlot"
     const val NETWORK_CLASS = "com.baidu.tbadk.core.util.NetWork"
@@ -116,6 +150,8 @@ object StableTiebaHookPoints {
     const val TB_RICH_TEXT_VIEW_CLASS = "com.baidu.tbadk.widget.richText.TbRichTextView"
     const val TB_IMAGE_CLASS = "com.baidu.tbadk.widget.image.TbImage"
 
+    // Method and field names that are readable public-like APIs on the stable classes above. Feature
+    // hooks must still fail closed if the resolved owner/signature does not match expectations.
     const val METHOD_GET_VIEW = "getView"
     const val METHOD_SET_NEXT_PAGE = "setNextPage"
     const val METHOD_SET_BACKGROUND_RESOURCE = "setBackgroundResource"
@@ -127,6 +163,7 @@ object StableTiebaHookPoints {
     const val METHOD_GET_CURRENT_TAB_TYPE = "getCurrentTabType"
     const val METHOD_IS_HOME_PRE_LOAD_MORE_OPT = "isHomePreLoadMoreOpt"
     const val METHOD_SET_GUIDE_VISIBILITY = "setGuideVisibility"
+    const val METHOD_SET_GUIDE_TOUCHING = "setGuideTouching"
     const val METHOD_FIND_TYPE = "findType"
     const val METHOD_SEND_MESSAGE = "sendMessage"
     const val METHOD_GET_DATA = "getData"
@@ -140,6 +177,8 @@ object StableTiebaHookPoints {
     const val FIELD_SERVER_ADDRESS = "SERVER_ADDRESS"
     const val FIELD_MARK_GET_STORE = "MARK_GETSTORE"
 
+    // WebView subclasses observed under the followed tab; callers try each class and skip missing
+    // entries rather than treating the whole feature as resolved by this list alone.
     val FOLLOWED_TAB_WEB_VIEW_CLASS_NAMES = arrayOf(
         TB_WEB_VIEW_CLASS,
         "com.baidu.tieba.browser.core.webview.base.BaseWebView",
@@ -147,6 +186,8 @@ object StableTiebaHookPoints {
         "com.baidu.tieba.browser.webview.scroll.NestedScrollingWebView",
     )
 
+    // Ad view anchors with readable class names. Data extraction/filtering symbols remain scanner
+    // owned when they depend on method signatures or obfuscated models.
     val POST_AD_VIEW_CLASS_NAMES = arrayOf(
         "com.baidu.tieba.funad.view.AbsFeedAdxView",
         "com.baidu.tieba.recapp.lego.view.AdCardBaseView",
