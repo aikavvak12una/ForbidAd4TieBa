@@ -9,6 +9,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
 import com.forbidad4tieba.hook.feature.perf.ComponentDisableHook
 import com.forbidad4tieba.hook.feature.perf.TitanPatchBlockHook
+import com.forbidad4tieba.hook.feature.ui.AutoRefreshHook
 import com.forbidad4tieba.hook.feature.web.MineTabWebBlockHook
 import com.forbidad4tieba.hook.ui.AboutInfoManager
 import com.forbidad4tieba.hook.ui.ModuleForegroundActivityTracker
@@ -123,6 +124,9 @@ class MainHook : XposedModule() {
                         if (isMainProcess) {
                             ModuleForegroundActivityTracker.register(app)
                             val startupSettings = ConfigManager.snapshot()
+                            if (startupSettings.isAutoRefreshDisabled) {
+                                AutoRefreshHook.registerForegroundCallbacks(app)
+                            }
                             if (startupSettings.isMineTabWebAdBlockEnabled) {
                                 MineTabWebBlockHook.onAppContextReady(app)
                             }
