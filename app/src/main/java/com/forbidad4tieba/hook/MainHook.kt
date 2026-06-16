@@ -129,16 +129,6 @@ class MainHook : XposedModule() {
                             runStartupTask("apply cached runtime controls") {
                                 AboutInfoManager.applyCachedRuntimeControlsIfNeeded(app)
                             }
-                            if (shouldMaintainCustomPostModelScoreStats(startupSettings)) {
-                                runStartupTask("trim model score stats") {
-                                    CustomPostModelScoreStats.trimToPostLimitAsync(
-                                        startupSettings.postModelScoreStatsPostLimit,
-                                    )
-                                }
-                                runStartupTask("apply auto percentile thresholds") {
-                                    CustomPostModelScoreStats.applyAutoPercentileThresholdsAsync()
-                                }
-                            }
                             runStartupTask("restore legacy component state") {
                                 ComponentDisableHook.apply(app)
                             }
@@ -194,7 +184,18 @@ class MainHook : XposedModule() {
                         refreshRuntime = true,
                     )
                 }
+                val isMainProcess = HookProcess.isMain(processName)
                 val settingsSnapshot = ConfigManager.snapshot()
+                if (isMainProcess && shouldMaintainCustomPostModelScoreStats(settingsSnapshot)) {
+                    runStartupTask("trim model score stats") {
+                        CustomPostModelScoreStats.trimToPostLimitAsync(
+                            settingsSnapshot.postModelScoreStatsPostLimit,
+                        )
+                    }
+                    runStartupTask("apply auto percentile thresholds") {
+                        CustomPostModelScoreStats.applyAutoPercentileThresholdsAsync()
+                    }
+                }
                 if (markPostAttachStaticHooksInstalled()) {
                     HookInstaller.install(
                         HookInstallPlanner.postAttachPlan(
@@ -211,7 +212,6 @@ class MainHook : XposedModule() {
                     return@intercept result
                 }
 
-                val isMainProcess = HookProcess.isMain(processName)
                 val symbolPlan = HookInstallPlanner.symbolPlan(
                     processName = processName,
                     symbols = symbols,

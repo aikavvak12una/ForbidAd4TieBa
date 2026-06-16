@@ -42,7 +42,6 @@ internal object CustomPostFilterMatcher {
         val forumKeywords: List<String>,
         val modelScore: Boolean,
         val modelScoreThresholds: List<ConfigManager.ModelScoreThreshold>,
-        val modelScoreAutoPercentiles: Map<String, Int>,
     ) {
         val needsFeedHeadParamsCheck: Boolean =
             gameBooking ||
@@ -75,7 +74,6 @@ internal object CustomPostFilterMatcher {
             forumKeywords = settings.postForumKeywordList,
             modelScore = settings.isPostModelScoreFilterEnabled,
             modelScoreThresholds = settings.postModelScoreThresholds,
-            modelScoreAutoPercentiles = settings.postModelScoreAutoPercentiles,
         )
         return if (rules.hasAnyRule()) rules else null
     }
@@ -219,12 +217,6 @@ internal object CustomPostFilterMatcher {
         val thresholds = rules.modelScoreThresholds
         if (thresholds.isEmpty()) return Decision(blocked = false)
         for (threshold in thresholds) {
-            if (
-                rules.modelScoreAutoPercentiles.containsKey(threshold.key) &&
-                !CustomPostModelScoreStats.isAutoPercentileThresholdReady(threshold.key)
-            ) {
-                continue
-            }
             val score = scores[threshold.key] ?: continue
             if (score < threshold.threshold) {
                 return Decision(

@@ -194,7 +194,7 @@ object UiText {
         const val BLOCK_UPDATE_DIALOG_LABEL = "屏蔽更新升级弹窗"
         const val COLLECTION_SEARCH_LABEL = "收藏搜索"
         const val HISTORY_SEARCH_LABEL = "浏览历史搜索"
-        const val DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL = "禁用图片末尾左滑跳转"
+        const val DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL = "禁用最后一张图左滑跳转"
         const val DEFAULT_NOTIFY_TAB_LABEL = "消息默认通知页"
         const val DEFAULT_NOTIFY_TAB_DESC = "进入消息页时默认显示通知"
         const val CLEAN_SHARE_TRACKING_LABEL = "安全分享"
