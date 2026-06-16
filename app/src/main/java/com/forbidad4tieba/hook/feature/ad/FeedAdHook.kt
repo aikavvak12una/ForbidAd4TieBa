@@ -90,6 +90,7 @@ object FeedAdHook {
     ): List<*> {
         val size = list.size
         var out: ArrayList<Any?>? = null
+        var blockedCount = 0
 
         for (i in 0 until size) {
             val item = list[i]
@@ -105,6 +106,7 @@ object FeedAdHook {
             }
 
             if (block) {
+                blockedCount += 1
                 if (blockReason != null) {
                     XposedCompat.logD { "[FeedAdHook] > blocked[$i] reason=$blockReason" }
                 }
@@ -116,6 +118,7 @@ object FeedAdHook {
                 out?.add(item)
             }
         }
+        if (blockedCount > 0) BlockCountStats.recordAd(blockedCount)
         return out ?: list
     }
 

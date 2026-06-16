@@ -85,7 +85,12 @@ object ForumPageAdBlockHook {
         val method = targets.bottomGameBarMapperMethod ?: return 0
 
         mod.hook(method).intercept { chain ->
-            if (ConfigManager.isForumPageAdBlockEnabled) null else chain.proceed()
+            if (ConfigManager.isForumPageAdBlockEnabled) {
+                BlockCountStats.recordAd()
+                null
+            } else {
+                chain.proceed()
+            }
         }
         return 1
     }
@@ -110,7 +115,12 @@ object ForumPageAdBlockHook {
         val method = targets.businessPromotShowMethod ?: return 0
 
         mod.hook(method).intercept { chain ->
-            if (ConfigManager.isForumPageAdBlockEnabled) false else chain.proceed()
+            if (ConfigManager.isForumPageAdBlockEnabled) {
+                BlockCountStats.recordAd()
+                false
+            } else {
+                chain.proceed()
+            }
         }
         return 1
     }
@@ -120,7 +130,12 @@ object ForumPageAdBlockHook {
         val method = targets.animationShowMethod ?: return 0
 
         mod.hook(method).intercept { chain ->
-            if (ConfigManager.isForumPageAdBlockEnabled) null else chain.proceed()
+            if (ConfigManager.isForumPageAdBlockEnabled) {
+                BlockCountStats.recordAd()
+                null
+            } else {
+                chain.proceed()
+            }
         }
         return 1
     }
@@ -136,7 +151,9 @@ object ForumPageAdBlockHook {
                 if (!ConfigManager.isForumPageAdBlockEnabled) {
                     return@intercept chain.proceed()
                 }
-                hideFloatingBar(chain.thisObject, field)
+                if (hideFloatingBar(chain.thisObject, field)) {
+                    BlockCountStats.recordAd()
+                }
                 null
             }
             return 1
@@ -149,7 +166,12 @@ object ForumPageAdBlockHook {
         val method = targets.businessPromotJumpMethod ?: return 0
 
         mod.hook(method).intercept { chain ->
-            if (ConfigManager.isForumPageAdBlockEnabled) null else chain.proceed()
+            if (ConfigManager.isForumPageAdBlockEnabled) {
+                BlockCountStats.recordAd()
+                null
+            } else {
+                chain.proceed()
+            }
         }
         return 1
     }
@@ -200,14 +222,16 @@ object ForumPageAdBlockHook {
         }
     }
 
-    private fun hideFloatingBar(owner: Any?, field: Field?) {
-        if (owner == null || field == null) return
+    private fun hideFloatingBar(owner: Any?, field: Field?): Boolean {
+        if (owner == null || field == null) return false
         try {
-            val view = field.get(owner) as? View ?: return
+            val view = field.get(owner) as? View ?: return false
             view.visibility = View.GONE
             view.alpha = 0f
+            return true
         } catch (t: Throwable) {
             logErrorOnce(floatingErrorLogged, "hide floating bar FAILED", t)
+            return false
         }
     }
 

@@ -55,7 +55,7 @@ object PbFallingAdHook {
     private fun hookInitMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
-            squashSelf(chain.thisObject)
+            if (squashSelf(chain.thisObject)) BlockCountStats.recordAd()
             Unit
         }
         XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
@@ -64,7 +64,7 @@ object PbFallingAdHook {
     private fun hookShowMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
-            squashSelf(chain.thisObject)
+            if (squashSelf(chain.thisObject)) BlockCountStats.recordAd()
             Unit
         }
         XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
@@ -73,16 +73,17 @@ object PbFallingAdHook {
     private fun hookClearMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
-            squashSelf(chain.thisObject)
+            if (squashSelf(chain.thisObject)) BlockCountStats.recordAd()
             Unit
         }
         XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
     }
 
-    private fun squashSelf(target: Any?) {
-        val view = target as? View ?: return
+    private fun squashSelf(target: Any?): Boolean {
+        val view = target as? View ?: return false
         view.setTag(ViewExt.TAG_EMPTY_VIEW, true)
         ViewExt.squashViewRemembering(view)
+        return true
     }
 
     private fun tryBeginHook(): Boolean {

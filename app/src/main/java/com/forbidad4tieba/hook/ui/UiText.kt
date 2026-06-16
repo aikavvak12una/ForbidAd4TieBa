@@ -66,7 +66,7 @@ object UiText {
         const val CUSTOM_POST_FILTER_KEYWORD_EMPTY = "关键词已清空"
         const val CUSTOM_POST_FILTER_KEYWORD_SAVED = "吧名关键词已保存"
         const val CUSTOM_POST_FILTER_MODEL_SCORE_DIALOG_TITLE = "模型分数阈值筛选"
-        const val CUSTOM_POST_FILTER_MODEL_SCORE_GUIDE = "留空表示不启用该模型过滤，填写最低允许数值\n*过高的值可能导致信息流频繁加载\n*对求助类型帖子无效且不统计\n*启用指定百分位为最低值时，将在应用启动时自动更新"
+        const val CUSTOM_POST_FILTER_MODEL_SCORE_GUIDE = "留空表示不启用该模型过滤，填写最低允许数值\n*过高的值可能导致信息流频繁加载\n*对求助类型帖子无效且不统计\n*启用指定百分位为最低值时，将在应用启动时自动更新（仅在样本数据大于1000时生效）\n*长按百分位数据可切换P5、P10、P15、P20"
         const val CUSTOM_POST_FILTER_MODEL_SCORE_HINT = "最低值"
         const val CUSTOM_POST_FILTER_MODEL_SCORE_STATS_LIMIT_LABEL = "帖子统计数量"
         const val CUSTOM_POST_FILTER_MODEL_SCORE_STATS_LIMIT_DESC = "滚动统计指定数量的帖子样本数据"
@@ -311,6 +311,9 @@ object UiText {
         const val RESTRICTED_FEATURE_CONFIRM = "确认"
         const val RESTRICTED_FEATURE_UNLOCKED = "已显示被隐藏的功能"
         const val RESTRICTED_FEATURE_UNSUPPORTED_ENVIRONMENT = "当前环境不支持"
+
+        fun blockCountStatsSummary(adCount: Long, customPostCount: Long): String =
+            "已拦截 广告:${adCount}   帖子:${customPostCount}"
 
 
         const val HOME_TOP_TAB_DIALOG_TITLE = SIMPLIFY_HOME_TAB_LABEL

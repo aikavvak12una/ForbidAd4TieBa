@@ -51,6 +51,7 @@ object PbAdRequestBlockHook {
         mod.hook(encodeMethod).intercept { chain ->
             if (ConfigManager.isPbAdRequestBlockEnabled) {
                 clearPbPageAdRequestFields(chain.thisObject, patches)
+                BlockCountStats.recordAd()
             }
             chain.proceed()
         }
@@ -63,6 +64,7 @@ object PbAdRequestBlockHook {
 
         mod.hook(addAdMethod).intercept { chain ->
             if (ConfigManager.isPbAdRequestBlockEnabled) {
+                BlockCountStats.recordAd()
                 return@intercept null
             }
             chain.proceed()
@@ -83,6 +85,7 @@ object PbAdRequestBlockHook {
                     return@intercept chain.proceed()
                 }
                 notifyCommonAdBidFailure(model, notifyMethod)
+                BlockCountStats.recordAd()
                 null
             }
             installed++
@@ -100,6 +103,7 @@ object PbAdRequestBlockHook {
             if (!ConfigManager.isPbAdRequestBlockEnabled || model == null || !targetModelClass.isInstance(model)) {
                 return@intercept chain.proceed()
             }
+            BlockCountStats.recordAd()
             null
         }
         return 1
