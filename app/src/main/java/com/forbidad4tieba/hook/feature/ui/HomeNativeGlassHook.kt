@@ -2802,7 +2802,7 @@ object HomeNativeGlassHook {
             subPbLayout.background !is CardGlassDrawable
         val radius = subPbLayout.resources.displayMetrics.density * radiusDp
         if (shouldUpdateBackground) {
-            setGlassBackground(subPbLayout, host, radius, extraTintEnabled = true)
+            setGlassBackground(subPbLayout, host, radius, childSurfaceEnabled = true)
             pbSubPbLayoutCardStates[subPbLayout] = state
             disablePbSubPbLayoutScrollCaches(subPbLayout)
             applyPbSubPbLayoutShadow(subPbLayout, radius)
@@ -4988,7 +4988,7 @@ object HomeNativeGlassHook {
             applyGlassToView(
                 target,
                 page,
-                extraTintEnabled = true,
+                childSurfaceEnabled = true,
             )
         }
     }
@@ -5093,12 +5093,12 @@ object HomeNativeGlassHook {
     private fun applyGlassToView(
         view: View,
         page: View,
-        extraTintEnabled: Boolean = false,
+        childSurfaceEnabled: Boolean = false,
     ) {
         rememberChromeGlassOriginalState(view)
         val radius = view.resources.displayMetrics.density *
             effectiveCardRadiusDp()
-        setGlassBackground(view, page, radius, extraTintEnabled)
+        setGlassBackground(view, page, radius, childSurfaceEnabled)
         clearNativePressVisual(view)
     }
 
@@ -5362,7 +5362,7 @@ object HomeNativeGlassHook {
         view: View,
         page: View?,
         radius: Float,
-        extraTintEnabled: Boolean = false,
+        childSurfaceEnabled: Boolean = false,
     ) {
         val style = currentHomeNativeGlassRuntimeStyle()
         val request = backgroundRequestForStyle(
@@ -5378,7 +5378,7 @@ object HomeNativeGlassHook {
         if (page != null && cachedEntry == null && request != null) {
             val pageRef = WeakReference(page)
             scheduleBackgroundDecode(request, view) { target ->
-                setGlassBackground(target, pageRef.get(), radius, extraTintEnabled)
+                setGlassBackground(target, pageRef.get(), radius, childSurfaceEnabled)
             }
         }
         val blurredBitmap = cachedEntry?.blurredBitmap
@@ -5396,7 +5396,7 @@ object HomeNativeGlassHook {
                     bitmap = blurredBitmap,
                     radius = radius,
                     tintAlphaPercent = tintAlphaPercent,
-                    extraTintEnabled = extraTintEnabled,
+                    childSurfaceEnabled = childSurfaceEnabled,
                     darkMode = darkMode,
                     blurPercent = blurPercent,
                     strokeEnabled = strokeEnabled,
@@ -5413,7 +5413,7 @@ object HomeNativeGlassHook {
                 bitmap = blurredBitmap,
                 radius = radius,
                 tintAlphaPercent = tintAlphaPercent,
-                extraTintEnabled = extraTintEnabled,
+                childSurfaceEnabled = childSurfaceEnabled,
                 darkMode = darkMode,
                 blurPercent = blurPercent,
                 strokeEnabled = strokeEnabled,

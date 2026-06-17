@@ -24,6 +24,12 @@ import kotlin.math.roundToInt
 private const val CARD_RUNTIME_TINT_ALPHA_SCALE = 1.5f
 private const val CARD_ZERO_TINT_DARK_MODE_PERCENT = -20
 private const val CARD_ZERO_TINT_LIGHT_MODE_PERCENT = 20
+private const val CHILD_SURFACE_DARK_MODE_DEFAULT_PERCENT = 8
+private const val CHILD_SURFACE_DARK_MODE_MAX_PERCENT = 10
+private const val CHILD_SURFACE_LIGHT_MODE_DEFAULT_PERCENT = 5
+private const val CHILD_SURFACE_LIGHT_MODE_MAX_PERCENT = 7
+private const val CHILD_SURFACE_CUSTOM_TINT_SCALE = 0.7f
+private const val CHILD_SURFACE_CUSTOM_TINT_OFFSET_PERCENT = 4f
 private const val APPLE_NOISE_ALPHA = 52
 private const val APPLE_STROKE_ALPHA = 56
 private const val APPLE_EDGE_HIGHLIGHT_ALPHA = 86
@@ -168,7 +174,7 @@ internal class CardGlassDrawable(
     private val bitmap: Bitmap,
     private val radius: Float,
     tintAlphaPercent: Int,
-    private val extraTintEnabled: Boolean,
+    private val childSurfaceEnabled: Boolean,
     private val darkMode: Boolean,
     blurPercent: Int,
     private val strokeEnabled: Boolean,
@@ -193,6 +199,7 @@ internal class CardGlassDrawable(
         ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
     )
     private val runtimeTintAlphaPercent = runtimeTintAlphaPercent(baseTintAlpha, darkMode)
+    private val childSurfaceTintAlphaPercent = resolveChildSurfaceTintAlphaPercent(baseTintAlpha, darkMode)
     private val materialIntensity = cardBlurPercent / 100f
     private val strokeWidthPx = (1.0f + materialIntensity * 0.8f).coerceIn(1f, 1.8f)
     private val ambientShadowStrokeWidthPx = (2.2f + materialIntensity * 2.4f).coerceIn(2f, 4.6f)
@@ -287,7 +294,7 @@ internal class CardGlassDrawable(
         bitmap: Bitmap,
         radius: Float,
         tintAlphaPercent: Int,
-        extraTintEnabled: Boolean,
+        childSurfaceEnabled: Boolean,
         darkMode: Boolean,
         blurPercent: Int,
         strokeEnabled: Boolean,
@@ -300,7 +307,7 @@ internal class CardGlassDrawable(
                 ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                 ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
             ) &&
-            this.extraTintEnabled == extraTintEnabled &&
+            this.childSurfaceEnabled == childSurfaceEnabled &&
             this.darkMode == darkMode &&
             cardBlurPercent == blurPercent.coerceIn(
                 ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
@@ -345,7 +352,15 @@ internal class CardGlassDrawable(
     }
 
     private fun drawMaterialOverlay(canvas: Canvas) {
-        val overlayPercent = overlayTintAlphaPercent()
+        if (childSurfaceEnabled) {
+            drawOverlay(canvas, childSurfaceTintAlphaPercent)
+        }
+        if (pressTintEnabled) {
+            drawOverlay(canvas, runtimeTintAlphaPercent)
+        }
+    }
+
+    private fun drawOverlay(canvas: Canvas, overlayPercent: Int) {
         val overlayAlpha = overlayAlpha(overlayPercent)
         if (overlayAlpha <= 0) return
         val materialOverlayRgb = if (overlayPercent < 0) Color.BLACK else Color.WHITE
@@ -421,17 +436,6 @@ internal class CardGlassDrawable(
         canvas.drawRoundRect(insetRect, insetRadius, insetRadius, edgeHighlightPaint)
     }
 
-    private fun overlayTintAlphaPercent(): Int {
-        var layerCount = 0
-        if (extraTintEnabled) layerCount++
-        if (pressTintEnabled) layerCount++
-        if (layerCount <= 0) return 0
-        return (runtimeTintAlphaPercent * layerCount).coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-        )
-    }
-
     private fun overlayAlpha(overlayPercent: Int): Int {
         val alpha = abs(overlayPercent).coerceIn(
             ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
@@ -454,6 +458,31 @@ internal class CardGlassDrawable(
             ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         )
+    }
+
+    private fun resolveChildSurfaceTintAlphaPercent(basePercent: Int, darkMode: Boolean): Int {
+        val normalized = basePercent.coerceIn(
+            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        )
+        val defaultMagnitude = if (darkMode) {
+            CHILD_SURFACE_DARK_MODE_DEFAULT_PERCENT
+        } else {
+            CHILD_SURFACE_LIGHT_MODE_DEFAULT_PERCENT
+        }
+        val maxMagnitude = if (darkMode) {
+            CHILD_SURFACE_DARK_MODE_MAX_PERCENT
+        } else {
+            CHILD_SURFACE_LIGHT_MODE_MAX_PERCENT
+        }
+        val magnitude = if (normalized == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT) {
+            defaultMagnitude
+        } else {
+            (abs(normalized) * CHILD_SURFACE_CUSTOM_TINT_SCALE + CHILD_SURFACE_CUSTOM_TINT_OFFSET_PERCENT)
+                .roundToInt()
+                .coerceIn(0, maxMagnitude)
+        }
+        return if (darkMode) magnitude else -magnitude
     }
 
     private fun materialAlpha(appleAlpha: Int): Int {
