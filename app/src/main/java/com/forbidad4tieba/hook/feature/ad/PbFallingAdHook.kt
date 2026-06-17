@@ -55,7 +55,7 @@ object PbFallingAdHook {
     private fun hookInitMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
-            if (squashSelf(chain.thisObject)) BlockCountStats.recordAd()
+            squashSelf(chain.thisObject)
             Unit
         }
         XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
@@ -64,7 +64,7 @@ object PbFallingAdHook {
     private fun hookShowMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
-            if (squashSelf(chain.thisObject)) BlockCountStats.recordAd()
+            squashSelf(chain.thisObject)
             Unit
         }
         XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
@@ -73,17 +73,18 @@ object PbFallingAdHook {
     private fun hookClearMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
-            if (squashSelf(chain.thisObject)) BlockCountStats.recordAd()
+            squashSelf(chain.thisObject)
             Unit
         }
         XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
     }
 
-    private fun squashSelf(target: Any?): Boolean {
-        val view = target as? View ?: return false
+    private fun squashSelf(target: Any?) {
+        val view = target as? View ?: return
+        val shouldRecord = ViewExt.markAdBlockCounted(view)
         view.setTag(ViewExt.TAG_EMPTY_VIEW, true)
         ViewExt.squashViewRemembering(view)
-        return true
+        if (shouldRecord) BlockCountStats.recordAd()
     }
 
     private fun tryBeginHook(): Boolean {
