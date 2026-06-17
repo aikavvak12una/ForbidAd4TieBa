@@ -2459,6 +2459,8 @@ object HomeNativeGlassHook {
     private fun applyPbCommentUnifiedBackgroundSafely(source: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
+        val activity = findCachedActivityFromContext(source.context) ?: return
+        if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return
         try {
             val host = findPbCommentBackgroundHost(source) ?: return
             applyPbCommentBackgroundHost(host)
@@ -2701,6 +2703,9 @@ object HomeNativeGlassHook {
     }
 
     private fun resolvePbActivityType(activity: Activity): PbActivityType {
+        if (activity.javaClass.name == StableTiebaHookPoints.PB_COMMENT_FLOAT_ACTIVITY_CLASS) {
+            return PbActivityType(isPb = false, isSubPbReplyHost = false)
+        }
         var isPb = false
         var isSubPbReplyHost = false
         var current: Class<*>? = activity.javaClass

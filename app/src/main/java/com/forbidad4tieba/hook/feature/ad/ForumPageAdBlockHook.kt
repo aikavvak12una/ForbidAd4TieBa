@@ -86,7 +86,6 @@ object ForumPageAdBlockHook {
 
         mod.hook(method).intercept { chain ->
             if (ConfigManager.isForumPageAdBlockEnabled) {
-                BlockCountStats.recordAd()
                 null
             } else {
                 chain.proceed()
@@ -151,9 +150,7 @@ object ForumPageAdBlockHook {
                 if (!ConfigManager.isForumPageAdBlockEnabled) {
                     return@intercept chain.proceed()
                 }
-                if (hideFloatingBar(chain.thisObject, field)) {
-                    BlockCountStats.recordAd()
-                }
+                hideFloatingBar(chain.thisObject, field)
                 null
             }
             return 1
@@ -167,7 +164,6 @@ object ForumPageAdBlockHook {
 
         mod.hook(method).intercept { chain ->
             if (ConfigManager.isForumPageAdBlockEnabled) {
-                BlockCountStats.recordAd()
                 null
             } else {
                 chain.proceed()

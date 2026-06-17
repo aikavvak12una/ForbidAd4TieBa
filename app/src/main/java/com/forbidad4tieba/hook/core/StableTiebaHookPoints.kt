@@ -46,6 +46,7 @@ object StableTiebaHookPoints {
     // need structural verification or HookSymbolResolver status when they are not stable by name.
     const val PB_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.main.PbActivity"
     const val PB_ABS_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.main.AbsPbActivity"
+    const val PB_COMMENT_FLOAT_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.main.PbCommentFloatActivity"
     const val PB_FRAGMENT_CLASS = "com.baidu.tieba.pb.pb.main.PbFragment"
     const val PB_ITEM_FRAME_VIEW_CLASS = "com.baidu.tieba.pb.view.ItemFrameView"
     const val PB_ITEM_RELATIVE_VIEW_CLASS = "com.baidu.tieba.pb.view.ItemRelativeView"

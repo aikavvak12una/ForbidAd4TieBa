@@ -20,7 +20,6 @@ object PbEarlyAdBlockHook {
             for (target in targets.methods.distinctBy { it.method }) {
                 mod.hook(target.method).intercept { chain ->
                     if (ConfigManager.isPbEarlyAdBlockEnabled) {
-                        BlockCountStats.recordAd()
                         return@intercept blockedReturnValue(target.returnsSparseArray)
                     }
                     chain.proceed()

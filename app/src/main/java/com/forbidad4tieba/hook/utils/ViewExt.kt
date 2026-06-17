@@ -12,12 +12,19 @@ object ViewExt {
     const val TAG_SQUASH_STATE = 0x7E000001.toInt()
     const val TAG_EMPTY_VIEW = 0x7E000002.toInt()
     const val TAG_SETTINGS_BOUND = 0x7E000003.toInt()
+    const val TAG_AD_BLOCK_COUNTED = 0x7E000004.toInt()
 
     private const val LP_UNSET = Int.MIN_VALUE
 
     fun markSettingsLongPressBound(view: View): Boolean {
         if (view.getTag(TAG_SETTINGS_BOUND) == true) return false
         view.setTag(TAG_SETTINGS_BOUND, true)
+        return true
+    }
+
+    fun markAdBlockCounted(view: View): Boolean {
+        if (view.getTag(TAG_AD_BLOCK_COUNTED) == true) return false
+        view.setTag(TAG_AD_BLOCK_COUNTED, true)
         return true
     }
 
