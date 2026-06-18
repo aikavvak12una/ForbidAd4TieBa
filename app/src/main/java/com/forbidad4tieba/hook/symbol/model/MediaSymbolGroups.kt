@@ -110,6 +110,7 @@ data class AiPbInputSymbolsGroup(
 
 data class AiEmojiCreationSymbolsGroup(
     val aiPbAiEmojiCreationViewBindMethod: String? = null,
+    val aiPbPageBrowserAiEmojiCreationViewClass: String? = null,
     val aiPbPageBrowserAiEmojiCreationBindMethod: String? = null,
 )
 

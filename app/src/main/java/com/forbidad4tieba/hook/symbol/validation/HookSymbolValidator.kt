@@ -244,6 +244,7 @@ internal object HookSymbolValidator {
             symbols.aiPbNewInputContainerInitSpriteMemeMethod != null ||
             symbols.aiPbNewInputContainerInitAiWriteMethod != null ||
             symbols.aiPbAiEmojiCreationViewBindMethod != null ||
+            symbols.aiPbPageBrowserAiEmojiCreationViewClass != null ||
             symbols.aiPbPageBrowserAiEmojiCreationBindMethod != null ||
             symbols.aiImageViewerJumpButtonOwnerClass != null ||
             symbols.aiImageViewerJumpButtonInitMethod != null
@@ -1336,9 +1337,12 @@ private fun isAiPbEmojiCreationValid(symbols: HookSymbols, cl: ClassLoader): Boo
         if (!bindOk) return false
     }
 
+    val pageBrowserViewName = symbols.aiPbPageBrowserAiEmojiCreationViewClass
     val pageBrowserBindName = symbols.aiPbPageBrowserAiEmojiCreationBindMethod
-    if (!pageBrowserBindName.isNullOrBlank()) {
-        val viewClass = safeFindClass(AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS, cl) ?: return false
+    if (!pageBrowserViewName.isNullOrBlank() || !pageBrowserBindName.isNullOrBlank()) {
+        val viewClassName = pageBrowserViewName ?: return false
+        if (pageBrowserBindName.isNullOrBlank()) return false
+        val viewClass = safeFindClass(viewClassName, cl) ?: return false
         val bindOk = viewClass.declaredMethods.any { method ->
             method.name == pageBrowserBindName && isPbPageBrowserAiEmojiCreationBindMethod(method)
         }

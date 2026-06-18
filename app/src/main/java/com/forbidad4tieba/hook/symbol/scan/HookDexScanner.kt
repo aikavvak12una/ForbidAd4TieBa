@@ -32,15 +32,28 @@ internal object DexShareIconScanner {
     private const val FRAME_LAYOUT_DESCRIPTOR = "Landroid/widget/FrameLayout;"
     private const val LINEAR_LAYOUT_DESCRIPTOR = "Landroid/widget/LinearLayout;"
     private const val VIEW_GROUP_DESCRIPTOR = "Landroid/view/ViewGroup;"
+    private const val ANDROID_ACTIVITY_DESCRIPTOR = "Landroid/app/Activity;"
+    private const val FRAGMENT_ACTIVITY_DESCRIPTOR = "Landroidx/fragment/app/FragmentActivity;"
+    private const val ANDROID_CONTEXT_DESCRIPTOR = "Landroid/content/Context;"
+    private const val ANDROID_ATTRIBUTE_SET_DESCRIPTOR = "Landroid/util/AttributeSet;"
     private const val LINEAR_LAYOUT_LAYOUT_PARAMS_DESCRIPTOR =
         "Landroid/widget/LinearLayout\$LayoutParams;"
     private const val VIEW_MARGIN_LAYOUT_PARAMS_DESCRIPTOR =
         "Landroid/view/ViewGroup\$MarginLayoutParams;"
+    private const val TB_FLOATING_BAR_DESCRIPTOR =
+        "Lcom/baidu/tieba/feed/component/view/TbFloatingBar;"
+    private const val PB_AI_EMOJI_CREATION_VIEW_DESCRIPTOR =
+        "Lcom/baidu/tieba/pb/view/PbAiEmojiCreationView;"
+    private const val PB_PAGE_BROWSER_AI_EMOJI_CREATION_VIEW_DESCRIPTOR =
+        "Lcom/baidu/tieba/pb/pagebrowser/comment/floor/meme/CommentFloorAiEmojiCreationView;"
+    private const val PB_PAGE_BROWSER_AI_EMOJI_CREATION_BINDING_DESCRIPTOR =
+        "Lcom/baidu/tieba/pb/pagebrowser/databinding/CommentFloorAiEmojiCreationItemBinding;"
     private const val PB_AD_BID_ENDPOINT = "c/b/ad/adBid?cmd=309757&format=protobuf"
     private const val PB_COMMON_REQUEST_MODEL_DESCRIPTOR =
         "Lcom/baidu/tieba/pb/pb/main/newmodel/CommonRequestModel;"
     private const val PB_PAGE_BROWSER_REQUEST_MODEL_DESCRIPTOR =
         "Lcom/baidu/tieba/pb/pagebrowser/model/BaseRequestModel;"
+    private const val HTTP_MESSAGE_DESCRIPTOR = "Lcom/baidu/adp/framework/message/HttpMessage;"
     private const val KOTLIN_CONTINUATION_DESCRIPTOR = "Lkotlin/coroutines/Continuation;"
     private const val OBJECT_DESCRIPTOR = "Ljava/lang/Object;"
     private const val AGREE_DATA_DESCRIPTOR = "Lcom/baidu/tieba/tbadkcore/data/AgreeData;"
@@ -395,6 +408,113 @@ internal object DexShareIconScanner {
         )
     }
 
+    fun scanGameFloatingBar(
+        sourcePaths: List<String>,
+        logger: ScanLogger? = null,
+    ): DexGameFloatingBarMatch? {
+        val matches = ArrayList<DexGameFloatingBarMatch>(4)
+        var errorCount = 0
+        var firstError: String? = null
+        fun recordError(t: Throwable) {
+            errorCount++
+            if (firstError == null) firstError = sanitizeScanStatusText(formatScanException(t))
+        }
+        for (sourcePath in sourcePaths) {
+            val file = File(sourcePath)
+            if (!file.isFile) continue
+            scanDexFiles(file, ::recordError) { dexBytes ->
+                val reader = try {
+                    DexImage(dexBytes)
+                } catch (t: Throwable) {
+                    recordError(t)
+                    return@scanDexFiles
+                }
+                try {
+                    matches.addAll(reader.findGameFloatingBarMatches())
+                } catch (t: Throwable) {
+                    recordError(t)
+                }
+            }
+        }
+        recordDexScanIssue(logger, "ForumPageAdBlockHook.FloatingBarDex", errorCount, firstError)
+        val ranked = matches.sortedWith(
+            compareByDescending<DexGameFloatingBarMatch> { it.score }
+                .thenBy { it.controllerClassName }
+                .thenBy { it.showMethodName },
+        )
+        val best = ranked.firstOrNull() ?: return null
+        val second = ranked.getOrNull(1)
+        if (second != null && best.score - second.score < 24) {
+            log(
+                logger,
+                "forumPageAd.floatingBarDex ambiguous: " +
+                    "best=${best.controllerClassName}.${best.showMethodName}:${best.score}[${best.evidence}], " +
+                    "second=${second.controllerClassName}.${second.showMethodName}:${second.score}[${second.evidence}]",
+            )
+            return null
+        }
+        log(
+            logger,
+            "forumPageAd.floatingBarDex matched: " +
+                "${best.controllerClassName}.${best.showMethodName} " +
+                "field=${best.floatingBarFieldName ?: "-"} score=${best.score} evidence=${best.evidence}",
+        )
+        return best
+    }
+
+    fun scanPbPageBrowserAiEmojiCreation(
+        sourcePaths: List<String>,
+        logger: ScanLogger? = null,
+    ): DexPbPageBrowserAiEmojiCreationMatch? {
+        val matches = ArrayList<DexPbPageBrowserAiEmojiCreationMatch>(4)
+        var errorCount = 0
+        var firstError: String? = null
+        fun recordError(t: Throwable) {
+            errorCount++
+            if (firstError == null) firstError = sanitizeScanStatusText(formatScanException(t))
+        }
+        for (sourcePath in sourcePaths) {
+            val file = File(sourcePath)
+            if (!file.isFile) continue
+            scanDexFiles(file, ::recordError) { dexBytes ->
+                val reader = try {
+                    DexImage(dexBytes)
+                } catch (t: Throwable) {
+                    recordError(t)
+                    return@scanDexFiles
+                }
+                try {
+                    matches.addAll(reader.findPbPageBrowserAiEmojiCreationMatches())
+                } catch (t: Throwable) {
+                    recordError(t)
+                }
+            }
+        }
+        recordDexScanIssue(logger, "AiComponentDisableHook.PbPageBrowserAiEmojiCreationDex", errorCount, firstError)
+        val ranked = matches.sortedWith(
+            compareByDescending<DexPbPageBrowserAiEmojiCreationMatch> { it.score }
+                .thenBy { it.viewClassName }
+                .thenBy { it.bindMethodName },
+        )
+        val best = ranked.firstOrNull() ?: return null
+        val second = ranked.getOrNull(1)
+        if (second != null && best.score - second.score < 24) {
+            log(
+                logger,
+                "aiComponent.pbAiEmojiCreationDex pageBrowser ambiguous: " +
+                    "best=${best.viewClassName}.${best.bindMethodName}:${best.score}[${best.evidence}], " +
+                    "second=${second.viewClassName}.${second.bindMethodName}:${second.score}[${second.evidence}]",
+            )
+            return null
+        }
+        log(
+            logger,
+            "aiComponent.pbAiEmojiCreationDex pageBrowser matched: " +
+                "${best.viewClassName}.${best.bindMethodName} score=${best.score} evidence=${best.evidence}",
+        )
+        return best
+    }
+
     fun scanEnterForumCapsules(
         sourcePaths: List<String>,
         ownerClassNames: List<String>,
@@ -575,28 +695,336 @@ internal object DexShareIconScanner {
                 val classDefOff = classDefsOff + i * 32
                 val descriptor = typeDescriptor(intAt(classDefOff)) ?: continue
                 if (!descriptor.startsWith("Lcom/baidu/tieba/")) continue
-                val kind = when {
+                val fixedKind = when {
                     extendsDescriptor(descriptor, PB_COMMON_REQUEST_MODEL_DESCRIPTOR) ->
                         PB_AD_BID_DEX_KIND_COMMON
                     extendsDescriptor(descriptor, PB_PAGE_BROWSER_REQUEST_MODEL_DESCRIPTOR) ->
                         PB_AD_BID_DEX_KIND_PAGE_BROWSER
                     else -> null
-                } ?: continue
+                }
                 val classDataOff = intAt(classDefOff + 24)
                 if (classDataOff == 0) continue
-                out.addAll(scanPbAdBidModelClassData(classDataOff, descriptor, kind))
+                out.addAll(scanPbAdBidModelClassData(classDataOff, descriptor, fixedKind))
             }
             return out
         }
 
         fun findPbAdBidPageBrowserRequestDataMethod(): String? {
-            val classDataOff = classDataOffset(PB_PAGE_BROWSER_REQUEST_MODEL_DESCRIPTOR) ?: return null
-            val names = scanMethodNamesByProto(
-                classDataOff = classDataOff,
-                returnDescriptor = OBJECT_DESCRIPTOR,
-                parameterDescriptors = listOf(KOTLIN_CONTINUATION_DESCRIPTOR),
+            classDataOffset(PB_PAGE_BROWSER_REQUEST_MODEL_DESCRIPTOR)?.let { classDataOff ->
+                val names = scanMethodNamesByProto(
+                    classDataOff = classDataOff,
+                    returnDescriptor = OBJECT_DESCRIPTOR,
+                    parameterDescriptors = listOf(KOTLIN_CONTINUATION_DESCRIPTOR),
+                )
+                names.singleOrNull()?.let { return it }
+            }
+
+            val candidates = ArrayList<PbAdBidRequestDataMethodCandidate>(4)
+            for (i in 0 until classDefsSize) {
+                val classDefOff = classDefsOff + i * 32
+                val descriptor = typeDescriptor(intAt(classDefOff)) ?: continue
+                if (!descriptor.startsWith("Lcom/baidu/tieba/")) continue
+                val classDataOff = intAt(classDefOff + 24)
+                if (classDataOff == 0) continue
+                val names = scanMethodNamesByProto(
+                    classDataOff = classDataOff,
+                    returnDescriptor = OBJECT_DESCRIPTOR,
+                    parameterDescriptors = listOf(KOTLIN_CONTINUATION_DESCRIPTOR),
+                )
+                if (names.isEmpty()) continue
+
+                val score = scorePageBrowserRequestDataOwner(descriptor, classDataOff)
+                if (score < 80) continue
+                names.forEach { name ->
+                    candidates += PbAdBidRequestDataMethodCandidate(name, descriptor, score)
+                }
+            }
+            val ranked = candidates.sortedWith(
+                compareByDescending<PbAdBidRequestDataMethodCandidate> { it.score }
+                    .thenBy { it.ownerDescriptor }
+                    .thenBy { it.methodName },
             )
-            return names.singleOrNull()
+            val best = ranked.firstOrNull() ?: return null
+            val sameTop = ranked.filter { it.score == best.score }
+            if (sameTop.map { it.methodName }.distinct().size == 1) {
+                return best.methodName
+            }
+            val second = ranked.getOrNull(1)
+            return if (second == null || best.score - second.score >= 24) best.methodName else null
+        }
+
+        fun findGameFloatingBarMatches(): List<DexGameFloatingBarMatch> {
+            val out = ArrayList<DexGameFloatingBarMatch>(2)
+            for (i in 0 until classDefsSize) {
+                val classDefOff = classDefsOff + i * 32
+                val descriptor = typeDescriptor(intAt(classDefOff)) ?: continue
+                if (!descriptor.startsWith("Lcom/baidu/tieba/")) continue
+                val classDataOff = intAt(classDefOff + 24)
+                if (classDataOff == 0) continue
+                scanGameFloatingBarClassData(
+                    classDataOff = classDataOff,
+                    ownerDescriptor = descriptor,
+                )?.let(out::add)
+            }
+            return out
+        }
+
+        fun findPbPageBrowserAiEmojiCreationMatches(): List<DexPbPageBrowserAiEmojiCreationMatch> {
+            val out = ArrayList<DexPbPageBrowserAiEmojiCreationMatch>(2)
+            for (i in 0 until classDefsSize) {
+                val classDefOff = classDefsOff + i * 32
+                val descriptor = typeDescriptor(intAt(classDefOff)) ?: continue
+                if (!descriptor.startsWith("Lcom/baidu/tieba/pb/pagebrowser/")) continue
+                val classDataOff = intAt(classDefOff + 24)
+                if (classDataOff == 0) continue
+                scanPbPageBrowserAiEmojiCreationClassData(
+                    classDataOff = classDataOff,
+                    ownerDescriptor = descriptor,
+                )?.let(out::add)
+            }
+            return out
+        }
+
+        private fun scanGameFloatingBarClassData(
+            classDataOff: Int,
+            ownerDescriptor: String,
+        ): DexGameFloatingBarMatch? {
+            val fields = scanInstanceFields(classDataOff)
+            val floatingBarField = fields.singleOrNull { field ->
+                isTbFloatingBarDescriptor(field.typeDescriptor)
+            } ?: fields.singleOrNull { field ->
+                field.typeDescriptor.endsWith("/TbFloatingBar;")
+            }
+            val hasDescriptorSignal =
+                ownerDescriptor == "Lcom/baidu/tieba/forum/controller/GameFloatingBarController;" ||
+                    ownerDescriptor.contains("FloatingBar") ||
+                    ownerDescriptor.startsWith("Lcom/baidu/tieba/forum/controller/")
+            if (floatingBarField == null && !hasDescriptorSignal) return null
+
+            val methods = scanAllMethods(classDataOff)
+            val constructors = methods.filter { methodName(it.methodIdx) == "<init>" }
+            val methodCandidates = methods.mapNotNull { method ->
+                scoreGameFloatingBarShowMethod(method, ownerDescriptor, floatingBarField)
+            }.sortedWith(
+                compareByDescending<DexMethodCandidate> { it.score }
+                    .thenBy { it.methodName },
+            )
+            val showMethod = methodCandidates.firstOrNull() ?: return null
+            if (methodCandidates.getOrNull(1)?.let { showMethod.score - it.score < 20 } == true) return null
+
+            var score = 120 + showMethod.score
+            val evidence = ArrayList<String>(8)
+            evidence.add(showMethod.evidence)
+            if (ownerDescriptor == "Lcom/baidu/tieba/forum/controller/GameFloatingBarController;") {
+                score += 120
+                evidence.add("className")
+            } else if (ownerDescriptor.contains("GameFloatingBarController")) {
+                score += 80
+                evidence.add("gameFloatingClass")
+            } else if (ownerDescriptor.contains("FloatingBar")) {
+                score += 40
+                evidence.add("floatingClass")
+            }
+            if (ownerDescriptor.startsWith("Lcom/baidu/tieba/forum/controller/")) {
+                score += 35
+                evidence.add("forumController")
+            } else if (ownerDescriptor.startsWith("Lcom/baidu/tieba/forum/")) {
+                score += 18
+                evidence.add("forumPackage")
+            }
+            if (floatingBarField != null) {
+                score += 80
+                evidence.add("barField=${floatingBarField.name}")
+            }
+            if (constructors.any { method ->
+                    val params = methodParameterDescriptors(method.methodIdx)
+                    params.any { it == FRAGMENT_ACTIVITY_DESCRIPTOR || it == ANDROID_ACTIVITY_DESCRIPTOR }
+                }
+            ) {
+                score += 34
+                evidence.add("activityCtor")
+            }
+            if (methods.size > 0) score -= methods.size / 14
+            if (score < 250) return null
+            val ownerClassName = descriptorToClassName(ownerDescriptor) ?: return null
+            return DexGameFloatingBarMatch(
+                controllerClassName = ownerClassName,
+                showMethodName = showMethod.methodName,
+                floatingBarFieldName = floatingBarField?.name,
+                score = score,
+                evidence = evidence.joinToString(","),
+            )
+        }
+
+        private fun scoreGameFloatingBarShowMethod(
+            method: EncodedMethod,
+            ownerDescriptor: String,
+            floatingBarField: DexFieldShape?,
+        ): DexMethodCandidate? {
+            if (isStaticAccess(method.accessFlags)) return null
+            if (methodReturnDescriptor(method.methodIdx) != "V") return null
+            if (methodParameterDescriptors(method.methodIdx).isNotEmpty()) return null
+            val name = methodName(method.methodIdx)?.takeIf { it.isNotBlank() } ?: return null
+            var score = 0
+            val evidence = ArrayList<String>(8)
+            when {
+                name == "showFloatingBar" -> {
+                    score += 120
+                    evidence.add("name=showFloatingBar")
+                }
+                name == "k2" -> {
+                    score += 70
+                    evidence.add("name=k2")
+                }
+                name.length <= 3 -> {
+                    score += 10
+                    evidence.add("shortName")
+                }
+            }
+            if (floatingBarField != null && codeReferencesOwnField(method.codeOff, ownerDescriptor, floatingBarField)) {
+                score += 90
+                evidence.add("barFieldRef")
+            } else if (codeReferencesFieldType(method.codeOff, ownerDescriptor, TB_FLOATING_BAR_DESCRIPTOR)) {
+                score += 72
+                evidence.add("barTypeRef")
+            }
+            if (codeContainsString(method.codeOff, "floatingBar")) {
+                score += 55
+                evidence.add("floatingBarString")
+            }
+            if (codeInvokesMethod(method.codeOff, "setVisibility", null)) {
+                score += 45
+                evidence.add("setVisibility")
+            }
+            if (codeInvokesClass(method.codeOff, "Landroid/animation/ObjectAnimator;")) {
+                score += 20
+                evidence.add("animator")
+            }
+            return if (score >= 105) DexMethodCandidate(name, score, evidence.joinToString("+")) else null
+        }
+
+        private fun scanPbPageBrowserAiEmojiCreationClassData(
+            classDataOff: Int,
+            ownerDescriptor: String,
+        ): DexPbPageBrowserAiEmojiCreationMatch? {
+            if (!extendsDescriptor(ownerDescriptor, FRAME_LAYOUT_DESCRIPTOR)) return null
+
+            val fields = scanInstanceFields(classDataOff)
+            val hasBindingField = fields.any { field ->
+                field.typeDescriptor == PB_PAGE_BROWSER_AI_EMOJI_CREATION_BINDING_DESCRIPTOR ||
+                    field.typeDescriptor.contains("CommentFloorAiEmojiCreationItemBinding")
+            }
+            val hasViewField = fields.any { field ->
+                field.typeDescriptor == PB_AI_EMOJI_CREATION_VIEW_DESCRIPTOR ||
+                    field.typeDescriptor.endsWith("/PbAiEmojiCreationView;")
+            }
+            val hasClassSignal =
+                ownerDescriptor == PB_PAGE_BROWSER_AI_EMOJI_CREATION_VIEW_DESCRIPTOR ||
+                    ownerDescriptor.contains("AiEmojiCreation") ||
+                    ownerDescriptor.contains("CommentFloor") ||
+                    ownerDescriptor.contains("/meme/")
+            if (!hasBindingField && !hasViewField && !hasClassSignal) return null
+
+            val methods = scanAllMethods(classDataOff)
+            val constructors = methods.filter { methodName(it.methodIdx) == "<init>" }
+            val bindCandidates = methods.mapNotNull { method ->
+                scorePbPageBrowserAiEmojiCreationBindMethod(method)
+            }.sortedWith(
+                compareByDescending<DexMethodCandidate> { it.score }
+                    .thenBy { it.methodName },
+            )
+            val bindMethod = bindCandidates.firstOrNull() ?: return null
+            if (bindCandidates.getOrNull(1)?.let { bindMethod.score - it.score < 20 } == true) return null
+
+            var score = 120 + bindMethod.score
+            val evidence = ArrayList<String>(8)
+            evidence.add(bindMethod.evidence)
+            if (ownerDescriptor == PB_PAGE_BROWSER_AI_EMOJI_CREATION_VIEW_DESCRIPTOR) {
+                score += 120
+                evidence.add("className")
+            } else if (ownerDescriptor.contains("CommentFloorAiEmojiCreationView")) {
+                score += 85
+                evidence.add("commentFloorClass")
+            } else if (ownerDescriptor.contains("AiEmojiCreation")) {
+                score += 48
+                evidence.add("emojiClass")
+            }
+            if (ownerDescriptor.contains("/meme/")) {
+                score += 24
+                evidence.add("memePackage")
+            }
+            if (hasBindingField) {
+                score += 70
+                evidence.add("bindingField")
+            }
+            if (hasViewField) {
+                score += 45
+                evidence.add("viewField")
+            }
+            if (constructors.any { method ->
+                    val params = methodParameterDescriptors(method.methodIdx)
+                    params.isNotEmpty() &&
+                        params[0] == ANDROID_CONTEXT_DESCRIPTOR &&
+                        params.size <= 2 &&
+                        params.drop(1).all { it == ANDROID_ATTRIBUTE_SET_DESCRIPTOR }
+                }
+            ) {
+                score += 26
+                evidence.add("contextCtor")
+            }
+            if (methods.size > 0) score -= methods.size / 12
+            if (score < 260) return null
+            val ownerClassName = descriptorToClassName(ownerDescriptor) ?: return null
+            return DexPbPageBrowserAiEmojiCreationMatch(
+                viewClassName = ownerClassName,
+                bindMethodName = bindMethod.methodName,
+                score = score,
+                evidence = evidence.joinToString(","),
+            )
+        }
+
+        private fun scorePbPageBrowserAiEmojiCreationBindMethod(method: EncodedMethod): DexMethodCandidate? {
+            if (isStaticAccess(method.accessFlags)) return null
+            if (methodReturnDescriptor(method.methodIdx) != "V") return null
+            val params = methodParameterDescriptors(method.methodIdx)
+            if (params.size != 1) return null
+            val param = params.first()
+            val name = methodName(method.methodIdx)?.takeIf { it.isNotBlank() } ?: return null
+            var score = 0
+            val evidence = ArrayList<String>(8)
+            if (name == "bindData") {
+                score += 110
+                evidence.add("name=bindData")
+            } else if (name.length <= 3) {
+                score += 12
+                evidence.add("shortName")
+            }
+            if (param.contains("CommentFloorAiEmojiCreationUIState")) {
+                score += 100
+                evidence.add("uiStateParam")
+            } else if (param.contains("AiEmojiCreation") || param.contains("/meme/")) {
+                score += 55
+                evidence.add("emojiParam")
+            }
+            if (codeContainsString(method.codeOff, "uiState")) {
+                score += 42
+                evidence.add("uiStateString")
+            }
+            if (codeInvokesClass(method.codeOff, PB_AI_EMOJI_CREATION_VIEW_DESCRIPTOR)) {
+                score += 60
+                evidence.add("pbAiEmojiViewCall")
+            }
+            if (codeInvokesMethod(method.codeOff, "setVisibility", null)) {
+                score += 28
+                evidence.add("setVisibility")
+            }
+            if (codeContainsString(method.codeOff, "emotion_click") ||
+                codeContainsString(method.codeOff, "emotion_tongkuan_click")
+            ) {
+                score += 24
+                evidence.add("emotionLog")
+            }
+            return if (score >= 105) DexMethodCandidate(name, score, evidence.joinToString("+")) else null
         }
 
         private fun classDataOffset(descriptor: String): Int? {
@@ -613,7 +1041,7 @@ internal object DexShareIconScanner {
         private fun scanPbAdBidModelClassData(
             classDataOff: Int,
             ownerDescriptor: String,
-            kind: String,
+            fixedKind: String?,
         ): List<DexPbAdBidModelMatch> {
             var cursor = classDataOff
             val staticFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
@@ -630,7 +1058,7 @@ internal object DexShareIconScanner {
                 val method = readEncodedMethod(cursor, methodIdx)
                 cursor = method.next
                 methodIdx = method.methodIdx
-                scanPbAdBidModelCodeItem(method, ownerDescriptor, kind)?.let(out::add)
+                scanPbAdBidModelCodeItem(method, ownerDescriptor, classDataOff, fixedKind)?.let(out::add)
             }
 
             methodIdx = 0
@@ -638,7 +1066,7 @@ internal object DexShareIconScanner {
                 val method = readEncodedMethod(cursor, methodIdx)
                 cursor = method.next
                 methodIdx = method.methodIdx
-                scanPbAdBidModelCodeItem(method, ownerDescriptor, kind)?.let(out::add)
+                scanPbAdBidModelCodeItem(method, ownerDescriptor, classDataOff, fixedKind)?.let(out::add)
             }
             return out
         }
@@ -1140,10 +1568,12 @@ internal object DexShareIconScanner {
         private fun scanPbAdBidModelCodeItem(
             method: EncodedMethod,
             ownerDescriptor: String,
-            kind: String,
+            classDataOff: Int,
+            fixedKind: String?,
         ): DexPbAdBidModelMatch? {
             if (isStaticAccess(method.accessFlags)) return null
             if (!codeContainsString(method.codeOff, PB_AD_BID_ENDPOINT)) return null
+            val kind = fixedKind ?: inferPbAdBidModelKind(ownerDescriptor, classDataOff, method) ?: return null
             val ownerClassName = descriptorToClassName(ownerDescriptor) ?: return null
             val methodName = methodName(method.methodIdx)?.takeIf { it.isNotBlank() } ?: return null
             var score = 260
@@ -1167,6 +1597,25 @@ internal object DexShareIconScanner {
                 score += 10
                 evidence.add("noArgs")
             }
+            if (codeReferencesFieldName(method.codeOff, "call_from")) {
+                score += 8
+                evidence.add("callFrom")
+            }
+            if (codeReferencesFieldName(method.codeOff, "pn")) {
+                score += 28
+                evidence.add("pn")
+            }
+            if (classHasConstructorWithParams(classDataOff, listOf("I"))) {
+                score += 18
+                evidence.add("intCtor")
+            } else if (classHasConstructorWithParams(classDataOff, emptyList())) {
+                score += 8
+                evidence.add("noArgCtor")
+            }
+            if (classHasInstanceFieldType(classDataOff, HTTP_MESSAGE_DESCRIPTOR)) {
+                score += 14
+                evidence.add("httpMessageField")
+            }
             return DexPbAdBidModelMatch(
                 className = ownerClassName,
                 requestImplMethodName = methodName,
@@ -1174,6 +1623,333 @@ internal object DexShareIconScanner {
                 score = score,
                 evidence = evidence.joinToString(","),
             )
+        }
+
+        private fun inferPbAdBidModelKind(
+            ownerDescriptor: String,
+            classDataOff: Int,
+            method: EncodedMethod,
+        ): String? {
+            if (extendsDescriptor(ownerDescriptor, PB_COMMON_REQUEST_MODEL_DESCRIPTOR)) {
+                return PB_AD_BID_DEX_KIND_COMMON
+            }
+            if (extendsDescriptor(ownerDescriptor, PB_PAGE_BROWSER_REQUEST_MODEL_DESCRIPTOR)) {
+                return PB_AD_BID_DEX_KIND_PAGE_BROWSER
+            }
+
+            val referencesPageNumber = codeReferencesFieldName(method.codeOff, "pn")
+            if (referencesPageNumber && classHasConstructorWithParams(classDataOff, listOf("I"))) {
+                return PB_AD_BID_DEX_KIND_PAGE_BROWSER
+            }
+            if (referencesPageNumber && ownerDescriptor.contains("/pb/pagebrowser/")) {
+                return PB_AD_BID_DEX_KIND_PAGE_BROWSER
+            }
+            if (
+                classHasConstructorWithParams(classDataOff, emptyList()) &&
+                classHasInstanceFieldType(classDataOff, HTTP_MESSAGE_DESCRIPTOR)
+            ) {
+                return PB_AD_BID_DEX_KIND_COMMON
+            }
+            return null
+        }
+
+        private fun scorePageBrowserRequestDataOwner(descriptor: String, classDataOff: Int): Int {
+            var score = 0
+            if (descriptor == PB_PAGE_BROWSER_REQUEST_MODEL_DESCRIPTOR) score += 140
+            if (descriptor.contains("/pb/pagebrowser/")) score += 60
+            if (descriptor.contains("/model/")) score += 48
+            if (descriptor.contains("RequestModel")) score += 28
+            if (descriptor.contains("/repository/")) score -= 70
+            if (descriptor.contains("/viewmodel/")) score -= 50
+            if (hasNoArgAppReturnMethod(classDataOff)) score += 44
+            if (classHasInstanceFieldType(classDataOff, "I")) score += 8
+            return score
+        }
+
+        private fun classHasConstructorWithParams(
+            classDataOff: Int,
+            parameterDescriptors: List<String>,
+        ): Boolean {
+            return scanConstructorParameterDescriptors(classDataOff).any { params -> params == parameterDescriptors }
+        }
+
+        private fun classHasInstanceFieldType(classDataOff: Int, expectedTypeDescriptor: String): Boolean {
+            return scanInstanceFieldTypeDescriptors(classDataOff).any { it == expectedTypeDescriptor }
+        }
+
+        private fun hasNoArgAppReturnMethod(classDataOff: Int): Boolean {
+            return scanMethodReturnAndParameterDescriptors(classDataOff).any { shape ->
+                shape.parameterDescriptors.isEmpty() &&
+                    shape.returnDescriptor.startsWith("Lcom/baidu/tieba/") &&
+                    shape.returnDescriptor != OBJECT_DESCRIPTOR
+            }
+        }
+
+        private fun scanInstanceFieldTypeDescriptors(classDataOff: Int): List<String> {
+            var cursor = classDataOff
+            val staticFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val instanceFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            readUleb128(cursor).also { cursor = it.next }
+            readUleb128(cursor).also { cursor = it.next }
+
+            var fieldIdx = 0
+            repeat(staticFieldsSize) {
+                val field = readEncodedField(cursor, fieldIdx)
+                cursor = field.next
+                fieldIdx = field.fieldIdx
+            }
+
+            val out = ArrayList<String>(instanceFieldsSize)
+            fieldIdx = 0
+            repeat(instanceFieldsSize) {
+                val field = readEncodedField(cursor, fieldIdx)
+                cursor = field.next
+                fieldIdx = field.fieldIdx
+                fieldTypeDescriptor(field.fieldIdx)?.let(out::add)
+            }
+            return out
+        }
+
+        private fun scanConstructorParameterDescriptors(classDataOff: Int): List<List<String>> {
+            var cursor = classDataOff
+            val staticFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val instanceFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val directMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+            readUleb128(cursor).also { cursor = it.next }
+
+            repeat(staticFieldsSize) { cursor = skipEncodedField(cursor) }
+            repeat(instanceFieldsSize) { cursor = skipEncodedField(cursor) }
+
+            val out = ArrayList<List<String>>(2)
+            var methodIdx = 0
+            repeat(directMethodsSize) {
+                val method = readEncodedMethod(cursor, methodIdx)
+                cursor = method.next
+                methodIdx = method.methodIdx
+                if (methodName(methodIdx) == "<init>") {
+                    out += methodParameterDescriptors(methodIdx)
+                }
+            }
+            return out
+        }
+
+        private fun scanMethodReturnAndParameterDescriptors(classDataOff: Int): List<DexMethodShape> {
+            var cursor = classDataOff
+            val staticFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val instanceFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val directMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val virtualMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+
+            repeat(staticFieldsSize) { cursor = skipEncodedField(cursor) }
+            repeat(instanceFieldsSize) { cursor = skipEncodedField(cursor) }
+
+            val out = ArrayList<DexMethodShape>(directMethodsSize + virtualMethodsSize)
+            var methodIdx = 0
+            repeat(directMethodsSize) {
+                val method = readEncodedMethod(cursor, methodIdx)
+                cursor = method.next
+                methodIdx = method.methodIdx
+                methodReturnDescriptor(methodIdx)?.let { returnDescriptor ->
+                    out += DexMethodShape(returnDescriptor, methodParameterDescriptors(methodIdx))
+                }
+            }
+
+            methodIdx = 0
+            repeat(virtualMethodsSize) {
+                val method = readEncodedMethod(cursor, methodIdx)
+                cursor = method.next
+                methodIdx = method.methodIdx
+                methodReturnDescriptor(methodIdx)?.let { returnDescriptor ->
+                    out += DexMethodShape(returnDescriptor, methodParameterDescriptors(methodIdx))
+                }
+            }
+            return out
+        }
+
+        private fun scanInstanceFields(classDataOff: Int): List<DexFieldShape> {
+            var cursor = classDataOff
+            val staticFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val instanceFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            readUleb128(cursor).also { cursor = it.next }
+            readUleb128(cursor).also { cursor = it.next }
+
+            var fieldIdx = 0
+            repeat(staticFieldsSize) {
+                val field = readEncodedField(cursor, fieldIdx)
+                cursor = field.next
+                fieldIdx = field.fieldIdx
+            }
+
+            val out = ArrayList<DexFieldShape>(instanceFieldsSize)
+            fieldIdx = 0
+            repeat(instanceFieldsSize) {
+                val field = readEncodedField(cursor, fieldIdx)
+                cursor = field.next
+                fieldIdx = field.fieldIdx
+                val name = fieldName(field.fieldIdx).orEmpty()
+                val type = fieldTypeDescriptor(field.fieldIdx).orEmpty()
+                if (name.isNotBlank() && type.isNotBlank()) {
+                    out += DexFieldShape(name, type)
+                }
+            }
+            return out
+        }
+
+        private fun scanAllMethods(classDataOff: Int): List<EncodedMethod> {
+            var cursor = classDataOff
+            val staticFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val instanceFieldsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val directMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+            val virtualMethodsSize = readUleb128(cursor).also { cursor = it.next }.value
+
+            repeat(staticFieldsSize) { cursor = skipEncodedField(cursor) }
+            repeat(instanceFieldsSize) { cursor = skipEncodedField(cursor) }
+
+            val out = ArrayList<EncodedMethod>(directMethodsSize + virtualMethodsSize)
+            var methodIdx = 0
+            repeat(directMethodsSize) {
+                val method = readEncodedMethod(cursor, methodIdx)
+                cursor = method.next
+                methodIdx = method.methodIdx
+                out += method
+            }
+            methodIdx = 0
+            repeat(virtualMethodsSize) {
+                val method = readEncodedMethod(cursor, methodIdx)
+                cursor = method.next
+                methodIdx = method.methodIdx
+                out += method
+            }
+            return out
+        }
+
+        private fun codeReferencesOwnField(
+            codeOff: Int,
+            ownerDescriptor: String,
+            field: DexFieldShape,
+        ): Boolean {
+            if (codeOff <= 0 || codeOff + 16 > bytes.size) return false
+            val insnsSize = intAt(codeOff + 12)
+            val insnsOff = codeOff + 16
+            if (insnsOff <= 0 || insnsOff + insnsSize * 2 > bytes.size) return false
+            var i = 0
+            while (i < insnsSize) {
+                val offset = insnsOff + i * 2
+                val unit = ushortAt(offset)
+                val op = unit and 0xFF
+                if (op in 0x52..0x6D) {
+                    val fieldIdx = ushortAt(offset + 2)
+                    if (
+                        fieldClassDescriptor(fieldIdx) == ownerDescriptor &&
+                        fieldName(fieldIdx) == field.name &&
+                        fieldTypeDescriptor(fieldIdx) == field.typeDescriptor
+                    ) {
+                        return true
+                    }
+                }
+                i += instructionCodeUnits(op)
+            }
+            return false
+        }
+
+        private fun codeReferencesFieldType(
+            codeOff: Int,
+            ownerDescriptor: String,
+            expectedTypeDescriptor: String,
+        ): Boolean {
+            if (codeOff <= 0 || codeOff + 16 > bytes.size) return false
+            val insnsSize = intAt(codeOff + 12)
+            val insnsOff = codeOff + 16
+            if (insnsOff <= 0 || insnsOff + insnsSize * 2 > bytes.size) return false
+            var i = 0
+            while (i < insnsSize) {
+                val offset = insnsOff + i * 2
+                val unit = ushortAt(offset)
+                val op = unit and 0xFF
+                if (op in 0x52..0x6D) {
+                    val fieldIdx = ushortAt(offset + 2)
+                    if (
+                        fieldClassDescriptor(fieldIdx) == ownerDescriptor &&
+                        fieldTypeDescriptor(fieldIdx) == expectedTypeDescriptor
+                    ) {
+                        return true
+                    }
+                }
+                i += instructionCodeUnits(op)
+            }
+            return false
+        }
+
+        private fun codeInvokesClass(codeOff: Int, expectedClassDescriptor: String): Boolean {
+            if (codeOff <= 0 || codeOff + 16 > bytes.size) return false
+            val insnsSize = intAt(codeOff + 12)
+            val insnsOff = codeOff + 16
+            if (insnsOff <= 0 || insnsOff + insnsSize * 2 > bytes.size) return false
+            var i = 0
+            while (i < insnsSize) {
+                val offset = insnsOff + i * 2
+                val unit = ushortAt(offset)
+                val op = unit and 0xFF
+                if (op in 0x6E..0x72 || op in 0x74..0x78) {
+                    val methodIdx = ushortAt(offset + 2)
+                    if (methodClassDescriptor(methodIdx) == expectedClassDescriptor) return true
+                }
+                i += instructionCodeUnits(op)
+            }
+            return false
+        }
+
+        private fun codeInvokesMethod(
+            codeOff: Int,
+            expectedName: String,
+            expectedClassDescriptor: String?,
+        ): Boolean {
+            if (codeOff <= 0 || codeOff + 16 > bytes.size) return false
+            val insnsSize = intAt(codeOff + 12)
+            val insnsOff = codeOff + 16
+            if (insnsOff <= 0 || insnsOff + insnsSize * 2 > bytes.size) return false
+            var i = 0
+            while (i < insnsSize) {
+                val offset = insnsOff + i * 2
+                val unit = ushortAt(offset)
+                val op = unit and 0xFF
+                if (op in 0x6E..0x72 || op in 0x74..0x78) {
+                    val methodIdx = ushortAt(offset + 2)
+                    if (
+                        methodName(methodIdx) == expectedName &&
+                        (expectedClassDescriptor == null ||
+                            methodClassDescriptor(methodIdx) == expectedClassDescriptor)
+                    ) {
+                        return true
+                    }
+                }
+                i += instructionCodeUnits(op)
+            }
+            return false
+        }
+
+        private fun isTbFloatingBarDescriptor(descriptor: String): Boolean {
+            return descriptor == TB_FLOATING_BAR_DESCRIPTOR ||
+                descriptor.endsWith("/TbFloatingBar;")
+        }
+
+        private fun codeReferencesFieldName(codeOff: Int, expectedName: String): Boolean {
+            if (codeOff <= 0 || codeOff + 16 > bytes.size) return false
+            val insnsSize = intAt(codeOff + 12)
+            val insnsOff = codeOff + 16
+            if (insnsOff <= 0 || insnsOff + insnsSize * 2 > bytes.size) return false
+            var i = 0
+            while (i < insnsSize) {
+                val offset = insnsOff + i * 2
+                val unit = ushortAt(offset)
+                val op = unit and 0xFF
+                if (op in 0x52..0x6D) {
+                    val fieldIdx = ushortAt(offset + 2)
+                    if (fieldName(fieldIdx) == expectedName) return true
+                }
+                i += instructionCodeUnits(op)
+            }
+            return false
         }
 
         private fun codeContainsString(codeOff: Int, expected: String): Boolean {
@@ -1203,6 +1979,13 @@ internal object DexShareIconScanner {
             cursor = readUleb128(cursor).next
             cursor = readUleb128(cursor).next
             return cursor
+        }
+
+        private fun readEncodedField(offset: Int, previousFieldIdx: Int): EncodedField {
+            var cursor = offset
+            val fieldIdxDiff = readUleb128(cursor).also { cursor = it.next }.value
+            val accessFlags = readUleb128(cursor).also { cursor = it.next }.value
+            return EncodedField(previousFieldIdx + fieldIdxDiff, accessFlags, cursor)
         }
 
         private fun readEncodedMethod(offset: Int, previousMethodIdx: Int): EncodedMethod {
@@ -2546,11 +3329,39 @@ internal object DexShareIconScanner {
             val next: Int,
         )
 
+        private data class EncodedField(
+            val fieldIdx: Int,
+            val accessFlags: Int,
+            val next: Int,
+        )
+
         private data class EncodedMethod(
             val methodIdx: Int,
             val accessFlags: Int,
             val codeOff: Int,
             val next: Int,
+        )
+
+        private data class DexMethodShape(
+            val returnDescriptor: String,
+            val parameterDescriptors: List<String>,
+        )
+
+        private data class DexFieldShape(
+            val name: String,
+            val typeDescriptor: String,
+        )
+
+        private data class DexMethodCandidate(
+            val methodName: String,
+            val score: Int,
+            val evidence: String,
+        )
+
+        private data class PbAdBidRequestDataMethodCandidate(
+            val methodName: String,
+            val ownerDescriptor: String,
+            val score: Int,
         )
     }
 

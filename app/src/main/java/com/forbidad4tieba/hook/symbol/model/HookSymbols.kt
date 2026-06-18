@@ -625,6 +625,8 @@ data class HookSymbols(
         get() = hookPoints.media.ai.pbInput.aiPbNewInputContainerInitAiWriteMethod
     val aiPbAiEmojiCreationViewBindMethod: String?
         get() = hookPoints.media.ai.emojiCreation.aiPbAiEmojiCreationViewBindMethod
+    val aiPbPageBrowserAiEmojiCreationViewClass: String?
+        get() = hookPoints.media.ai.emojiCreation.aiPbPageBrowserAiEmojiCreationViewClass
     val aiPbPageBrowserAiEmojiCreationBindMethod: String?
         get() = hookPoints.media.ai.emojiCreation.aiPbPageBrowserAiEmojiCreationBindMethod
     val aiImageViewerJumpButtonOwnerClass: String?
@@ -1073,6 +1075,7 @@ data class HookSymbols(
             put("aiPbNewInputContainerInitSpriteMemeMethod", aiPbNewInputContainerInitSpriteMemeMethod)
             put("aiPbNewInputContainerInitAiWriteMethod", aiPbNewInputContainerInitAiWriteMethod)
             put("aiPbAiEmojiCreationViewBindMethod", aiPbAiEmojiCreationViewBindMethod)
+            put("aiPbPageBrowserAiEmojiCreationViewClass", aiPbPageBrowserAiEmojiCreationViewClass)
             put("aiPbPageBrowserAiEmojiCreationBindMethod", aiPbPageBrowserAiEmojiCreationBindMethod)
             put("aiImageViewerJumpButtonOwnerClass", aiImageViewerJumpButtonOwnerClass)
             put("aiImageViewerJumpButtonInitMethod", aiImageViewerJumpButtonInitMethod)
@@ -1111,7 +1114,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 7
+        const val CACHE_SCHEMA_VERSION = 10
 
         fun unsupported(
             featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
@@ -1535,6 +1538,8 @@ data class HookSymbols(
                     aiPbNewInputContainerInitSpriteMemeMethod = obj.optStringOrNull("aiPbNewInputContainerInitSpriteMemeMethod")
                     aiPbNewInputContainerInitAiWriteMethod = obj.optStringOrNull("aiPbNewInputContainerInitAiWriteMethod")
                     aiPbAiEmojiCreationViewBindMethod = obj.optStringOrNull("aiPbAiEmojiCreationViewBindMethod")
+                    aiPbPageBrowserAiEmojiCreationViewClass =
+                        obj.optStringOrNull("aiPbPageBrowserAiEmojiCreationViewClass")
                     aiPbPageBrowserAiEmojiCreationBindMethod = obj.optStringOrNull("aiPbPageBrowserAiEmojiCreationBindMethod")
                     aiImageViewerJumpButtonOwnerClass = obj.optStringOrNull("aiImageViewerJumpButtonOwnerClass")
                     aiImageViewerJumpButtonInitMethod = obj.optStringOrNull("aiImageViewerJumpButtonInitMethod")
