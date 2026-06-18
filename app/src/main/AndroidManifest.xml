@@ -6,9 +6,6 @@
         android:label="ForbidAd4TieBa"
         android:description="@string/module_description"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round">
-
-
-    </application>
+        android:roundIcon="@mipmap/ic_launcher_round" />
 
 </manifest>

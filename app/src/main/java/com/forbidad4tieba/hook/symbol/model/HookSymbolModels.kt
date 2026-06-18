@@ -50,6 +50,7 @@ object HookFeatureKey {
     const val CLEAN_SHARE_TRACKING_PARAMS = "clean_share_tracking_params"
     const val DISABLE_AI_COMPONENTS = "disable_ai_components"
     const val VERIFY_REPLY_AFTER_POST = "verify_reply_after_post"
+    const val DETAILED_LOGGING = "enable_detailed_logging"
 
     val orderedKeys = listOf(
         BLOCK_AD,
@@ -82,6 +83,7 @@ object HookFeatureKey {
         CLEAN_SHARE_TRACKING_PARAMS,
         DISABLE_AI_COMPONENTS,
         VERIFY_REPLY_AFTER_POST,
+        DETAILED_LOGGING,
     )
 }
 

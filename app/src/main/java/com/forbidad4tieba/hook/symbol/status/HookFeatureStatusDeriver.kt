@@ -11,9 +11,10 @@ internal object HookFeatureStatusDeriver {
     fun deriveWithOverrides(symbols: HookSymbols?): Map<String, HookFeatureStatus> {
         val source = symbols ?: HookSymbols.unsupported()
         if (source.featureStatusMap.isEmpty()) return derive(source)
-        return LinkedHashMap<String, HookFeatureStatus>(derive(source)).apply {
+        val merged = LinkedHashMap<String, HookFeatureStatus>(derive(source)).apply {
             putAll(source.featureStatusMap)
         }
+        return withHookPointAvailability(source, merged)
     }
 
     fun derive(symbols: HookSymbols): Map<String, HookFeatureStatus> {
@@ -541,6 +542,32 @@ internal object HookFeatureStatusDeriver {
             )
         }
 
+        val replyServerLogReady =
+            !symbols.replyServerResponseClass.isNullOrBlank() &&
+                !symbols.replyServerResponseDecodeMethod.isNullOrBlank() &&
+                !symbols.replyServerResponseResultJsonField.isNullOrBlank()
+        val agreeServerLogReady =
+            !symbols.replyVisibilityProbeAgreeResponseClass.isNullOrBlank() &&
+                !symbols.replyVisibilityProbeAgreeDecodeLogicMethod.isNullOrBlank()
+        val feedInfoLogReady = !symbols.feedCardBindMethod.isNullOrBlank()
+        val detailedLoggingMissing = buildList {
+            if (!replyServerLogReady) add("ReplyServerResponseLogHook")
+            if (!agreeServerLogReady) add("AgreeServerResponseLogHook")
+            if (!feedInfoLogReady) add("FeedInfoLogHook.Bind")
+        }
+        out[HookFeatureKey.DETAILED_LOGGING] = when {
+            detailedLoggingMissing.isEmpty() -> HookFeatureStatus(state = HookFeatureState.FULL)
+            replyServerLogReady || agreeServerLogReady || feedInfoLogReady -> HookFeatureStatus(
+                state = HookFeatureState.PARTIAL,
+                missingOptional = detailedLoggingMissing,
+            )
+            else -> HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = listOf("detailedLoggingHookPoints"),
+                missingOptional = detailedLoggingMissing,
+            )
+        }
+
         val pbScrollCoalesceCritical = ArrayList<String>(2)
         if (symbols.pbCommentScrollListenerClass.isNullOrBlank()) {
             pbScrollCoalesceCritical.add("pbCommentScrollListenerClass")
@@ -890,7 +917,7 @@ internal object HookFeatureStatusDeriver {
         for (key in featureKeys) {
             if (!out.containsKey(key)) out[key] = HookFeatureStatus()
         }
-        return out
+        return withHookPointAvailability(symbols, out)
     }
 
     private fun combineSubFeatureStatuses(statuses: List<HookFeatureStatus>): HookFeatureStatus {
@@ -917,5 +944,124 @@ internal object HookFeatureStatusDeriver {
             )
         }
     }
+
+    private fun withHookPointAvailability(
+        symbols: HookSymbols,
+        statusMap: LinkedHashMap<String, HookFeatureStatus>,
+    ): LinkedHashMap<String, HookFeatureStatus> {
+        val missingHookPointsByFeature = LinkedHashMap<String, MutableList<String>>()
+        HookSymbolStatusFormatter.formatHookPointStatusLines(
+            symbols = symbols,
+            aiPbAiEmojiCreationViewClass = AI_PB_AI_EMOJI_CREATION_VIEW_CLASS,
+            aiPbAiEmojiCreationPageBrowserViewClass = AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS,
+            msgTabViewModelClass = StableTiebaHookPoints.MSG_CENTER_CONTAINER_VIEW_MODEL_CLASS,
+            msgTabContainerViewClass = MSG_TAB_CONTAINER_VIEW_CLASS,
+        ).forEach { line ->
+            val match = HOOK_POINT_STATUS_PATTERN.matchEntire(line) ?: return@forEach
+            val hookPoint = match.groupValues[1]
+            val state = match.groupValues[2]
+            if (state == "FOUND") return@forEach
+            val affectedFeatures = featureKeysForHookPoint(hookPoint)
+            if (affectedFeatures.isEmpty()) return@forEach
+            affectedFeatures.forEach { featureKey ->
+                missingHookPointsByFeature.getOrPut(featureKey) { ArrayList() }.add(hookPoint)
+            }
+        }
+
+        missingHookPointsByFeature.forEach { (featureKey, hookPoints) ->
+            val current = statusMap[featureKey] ?: HookFeatureStatus()
+            val missingOptional = (current.missingOptional + hookPoints).distinct()
+            val state = when (current.state) {
+                HookFeatureState.DISABLED -> HookFeatureState.DISABLED
+                else -> HookFeatureState.PARTIAL
+            }
+            statusMap[featureKey] = current.copy(
+                state = state,
+                missingOptional = missingOptional,
+            )
+        }
+        refreshAdBlockParentStatus(statusMap)
+        return statusMap
+    }
+
+    private fun refreshAdBlockParentStatus(statusMap: LinkedHashMap<String, HookFeatureStatus>) {
+        statusMap[HookFeatureKey.BLOCK_AD] = combineSubFeatureStatuses(
+            listOf(
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_FEED),
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_POST_PAGE),
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_FORUM_PAGE),
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_STRATEGY),
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT),
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_HOME_TOP_BAR),
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_MINE_TAB_WEB),
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB),
+            ),
+        )
+    }
+
+    private fun featureKeysForHookPoint(name: String): List<String> {
+        return when {
+            name == "HomeTabHook" -> features(HookFeatureKey.SIMPLIFY_HOME_TOP_TABS)
+            name.startsWith("HomeNativeGlassHook") -> features(HookFeatureKey.HOME_NATIVE_GLASS)
+            name == "StrategyAdHook.HomePersonalizeAnchors" -> features(
+                HookFeatureKey.BLOCK_AD_HOME_TOP_BAR,
+                HookFeatureKey.HOME_NATIVE_GLASS,
+            )
+            name == "FeedInfoLogHook.Bind" -> features(
+                HookFeatureKey.HOME_NATIVE_GLASS,
+                HookFeatureKey.DETAILED_LOGGING,
+            )
+            name == "FeedAdHook.TemplateKey" -> features(
+                HookFeatureKey.BLOCK_AD_FEED,
+                HookFeatureKey.ENABLE_CUSTOM_POST_FILTER,
+            )
+            name == "FeedAdHook.LoadMore" -> features(
+                HookFeatureKey.BLOCK_AD_FEED,
+                HookFeatureKey.ENABLE_CUSTOM_POST_FILTER,
+            )
+            name.startsWith("CustomPostCardBlockHook") -> features(HookFeatureKey.ENABLE_CUSTOM_POST_FILTER)
+            name == "ReplyVisibilityProbeHook" -> features(HookFeatureKey.VERIFY_REPLY_AFTER_POST)
+            name == "ReplyServerResponseLogHook" -> features(HookFeatureKey.DETAILED_LOGGING)
+            name == "AgreeServerResponseLogHook" -> features(HookFeatureKey.DETAILED_LOGGING)
+            name.startsWith("StrategyAdHook.") -> features(HookFeatureKey.BLOCK_AD_STRATEGY)
+            name.startsWith("SearchBoxTextAdHook.") -> features(HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT)
+            name == "HomeTopBarRightSlotHook" -> features(HookFeatureKey.BLOCK_AD_HOME_TOP_BAR)
+            name == "PbFallingAdHook" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
+            name == "PbEarlyAdBlockHook" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
+            name.startsWith("PbAdRequestBlockHook.") -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
+            name == "PostAdHook.DataFilter" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
+            name.startsWith("ForumPageAdBlockHook") -> features(HookFeatureKey.BLOCK_AD_FORUM_PAGE)
+            name.startsWith("EnterForumWebHook") -> features(HookFeatureKey.FILTER_ENTER_FORUM_WEB)
+            name.startsWith("PlainUrlDirectBrowserHook.") -> features(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
+            name == "ForumNativeTopShiftBlockHook" -> features(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
+            name == "AutoRefreshHook" -> features(HookFeatureKey.DISABLE_AUTO_REFRESH)
+            name == "AutoLoadMoreHook.Config" -> features(HookFeatureKey.AUTO_LOAD_MORE)
+            name == "PbCommentAutoLoadHook" -> features(HookFeatureKey.AUTO_LOAD_MORE)
+            name.startsWith("PbScrollCoalesceHook") -> features(HookFeatureKey.ENABLE_PB_SCROLL_COALESCE)
+            name.startsWith("PbDisableGestureFontScaleHook.") -> features(
+                HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE,
+            )
+            name == "PbLikeAutoReplyHook" -> features(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
+            name.startsWith("AiComponentDisableHook.") -> features(HookFeatureKey.DISABLE_AI_COMPONENTS)
+            name.startsWith("MsgTabDefaultNotifyHook") -> features(HookFeatureKey.DEFAULT_NOTIFY_TAB)
+            name == "PrivateReadReceiptBlockHook" -> features(HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE)
+            name == "FreeCopyHook.Popup" -> features(HookFeatureKey.FREE_COPY)
+            name.startsWith("MainTabBottomHook") -> features(HookFeatureKey.SIMPLIFY_BOTTOM_TABS)
+            name.startsWith("DefaultOriginalImageHook") -> features(HookFeatureKey.DEFAULT_ORIGINAL_IMAGE)
+            name.startsWith("ShareTrackingParamCleanerHook") -> features(HookFeatureKey.CLEAN_SHARE_TRACKING_PARAMS)
+            else -> emptyList()
+        }
+    }
+
+    private fun features(vararg featureKeys: String): List<String> = featureKeys.asList()
+
+    private val HOOK_POINT_STATUS_PATTERN = Regex("""^HookPoint\[([^]]+)] state=([^ ]+) missing=([^ ]+) target=.*$""")
+
+    private const val AI_PB_AI_EMOJI_CREATION_VIEW_CLASS =
+        "com.baidu.tieba.pb.view.PbAiEmojiCreationView"
+    private const val AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS =
+        "com.baidu.tieba.pb.pagebrowser.comment.floor.meme.CommentFloorAiEmojiCreationView"
+    private const val MSG_TAB_CONTAINER_VIEW_CLASS =
+        "com.baidu.tieba.immessagecenter.msgtab.ui.view.MsgCenterContainerView"
 
 }

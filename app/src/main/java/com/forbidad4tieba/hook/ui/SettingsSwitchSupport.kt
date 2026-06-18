@@ -46,7 +46,8 @@ internal object SettingsSwitchSupportResolver {
             )
         return when (status.state) {
             HookFeatureState.DISABLED -> {
-                val critical = if (status.missingCritical.isEmpty()) "-" else status.missingCritical.joinToString(", ")
+                val miss = status.missingCritical + status.missingOptional
+                val critical = if (miss.isEmpty()) "-" else miss.joinToString(", ")
                 SettingsSwitchSupport(
                     supported = false,
                     partial = false,

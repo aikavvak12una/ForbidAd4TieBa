@@ -63,6 +63,8 @@ object AboutInfoManager {
     private val telemetryAccountRetryRunning = AtomicBoolean(false)
     @Volatile private var pendingTelemetryConfigs: List<TelemetryConfig> = emptyList()
     @Volatile private var runtimeEnvironmentCache: RuntimeEnvironment? = null
+    @Volatile private var startupFetchThread: Thread? = null
+    @Volatile private var telemetryRetryThread: Thread? = null
 
     data class AboutItem(
         val title: String,
@@ -277,6 +279,26 @@ object AboutInfoManager {
         return cachedRemoteItems
     }
 
+    fun hotReloadBusyReason(): String? {
+        if (startupFetchThread?.isAlive == true) return "about startup fetch active"
+        if (telemetryRetryThread?.isAlive == true) return "about telemetry retry active"
+        return null
+    }
+
+    fun prepareForHotReload() {
+        cachedRemoteItems = emptyList()
+        startupFetchTriggered = false
+        pendingTelemetryConfigs = emptyList()
+        runtimeEnvironmentCache = null
+        telemetryAccountRetryRunning.set(false)
+        startupFetchThread = null
+        telemetryRetryThread = null
+        synchronized(remoteCustomDialogLock) {
+            pendingRemoteCustomDialogs.clear()
+            seenRemoteCustomDialogKeys.clear()
+        }
+    }
+
     fun runtimeEnvironmentJsonForSettings(context: Context): String {
         return collectRuntimeEnvironment(context)
             .toJson()
@@ -313,58 +335,66 @@ object AboutInfoManager {
             startupFetchTriggered = true
         }
 
-        thread(name = "tbhook-about-startup-fetch", isDaemon = true) {
-            runCatching {
-                val cachedPayload = readCachedPayload(appContext)
-                if (cachedPayload == null) {
-                    XposedCompat.logW("[AboutInfo] startup cache unavailable, skip active payload")
-                } else {
-                    val parsedPayload = parseAndValidatePayload(cachedPayload.raw)
-                    if (parsedPayload == null) {
-                        XposedCompat.logW(
-                            "[AboutInfo] payload rejected: source=cache url=cache " +
-                                "bytes=${cachedPayload.bytes} elapsedMs=${cachedPayload.elapsedMs} " +
-                                "cacheAgeMs=${cachedPayload.cacheAgeMs}"
-                        )
+        val worker = thread(start = false, name = "tbhook-about-startup-fetch", isDaemon = true) {
+            try {
+                runCatching {
+                    val cachedPayload = readCachedPayload(appContext)
+                    if (cachedPayload == null) {
+                        XposedCompat.logW("[AboutInfo] startup cache unavailable, skip active payload")
                     } else {
-                        applyParsedPayload(
-                            context = appContext,
-                            rawPayload = cachedPayload.raw,
-                            parsedPayload = parsedPayload,
-                            elapsedMs = cachedPayload.elapsedMs,
-                            cacheAgeMs = cachedPayload.cacheAgeMs,
-                        )
+                        val parsedPayload = parseAndValidatePayload(cachedPayload.raw)
+                        if (parsedPayload == null) {
+                            XposedCompat.logW(
+                                "[AboutInfo] payload rejected: source=cache url=cache " +
+                                    "bytes=${cachedPayload.bytes} elapsedMs=${cachedPayload.elapsedMs} " +
+                                    "cacheAgeMs=${cachedPayload.cacheAgeMs}"
+                            )
+                        } else {
+                            applyParsedPayload(
+                                context = appContext,
+                                rawPayload = cachedPayload.raw,
+                                parsedPayload = parsedPayload,
+                                elapsedMs = cachedPayload.elapsedMs,
+                                cacheAgeMs = cachedPayload.cacheAgeMs,
+                            )
+                        }
                     }
-                }
 
-                val remotePayload = fetchFromSources()
-                if (remotePayload == null) {
-                    XposedCompat.logW("[AboutInfo] remote cache update skipped: no valid source")
-                } else {
-                    writeCachedPayload(
-                        context = appContext,
-                        payload = remotePayload.raw,
-                        url = remotePayload.url,
-                        bytes = remotePayload.bytes,
-                        elapsedMs = remotePayload.elapsedMs,
-                    )
-                    parseAndValidatePayload(remotePayload.raw)?.let { parsedRemote ->
-                        applyParsedPayload(
+                    val remotePayload = fetchFromSources()
+                    if (remotePayload == null) {
+                        XposedCompat.logW("[AboutInfo] remote cache update skipped: no valid source")
+                    } else {
+                        writeCachedPayload(
                             context = appContext,
-                            rawPayload = remotePayload.raw,
-                            parsedPayload = parsedRemote,
-                            source = "remote",
+                            payload = remotePayload.raw,
                             url = remotePayload.url,
+                            bytes = remotePayload.bytes,
                             elapsedMs = remotePayload.elapsedMs,
-                            cacheAgeMs = -1L,
                         )
+                        parseAndValidatePayload(remotePayload.raw)?.let { parsedRemote ->
+                            applyParsedPayload(
+                                context = appContext,
+                                rawPayload = remotePayload.raw,
+                                parsedPayload = parsedRemote,
+                                source = "remote",
+                                url = remotePayload.url,
+                                elapsedMs = remotePayload.elapsedMs,
+                                cacheAgeMs = -1L,
+                            )
+                        }
                     }
+                }.onFailure { t ->
+                    XposedCompat.log("[AboutInfo] startup fetch crashed: ${t.message}")
+                    XposedCompat.log(t)
                 }
-            }.onFailure { t ->
-                XposedCompat.log("[AboutInfo] startup fetch crashed: ${t.message}")
-                XposedCompat.log(t)
+            } finally {
+                if (startupFetchThread === Thread.currentThread()) {
+                    startupFetchThread = null
+                }
             }
         }
+        startupFetchThread = worker
+        worker.start()
     }
 
     private fun fetchFromSources(): FetchedPayload? {
@@ -1180,7 +1210,7 @@ object AboutInfoManager {
             return
         }
         val appContext = context.applicationContext ?: context
-        thread(name = "tbhook-telemetry-account-retry", isDaemon = true) {
+        val worker = thread(start = false, name = "tbhook-telemetry-account-retry", isDaemon = true) {
             try {
                 Thread.sleep(TELEMETRY_ACCOUNT_ID_FIRST_DELAY_MS)
                 for (attempt in 0..TELEMETRY_ACCOUNT_ID_RETRY_COUNT) {
@@ -1202,8 +1232,13 @@ object AboutInfoManager {
                 XposedCompat.logD("[AboutInfo] telemetry account retry stopped: ${t.message}")
             } finally {
                 telemetryAccountRetryRunning.set(false)
+                if (telemetryRetryThread === Thread.currentThread()) {
+                    telemetryRetryThread = null
+                }
             }
         }
+        telemetryRetryThread = worker
+        worker.start()
     }
 
     private fun telemetrySuccessDateKey(name: String): String {

@@ -371,20 +371,20 @@ object ConfigManager {
         synchronized(this) {
             if (prefs != null) return
             val appCtx = context.applicationContext ?: context
-            val p = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val localPrefs = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             appContext = appCtx
-            prefs = p
-            ensureUserSettingsVersion(p)
+            prefs = localPrefs
+            ensureUserSettingsVersion(localPrefs)
 
             restrictedFeatureUnlockBlockedByRemote = getModuleStatePrefs(appCtx)
                 .getBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, false)
             environmentWarningDialogActive = getModuleStatePrefs(appCtx)
                 .getBoolean(KEY_REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE, false)
-            if (restrictedFeatureUnlockBlockedByRemote && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
-                p.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
+            if (restrictedFeatureUnlockBlockedByRemote && localPrefs.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
+                localPrefs.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
             }
-            refreshUserSettingsSnapshot(p)
-            ensurePrefsListener(p)
+            refreshUserSettingsSnapshot(localPrefs)
+            ensurePrefsListener(localPrefs)
         }
     }
 
@@ -392,7 +392,10 @@ object ConfigManager {
     fun snapshotVersion(): Long = settingsSnapshotVersion
 
     fun refreshRuntimeSettings(context: Context? = null) {
-        val p = prefs ?: context?.let { getPrefs(it) } ?: return
+        val p = prefs ?: context?.let {
+            init(it)
+            prefs
+        } ?: return
         synchronized(this) {
             refreshUserSettingsSnapshot(p)
         }
@@ -456,9 +459,9 @@ object ConfigManager {
     }
 
     fun getPrefs(context: Context): SharedPreferences {
-        return prefs ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).also {
-            init(context)
-        }
+        prefs?.let { return it }
+        init(context)
+        return prefs ?: (context.applicationContext ?: context).getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
     fun getModuleStatePrefs(context: Context): SharedPreferences {
@@ -467,6 +470,24 @@ object ConfigManager {
     }
 
     fun getAppContext(): Context? = appContext
+
+    fun prepareForHotReload() {
+        synchronized(this) {
+            prefsListener?.let { listener ->
+                runCatching {
+                    prefs?.unregisterOnSharedPreferenceChangeListener(listener)
+                }.onFailure { t ->
+                    XposedCompat.logW("[ConfigManager] local prefs listener unregister failed: ${t.message}")
+                }
+            }
+            prefsListener = null
+            prefs = null
+            appContext = null
+            settingsSnapshot = SettingsSnapshot()
+            settingsSnapshotVersion++
+            homeNativeGlassDarkModeActive = false
+        }
+    }
 
     fun resetRuntimeAfterUserDataClear(context: Context) {
         synchronized(this) {
@@ -631,7 +652,7 @@ object ConfigManager {
         if (lockHiddenFeatures && p.getBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false)) {
             p.edit().putBoolean(KEY_RESTRICTED_FEATURES_UNLOCKED, false).apply()
         }
-        refreshUserSettingsSnapshot(p)
+        refreshRuntimeSettings(appCtx)
     }
 
     private fun refreshUserSettingsSnapshot(p: SharedPreferences) {
@@ -1055,6 +1076,7 @@ object ConfigManager {
             KEY_BLOCK_AD_HOME_TOP_BAR -> HookFeatureKey.BLOCK_AD_HOME_TOP_BAR
             KEY_BLOCK_AD_MINE_TAB_WEB -> HookFeatureKey.BLOCK_AD_MINE_TAB_WEB
             KEY_BLOCK_AD_HOME_SIDE_BAR_WEB -> HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB
+            KEY_ENABLE_DETAILED_LOGGING -> HookFeatureKey.DETAILED_LOGGING
 
             KEY_FILTER_POST_VOTE,
             KEY_FILTER_POST_VIDEO,
@@ -1114,7 +1136,7 @@ object ConfigManager {
         }
 
         if (refreshRuntime) {
-            refreshUserSettingsSnapshot(getPrefs(context))
+            refreshRuntimeSettings(context)
         }
     }
 

@@ -8,11 +8,11 @@ ForbidAd4TieBa 是一个贴吧净化 Xposed 模块，用于净化贴吧界面元
 
 ## 安装与入口
 
-在支持现代 libxposed api101 的框架中启用模块，并将作用域设置为：
+在支持现代 libxposed api102 的框架中启用模块，并将作用域设置为：
 
 `百度贴吧 com.baidu.tieba`
 
-未root设备使用[NPatch](https://github.com/7723mod/NPatch)或其他支持现代 libxposed api101 的免root框架
+未root设备使用[NPatch](https://github.com/7723mod/NPatch)或其他支持现代 libxposed api102 的免root框架
 
 模块设置入口：
 

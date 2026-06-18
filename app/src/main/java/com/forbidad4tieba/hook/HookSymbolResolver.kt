@@ -352,8 +352,23 @@ internal object HookSymbolResolver {
         if (symbols == null) return true
         if (symbols.source != "scan") return true
         if (symbols.scanErrors.isNotEmpty()) return true
-        val missingLines = failedLines ?: formatHookPointStatusLines(symbols).filter { it.contains("MISSING") }
+        val missingLines = failedLines ?: formatUnavailableHookPointStatusLines(symbols)
         return missingLines.isNotEmpty()
+    }
+
+    fun formatUnavailableHookPointStatusLines(symbols: HookSymbols?): List<String> {
+        return formatHookPointStatusLines(symbols).filter(::isUnavailableHookPointStatusLine)
+    }
+
+    fun formatScanIssueLines(symbols: HookSymbols?): List<String> {
+        if (symbols == null) return listOf("HookPoint[SymbolCache] state=MISSING missing=symbols target=-")
+        return formatUnavailableHookPointStatusLines(symbols).ifEmpty { symbols.scanErrors }
+    }
+
+    private fun isUnavailableHookPointStatusLine(line: String): Boolean {
+        return line.contains(" state=MISSING ") ||
+            line.contains(" state=PARTIAL ") ||
+            line.contains(" state=ERROR ")
     }
 
     fun formatScanVersionWarning(symbols: HookSymbols?): String? {

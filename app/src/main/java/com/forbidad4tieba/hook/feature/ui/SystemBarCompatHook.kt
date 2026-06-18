@@ -30,6 +30,8 @@ object SystemBarCompatHook {
     private val navigationBarColorHookedClasses = ConcurrentHashMap.newKeySet<String>()
     private val bottomTabInsetStates = Collections.synchronizedMap(WeakHashMap<View, BottomTabInsetState>())
     private val requestedNavigationBarColors = Collections.synchronizedMap(WeakHashMap<Window, Int>())
+    @Volatile private var registeredApp: Application? = null
+    @Volatile private var registeredCallback: Application.ActivityLifecycleCallbacks? = null
 
     private data class BottomTabInsetState(
         val left: Int,
@@ -46,7 +48,7 @@ object SystemBarCompatHook {
     fun register(app: Application) {
         if (!registered.compareAndSet(false, true)) return
         installWindowHooks()
-        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+        val callback = object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
                 rememberActivityWindow(activity)
                 applyIfNeeded(activity)
@@ -65,8 +67,31 @@ object SystemBarCompatHook {
             override fun onActivityDestroyed(activity: Activity) {
                 forgetActivityWindow(activity)
             }
-        })
+        }
+        registeredApp = app
+        registeredCallback = callback
+        app.registerActivityLifecycleCallbacks(callback)
         XposedCompat.log("$TAG registered")
+    }
+
+    fun prepareForHotReload() {
+        val app = registeredApp
+        val callback = registeredCallback
+        if (app != null && callback != null) {
+            runCatching {
+                app.unregisterActivityLifecycleCallbacks(callback)
+            }.onFailure { t ->
+                XposedCompat.logW("$TAG unregister failed: ${t.message}")
+            }
+        }
+        registeredApp = null
+        registeredCallback = null
+        registered.set(false)
+        firstErrorLogged.set(false)
+        windowActivities.clear()
+        navigationBarColorHookedClasses.clear()
+        bottomTabInsetStates.clear()
+        requestedNavigationBarColors.clear()
     }
 
     fun applyIfNeeded(activity: Activity?) {

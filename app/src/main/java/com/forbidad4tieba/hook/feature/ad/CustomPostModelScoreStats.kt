@@ -7,6 +7,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.sqrt
 
@@ -23,17 +24,36 @@ internal object CustomPostModelScoreStats {
     private const val TRIM_POST_THRESHOLD_RATIO = 0.1
     private val lock = Any()
     private val fileLock = Any()
+    private val executorLock = Any()
     private val pendingRecords = ArrayList<StoredRecord>(128)
     private val flushScheduled = AtomicBoolean(false)
+    private val activeBackgroundTasks = AtomicInteger(0)
     private val postIdGenerator = AtomicLong(System.currentTimeMillis())
     private var statsGeneration = 0L
     // Guarded by fileLock.
     private var persistenceFailureCount = 0
     private var persistenceDisabled = false
     private var postsSinceLastTrim = 0
-    private val executor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->
-        Thread(runnable, "tbhook-model-score-stats").apply {
-            isDaemon = true
+    private var executor: ScheduledExecutorService? = null
+
+    fun hotReloadBusyReason(): String? {
+        val pendingCount = synchronized(lock) { pendingRecords.size }
+        if (pendingCount > 0) return "model score stats pending records=$pendingCount"
+        if (flushScheduled.get()) return "model score stats flush scheduled"
+        if (activeBackgroundTasks.get() > 0) return "model score stats task active"
+        return null
+    }
+
+    fun prepareForHotReload(): Boolean {
+        val service = synchronized(executorLock) {
+            executor.also { executor = null }
+        } ?: return true
+        service.shutdownNow()
+        return try {
+            service.awaitTermination(300L, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
         }
     }
 
@@ -73,8 +93,8 @@ internal object CustomPostModelScoreStats {
     }
 
     fun trimToPostLimitAsync(postLimit: Int = ConfigManager.postModelScoreStatsPostLimit) {
-        executor.execute {
-            val context = ConfigManager.getAppContext() ?: return@execute
+        executeBackground {
+            val context = ConfigManager.getAppContext() ?: return@executeBackground
             val file = File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME)
             synchronized(fileLock) {
                 runCatching {
@@ -87,7 +107,7 @@ internal object CustomPostModelScoreStats {
     }
 
     fun applyAutoPercentileThresholdsAsync() {
-        executor.execute {
+        executeBackground {
             applyAutoPercentileThresholds()
         }
     }
@@ -120,7 +140,7 @@ internal object CustomPostModelScoreStats {
 
     private fun scheduleFlush() {
         if (!flushScheduled.compareAndSet(false, true)) return
-        executor.schedule({
+        scheduleBackground(FLUSH_DELAY_MS) {
             var retryPending = true
             try {
                 retryPending = flushPending()
@@ -129,7 +149,51 @@ internal object CustomPostModelScoreStats {
                 val hasMore = synchronized(lock) { pendingRecords.isNotEmpty() }
                 if (retryPending && hasMore) scheduleFlush()
             }
-        }, FLUSH_DELAY_MS, TimeUnit.MILLISECONDS)
+        }
+    }
+
+    private fun executeBackground(block: () -> Unit) {
+        activeBackgroundTasks.incrementAndGet()
+        try {
+            executor().execute {
+                try {
+                    block()
+                } finally {
+                    activeBackgroundTasks.decrementAndGet()
+                }
+            }
+        } catch (t: Throwable) {
+            activeBackgroundTasks.decrementAndGet()
+            throw t
+        }
+    }
+
+    private fun scheduleBackground(delayMs: Long, block: () -> Unit) {
+        activeBackgroundTasks.incrementAndGet()
+        try {
+            executor().schedule({
+                try {
+                    block()
+                } finally {
+                    activeBackgroundTasks.decrementAndGet()
+                }
+            }, delayMs, TimeUnit.MILLISECONDS)
+        } catch (t: Throwable) {
+            activeBackgroundTasks.decrementAndGet()
+            throw t
+        }
+    }
+
+    private fun executor(): ScheduledExecutorService {
+        return synchronized(executorLock) {
+            val current = executor
+            if (current != null && !current.isShutdown) return current
+            Executors.newSingleThreadScheduledExecutor { runnable ->
+                Thread(runnable, "tbhook-model-score-stats").apply {
+                    isDaemon = true
+                }
+            }.also { executor = it }
+        }
     }
 
     private fun flushPending(): Boolean {

@@ -90,6 +90,10 @@ object AutoSignInManager {
         val signedCount: Int,
     )
 
+    fun hotReloadBusyReason(): String? {
+        return if (running.get()) "auto sign in active" else null
+    }
+
     fun tryAutoSignIn(context: Context, force: Boolean = false) {
         val enabled = ConfigManager.isAutoSignInEnabled(context)
         XposedCompat.log("$TAG: trigger force=$force enabled=$enabled")
