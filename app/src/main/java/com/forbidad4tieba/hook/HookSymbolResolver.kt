@@ -391,7 +391,9 @@ internal object HookSymbolResolver {
         return HookSymbolStatusFormatter.formatHookPointStatusLines(
             symbols = symbols,
             aiPbAiEmojiCreationViewClass = AI_PB_AI_EMOJI_CREATION_VIEW_CLASS,
-            aiPbAiEmojiCreationPageBrowserViewClass = AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS,
+            aiPbAiEmojiCreationPageBrowserViewClass =
+                symbols?.aiPbPageBrowserAiEmojiCreationViewClass
+                    ?: AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS,
             msgTabViewModelClass = MSG_TAB_VIEW_MODEL_CLASS,
             msgTabContainerViewClass = MSG_TAB_CONTAINER_VIEW_CLASS,
         )
@@ -4134,7 +4136,10 @@ internal object HookSymbolResolver {
     ): Method? {
         return try {
             val methodName = symbols.aiPbPageBrowserAiEmojiCreationBindMethod?.takeIf { it.isNotBlank() } ?: return null
-            val viewClass = safeFindClass(AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS, cl) ?: return null
+            val viewClassName = symbols.aiPbPageBrowserAiEmojiCreationViewClass
+                ?.takeIf { it.isNotBlank() }
+                ?: return null
+            val viewClass = safeFindClass(viewClassName, cl) ?: return null
             viewClass.declaredMethods.singleOrNull { method ->
                 method.name == methodName && AiComponentSymbolScanner.isPbPageBrowserAiEmojiCreationBindMethod(method)
             }
@@ -4767,6 +4772,7 @@ internal object HookSymbolResolver {
         var aiPbNewInputContainerInitSpriteMemeMethod: String? = null
         var aiPbNewInputContainerInitAiWriteMethod: String? = null
         var aiPbAiEmojiCreationViewBindMethod: String? = null
+        var aiPbPageBrowserAiEmojiCreationViewClass: String? = null
         var aiPbPageBrowserAiEmojiCreationBindMethod: String? = null
         var aiImageViewerJumpButtonOwnerClass: String? = null
         var aiImageViewerJumpButtonInitMethod: String? = null
@@ -4938,7 +4944,7 @@ internal object HookSymbolResolver {
             scanErrors,
             ForumPageAdScanSymbols(),
         ) {
-            ForumPageAdSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
+            ForumPageAdSymbolScanner.scan(context, candidatesWithWhitelist, cl, logger)
         }
 
         val enterForumWebScan = runScanStep(
@@ -5329,6 +5335,7 @@ internal object HookSymbolResolver {
         aiPbNewInputContainerInitSpriteMemeMethod = aiComponentScan.pbInitSpriteMemeMethod
         aiPbNewInputContainerInitAiWriteMethod = aiComponentScan.pbInitAiWriteMethod
         aiPbAiEmojiCreationViewBindMethod = aiComponentScan.pbAiEmojiCreationViewBindMethod
+        aiPbPageBrowserAiEmojiCreationViewClass = aiComponentScan.pbPageBrowserAiEmojiCreationViewClass
         aiPbPageBrowserAiEmojiCreationBindMethod = aiComponentScan.pbPageBrowserAiEmojiCreationBindMethod
         aiImageViewerJumpButtonOwnerClass = aiComponentScan.imageViewerJumpButtonOwnerClass
         aiImageViewerJumpButtonInitMethod = aiComponentScan.imageViewerJumpButtonInitMethod
@@ -5643,6 +5650,7 @@ internal object HookSymbolResolver {
             this.aiPbNewInputContainerInitSpriteMemeMethod = aiPbNewInputContainerInitSpriteMemeMethod
             this.aiPbNewInputContainerInitAiWriteMethod = aiPbNewInputContainerInitAiWriteMethod
             this.aiPbAiEmojiCreationViewBindMethod = aiPbAiEmojiCreationViewBindMethod
+            this.aiPbPageBrowserAiEmojiCreationViewClass = aiPbPageBrowserAiEmojiCreationViewClass
             this.aiPbPageBrowserAiEmojiCreationBindMethod = aiPbPageBrowserAiEmojiCreationBindMethod
             this.aiImageViewerJumpButtonOwnerClass = aiImageViewerJumpButtonOwnerClass
             this.aiImageViewerJumpButtonInitMethod = aiImageViewerJumpButtonInitMethod

@@ -739,6 +739,9 @@ internal object HookFeatureStatusDeriver {
         if (symbols.aiPbAiEmojiCreationViewBindMethod.isNullOrBlank()) {
             aiComponentOptional.add("aiPbAiEmojiCreationViewBindMethod")
         }
+        if (symbols.aiPbPageBrowserAiEmojiCreationViewClass.isNullOrBlank()) {
+            aiComponentOptional.add("aiPbPageBrowserAiEmojiCreationViewClass")
+        }
         if (symbols.aiPbPageBrowserAiEmojiCreationBindMethod.isNullOrBlank()) {
             aiComponentOptional.add("aiPbPageBrowserAiEmojiCreationBindMethod")
         }
@@ -953,7 +956,9 @@ internal object HookFeatureStatusDeriver {
         HookSymbolStatusFormatter.formatHookPointStatusLines(
             symbols = symbols,
             aiPbAiEmojiCreationViewClass = AI_PB_AI_EMOJI_CREATION_VIEW_CLASS,
-            aiPbAiEmojiCreationPageBrowserViewClass = AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS,
+            aiPbAiEmojiCreationPageBrowserViewClass =
+                symbols.aiPbPageBrowserAiEmojiCreationViewClass
+                    ?: AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS,
             msgTabViewModelClass = StableTiebaHookPoints.MSG_CENTER_CONTAINER_VIEW_MODEL_CLASS,
             msgTabContainerViewClass = MSG_TAB_CONTAINER_VIEW_CLASS,
         ).forEach { line ->

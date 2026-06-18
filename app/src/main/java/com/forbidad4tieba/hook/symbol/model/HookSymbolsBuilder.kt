@@ -297,6 +297,7 @@ internal class HookSymbolsBuilder {
     var aiPbNewInputContainerInitSpriteMemeMethod: String? = null
     var aiPbNewInputContainerInitAiWriteMethod: String? = null
     var aiPbAiEmojiCreationViewBindMethod: String? = null
+    var aiPbPageBrowserAiEmojiCreationViewClass: String? = null
     var aiPbPageBrowserAiEmojiCreationBindMethod: String? = null
     var aiImageViewerJumpButtonOwnerClass: String? = null
     var aiImageViewerJumpButtonInitMethod: String? = null
@@ -716,6 +717,7 @@ internal class HookSymbolsBuilder {
                 ),
                 emojiCreation = AiEmojiCreationSymbolsGroup(
                     aiPbAiEmojiCreationViewBindMethod,
+                    aiPbPageBrowserAiEmojiCreationViewClass,
                     aiPbPageBrowserAiEmojiCreationBindMethod,
                 ),
                 imageViewerJumpButton = AiImageViewerJumpButtonSymbolsGroup(

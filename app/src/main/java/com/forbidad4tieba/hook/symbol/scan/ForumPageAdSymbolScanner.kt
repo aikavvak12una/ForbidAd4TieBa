@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.symbol.scan
 
+import android.content.Context
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.model.ForumPageAdScanSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
@@ -47,7 +48,12 @@ internal object ForumPageAdSymbolScanner {
         FieldSpec("frsMaskPopInfo") { !it.type.isPrimitive },
     )
 
-    fun scan(candidates: List<String>, cl: ClassLoader, logger: ScanLogger?): ForumPageAdScanSymbols {
+    fun scan(
+        context: Context,
+        candidates: List<String>,
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): ForumPageAdScanSymbols {
         val classNames = (preferredClassNames() + candidates).distinct()
         val preferredDataResClass = safeFindClass(DATA_RES_CLASS, cl)
 
@@ -72,7 +78,8 @@ internal object ForumPageAdSymbolScanner {
             resolveDialogPath(cl, protoTypes.businessPromotClass, logger)
         }
         val floating = step("gameFloatingBar", logger, null as FloatingBarPath?) {
-            resolveGameFloatingBarPath(cl, logger)
+            resolveGameFloatingBarPath(classNames, cl, logger)
+                ?: resolveGameFloatingBarPathFromDex(context, cl, logger)
         }
         val businessBiz = step("businessPromotBiz", logger, null as BusinessPromotBizPath?) {
             resolveBusinessPromotBizPath(cl, logger)
@@ -435,36 +442,181 @@ internal object ForumPageAdSymbolScanner {
         return DialogPath(controllerClass, businessPromotShow, animationShow)
     }
 
-    private fun resolveGameFloatingBarPath(cl: ClassLoader, logger: ScanLogger?): FloatingBarPath? {
-        val controllerClass = safeFindClass(GAME_FLOATING_BAR_CONTROLLER_CLASS, cl) ?: run {
-            log(logger, "forumPageAd.floatingBar: class not found: $GAME_FLOATING_BAR_CONTROLLER_CLASS")
-            return null
-        }
+    private fun resolveGameFloatingBarPath(
+        candidates: List<String>,
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): FloatingBarPath? {
         val floatingBarClass = safeFindClass(TB_FLOATING_BAR_CLASS, cl)
         if (floatingBarClass == null) {
             log(logger, "forumPageAd.floatingBar: TbFloatingBar class not found: $TB_FLOATING_BAR_CLASS")
         }
-        val field = floatingBarClass?.let { barClass ->
-            declaredFields("floatingBar.${controllerClass.name}", controllerClass, logger)?.singleOrNull { field ->
-                barClass.isAssignableFrom(field.type)
+
+        val matches = ArrayList<FloatingBarCandidate>()
+        var skippedByReflection = 0
+        var firstReflectionError: String? = null
+        for (className in floatingBarControllerCandidateNames(candidates)) {
+            try {
+                val controllerClass = safeFindClass(className, cl) ?: continue
+                scoreFloatingBarController(controllerClass, floatingBarClass, logger)?.let(matches::add)
+            } catch (t: Throwable) {
+                skippedByReflection++
+                if (firstReflectionError == null) {
+                    firstReflectionError = describeThrowable(t)
+                }
             }
         }
-        val showMethod = resolvePreferredNoArgVoidMethod(
-            controllerClass,
-            preferredName = "k2",
-            semanticSignal = "showFloatingBar",
-            logger = logger,
+        logReflectionSkips(logger, "forumPageAd.floatingBar", skippedByReflection, firstReflectionError)
+
+        val ranked = matches.sortedWith(
+            compareByDescending<FloatingBarCandidate> { it.score }
+                .thenByDescending { if (it.controllerClass.name == GAME_FLOATING_BAR_CONTROLLER_CLASS) 1 else 0 }
+                .thenBy { it.controllerClass.name },
         )
-        if (showMethod == null) {
-            log(logger, "forumPageAd.floatingBar: no validated show method found")
+        val best = ranked.firstOrNull() ?: run {
+            log(logger, "forumPageAd.floatingBar: no validated controller/show method found")
+            return null
+        }
+        val second = ranked.getOrNull(1)
+        if (
+            second != null &&
+            best.controllerClass.name != GAME_FLOATING_BAR_CONTROLLER_CLASS &&
+            best.score - second.score < 24
+        ) {
+            log(
+                logger,
+                "forumPageAd.floatingBar: ambiguous controller candidates: " +
+                    "best=${best.controllerClass.name}.${best.showMethod.name}:${best.score}, " +
+                    "second=${second.controllerClass.name}.${second.showMethod.name}:${second.score}",
+            )
             return null
         }
         log(
             logger,
-            "forumPageAd.floatingBar: ${controllerClass.name} show=${showMethod.name} " +
+            "forumPageAd.floatingBar: ${best.controllerClass.name} show=${best.showMethod.name} " +
+                "field=${best.floatingBarField?.name ?: "-"} score=${best.score}",
+        )
+        return FloatingBarPath(best.controllerClass, best.showMethod, best.floatingBarField)
+    }
+
+    private fun resolveGameFloatingBarPathFromDex(
+        context: Context,
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): FloatingBarPath? {
+        val sourcePaths = appSourcePaths(context)
+        if (sourcePaths.isEmpty()) {
+            log(logger, "forumPageAd.floatingBarDex: no app source paths")
+            return null
+        }
+        val match = DexShareIconScanner.scanGameFloatingBar(sourcePaths, logger) ?: return null
+        val controllerClass = safeFindClass(match.controllerClassName, cl) ?: run {
+            log(logger, "forumPageAd.floatingBarDex: class not loadable: ${match.controllerClassName}")
+            return null
+        }
+        val showMethod = declaredMethods("floatingBarDex.${controllerClass.name}", controllerClass, logger)
+            ?.singleOrNull { method ->
+                method.name == match.showMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.isEmpty()
+            } ?: run {
+            log(
+                logger,
+                "forumPageAd.floatingBarDex: show method reflection mismatch: " +
+                    "${match.controllerClassName}.${match.showMethodName}",
+            )
+            return null
+        }
+        val field = match.floatingBarFieldName?.let { fieldName ->
+            declaredFields("floatingBarDex.${controllerClass.name}", controllerClass, logger)
+                ?.singleOrNull { field ->
+                    field.name == fieldName &&
+                        (
+                            field.type.name == TB_FLOATING_BAR_CLASS ||
+                                field.type.name.endsWith(".TbFloatingBar")
+                            )
+                }
+        }
+        log(
+            logger,
+            "forumPageAd.floatingBarDex verified: ${controllerClass.name}.${showMethod.name} " +
                 "field=${field?.name ?: "-"}",
         )
         return FloatingBarPath(controllerClass, showMethod, field)
+    }
+
+    private fun floatingBarControllerCandidateNames(candidates: List<String>): List<String> {
+        return (listOf(GAME_FLOATING_BAR_CONTROLLER_CLASS) + candidates)
+            .asSequence()
+            .distinct()
+            .filter { name ->
+                name == GAME_FLOATING_BAR_CONTROLLER_CLASS ||
+                    name.contains("FloatingBar") ||
+                    name.startsWith("com.baidu.tieba.forum.controller.") ||
+                    name.startsWith("com.baidu.tieba.forum.")
+            }
+            .toList()
+    }
+
+    private fun scoreFloatingBarController(
+        controllerClass: Class<*>,
+        floatingBarClass: Class<*>?,
+        logger: ScanLogger?,
+    ): FloatingBarCandidate? {
+        if (controllerClass.isInterface || Modifier.isAbstract(controllerClass.modifiers)) return null
+
+        val showMethod = resolveFloatingBarShowMethod(controllerClass, logger) ?: return null
+        val fields = declaredFields("floatingBar.${controllerClass.name}", controllerClass, logger).orEmpty()
+        val field = floatingBarClass?.let { barClass ->
+            fields.singleOrNull { field -> barClass.isAssignableFrom(field.type) }
+        } ?: fields.singleOrNull { field ->
+            field.type.name == TB_FLOATING_BAR_CLASS ||
+                field.type.name.endsWith(".TbFloatingBar") ||
+                field.type.name.endsWith(".feed.component.view.TbFloatingBar")
+        }
+        val constructors = declaredConstructors("floatingBar.${controllerClass.name}", controllerClass, logger).orEmpty()
+
+        var score = 120
+        if (controllerClass.name == GAME_FLOATING_BAR_CONTROLLER_CLASS) score += 90
+        if (controllerClass.name.contains("GameFloatingBarController")) score += 60
+        if (controllerClass.name.startsWith("com.baidu.tieba.forum.controller.")) score += 32
+        if (controllerClass.name.contains("FloatingBar")) score += 24
+        if (hasAnyKotlinMetadataSignal(controllerClass, listOf("GameFloatingBarController"))) score += 36
+        if (hasAnyKotlinMetadataSignal(controllerClass, listOf("showFloatingBar"))) score += 44
+        if (hasAnyKotlinMetadataSignal(controllerClass, listOf("floatingBar", "TbFloatingBar"))) score += 24
+        if (field != null) score += 42
+        if (constructors.any { ctor ->
+                ctor.parameterTypes.any { type ->
+                    type.name == "androidx.fragment.app.FragmentActivity" ||
+                        type.name == "android.app.Activity" ||
+                        type.name.endsWith(".BaseFragmentActivity")
+                }
+            }
+        ) {
+            score += 28
+        }
+        score -= fields.size / 4
+        score -= declaredMethods("floatingBar.${controllerClass.name}", controllerClass, logger).orEmpty().size / 10
+        return if (score >= 190) {
+            FloatingBarCandidate(controllerClass, showMethod, field, score)
+        } else {
+            null
+        }
+    }
+
+    private fun resolveFloatingBarShowMethod(clazz: Class<*>, logger: ScanLogger?): Method? {
+        val methods = declaredMethods("floatingBarShow.${clazz.name}", clazz, logger)
+            ?.filter { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.isEmpty()
+            } ?: return null
+
+        methods.singleOrNull { it.name == "showFloatingBar" }?.let { return it }
+        if (!hasAnyKotlinMetadataSignal(clazz, listOf("showFloatingBar"))) return null
+        methods.singleOrNull { it.name == "k2" }?.let { return it }
+        return null
     }
 
     private fun resolveBusinessPromotBizPath(cl: ClassLoader, logger: ScanLogger?): BusinessPromotBizPath? {
@@ -623,19 +775,48 @@ internal object ForumPageAdSymbolScanner {
     }
 
     private fun isFloatingBarDataClass(clazz: Class<*>, logger: ScanLogger?): Boolean {
-        return declaredConstructors("floatingBarData.${clazz.name}", clazz, logger)?.any { constructor ->
+        val constructors = declaredConstructors("floatingBarData.${clazz.name}", clazz, logger) ?: return false
+        val legacyConstructor = constructors.any { constructor ->
             val params = constructor.parameterTypes
             params.size == 8 &&
                 params.count { isListType(it) } >= 3 &&
                 params.any { it == String::class.java } &&
                 params.any { it == Integer.TYPE }
-        } == true
+        }
+        if (legacyConstructor) return true
+
+        val fields = declaredFields("floatingBarData.${clazz.name}", clazz, logger).orEmpty()
+        val metadataScore = listOf(
+            "TbFloatingBarData",
+            "title",
+            "desc",
+            "subDesc",
+            "button",
+            "schema",
+            "actionType",
+            "logParams",
+        ).count { signal -> hasKotlinMetadataSignal(clazz, signal) }
+        val structuralConstructor = constructors.any { constructor ->
+            val params = constructor.parameterTypes
+            params.size in 7..10 &&
+                params.count { isListType(it) } >= 3 &&
+                params.any { it == String::class.java } &&
+                params.any { isIntType(it) }
+        }
+        val structuralFields =
+            fields.count { isListType(it.type) } >= 3 &&
+                fields.any { it.type == String::class.java } &&
+                fields.any { isIntType(it.type) }
+        return metadataScore >= 5 || (metadataScore >= 3 && (structuralConstructor || structuralFields))
     }
 
     private fun hasKotlinMetadataSignal(clazz: Class<*>, signal: String): Boolean {
         val metadata = clazz.getAnnotation(Metadata::class.java) ?: return false
         return metadata.data1.any { it.contains(signal) } || metadata.data2.any { it.contains(signal) }
     }
+
+    private fun hasAnyKotlinMetadataSignal(clazz: Class<*>, signals: List<String>): Boolean =
+        signals.any { signal -> hasKotlinMetadataSignal(clazz, signal) }
 
     private fun preferredClassNames(): List<String> = listOf(
         RESPONSE_DATA_CLASS,
@@ -679,6 +860,15 @@ internal object ForumPageAdSymbolScanner {
 
     private fun isIntType(type: Class<*>): Boolean =
         ScanReflection.isIntType(type)
+
+    private fun appSourcePaths(context: Context): List<String> {
+        return buildList {
+            context.applicationInfo?.sourceDir?.takeIf { it.isNotBlank() }?.let(::add)
+            context.applicationInfo?.splitSourceDirs?.forEach { path ->
+                if (!path.isNullOrBlank()) add(path)
+            }
+        }.distinct()
+    }
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)
@@ -758,6 +948,13 @@ internal object ForumPageAdSymbolScanner {
         val controllerClass: Class<*>,
         val showMethod: Method?,
         val floatingBarField: Field?,
+    )
+
+    private data class FloatingBarCandidate(
+        val controllerClass: Class<*>,
+        val showMethod: Method,
+        val floatingBarField: Field?,
+        val score: Int,
     )
 
     private data class BusinessPromotBizPath(

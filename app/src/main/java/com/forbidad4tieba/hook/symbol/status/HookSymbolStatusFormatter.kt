@@ -621,6 +621,8 @@ internal object HookSymbolStatusFormatter {
             "AiComponentDisableHook.PbPageBrowserAiEmojiCreation",
             "$aiPbAiEmojiCreationPageBrowserViewClass.${symbols.aiPbPageBrowserAiEmojiCreationBindMethod}",
             listOf(
+                "aiPbPageBrowserAiEmojiCreationViewClass" to
+                    has(symbols.aiPbPageBrowserAiEmojiCreationViewClass),
                 "aiPbPageBrowserAiEmojiCreationBindMethod" to
                     has(symbols.aiPbPageBrowserAiEmojiCreationBindMethod),
             ),

@@ -254,6 +254,7 @@ internal data class PerformanceSymbols(
     val aiPbNewInputContainerInitSpriteMemeMethod: String?,
     val aiPbNewInputContainerInitAiWriteMethod: String?,
     val aiPbAiEmojiCreationViewBindMethod: String?,
+    val aiPbPageBrowserAiEmojiCreationViewClass: String?,
     val aiPbPageBrowserAiEmojiCreationBindMethod: String?,
     val aiImageViewerJumpButtonOwnerClass: String?,
     val aiImageViewerJumpButtonInitMethod: String?,
@@ -283,6 +284,7 @@ internal data class PerformanceSymbols(
         .putNullable("aiPbNewInputContainerInitSpriteMemeMethod", aiPbNewInputContainerInitSpriteMemeMethod)
         .putNullable("aiPbNewInputContainerInitAiWriteMethod", aiPbNewInputContainerInitAiWriteMethod)
         .putNullable("aiPbAiEmojiCreationViewBindMethod", aiPbAiEmojiCreationViewBindMethod)
+        .putNullable("aiPbPageBrowserAiEmojiCreationViewClass", aiPbPageBrowserAiEmojiCreationViewClass)
         .putNullable("aiPbPageBrowserAiEmojiCreationBindMethod", aiPbPageBrowserAiEmojiCreationBindMethod)
         .putNullable("aiImageViewerJumpButtonOwnerClass", aiImageViewerJumpButtonOwnerClass)
         .putNullable("aiImageViewerJumpButtonInitMethod", aiImageViewerJumpButtonInitMethod)
@@ -367,6 +369,7 @@ internal fun HookSymbols.toFeatureSymbols(): HookFeatureSymbols {
             aiPbNewInputContainerInitSpriteMemeMethod = aiPbNewInputContainerInitSpriteMemeMethod,
             aiPbNewInputContainerInitAiWriteMethod = aiPbNewInputContainerInitAiWriteMethod,
             aiPbAiEmojiCreationViewBindMethod = aiPbAiEmojiCreationViewBindMethod,
+            aiPbPageBrowserAiEmojiCreationViewClass = aiPbPageBrowserAiEmojiCreationViewClass,
             aiPbPageBrowserAiEmojiCreationBindMethod = aiPbPageBrowserAiEmojiCreationBindMethod,
             aiImageViewerJumpButtonOwnerClass = aiImageViewerJumpButtonOwnerClass,
             aiImageViewerJumpButtonInitMethod = aiImageViewerJumpButtonInitMethod,

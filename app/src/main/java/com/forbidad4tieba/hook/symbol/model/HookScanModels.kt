@@ -310,6 +310,7 @@ internal data class AiComponentScanSymbols(
     val pbInitSpriteMemeMethod: String? = null,
     val pbInitAiWriteMethod: String? = null,
     val pbAiEmojiCreationViewBindMethod: String? = null,
+    val pbPageBrowserAiEmojiCreationViewClass: String? = null,
     val pbPageBrowserAiEmojiCreationBindMethod: String? = null,
     val imageViewerJumpButtonOwnerClass: String? = null,
     val imageViewerJumpButtonInitMethod: String? = null,
@@ -427,6 +428,21 @@ internal data class DexPbAdBidScanSymbols(
 internal data class DexPbAdBidRawScan(
     val modelMatches: List<DexPbAdBidModelMatch> = emptyList(),
     val pageBrowserRequestDataMethodName: String? = null,
+)
+
+internal data class DexGameFloatingBarMatch(
+    val controllerClassName: String,
+    val showMethodName: String,
+    val floatingBarFieldName: String?,
+    val score: Int,
+    val evidence: String,
+)
+
+internal data class DexPbPageBrowserAiEmojiCreationMatch(
+    val viewClassName: String,
+    val bindMethodName: String,
+    val score: Int,
+    val evidence: String,
 )
 
 internal object DexEnterForumCapsuleMethodKind {

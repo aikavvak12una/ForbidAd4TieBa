@@ -57,10 +57,11 @@ internal object AiComponentSymbolScanner {
             logger,
             AiComponentScanSymbols(),
         ) {
-            scanPbAiEmojiCreationSymbols(cl, logger)
+            scanPbAiEmojiCreationSymbols(context, cl, candidateClassNames, logger)
         }
         val optionalScan = imageViewerJumpButtonScan.copy(
             pbAiEmojiCreationViewBindMethod = emojiCreationScan.pbAiEmojiCreationViewBindMethod,
+            pbPageBrowserAiEmojiCreationViewClass = emojiCreationScan.pbPageBrowserAiEmojiCreationViewClass,
             pbPageBrowserAiEmojiCreationBindMethod = emojiCreationScan.pbPageBrowserAiEmojiCreationBindMethod,
         )
         return scanSubStep("AiComponentDisableHook.Main", logger, optionalScan) {
@@ -283,19 +284,23 @@ internal object AiComponentSymbolScanner {
     }
 
     private fun scanPbAiEmojiCreationSymbols(
+        context: Context,
         cl: ClassLoader,
+        candidateClassNames: List<String>,
         logger: ScanLogger?,
     ): AiComponentScanSymbols {
         val viewBindMethod = scanPbAiEmojiCreationViewBindMethod(cl, logger)
-        val pageBrowserBindMethod = scanPbPageBrowserAiEmojiCreationBindMethod(cl, logger)
+        val pageBrowserPath = scanPbPageBrowserAiEmojiCreationBindMethod(context, cl, candidateClassNames, logger)
         log(
             logger,
             "aiComponent.pbAiEmojiCreation matched: " +
-                "bind=${viewBindMethod?.name ?: "-"}, pageBrowser=${pageBrowserBindMethod?.name ?: "-"}",
+                "bind=${viewBindMethod?.name ?: "-"}, " +
+                "pageBrowser=${pageBrowserPath?.viewClass?.name ?: "-"}.${pageBrowserPath?.bindMethod?.name ?: "-"}",
         )
         return AiComponentScanSymbols(
             pbAiEmojiCreationViewBindMethod = viewBindMethod?.name,
-            pbPageBrowserAiEmojiCreationBindMethod = pageBrowserBindMethod?.name,
+            pbPageBrowserAiEmojiCreationViewClass = pageBrowserPath?.viewClass?.name,
+            pbPageBrowserAiEmojiCreationBindMethod = pageBrowserPath?.bindMethod?.name,
         )
     }
 
@@ -322,25 +327,188 @@ internal object AiComponentSymbolScanner {
     }
 
     private fun scanPbPageBrowserAiEmojiCreationBindMethod(
+        context: Context,
         cl: ClassLoader,
+        candidateClassNames: List<String>,
         logger: ScanLogger?,
-    ): Method? {
+    ): PageBrowserAiEmojiCreationPath? {
         return try {
-            val viewClass = safeFindClass(AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS, cl) ?: run {
-                log(logger, "aiComponent.pbAiEmojiCreation: page browser view class not found")
-                return null
+            val matches = ArrayList<PageBrowserAiEmojiCreationCandidate>()
+            var skippedByReflection = 0
+            var firstReflectionError: String? = null
+            for (className in pageBrowserAiEmojiCreationViewCandidateNames(candidateClassNames)) {
+                try {
+                    val viewClass = safeFindClass(className, cl) ?: continue
+                    scorePageBrowserAiEmojiCreationView(viewClass, logger)?.let(matches::add)
+                } catch (t: Throwable) {
+                    skippedByReflection++
+                    if (firstReflectionError == null) {
+                        firstReflectionError = sanitizeScanStatusText(formatScanException(t))
+                    }
+                }
             }
-            val methods = declaredMethodsForScan("PbAiEmojiCreation.PageBrowserView", viewClass, logger) ?: return null
-            methods.singleOrNull { method ->
-                isPbPageBrowserAiEmojiCreationBindMethod(method)
-            } ?: run {
-                log(logger, "aiComponent.pbAiEmojiCreation: page browser bind method not found")
-                null
+            if (skippedByReflection > 0) {
+                log(
+                    logger,
+                    "aiComponent.pbAiEmojiCreation: page browser skipped classes by reflection=$skippedByReflection" +
+                        (firstReflectionError?.let { ", firstException=$it" } ?: ""),
+                )
             }
+
+            val ranked = matches.sortedWith(
+                compareByDescending<PageBrowserAiEmojiCreationCandidate> { it.score }
+                    .thenByDescending { if (it.viewClass.name == AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS) 1 else 0 }
+                    .thenBy { it.viewClass.name },
+            )
+            val best = ranked.firstOrNull() ?: run {
+                log(logger, "aiComponent.pbAiEmojiCreation: page browser view/bind method not found")
+                return scanPbPageBrowserAiEmojiCreationBindMethodFromDex(context, cl, logger)
+            }
+            val second = ranked.getOrNull(1)
+            if (
+                second != null &&
+                best.viewClass.name != AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS &&
+                best.score - second.score < 24
+            ) {
+                log(
+                    logger,
+                    "aiComponent.pbAiEmojiCreation: page browser view ambiguous: " +
+                        "best=${best.viewClass.name}.${best.bindMethod.name}:${best.score}, " +
+                        "second=${second.viewClass.name}.${second.bindMethod.name}:${second.score}",
+                )
+                return scanPbPageBrowserAiEmojiCreationBindMethodFromDex(context, cl, logger)
+            }
+            log(
+                logger,
+                "aiComponent.pbAiEmojiCreation: page browser matched " +
+                    "${best.viewClass.name}.${best.bindMethod.name} score=${best.score}",
+            )
+            PageBrowserAiEmojiCreationPath(best.viewClass, best.bindMethod)
         } catch (t: Throwable) {
             log(logger, "aiComponent.pbAiEmojiCreation: page browser bind error: ${formatScanException(t)}")
             null
         }
+    }
+
+    private fun scanPbPageBrowserAiEmojiCreationBindMethodFromDex(
+        context: Context,
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): PageBrowserAiEmojiCreationPath? {
+        val sourcePaths = appSourcePaths(context)
+        if (sourcePaths.isEmpty()) {
+            log(logger, "aiComponent.pbAiEmojiCreationDex: no app source paths")
+            return null
+        }
+        val match = DexShareIconScanner.scanPbPageBrowserAiEmojiCreation(sourcePaths, logger) ?: return null
+        val viewClass = safeFindClass(match.viewClassName, cl) ?: run {
+            log(logger, "aiComponent.pbAiEmojiCreationDex: page browser view not loadable: ${match.viewClassName}")
+            return null
+        }
+        val method = declaredMethodsForScan("PbAiEmojiCreation.PageBrowserDex.${viewClass.name}", viewClass, logger)
+            ?.singleOrNull { method ->
+                method.name == match.bindMethodName &&
+                    isPbPageBrowserAiEmojiCreationBindMethod(method)
+            } ?: run {
+            log(
+                logger,
+                "aiComponent.pbAiEmojiCreationDex: page browser bind reflection mismatch: " +
+                    "${match.viewClassName}.${match.bindMethodName}",
+            )
+            return null
+        }
+        log(
+            logger,
+            "aiComponent.pbAiEmojiCreationDex verified: ${viewClass.name}.${method.name}",
+        )
+        return PageBrowserAiEmojiCreationPath(viewClass, method)
+    }
+
+    private fun pageBrowserAiEmojiCreationViewCandidateNames(candidateClassNames: List<String>): List<String> {
+        return (listOf(AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS) + candidateClassNames)
+            .asSequence()
+            .distinct()
+            .filter { name ->
+                name == AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS ||
+                    (
+                        name.startsWith("com.baidu.tieba.pb.pagebrowser.") &&
+                            (
+                                name.contains(".meme.") ||
+                                    name.contains("AiEmoji") ||
+                                    name.contains("EmojiCreation") ||
+                                    name.contains("CommentFloor") ||
+                                    name.endsWith("View")
+                                )
+                        )
+            }
+            .toList()
+    }
+
+    private fun scorePageBrowserAiEmojiCreationView(
+        viewClass: Class<*>,
+        logger: ScanLogger?,
+    ): PageBrowserAiEmojiCreationCandidate? {
+        if (viewClass.isInterface || Modifier.isAbstract(viewClass.modifiers)) return null
+        if (!FrameLayout::class.java.isAssignableFrom(viewClass)) return null
+
+        val methods = declaredMethodsForScan("PbAiEmojiCreation.PageBrowserView.${viewClass.name}", viewClass, logger)
+            ?: return null
+        val bindCandidates = methods.mapNotNull { method ->
+            scorePageBrowserAiEmojiCreationBindMethod(viewClass, method)?.let { score -> method to score }
+        }.sortedWith(
+            compareByDescending<Pair<Method, Int>> { it.second }
+                .thenBy { it.first.name },
+        )
+        val bind = bindCandidates.firstOrNull() ?: return null
+        if (bindCandidates.getOrNull(1)?.let { bind.second - it.second < 20 } == true) return null
+
+        val fields = declaredFieldsForScan("PbAiEmojiCreation.PageBrowserView.${viewClass.name}", viewClass, logger)
+            .orEmpty()
+        val constructors =
+            declaredConstructorsForScan("PbAiEmojiCreation.PageBrowserView.${viewClass.name}", viewClass, logger)
+                .orEmpty()
+
+        var score = 120 + bind.second
+        if (viewClass.name == AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS) score += 90
+        if (viewClass.name.contains("CommentFloorAiEmojiCreationView")) score += 70
+        if (viewClass.name.contains(".meme.")) score += 20
+        if (hasKotlinMetadataSignal(viewClass, "CommentFloorAiEmojiCreationView")) score += 50
+        if (hasKotlinMetadataSignal(viewClass, "AiEmojiCreation")) score += 42
+        if (hasKotlinMetadataSignal(viewClass, "bindData")) score += 36
+        if (hasKotlinMetadataSignal(viewClass, "CommentFloorAiEmojiCreationUIState")) score += 32
+        if (fields.any { field ->
+                field.type.name.contains("CommentFloorAiEmojiCreationItemBinding") ||
+                    field.type.name.contains("PbAiEmojiCreationView")
+            }
+        ) {
+            score += 42
+        }
+        if (constructors.any { ctor ->
+                val params = ctor.parameterTypes
+                params.isNotEmpty() && Context::class.java.isAssignableFrom(params[0])
+            }
+        ) {
+            score += 16
+        }
+        score -= methods.size / 8
+        score -= fields.size / 4
+        return if (score >= 220) {
+            PageBrowserAiEmojiCreationCandidate(viewClass, bind.first, score)
+        } else {
+            null
+        }
+    }
+
+    private fun scorePageBrowserAiEmojiCreationBindMethod(viewClass: Class<*>, method: Method): Int? {
+        if (!isPbPageBrowserAiEmojiCreationBindMethod(method)) return null
+        val param = method.parameterTypes.firstOrNull() ?: return null
+        var score = 0
+        if (method.name == "bindData") score += 90
+        if (param.name.contains("CommentFloorAiEmojiCreationUIState")) score += 80
+        if (param.name.contains("AiEmojiCreation")) score += 40
+        if (hasKotlinMetadataSignal(viewClass, "bindData")) score += 28
+        if (hasKotlinMetadataSignal(viewClass, "uiState")) score += 16
+        return score.takeIf { it >= 40 }
     }
 
     private fun scanImageViewerJumpButtonSymbols(
@@ -656,6 +824,11 @@ internal object AiComponentSymbolScanner {
         return "$staticPrefix${method.name}($params):$ret"
     }
 
+    private fun hasKotlinMetadataSignal(clazz: Class<*>, signal: String): Boolean {
+        val metadata = clazz.getAnnotation(Metadata::class.java) ?: return false
+        return metadata.data1.any { it.contains(signal) } || metadata.data2.any { it.contains(signal) }
+    }
+
     private fun appSourcePaths(context: Context): List<String> {
         return buildList {
             context.applicationInfo?.sourceDir?.takeIf { it.isNotBlank() }?.let(::add)
@@ -678,6 +851,16 @@ internal object AiComponentSymbolScanner {
         }
     }
 
+    private fun declaredFieldsForScan(
+        label: String,
+        clazz: Class<*>,
+        logger: ScanLogger?,
+    ): List<Field>? {
+        return scanSubStep("AiComponentDisableHook.$label.Fields", logger, null) {
+            clazz.declaredFields.toList()
+        }
+    }
+
     private fun declaredConstructorsForScan(
         label: String,
         clazz: Class<*>,
@@ -697,4 +880,15 @@ internal object AiComponentSymbolScanner {
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)
     }
+
+    private data class PageBrowserAiEmojiCreationPath(
+        val viewClass: Class<*>,
+        val bindMethod: Method,
+    )
+
+    private data class PageBrowserAiEmojiCreationCandidate(
+        val viewClass: Class<*>,
+        val bindMethod: Method,
+        val score: Int,
+    )
 }
