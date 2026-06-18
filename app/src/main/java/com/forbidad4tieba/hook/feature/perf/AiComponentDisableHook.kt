@@ -70,7 +70,7 @@ object AiComponentDisableHook {
     }
 
     private fun installImageViewerJumpButtonHook(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         method: Method?,
     ): Boolean {
         if (method == null) return false
@@ -85,7 +85,7 @@ object AiComponentDisableHook {
     }
 
     private fun installPbAiEmojiCreationHooks(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         targets: AiComponentSymbols,
     ): Int {
         var installed = 0

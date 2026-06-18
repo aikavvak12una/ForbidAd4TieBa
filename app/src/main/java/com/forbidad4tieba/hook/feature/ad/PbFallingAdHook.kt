@@ -52,7 +52,7 @@ object PbFallingAdHook {
         }
     }
 
-    private fun hookInitMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
+    private fun hookInitMethod(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
@@ -61,7 +61,7 @@ object PbFallingAdHook {
         XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
     }
 
-    private fun hookShowMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
+    private fun hookShowMethod(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
@@ -70,7 +70,7 @@ object PbFallingAdHook {
         XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
     }
 
-    private fun hookClearMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
+    private fun hookClearMethod(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, method: Method) {
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)

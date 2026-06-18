@@ -34,8 +34,11 @@ import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 
 object HomeNativeGlassHook {
@@ -127,13 +130,9 @@ object HomeNativeGlassHook {
         metadataCheckIntervalMs = BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS,
     )
     private val backgroundDecodeKeys = Collections.synchronizedSet(mutableSetOf<String>())
-    private val backgroundDecodeExecutor by lazy {
-        Executors.newSingleThreadExecutor { runnable ->
-            Thread(runnable, "tbhook-glass-bg-decode").apply {
-                isDaemon = true
-            }
-        }
-    }
+    private val backgroundDecodeExecutorLock = Any()
+    private val activeBackgroundDecodeTasks = AtomicInteger(0)
+    private var backgroundDecodeExecutor: ExecutorService? = null
     @Volatile private var runtimeTargets: RuntimeTargets? = null
     @Volatile private var pbCommentDynamicTintState: PbCommentDynamicTintState? = null
     @Volatile private var pbSortSwitchBackgroundPaintField: Field? = null
@@ -225,6 +224,85 @@ object HomeNativeGlassHook {
             XposedCompat.log("$TAG install FAILED: ${t.message}")
             XposedCompat.log(t)
         }
+    }
+
+    fun hotReloadBusyReason(): String? {
+        if (activeBackgroundDecodeTasks.get() > 0) return "home native glass background decode active"
+        return null
+    }
+
+    fun prepareForHotReload(): Boolean {
+        HomeNativeGlassHostDarkModeBridge.removeDarkModeChangeListener(::onHostDarkModeChanged)
+        clearRuntimeViewStateForHotReload()
+        val executor = synchronized(backgroundDecodeExecutorLock) {
+            backgroundDecodeExecutor.also { backgroundDecodeExecutor = null }
+        } ?: return true
+        executor.shutdownNow()
+        return try {
+            executor.awaitTermination(300L, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+    }
+
+    private fun clearRuntimeViewStateForHotReload() {
+        homeRecyclerViews.clear()
+        glassBackgroundViews.clear()
+        scrollInvalidationInstalled.clear()
+        frameInvalidationInstalled.clear()
+        homeRecyclerChildAttachRefreshInstalled.clear()
+        pageStyleReapplyScheduled.clear()
+        pbCommentActivityApplyScheduled.clear()
+        pbCommentSurfaceAttachRefreshInstalled.clear()
+        pbCommentSurfaceApplyScheduled.clear()
+        pbCommentItemFrameAttachRefreshInstalled.clear()
+        pbCommentItemFrameApplyScheduled.clear()
+        pbActivityByContext.clear()
+        pbActivityContentHosts.clear()
+        pbActivityTypes.clear()
+        pbCommentListItemApplyScheduled.clear()
+        pbCommentBackgroundHostStates.clear()
+        pbCommentBackgroundWriteRoles.clear()
+        pbSubPbLayoutAttachRefreshInstalled.clear()
+        pbSubPbLayoutApplyScheduled.clear()
+        pbSubPbLayoutCardStates.clear()
+        pbSubPbLayoutPaddingStates.clear()
+        subPbReplyItemApplyScheduled.clear()
+        subPbInputBarApplyScheduled.clear()
+        subPbNavigationBarApplyScheduled.clear()
+        pbReplyBarInputApplyScheduled.clear()
+        pbReplyBarGestureBridgeViews.clear()
+        pbReplyTitleDynamicTintScheduled.clear()
+        pbDialogRoundLayoutDynamicTintScheduled.clear()
+        shareDialogDynamicTintTargets.clear()
+        pbSortSwitchOriginalBackgroundColors.clear()
+        pbSortSwitchTintStates.clear()
+        pbEnterForumCapsuleOriginalStates.clear()
+        homeTopChromeAttachRefreshInstalled.clear()
+        homeTopChromeRefreshScheduled.clear()
+        homeBottomTabAttachRefreshInstalled.clear()
+        homeBottomTabRefreshScheduled.clear()
+        topChromeTabTypes.clear()
+        homeSearchBoxes.clear()
+        homeSearchBoxAttachRefreshInstalled.clear()
+        homeSearchBoxBootstrapScheduled.clear()
+        homeCardComponentViews.clear()
+        cardComponentAttachRefreshInstalled.clear()
+        cardComponentBootstrapScheduled.clear()
+        homeFeedCardGlassTargets.clear()
+        homeFeedCardStyleApplyScheduled.clear()
+        homeFeedCardStyleStates.clear()
+        chromeGlassOriginalStates.clear()
+        imageContainerRadiusStates.clear()
+        backgroundDecodeKeys.clear()
+        recyclerViewClass = null
+        runtimeTargets = null
+        pbCommentDynamicTintState = null
+        pbSortSwitchBackgroundPaintField = null
+        pbSortSwitchSlidePathField = null
+        pbEnterForumCapsuleViewField = null
+        pbEnterForumCapsuleTitleField = null
     }
 
     private fun installHostSkinTypeChangeHooks(cl: ClassLoader): Int {
@@ -5590,6 +5668,34 @@ object HomeNativeGlassHook {
         return CenterCropBitmapDrawable(bitmap)
     }
 
+    private fun executeBackgroundDecode(block: () -> Unit) {
+        activeBackgroundDecodeTasks.incrementAndGet()
+        try {
+            backgroundDecodeExecutor().execute {
+                try {
+                    block()
+                } finally {
+                    activeBackgroundDecodeTasks.decrementAndGet()
+                }
+            }
+        } catch (t: Throwable) {
+            activeBackgroundDecodeTasks.decrementAndGet()
+            throw t
+        }
+    }
+
+    private fun backgroundDecodeExecutor(): ExecutorService {
+        return synchronized(backgroundDecodeExecutorLock) {
+            val current = backgroundDecodeExecutor
+            if (current != null && !current.isShutdown) return current
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "tbhook-glass-bg-decode").apply {
+                    isDaemon = true
+                }
+            }.also { backgroundDecodeExecutor = it }
+        }
+    }
+
     private fun prewarmBackgroundCacheIfNeeded() {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         val style = currentHomeNativeGlassRuntimeStyle()
@@ -5605,7 +5711,7 @@ object HomeNativeGlassHook {
         if (findCachedBackgroundEntry(request) != null) return
         val key = "prewarm|" + request.cacheKey
         if (!backgroundDecodeKeys.add(key)) return
-        backgroundDecodeExecutor.execute {
+        executeBackgroundDecode {
             try {
                 if (
                     isBackgroundDecodeRequestCurrent(request) &&
@@ -5635,7 +5741,7 @@ object HomeNativeGlassHook {
         val key = request.cacheKey
         if (!backgroundDecodeKeys.add(key)) return
         val anchorRef = WeakReference(anchor)
-        backgroundDecodeExecutor.execute {
+        executeBackgroundDecode {
             try {
                 if (
                     isBackgroundDecodeRequestCurrent(request) &&

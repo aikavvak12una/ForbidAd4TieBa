@@ -6,7 +6,7 @@ import android.view.ViewTreeObserver
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ViewExt
-import io.github.libxposed.api.XposedModule
+import com.forbidad4tieba.hook.core.Api102ModuleFacade
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
@@ -25,7 +25,7 @@ object PbBottomEnterBarHook {
         }
     }
 
-    private fun installBottomEnterBarHook(mod: XposedModule, cl: ClassLoader): Int {
+    private fun installBottomEnterBarHook(mod: Api102ModuleFacade, cl: ClassLoader): Int {
         try {
             val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_BOTTOM_ENTER_BAR_VIEW_CLASS, cl)
             if (clazz == null) {
@@ -75,7 +75,7 @@ object PbBottomEnterBarHook {
             (method.name == "onChangeSkinType" && params.isEmpty())
     }
 
-    private fun installHotTopicGuideHook(mod: XposedModule, cl: ClassLoader): Int {
+    private fun installHotTopicGuideHook(mod: Api102ModuleFacade, cl: ClassLoader): Int {
         try {
             val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS, cl)
             if (clazz == null) {
@@ -117,7 +117,7 @@ object PbBottomEnterBarHook {
         }
     }
 
-    private fun installPbEnterFrsAnimationTipHook(mod: XposedModule, cl: ClassLoader): Int {
+    private fun installPbEnterFrsAnimationTipHook(mod: Api102ModuleFacade, cl: ClassLoader): Int {
         try {
             val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.TB_ANIMATION_TIP_VIEW_CLASS, cl)
             if (clazz == null) {

@@ -81,7 +81,7 @@ object BottomTabTopLineHook {
     }
 
     private fun hookConstructors(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         clazz: Class<*>,
         after: (Any?) -> Unit,
     ): Int {
@@ -99,7 +99,7 @@ object BottomTabTopLineHook {
     }
 
     private fun hookBooleanMethod(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         clazz: Class<*>,
         methodName: String,
         after: (Any?) -> Unit,
@@ -119,7 +119,7 @@ object BottomTabTopLineHook {
     }
 
     private fun hookIntMethod(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         clazz: Class<*>,
         methodName: String,
         after: (Any?) -> Unit,
@@ -139,7 +139,7 @@ object BottomTabTopLineHook {
     }
 
     private fun hookSkinManagerBackgroundMethods(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         skinManagerClass: Class<*>?,
     ): Int {
         if (skinManagerClass == null) {
@@ -177,7 +177,7 @@ object BottomTabTopLineHook {
     }
 
     private fun hookSkinBackgroundMethod(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         clazz: Class<*>,
         methodName: String,
         vararg extraParameterTypes: Class<*>,

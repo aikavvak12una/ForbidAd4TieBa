@@ -40,6 +40,7 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import com.forbidad4tieba.hook.HookSymbolResolver
+import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import com.forbidad4tieba.hook.config.ConfigManager
@@ -330,12 +331,14 @@ object SettingsMenuHook {
             val groups = SettingsMenuGroupBuilder.build(
                 restrictedFeaturesUnlocked = restrictedFeaturesUnlocked,
                 actions = SettingsMenuGroupActions(
-                    onAdBlock = { items -> showAdBlockDialog(context, prefs, items) },
+                    onAdBlock = { items -> showAdBlockDialog(context, prefs, items, featureStatusMap) },
                     onCustomPostFilter = { items -> showCustomPostFilterDialog(context, prefs, items) },
                     onCustomPostModelScore = { showCustomPostModelScoreDialog(context, prefs) },
                     onCustomPostFilterKeyword = { showCustomPostFilterKeywordDialog(context, prefs) },
                     onPbLikeAutoReply = { showPbLikeAutoReplyDialog(context, prefs) },
-                    onPerformanceOptimization = { groups -> showPerformanceOptimizationDialog(context, prefs, groups) },
+                    onPerformanceOptimization = { groups ->
+                        showPerformanceOptimizationDialog(context, prefs, groups, featureStatusMap)
+                    },
                     onAutoSignIn = { AutoSignInManager.tryAutoSignIn(context, force = true) },
                     onReplyVisibilityProbe = { showReplyVisibilityProbeDialog(context, prefs) },
                     onHomeTopTab = { showHomeTopTabDialog(context, prefs) },
@@ -375,13 +378,8 @@ object SettingsMenuHook {
 
                 group.items.forEach { item ->
                     val support = supportOf(item)
-                    val finalLabel = when {
-                        support.unknown -> UiText.Settings.withScanUnknownSuffix(item.label)
-                        !support.supported -> UiText.Settings.withUnsupportedSuffix(item.label)
-                        support.partial -> UiText.Settings.withPartialSuffix(item.label)
-                        else -> item.label
-                    }
-                    val finalDesc = SettingsSwitchSupportResolver.mergeDescription(item.description, support.note)
+                    val finalLabel = labelWithScanSupport(item.label, support)
+                    val finalDesc = descriptionWithScanSupport(item.description, support)
 
                     val rowView = createSwitchRow(
                         context,
@@ -1096,8 +1094,7 @@ object SettingsMenuHook {
                     val versionInfo = buildVersionDisplayInfo(activity, scanSymbols)
 
                     // Failed hook points decide the result severity color.
-                    val failedLines = HookSymbolResolver.formatHookPointStatusLines(scanSymbols)
-                        .filter { it.contains("MISSING") || it.contains("ERROR") }
+                    val failedLines = HookSymbolResolver.formatUnavailableHookPointStatusLines(scanSymbols)
                     val hasScanErrors = HookSymbolResolver.hasScanErrors(scanSymbols, failedLines)
                     val versionWarning = HookSymbolResolver.formatScanVersionWarning(scanSymbols)
                     val resultWarning = versionWarning ?: if (hasScanErrors) {
@@ -1266,14 +1263,35 @@ object SettingsMenuHook {
             }
         }
     }
-    private fun resolveAdBlockDialogItemSupported(item: SwitchItem): Boolean {
-        return item.supported && ConfigManager.isScanFeatureAvailable(item.prefKey)
+    private fun labelWithScanSupport(label: String, support: SettingsSwitchSupport): String {
+        return when {
+            support.unknown -> UiText.Settings.withScanUnknownSuffix(label)
+            !support.supported -> UiText.Settings.withUnsupportedSuffix(label)
+            support.partial -> UiText.Settings.withPartialSuffix(label)
+            else -> label
+        }
+    }
+
+    private fun descriptionWithScanSupport(description: String?, support: SettingsSwitchSupport): String? {
+        return SettingsSwitchSupportResolver.mergeDescription(description, support.note)
+    }
+
+    private fun resolveSwitchSupport(
+        item: SwitchItem,
+        featureStatusMap: Map<String, HookFeatureStatus>,
+    ): SettingsSwitchSupport {
+        return SettingsSwitchSupportResolver.resolve(
+            prefKey = item.prefKey,
+            supported = item.supported,
+            featureStatusMap = featureStatusMap,
+        )
     }
 
     private fun showAdBlockDialog(
         context: Context,
         prefs: android.content.SharedPreferences,
         items: List<SwitchItem>,
+        featureStatusMap: Map<String, HookFeatureStatus>,
     ) {
         try {
             val density = context.resources.displayMetrics.density
@@ -1289,16 +1307,16 @@ object SettingsMenuHook {
 
             val views = ArrayList<Pair<SwitchItem, Switch>>(items.size)
             for (item in items) {
-                val supported = resolveAdBlockDialogItemSupported(item)
+                val support = resolveSwitchSupport(item, featureStatusMap)
                 val row = createSwitchRow(
                     context = context,
                     prefs = prefs,
-                    label = item.label,
-                    description = item.description,
+                    label = labelWithScanSupport(item.label, support),
+                    description = descriptionWithScanSupport(item.description, support),
                     prefKey = null,
                     padding = padding,
-                    enabled = supported,
-                    defaultValue = if (supported) {
+                    enabled = support.supported,
+                    defaultValue = if (support.supported) {
                         prefs.getBoolean(item.prefKey, item.defaultValue)
                     } else {
                         false
@@ -1349,6 +1367,7 @@ object SettingsMenuHook {
         context: Context,
         prefs: android.content.SharedPreferences,
         groups: List<SettingGroup>,
+        featureStatusMap: Map<String, HookFeatureStatus>,
     ) {
         try {
             val density = context.resources.displayMetrics.density
@@ -1379,16 +1398,16 @@ object SettingsMenuHook {
                     )
                 })
                 for (item in group.items) {
-                    val supported = ConfigManager.isScanFeatureAvailable(item.prefKey)
+                    val support = resolveSwitchSupport(item, featureStatusMap)
                     val row = createSwitchRow(
                         context = context,
                         prefs = prefs,
-                        label = item.label,
-                        description = item.description,
+                        label = labelWithScanSupport(item.label, support),
+                        description = descriptionWithScanSupport(item.description, support),
                         prefKey = null,
                         padding = padding,
-                        enabled = supported,
-                        defaultValue = if (supported) resolvePerformanceItemChecked(prefs, item) else false,
+                        enabled = support.supported,
+                        defaultValue = if (support.supported) resolvePerformanceItemChecked(prefs, item) else false,
                         actionIcon = item.actionIcon,
                         onActionClick = item.onActionClick,
                     )

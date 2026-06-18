@@ -2,7 +2,7 @@ package com.forbidad4tieba.hook.feature.perf
 
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
-import io.github.libxposed.api.XposedModule
+import com.forbidad4tieba.hook.core.Api102ModuleFacade
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
@@ -26,7 +26,7 @@ internal object UbsAbTestBooleanOverrideInstaller {
         return method.takeIf(::isStaticNoArgBoolean)
     }
 
-    fun install(module: XposedModule, method: Method, override: UbsAbTestBooleanOverride) {
+    fun install(module: Api102ModuleFacade, method: Method, override: UbsAbTestBooleanOverride) {
         method.isAccessible = true
         module.hook(method).intercept { chain ->
             if (override.enabled()) {

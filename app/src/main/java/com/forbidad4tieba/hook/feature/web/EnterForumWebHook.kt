@@ -45,7 +45,7 @@ object EnterForumWebHook {
     }
 
     private fun hookInitInfoUrlSource(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         getUrlMethod: Method,
     ) {
         try {
@@ -64,7 +64,7 @@ object EnterForumWebHook {
     }
 
     private fun installUrlReplaceHook(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         method: Method,
     ): Boolean {
         val methodKey = ReflectionUtils.methodSignature(method)
@@ -87,7 +87,7 @@ object EnterForumWebHook {
     }
 
     private fun installForumUrlSourceHook(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         method: Method,
     ): Boolean {
         val methodKey = ReflectionUtils.methodSignature(method)

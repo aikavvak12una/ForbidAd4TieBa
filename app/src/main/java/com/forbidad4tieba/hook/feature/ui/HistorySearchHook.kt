@@ -87,7 +87,7 @@ object HistorySearchHook {
         }
     }
 
-    private fun installLifecycleHooks(mod: io.github.libxposed.api.XposedModule, symbols: HistorySearchSymbols) {
+    private fun installLifecycleHooks(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, symbols: HistorySearchSymbols) {
         symbols.onCreateMethod?.let { method ->
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
@@ -130,7 +130,7 @@ object HistorySearchHook {
         }
     }
 
-    private fun installListUpdateHooks(mod: io.github.libxposed.api.XposedModule, symbols: HistorySearchSymbols) {
+    private fun installListUpdateHooks(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, symbols: HistorySearchSymbols) {
         val method = symbols.activityListUpdateMethod ?: return
         mod.hook(method).intercept { chain ->
             val result = chain.proceed()

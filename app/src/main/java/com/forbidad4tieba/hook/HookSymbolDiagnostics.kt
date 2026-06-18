@@ -8,6 +8,7 @@ internal object HookSymbolDiagnostics {
     fun describeSymbols(context: Context, symbols: HookSymbols): String {
         val appMeta = describeAppMetaFull(context)
         val modVersion = runtimeModuleVersionName()
+        val scanIssueLines = HookSymbolResolver.formatScanIssueLines(symbols)
 
         fun fmt(name: String, value: String?): String {
             val isNull = value == null ||
@@ -178,7 +179,7 @@ internal object HookSymbolDiagnostics {
             ${fmt("AiComponents", aiComponentValue)}
 
             Source        : ${symbols.source}
-            Scan Errors   : ${symbols.scanErrors.joinToString(" | ").ifEmpty { "-" }}
+            Scan Errors   : ${scanIssueLines.joinToString(" | ").ifEmpty { "-" }}
             =========================================
         """.trimIndent()
     }

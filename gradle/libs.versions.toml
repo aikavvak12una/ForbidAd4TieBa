@@ -1,5 +1,5 @@
 [versions]
-agp = "9.1.0"
+agp = "9.2.1"
 coreKtx = "1.10.1"
 junit = "4.13.2"
 json = "20240303"
@@ -16,7 +16,7 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
-xposed-api = { group = "io.github.libxposed", name = "api", version = "101.0.0" }
+xposed-api = { group = "io.github.libxposed", name = "api", version = "102.0.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

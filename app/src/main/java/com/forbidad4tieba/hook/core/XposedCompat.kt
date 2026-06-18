@@ -1,7 +1,9 @@
 package com.forbidad4tieba.hook.core
 
 import com.forbidad4tieba.hook.config.ConfigManager
+import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
+import java.lang.reflect.Executable
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -22,9 +24,34 @@ import java.util.concurrent.ConcurrentHashMap
 object XposedCompat {
 
     @Volatile
-    var module: XposedModule? = null
+    var module: Api102ModuleFacade? = null
+        private set
 
     private val installInfoOnce = ConcurrentHashMap.newKeySet<String>()
+
+    fun attachModule(xposedModule: XposedModule) {
+        module = Api102ModuleFacade(xposedModule)
+    }
+
+    fun api102HookId(featureId: String, executable: Executable): String {
+        return Api102HookRegistry.hookId(featureId, executable)
+    }
+
+    fun interceptHook(
+        featureId: String,
+        executable: Executable,
+        hooker: XposedInterface.Hooker,
+    ): XposedInterface.HookHandle? {
+        val mod = module ?: run {
+            log("[XposedCompat] hook skipped, module unavailable: feature=$featureId")
+            return null
+        }
+        val id = api102HookId(featureId, executable)
+        val handle = mod.hook(executable)
+            .setId(id)
+            .intercept(hooker)
+        return handle
+    }
 
     // Logging.
 

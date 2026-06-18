@@ -36,7 +36,10 @@ import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.WeakHashMap
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONObject
 
 /**
@@ -135,12 +138,11 @@ object CollectionSearchHook {
     private val sHookedAdapterClasses =
         Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap<Class<*>, Boolean>()))
     private val sEditModeMethodCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Method>())
-    private val sDiskIoExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "tbhook-collect-cache-io").apply { isDaemon = true }
-    }
-    private val sNetExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "tbhook-collect-search-net").apply { isDaemon = true }
-    }
+    private val sExecutorLock = Any()
+    private val sActiveDiskTasks = AtomicInteger(0)
+    private val sActiveNetTasks = AtomicInteger(0)
+    private var sDiskIoExecutor: ExecutorService? = null
+    private var sNetExecutor: ExecutorService? = null
 
     private inline fun dbg(message: () -> String) {
         if (ConfigManager.shouldOutputDetailedLogs()) {
@@ -162,6 +164,32 @@ object CollectionSearchHook {
     @Volatile
     private var sRuntimeTargets: CollectionSearchSymbols? = null
 
+    fun hotReloadBusyReason(): String? {
+        if (sActiveDiskTasks.get() > 0) return "collection search disk task active"
+        if (sActiveNetTasks.get() > 0) return "collection search network task active"
+        return null
+    }
+
+    fun prepareForHotReload(): Boolean {
+        val executors = synchronized(sExecutorLock) {
+            val current = listOfNotNull(sDiskIoExecutor, sNetExecutor)
+            sDiskIoExecutor = null
+            sNetExecutor = null
+            current
+        }
+        var terminated = true
+        for (executor in executors) {
+            executor.shutdownNow()
+            terminated = try {
+                executor.awaitTermination(300L, TimeUnit.MILLISECONDS) && terminated
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                false
+            }
+        }
+        return terminated
+    }
+
     internal fun hook(symbols: CollectionSearchSymbols) {
         val mod = XposedCompat.module ?: return
         sRuntimeTargets = symbols
@@ -176,7 +204,55 @@ object CollectionSearchHook {
         }
     }
 
-    private fun installActivityHooks(mod: io.github.libxposed.api.XposedModule, activityClass: Class<*>) {
+    private fun executeDisk(block: () -> Unit) {
+        executeBackground(diskExecutor(), sActiveDiskTasks, block)
+    }
+
+    private fun executeNet(block: () -> Unit) {
+        executeBackground(netExecutor(), sActiveNetTasks, block)
+    }
+
+    private fun executeBackground(
+        executor: ExecutorService,
+        activeTasks: AtomicInteger,
+        block: () -> Unit,
+    ) {
+        activeTasks.incrementAndGet()
+        try {
+            executor.execute {
+                try {
+                    block()
+                } finally {
+                    activeTasks.decrementAndGet()
+                }
+            }
+        } catch (t: Throwable) {
+            activeTasks.decrementAndGet()
+            throw t
+        }
+    }
+
+    private fun diskExecutor(): ExecutorService {
+        return synchronized(sExecutorLock) {
+            val current = sDiskIoExecutor
+            if (current != null && !current.isShutdown) return current
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "tbhook-collect-cache-io").apply { isDaemon = true }
+            }.also { sDiskIoExecutor = it }
+        }
+    }
+
+    private fun netExecutor(): ExecutorService {
+        return synchronized(sExecutorLock) {
+            val current = sNetExecutor
+            if (current != null && !current.isShutdown) return current
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "tbhook-collect-search-net").apply { isDaemon = true }
+            }.also { sNetExecutor = it }
+        }
+    }
+
+    private fun installActivityHooks(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, activityClass: Class<*>) {
         XposedCompat.findMethodOrNull(activityClass, "onCreate", Bundle::class.java)?.let { method ->
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
@@ -205,7 +281,7 @@ object CollectionSearchHook {
         }
     }
 
-    private fun installFragmentHooks(mod: io.github.libxposed.api.XposedModule, fragmentClass: Class<*>) {
+    private fun installFragmentHooks(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, fragmentClass: Class<*>) {
         XposedCompat.findMethodOrNull(
             fragmentClass,
             "onCreateView",
@@ -482,7 +558,7 @@ object CollectionSearchHook {
         if (!force && state.fetchingAll) return
         state.syncingFirstPage = true
         dbg { "syncFirstPageEveryEntry start force=$force fetchingAll=${state.fetchingAll}" }
-        sNetExecutor.execute {
+        executeNet {
             val result = fetchFirstPage(fragment)
             val host = findHostActivity(fragment)
             host?.runOnUiThread {
@@ -616,15 +692,15 @@ object CollectionSearchHook {
         state.fetchToken = token
         dbg { "startFetchAllCollections token=$token userVisible=$userVisible" }
 
-        sNetExecutor.execute {
+        executeNet {
             val allResult = loadAllCollections(fragment, token)
             persistFullSnapshot(fragment, allResult)
             val host = findHostActivity(fragment)
             if (host == null) {
-                val current = sFragmentStates[fragment] ?: return@execute
-                if (current.fetchToken != token) return@execute
+                val current = sFragmentStates[fragment] ?: return@executeNet
+                if (current.fetchToken != token) return@executeNet
                 current.fetchingAll = false
-                return@execute
+                return@executeNet
             }
             host.runOnUiThread {
                 val current = sFragmentStates[fragment] ?: return@runOnUiThread
@@ -861,7 +937,7 @@ object CollectionSearchHook {
         }
         val context = resolveAppContext(fragment) ?: return
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
-        sDiskIoExecutor.execute {
+        executeDisk {
             dbg { "persistFullSnapshot write pages=${data.rawPages.size} account=$accountKey" }
             CollectionSearchCacheStore.write(
                 context = context,
@@ -877,7 +953,7 @@ object CollectionSearchHook {
         if (rawPage.isNullOrBlank()) return
         val context = resolveAppContext(fragment) ?: return
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
-        sDiskIoExecutor.execute {
+        executeDisk {
             dbg { "persistFirstPageSnapshot write rawLen=${rawPage.length} account=$accountKey" }
             CollectionSearchCacheStore.updateFirstPage(
                 context = context,

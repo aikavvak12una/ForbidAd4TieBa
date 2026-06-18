@@ -32,7 +32,7 @@ object PbDisableGestureFontScaleHook {
     }
 
     private fun installDispatchHook(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         method: Method,
     ): Boolean {
         val methodKey = ReflectionUtils.methodSignature(method)

@@ -115,7 +115,7 @@ object HomeTopTabAutoHideHook {
     }
 
     private fun installRecyclerViewPreScrollObserver(
-        mod: io.github.libxposed.api.XposedModule,
+        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
         cl: ClassLoader,
     ): Int {
         val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
@@ -154,7 +154,7 @@ object HomeTopTabAutoHideHook {
         return 1
     }
 
-    private fun installHomeViewPagerMarker(mod: io.github.libxposed.api.XposedModule, cl: ClassLoader): Int {
+    private fun installHomeViewPagerMarker(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, cl: ClassLoader): Int {
         val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.CUSTOM_VIEW_PAGER_CLASS, cl)
         if (clazz == null) {
             XposedCompat.log("[HomeTopTabAutoHideHook] class NOT FOUND: ${StableTiebaHookPoints.CUSTOM_VIEW_PAGER_CLASS}")
@@ -179,7 +179,7 @@ object HomeTopTabAutoHideHook {
         return 1
     }
 
-    private fun installViewPagerPageSelectedObserver(mod: io.github.libxposed.api.XposedModule, cl: ClassLoader): Int {
+    private fun installViewPagerPageSelectedObserver(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, cl: ClassLoader): Int {
         val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.VIEW_PAGER_CLASS, cl)
         if (clazz == null) {
             XposedCompat.log("[HomeTopTabAutoHideHook] class NOT FOUND: ${StableTiebaHookPoints.VIEW_PAGER_CLASS}")

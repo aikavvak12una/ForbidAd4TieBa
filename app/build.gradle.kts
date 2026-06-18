@@ -39,21 +39,17 @@ android {
         )
     }
 
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 37
 
-    val moduleVersionCode = 28
+    val moduleVersionCode = 30
     val minSupportedUserSettingsVersionCode = 20
 
     defaultConfig {
         applicationId = "com.forbidad4tieba.hook"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = moduleVersionCode
-        versionName = "26061701"
+        versionName = "26061801"
         buildConfigField(
             "int",
             "MIN_SUPPORTED_USER_SETTINGS_VERSION_CODE",
