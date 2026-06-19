@@ -17,7 +17,6 @@ object CustomPostCardBlockHook {
     private val sTemplatePayloadMethodCache = ConcurrentHashMap<Class<*>, Any>(64)
     private val sDataListFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
     private val sHeadParamsFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
-    private val sHeadParamsMapFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, List<Field>>())
     private val sRecommendNestedDataMethodCache = ConcurrentHashMap<Class<*>, Any>(16)
     private val sRecommendNestedDataListFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
 
@@ -61,7 +60,6 @@ object CustomPostCardBlockHook {
             sTemplatePayloadMethodCache.clear()
             sDataListFieldCache.clear()
             sHeadParamsFieldCache.clear()
-            sHeadParamsMapFieldCache.clear()
             sRecommendNestedDataMethodCache.clear()
             sRecommendNestedDataListFieldCache.clear()
             sFilterSignature = signature
@@ -416,60 +414,34 @@ object CustomPostCardBlockHook {
         fieldName: String,
         rules: CustomPostFilterMatcher.RuntimeRules,
     ): Map<*, *>? {
-        val clazz = item.javaClass
-        sHeadParamsFieldCache[clazz]?.let { field ->
-            val cached = runCatching { field.get(item) as? Map<*, *> }.getOrNull()
-            if (cached != null && looksLikeFeedHeadParams(cached, rules)) return cached
-        }
-
-        var bestField: Field? = null
-        var bestMap: Map<*, *>? = null
-        var bestScore = 0
-        for (field in resolveFeedHeadParamMapFields(clazz, fieldName)) {
-            val value = runCatching { field.get(item) as? Map<*, *> }.getOrNull() ?: continue
-            val score = feedHeadParamsScore(value, rules)
-            if (score > bestScore) {
-                bestScore = score
-                bestField = field
-                bestMap = value
-            }
-        }
-        sHeadParamsFieldCache[clazz] = bestField
-        return bestMap?.takeIf { bestScore > 0 }
+        val field = resolveFeedHeadParamsField(item.javaClass, fieldName) ?: return null
+        val value = runCatching { field.get(item) as? Map<*, *> }.getOrNull() ?: return null
+        return value.takeIf { looksLikeFeedHeadParams(it, rules) }
     }
 
-    private fun resolveFeedHeadParamMapFields(clazz: Class<*>, preferredFieldName: String): List<Field> {
-        sHeadParamsMapFieldCache[clazz]?.let { return it }
-        val fields = ArrayList<Field>(4)
-        val seen = HashSet<String>()
-
-        fun addField(field: Field) {
-            if (
-                Modifier.isStatic(field.modifiers) ||
-                !Map::class.java.isAssignableFrom(field.type) ||
-                !seen.add(field.declaringClass.name + "#" + field.name)
-            ) {
-                return
-            }
-            field.isAccessible = true
-            fields.add(field)
+    private fun resolveFeedHeadParamsField(clazz: Class<*>, fieldName: String): Field? {
+        val cached = sHeadParamsFieldCache[clazz]
+        if (cached != null || sHeadParamsFieldCache.containsKey(clazz)) {
+            return cached
         }
-
         var current: Class<*>? = clazz
+        var field: Field? = null
         while (current != null && current != Any::class.java) {
-            runCatching { current.getDeclaredField(preferredFieldName) }
-                .getOrNull()
-                ?.let(::addField)
-            current = current.superclass
-        }
-        current = clazz
-        while (current != null && current != Any::class.java) {
-            for (field in current.declaredFields) {
-                addField(field)
+            field = runCatching { current.getDeclaredField(fieldName) }.getOrNull()
+            if (field != null) {
+                break
             }
             current = current.superclass
         }
-        return fields.also { sHeadParamsMapFieldCache[clazz] = it }
+        if (field != null) {
+            if (Modifier.isStatic(field.modifiers) || !Map::class.java.isAssignableFrom(field.type)) {
+                field = null
+            } else {
+                field.isAccessible = true
+            }
+        }
+        sHeadParamsFieldCache[clazz] = field
+        return field
     }
 
     private fun looksLikeFeedHeadParams(

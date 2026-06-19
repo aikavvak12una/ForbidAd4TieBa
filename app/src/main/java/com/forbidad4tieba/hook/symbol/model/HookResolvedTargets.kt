@@ -274,6 +274,18 @@ internal data class PbGestureScaleSymbols(
     val dispatchMethod: Method,
 )
 
+internal data class PbBottomEnterBarStableSymbols(
+    val bottomEnterBarViewClass: Class<*>?,
+    val bottomEnterBarRefreshMethods: List<Method>,
+    val enterFrsAnimationTipViewClass: Class<*>?,
+)
+
+internal data class PbBottomEnterBarHotTopicGuideSymbols(
+    val guideClass: Class<*>,
+    val totalViewMethod: Method,
+    val refreshMethods: List<Method>,
+)
+
 internal data class PbScrollCoalesceSymbols(
     val scrollMethod: Method,
 )
@@ -336,6 +348,7 @@ internal data class HistorySearchSymbols(
     val activityListUpdateMethod: Method?,
     val adapterField: String,
     val adapterSetListMethod: String,
+    val adapterSetListMethodSpec: String,
     val listField: String,
     val activityNavBarField: String,
     val threadNameMethod: String,
@@ -352,9 +365,12 @@ internal data class CollectionSearchSymbols(
     val fragmentClass: Class<*>,
     val presenterField: String,
     val presenterListSetterMethod: String,
+    val presenterListSetterMethodSpec: String,
     val modelField: String,
     val modelListGetterMethod: String,
+    val modelListGetterMethodSpec: String,
     val modelParseMethod: String,
+    val modelParseMethodSpec: String,
     val modelListField: String,
     val fragmentDisplayListField: String,
     val activityNavControllerField: String?,

@@ -10,23 +10,22 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.util.Collections
 import java.util.WeakHashMap
-import java.util.concurrent.ConcurrentHashMap
 
 object PbCommentAutoLoadHook {
     private const val PRELOAD_NOT_SEE_COMMENT_NUM = 20
     private const val SCROLL_CHECK_INTERVAL_MS = 120L
     private const val MIN_TRIGGER_INTERVAL_MS = 1000L
+    private const val RECYCLER_VIEW_ADAPTER_CLASS = "androidx.recyclerview.widget.RecyclerView\$Adapter"
     private const val GET_ITEM_COUNT = "getItemCount"
     private const val TAG = "[PbCommentAutoLoadHook]"
 
     @Volatile private var hooked = false
     @Volatile private var runtimeDisabled = false
+    @Volatile private var recyclerAdapterGetItemCountMethod: Method? = null
     private val triggerStates = Collections.synchronizedMap(WeakHashMap<Any, TriggerState>())
     private val recyclerCheckStates = Collections.synchronizedMap(WeakHashMap<Any, RecyclerCheckState>())
-    private val adapterItemCountMethods = ConcurrentHashMap<Class<*>, Method>()
 
     internal fun hook(targets: PbCommentAutoLoadSymbols) {
         if (!ConfigManager.isAutoLoadMoreEnabled) {
@@ -91,6 +90,12 @@ object PbCommentAutoLoadHook {
         targets: PbCommentBottomRecyclerSymbols,
     ): Int {
         return try {
+            val getItemCountMethod = resolveRecyclerAdapterGetItemCountMethod(targets.recyclerClass)
+                ?: run {
+                    XposedCompat.logD { "$TAG BdRecyclerView hook SKIP: RecyclerView.Adapter.getItemCount not found" }
+                    return 0
+                }
+            recyclerAdapterGetItemCountMethod = getItemCountMethod
             mod.hook(targets.scrollMethod).intercept { chain ->
                 val result = chain.proceed()
                 if (!ConfigManager.isAutoLoadMoreEnabled || runtimeDisabled) {
@@ -234,25 +239,19 @@ object PbCommentAutoLoadHook {
 
     private fun getRecyclerAdapterItemCount(recycler: Any, getAdapterMethod: Method): Int? {
         val adapter = getAdapterMethod.invoke(recycler) ?: return null
-        val itemCountMethod = adapterItemCountMethods.getOrPut(adapter.javaClass) {
-            resolveNoArgIntMethod(adapter.javaClass, GET_ITEM_COUNT) ?: return null
-        }
+        val itemCountMethod = recyclerAdapterGetItemCountMethod ?: return null
         return itemCountMethod.invoke(adapter) as? Int
     }
 
-    private fun resolveNoArgIntMethod(clazz: Class<*>, methodName: String): Method? {
-        var current: Class<*>? = clazz
-        while (current != null) {
-            val method = current.declaredMethods.firstOrNull {
-                !Modifier.isStatic(it.modifiers) &&
-                    it.name == methodName &&
-                    it.returnType == Int::class.javaPrimitiveType &&
+    private fun resolveRecyclerAdapterGetItemCountMethod(recyclerClass: Class<*>): Method? {
+        val loader = recyclerClass.classLoader ?: return null
+        val adapterClass = XposedCompat.findClassOrNull(RECYCLER_VIEW_ADAPTER_CLASS, loader)
+            ?: return null
+        return XposedCompat.findMethodOrNull(adapterClass, GET_ITEM_COUNT)
+            ?.takeIf {
+                it.returnType == Int::class.javaPrimitiveType &&
                     it.parameterTypes.isEmpty()
             }
-            if (method != null) return method.apply { isAccessible = true }
-            current = current.superclass
-        }
-        return null
     }
 
     private fun tryMarkHooked(): Boolean {

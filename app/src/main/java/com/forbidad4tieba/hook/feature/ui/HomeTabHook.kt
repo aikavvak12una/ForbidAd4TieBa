@@ -7,7 +7,6 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -33,7 +32,6 @@ object HomeTabHook {
     private val sMainBooleanFieldMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
     private val sNoArgCtorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
     private val sNoArgCtorMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val sInstanceFieldsCache = ConcurrentHashMap<Class<*>, Array<Field>>()
     @Volatile private var sLastTabItemClass: Class<*>? = null
 
     private const val TAB_TYPE_RECOMMEND = 1
@@ -370,37 +368,26 @@ object HomeTabHook {
 
     private fun cloneTabItem(template: Any): Any? {
         val clone = instantiateTabItem(template.javaClass) ?: return null
-        copyInstanceFields(template, clone)
+        copyCachedTabFields(template, clone)
         return clone
     }
 
-    private fun copyInstanceFields(source: Any, target: Any) {
-        for (field in resolveInstanceFields(source.javaClass)) {
-            try {
-                field.set(target, field.get(source))
-            } catch (_: Throwable) {
-                // Skip and continue.
-            }
-        }
+    private fun copyCachedTabFields(source: Any, target: Any) {
+        val cls = source.javaClass
+        copyFieldValue(resolveTypeField(cls), source, target)
+        copyFieldValue(resolveCodeField(cls), source, target)
+        copyFieldValue(resolveNameField(cls), source, target)
+        copyFieldValue(resolveUrlField(cls), source, target)
+        copyFieldValue(resolveMainIntField(cls), source, target)
+        copyFieldValue(resolveMainBooleanField(cls), source, target)
     }
 
-    private fun resolveInstanceFields(cls: Class<*>): Array<Field> {
-        return sInstanceFieldsCache.getOrPut(cls) {
-            val fields = ArrayList<Field>(16)
-            var current: Class<*>? = cls
-            while (current != null && current != Any::class.java) {
-                for (field in current.declaredFields) {
-                    if (Modifier.isStatic(field.modifiers)) continue
-                    try {
-                        field.isAccessible = true
-                        fields.add(field)
-                    } catch (_: Throwable) {
-                        // Skip and continue.
-                    }
-                }
-                current = current.superclass
-            }
-            fields.toTypedArray()
+    private fun copyFieldValue(field: Field?, source: Any, target: Any) {
+        if (field == null) return
+        try {
+            field.set(target, field.get(source))
+        } catch (_: Throwable) {
+            // Template copy is best-effort; followed identity is applied afterward.
         }
     }
 
@@ -593,7 +580,7 @@ object HomeTabHook {
         typeCheck: (Class<*>) -> Boolean,
     ): Field? {
         if (fieldName.isNullOrBlank()) return null
-        val field = runCatching { cls.getDeclaredField(fieldName) }.getOrNull() ?: return null
+        val field = resolveDeclaredFieldInHierarchy(cls, fieldName) ?: return null
         if (!typeCheck(field.type)) return null
         field.isAccessible = true
         return field
@@ -622,13 +609,15 @@ object HomeTabHook {
 
         val methodName = sRuntimeTargets?.itemMainSetterMethod
         if (!methodName.isNullOrBlank()) {
-            val method = cls.declaredMethods.firstOrNull { candidate ->
-                candidate.name == methodName &&
-                    candidate.returnType == Void.TYPE &&
-                    candidate.parameterTypes.size == 1 &&
-                    (candidate.parameterTypes[0] == Boolean::class.javaPrimitiveType ||
-                        candidate.parameterTypes[0] == Boolean::class.java)
-            }
+            val method = resolveDeclaredMethodInHierarchy(
+                cls = cls,
+                methodName = methodName,
+                parameterTypes = arrayOf(Boolean::class.javaPrimitiveType!!),
+            ) ?: resolveDeclaredMethodInHierarchy(
+                cls = cls,
+                methodName = methodName,
+                parameterTypes = arrayOf(Boolean::class.java),
+            )
             if (method != null) {
                 method.isAccessible = true
                 sMainSetterMethodCache[cls] = method
@@ -647,7 +636,7 @@ object HomeTabHook {
 
         val fieldName = sRuntimeTargets?.itemMainIntField
         if (!fieldName.isNullOrBlank()) {
-            val field = runCatching { cls.getDeclaredField(fieldName) }.getOrNull()
+            val field = resolveDeclaredFieldInHierarchy(cls, fieldName)
             if (field != null && (field.type == Int::class.javaPrimitiveType || field.type == Int::class.javaObjectType)) {
                 field.isAccessible = true
                 sMainIntFieldCache[cls] = field
@@ -666,7 +655,7 @@ object HomeTabHook {
 
         val fieldName = sRuntimeTargets?.itemMainBooleanField
         if (!fieldName.isNullOrBlank()) {
-            val field = runCatching { cls.getDeclaredField(fieldName) }.getOrNull()
+            val field = resolveDeclaredFieldInHierarchy(cls, fieldName)
             if (field != null &&
                 (field.type == Boolean::class.javaPrimitiveType || field.type == Boolean::class.javaObjectType)
             ) {
@@ -677,6 +666,38 @@ object HomeTabHook {
         }
 
         sMainBooleanFieldMissCache.add(cls)
+        return null
+    }
+
+    private fun resolveDeclaredFieldInHierarchy(cls: Class<*>, fieldName: String): Field? {
+        var current: Class<*>? = cls
+        while (current != null && current != Any::class.java) {
+            val field = try {
+                current.getDeclaredField(fieldName)
+            } catch (_: Throwable) {
+                null
+            }
+            if (field != null) return field
+            current = current.superclass
+        }
+        return null
+    }
+
+    private fun resolveDeclaredMethodInHierarchy(
+        cls: Class<*>,
+        methodName: String,
+        parameterTypes: Array<Class<*>>,
+    ): Method? {
+        var current: Class<*>? = cls
+        while (current != null && current != Any::class.java) {
+            val method = try {
+                current.getDeclaredMethod(methodName, *parameterTypes)
+            } catch (_: Throwable) {
+                null
+            }
+            if (method != null && method.returnType == Void.TYPE) return method
+            current = current.superclass
+        }
         return null
     }
 

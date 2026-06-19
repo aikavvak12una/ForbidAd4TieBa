@@ -2,7 +2,7 @@ package com.forbidad4tieba.hook.feature.perf
 
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
-import java.lang.reflect.Modifier
+import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -10,10 +10,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * 目标应用会通过这些入口预加载后续信息流视频：
  * 1. PreLoadVideoSwitchManager.isOpen() 做开关判断。
- * 2. PreLoadVideoHelper.load() 做调度。
- * 3. DuMediaPrefetch.prefetch() 和 preConnect() 发起网络预取。
+ * 2. DuMediaPrefetch.prefetch() 和 preConnect() 发起网络预取。
  *
- * 三层 hook 后，不管哪条路径触发，都不会继续预取视频。
+ * 这两层都使用稳定类/方法签名，避免业务层扫描 PreLoadVideoHelper.load(...) 的混淆参数类型。
  *
  * 由视频组件开关控制。
  */
@@ -22,10 +21,10 @@ object VideoPreloadBlockHook {
 
     private const val PRELOAD_SWITCH_MANAGER_CLASS =
         "com.baidu.tbadk.core.util.videoPreload.PreLoadVideoSwitchManager"
-    private const val PRELOAD_VIDEO_HELPER_CLASS =
-        "com.baidu.tbadk.core.util.videoPreload.PreLoadVideoHelper"
     private const val DU_MEDIA_PREFETCH_CLASS =
         "com.baidu.cyberplayer.sdk.DuMediaPrefetch"
+    private const val DU_MEDIA_PREFETCH_CONFIG_CLASS =
+        "com.baidu.cyberplayer.sdk.DuMediaPrefetch\$PrefetchConfig"
 
     private val installed = AtomicBoolean(false)
 
@@ -60,46 +59,26 @@ object VideoPreloadBlockHook {
             }
         }
 
-        // Hook PreLoadVideoHelper.load() and return without work.
-        val helperClass = XposedCompat.findClassOrNull(PRELOAD_VIDEO_HELPER_CLASS, cl)
-        if (helperClass != null) {
-            val loadMethods = helperClass.declaredMethods.filter { method ->
-                method.name == "load" && Modifier.isStatic(method.modifiers)
-            }
-            for (method in loadMethods) {
-                try {
-                    method.isAccessible = true
-                    mod.hook(method).intercept { chain ->
-                        if (isEnabled()) return@intercept null
-                        chain.proceed()
-                    }
-                    totalInstalled++
-                } catch (t: Throwable) {
-                    XposedCompat.logD { "$TAG hook ${helperClass.name}.${method.name} skipped: ${t.message}" }
-                }
-            }
-        }
-
         // Hook DuMediaPrefetch network prefetch entry points.
         val prefetchClass = XposedCompat.findClassOrNull(DU_MEDIA_PREFETCH_CLASS, cl)
-        if (prefetchClass != null) {
-            val targetMethods = prefetchClass.declaredMethods.filter { method ->
-                Modifier.isStatic(method.modifiers) &&
-                    method.returnType == Void.TYPE &&
-                    (method.name == "prefetch" || method.name == "preConnect")
-            }
-            for (method in targetMethods) {
-                try {
-                    method.isAccessible = true
-                    mod.hook(method).intercept { chain ->
-                        if (isEnabled()) return@intercept null
-                        chain.proceed()
-                    }
-                    totalInstalled++
-                } catch (t: Throwable) {
-                    XposedCompat.logD { "$TAG hook ${prefetchClass.name}.${method.name} skipped: ${t.message}" }
-                }
-            }
+        val prefetchConfigClass = XposedCompat.findClassOrNull(DU_MEDIA_PREFETCH_CONFIG_CLASS, cl)
+        if (prefetchClass != null && prefetchConfigClass != null) {
+            totalInstalled += installStaticVoidMethod(
+                prefetchClass,
+                "prefetch",
+                String::class.java,
+                java.lang.Integer.TYPE,
+                prefetchConfigClass,
+            )
+            totalInstalled += installStaticVoidMethod(
+                prefetchClass,
+                "preConnect",
+                String::class.java,
+                java.lang.Integer.TYPE,
+                prefetchConfigClass,
+            )
+        } else if (prefetchClass != null) {
+            XposedCompat.logD("$TAG prefetch config class not found")
         }
 
         if (totalInstalled > 0) {
@@ -112,5 +91,35 @@ object VideoPreloadBlockHook {
 
     private fun isEnabled(): Boolean {
         return ConfigManager.isVideoComponentsDisabled
+    }
+
+    private fun installStaticVoidMethod(
+        clazz: Class<*>,
+        methodName: String,
+        vararg parameterTypes: Class<*>,
+    ): Int {
+        val mod = XposedCompat.module ?: return 0
+        val method = XposedCompat.findMethodOrNull(clazz, methodName, *parameterTypes)
+            ?.takeIf { it.returnType == Void.TYPE }
+            ?: run {
+                XposedCompat.logD { "$TAG method not found: ${clazz.name}.$methodName" }
+                return 0
+            }
+        return installShortCircuitHook(clazz, method)
+    }
+
+    private fun installShortCircuitHook(clazz: Class<*>, method: Method): Int {
+        val mod = XposedCompat.module ?: return 0
+        return try {
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                if (isEnabled()) return@intercept null
+                chain.proceed()
+            }
+            1
+        } catch (t: Throwable) {
+            XposedCompat.logD { "$TAG hook ${clazz.name}.${method.name} skipped: ${t.message}" }
+            0
+        }
     }
 }

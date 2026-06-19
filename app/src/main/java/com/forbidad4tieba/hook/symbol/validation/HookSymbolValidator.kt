@@ -6,6 +6,7 @@ import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebView
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -17,6 +18,7 @@ import com.forbidad4tieba.hook.symbol.scan.PbAdBidSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbEarlyAdInsertSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlClickableSpanSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
+import org.json.JSONObject
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -63,6 +65,16 @@ internal object HookSymbolValidator {
             symbols.pbFallingShowMethod != null ||
             symbols.pbFallingClearMethod != null
     if (hasPbFallingSymbols && !isPbFallingValid(symbols, cl)) return false
+    val hasPbBottomEnterBarSymbols =
+        symbols.pbBottomEnterBarViewClass != null ||
+            symbols.pbBottomEnterBarConstructorCount != null ||
+            !symbols.pbBottomEnterBarRefreshMethodSpecs.isNullOrEmpty() ||
+            symbols.pbEnterFrsAnimationTipViewClass != null ||
+            symbols.pbEnterFrsAnimationTipConstructorCount != null ||
+            !symbols.pbEnterFrsAnimationTipCallerClasses.isNullOrEmpty() ||
+        symbols.pbHotTopicGuideTotalViewMethod != null ||
+            !symbols.pbHotTopicGuideRefreshMethodSpecs.isNullOrEmpty()
+    if (hasPbBottomEnterBarSymbols && !isPbBottomEnterBarValid(symbols, cl)) return false
     val hasPbEarlyAdInsertSymbols =
         symbols.pbEarlyAdInsertClass != null ||
             symbols.pbEarlyAdInsertMethodSpecs != null
@@ -160,6 +172,43 @@ internal object HookSymbolValidator {
             symbols.mountCardLinkInfoDataClass != null ||
             symbols.mountCardLinkInfoGetUrlMethod != null
     if (hasMountCardLinkSymbols && !isMountCardLinkLayoutValid(symbols, cl)) return false
+    val hasMineTabWebBlockSymbols =
+        symbols.mineTabWebViewClass != null ||
+            symbols.mineTabWebLoadUrlMethod != null ||
+            symbols.mineTabWebGetUrlMethod != null ||
+            symbols.mineTabWebGetInnerWebViewMethod != null
+    if (hasMineTabWebBlockSymbols && !isMineTabWebBlockValid(symbols, cl)) return false
+    val hasHomeSideBarWebBlockSymbols =
+        symbols.homeSideBarWebViewClass != null ||
+            symbols.homeSideBarTbWebViewClass != null ||
+            symbols.homeSideBarWebGetWebViewMethod != null ||
+            symbols.homeSideBarWebGetUrlMethod != null ||
+            symbols.homeSideBarWebGetInnerWebViewMethod != null ||
+            !symbols.homeSideBarWebLoadUrlMethods.isNullOrEmpty()
+    if (hasHomeSideBarWebBlockSymbols && !isHomeSideBarWebBlockValid(symbols, cl)) return false
+    val hasAutoSignInNativeNetworkSymbols =
+        symbols.autoSignInNetworkClass != null ||
+            symbols.autoSignInNetworkConstructorSpec != null ||
+            symbols.autoSignInNetworkAddPostDataMethod != null ||
+            symbols.autoSignInNetworkPostNetDataMethod != null ||
+            symbols.autoSignInNetworkSetNeedTbsMethod != null ||
+            symbols.autoSignInNetworkSetNeedSigMethod != null ||
+            symbols.autoSignInTbConfigClass != null ||
+            symbols.autoSignInServerAddressField != null ||
+            symbols.autoSignInCoreApplicationClass != null ||
+            symbols.autoSignInCurrentAccountMethod != null
+    if (hasAutoSignInNativeNetworkSymbols && !isAutoSignInNativeNetworkValid(symbols, cl)) return false
+    val hasAutoSignInHybridNativeProxySymbols =
+        symbols.autoSignInHybridProxyClass != null ||
+            symbols.autoSignInHybridProxyConstructorSpec != null ||
+            symbols.autoSignInHybridJsBridgeClass != null ||
+            symbols.autoSignInHybridNativeNetworkProxyMethod != null ||
+            symbols.autoSignInHybridTaskClass != null ||
+            symbols.autoSignInHybridTaskConstructorSpec != null ||
+            symbols.autoSignInHybridTaskDoInBackgroundMethod != null
+    if (hasAutoSignInHybridNativeProxySymbols && !isAutoSignInHybridNativeProxyValid(symbols, cl)) {
+        return false
+    }
     val hasForumBottomSheetSymbols =
         symbols.forumBottomSheetViewClass != null ||
             symbols.forumBottomSheetInitScrollMethod != null
@@ -185,6 +234,17 @@ internal object HookSymbolValidator {
             symbols.pbCommentBottomRecyclerScrollMethod != null ||
             symbols.pbCommentBottomRecyclerOwnerField != null
     if (hasPbCommentBottomSymbols && !isPbCommentBottomMechanismValid(symbols, cl)) return false
+    val hasHomeNativeGlassTopChromeSymbols =
+        !symbols.homeNativeGlassTopChromeTabSelectedMethodSpecs.isNullOrEmpty()
+    if (hasHomeNativeGlassTopChromeSymbols && !isHomeNativeGlassTopChromeValid(symbols, cl)) {
+        return false
+    }
+    val hasHomeNativeGlassSubPbNextPageSymbols =
+        symbols.homeNativeGlassSubPbSetNextPageMethod != null ||
+            symbols.homeNativeGlassSubPbSetNextPageParamType != null
+    if (hasHomeNativeGlassSubPbNextPageSymbols && !isHomeNativeGlassSubPbNextPageValid(symbols, cl)) {
+        return false
+    }
     val hasHomeNativeGlassSortSwitchSymbols =
         symbols.homeNativeGlassSortSwitchBackgroundPaintField != null ||
             symbols.homeNativeGlassSortSwitchSlideDrawMethod != null ||
@@ -252,16 +312,22 @@ internal object HookSymbolValidator {
     val hasCollectionSearchSymbols =
         symbols.collectionPresenterField != null ||
             symbols.collectionPresenterListSetterMethod != null ||
+            symbols.collectionPresenterListSetterMethodSpec != null ||
             symbols.collectionModelField != null ||
             symbols.collectionModelListGetterMethod != null ||
+            symbols.collectionModelListGetterMethodSpec != null ||
             symbols.collectionModelParseMethod != null ||
+            symbols.collectionModelParseMethodSpec != null ||
             symbols.collectionModelListField != null ||
             symbols.collectionFragmentDisplayListField != null
     if (hasCollectionSearchSymbols && symbols.collectionNavBarField.isNullOrBlank()) return false
     val hasHistorySearchSymbols =
         symbols.historyAdapterField != null ||
             symbols.historyAdapterSetListMethod != null ||
-            symbols.historyListField != null
+            symbols.historyAdapterSetListMethodSpec != null ||
+            symbols.historyListField != null ||
+            symbols.historyActivityListUpdateMethod != null ||
+            symbols.historyActivityListUpdateMethodSpec != null
     if (hasHistorySearchSymbols && symbols.historyActivityNavBarField.isNullOrBlank()) return false
     val hasMainTabBottomSymbols =
         symbols.mainTabDataClass != null ||
@@ -333,6 +399,38 @@ private fun isFreeCopyPopupValid(symbols: HookSymbols, cl: ClassLoader): Boolean
     }
 }
 
+private fun isHomeNativeGlassTopChromeValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val specs = symbols.homeNativeGlassTopChromeTabSelectedMethodSpecs.orEmpty()
+    if (specs.isEmpty()) return false
+    return try {
+        specs.all { spec ->
+            val target = parseClassMethodSpec(spec) ?: return false
+            val clazz = safeFindClass(target.first, cl) ?: return false
+            val method = clazz.getDeclaredMethod(
+                target.second,
+                Integer.TYPE,
+                Integer.TYPE,
+            )
+            !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE
+        }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isHomeNativeGlassSubPbNextPageValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val methodName = symbols.homeNativeGlassSubPbSetNextPageMethod ?: return false
+    val parameterTypeName = symbols.homeNativeGlassSubPbSetNextPageParamType ?: return false
+    val listViewClass = safeFindClass(StableTiebaHookPoints.BD_LIST_VIEW_CLASS, cl) ?: return false
+    val parameterType = resolveCachedParameterClass(parameterTypeName, cl) ?: return false
+    return try {
+        val method = listViewClass.getDeclaredMethod(methodName, parameterType)
+        !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE
+    } catch (_: Throwable) {
+        false
+    }
+}
+
 private fun isHomeNativeGlassEnterForumCapsuleValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
     val controllerClassName = symbols.homeNativeGlassEnterForumCapsuleControllerClass ?: return false
     val initMethodName = symbols.homeNativeGlassEnterForumCapsuleInitMethod ?: return false
@@ -366,6 +464,29 @@ private fun isHomeNativeGlassEnterForumCapsuleValid(symbols: HookSymbols, cl: Cl
         }
     } catch (_: Throwable) {
         false
+    }
+}
+
+private fun parseClassMethodSpec(spec: String): Pair<String, String>? {
+    val sep = spec.indexOf('#')
+    if (sep <= 0 || sep == spec.lastIndex) return null
+    val className = spec.substring(0, sep).trim()
+    val methodName = spec.substring(sep + 1).trim()
+    if (className.isEmpty() || methodName.isEmpty()) return null
+    return className to methodName
+}
+
+private fun resolveCachedParameterClass(typeName: String, cl: ClassLoader): Class<*>? {
+    return when (typeName) {
+        "boolean" -> java.lang.Boolean.TYPE
+        "byte" -> java.lang.Byte.TYPE
+        "char" -> java.lang.Character.TYPE
+        "short" -> java.lang.Short.TYPE
+        "int" -> Integer.TYPE
+        "long" -> java.lang.Long.TYPE
+        "float" -> java.lang.Float.TYPE
+        "double" -> java.lang.Double.TYPE
+        else -> safeFindClass(typeName, cl)
     }
 }
 
@@ -612,6 +733,113 @@ private fun isPbFallingValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
     } catch (_: Throwable) {
         false
     }
+}
+
+private fun isPbBottomEnterBarValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    return isPbBottomEnterBarViewValid(symbols, cl) &&
+        isPbEnterFrsAnimationTipValid(symbols, cl) &&
+        isPbBottomEnterBarHotTopicGuideValid(symbols, cl)
+}
+
+private fun isPbBottomEnterBarViewValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val className = symbols.pbBottomEnterBarViewClass ?: return true
+    return try {
+        val targetClass = safeFindClass(className, cl) ?: return false
+        symbols.pbBottomEnterBarConstructorCount?.let { expected ->
+            if (expected != targetClass.declaredConstructors.size) return false
+        }
+        symbols.pbBottomEnterBarRefreshMethodSpecs.orEmpty().all { spec ->
+            isPbBottomEnterBarRefreshMethodValid(targetClass, spec)
+        }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isPbBottomEnterBarRefreshMethodValid(targetClass: Class<*>, spec: String): Boolean {
+    val parts = spec.split('|', limit = 2)
+    if (parts.size != 2 || parts[0].isBlank()) return false
+    val classLoader = targetClass.classLoader ?: return false
+    val paramTypes = when (parts[1].trim()) {
+        "" -> emptyArray<Class<*>>()
+        else -> arrayOf<Class<*>>(
+            resolveParameterType(parts[1].trim(), classLoader) ?: return false,
+        )
+    }
+    val method = targetClass.getDeclaredMethod(parts[0].trim(), *paramTypes)
+    if (Modifier.isStatic(method.modifiers)) return false
+    if (method.returnType != Void.TYPE) return false
+    return (method.name == "setData" && method.parameterTypes.size == 1) ||
+        (method.name == "onChangeSkinType" && method.parameterTypes.isEmpty())
+}
+
+private fun resolveParameterType(name: String, cl: ClassLoader): Class<*>? {
+    return when (name) {
+        "boolean" -> java.lang.Boolean.TYPE
+        "byte" -> java.lang.Byte.TYPE
+        "char" -> java.lang.Character.TYPE
+        "double" -> java.lang.Double.TYPE
+        "float" -> java.lang.Float.TYPE
+        "int" -> Integer.TYPE
+        "long" -> java.lang.Long.TYPE
+        "short" -> java.lang.Short.TYPE
+        else -> safeFindClass(name, cl)
+    }
+}
+
+private fun isPbEnterFrsAnimationTipValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val className = symbols.pbEnterFrsAnimationTipViewClass ?: return true
+    return try {
+        val targetClass = safeFindClass(className, cl) ?: return false
+        symbols.pbEnterFrsAnimationTipConstructorCount?.let { expected ->
+            if (expected != targetClass.declaredConstructors.size) return false
+        }
+        symbols.pbEnterFrsAnimationTipCallerClasses.orEmpty().all { callerClass ->
+            safeFindClass(callerClass, cl) != null
+        }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isPbBottomEnterBarHotTopicGuideValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    if (
+        symbols.pbHotTopicGuideTotalViewMethod == null &&
+        symbols.pbHotTopicGuideRefreshMethodSpecs.isNullOrEmpty()
+    ) {
+        return true
+    }
+    val totalViewMethodName = symbols.pbHotTopicGuideTotalViewMethod ?: return false
+    return try {
+        val targetClass = safeFindClass(StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS, cl) ?: return false
+        val totalViewMethod = targetClass.getDeclaredMethod(totalViewMethodName)
+        if (
+            Modifier.isStatic(totalViewMethod.modifiers) ||
+            totalViewMethod.parameterTypes.isNotEmpty() ||
+            totalViewMethod.returnType != View::class.java
+        ) {
+            return false
+        }
+        symbols.pbHotTopicGuideRefreshMethodSpecs.orEmpty().all { spec ->
+            isPbHotTopicGuideRefreshMethodValid(targetClass, spec)
+        }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isPbHotTopicGuideRefreshMethodValid(targetClass: Class<*>, spec: String): Boolean {
+    val parts = spec.split('|', limit = 2)
+    if (parts.size != 2 || parts[0].isBlank()) return false
+    val paramTypes = when (parts[1].trim()) {
+        "" -> emptyArray<Class<*>>()
+        "int" -> arrayOf<Class<*>>(Integer.TYPE)
+        else -> return false
+    }
+    val method = targetClass.getDeclaredMethod(parts[0].trim(), *paramTypes)
+    if (Modifier.isStatic(method.modifiers)) return false
+    if (method.returnType != Void.TYPE) return false
+    return true
 }
 
 private fun isPbEarlyAdInsertValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
@@ -1008,6 +1236,190 @@ private fun isMountCardLinkLayoutValid(symbols: HookSymbols, cl: ClassLoader): B
     } catch (_: Throwable) {
         false
     }
+}
+
+private fun isMineTabWebBlockValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val className = symbols.mineTabWebViewClass ?: return false
+    val loadUrlMethodName = symbols.mineTabWebLoadUrlMethod ?: return false
+    val getUrlMethodName = symbols.mineTabWebGetUrlMethod ?: return false
+    val getInnerWebViewMethodName = symbols.mineTabWebGetInnerWebViewMethod ?: return false
+    return try {
+        val targetClass = safeFindClass(className, cl) ?: return false
+        findWebMethodInHierarchy(targetClass, loadUrlMethodName, ::isStringLoadUrlMethod) != null &&
+            findWebMethodInHierarchy(targetClass, getUrlMethodName, ::isGetUrlMethod) != null &&
+            findWebMethodInHierarchy(targetClass, getInnerWebViewMethodName, ::isGetInnerWebViewMethod) != null
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isHomeSideBarWebBlockValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val sideBarClassName = symbols.homeSideBarWebViewClass ?: return false
+    val tbWebViewClassName = symbols.homeSideBarTbWebViewClass ?: return false
+    val getWebViewMethodName = symbols.homeSideBarWebGetWebViewMethod ?: return false
+    val getUrlMethodName = symbols.homeSideBarWebGetUrlMethod ?: return false
+    val getInnerWebViewMethodName = symbols.homeSideBarWebGetInnerWebViewMethod ?: return false
+    val loadUrlMethodNames = symbols.homeSideBarWebLoadUrlMethods.orEmpty().filter { it.isNotBlank() }
+    if (loadUrlMethodNames.isEmpty()) return false
+    return try {
+        val sideBarClass = safeFindClass(sideBarClassName, cl) ?: return false
+        val tbWebViewClass = safeFindClass(tbWebViewClassName, cl) ?: return false
+        val hasGetWebViewMethod = findWebMethodInHierarchy(sideBarClass, getWebViewMethodName) { method ->
+            !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                tbWebViewClass.isAssignableFrom(method.returnType)
+        } != null
+        if (!hasGetWebViewMethod) return false
+        if (findWebMethodInHierarchy(tbWebViewClass, getUrlMethodName, ::isGetUrlMethod) == null) return false
+        if (
+            findWebMethodInHierarchy(
+                tbWebViewClass,
+                getInnerWebViewMethodName,
+                ::isGetInnerWebViewMethod,
+            ) == null
+        ) {
+            return false
+        }
+        loadUrlMethodNames.all { methodName ->
+            sideBarClass.declaredMethods.any { method ->
+                method.name == methodName && isStringLoadUrlMethod(method)
+            }
+        }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isAutoSignInNativeNetworkValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val networkClassName = symbols.autoSignInNetworkClass ?: return false
+    val addPostDataMethodName = symbols.autoSignInNetworkAddPostDataMethod ?: return false
+    val postNetDataMethodName = symbols.autoSignInNetworkPostNetDataMethod ?: return false
+    val setNeedTbsMethodName = symbols.autoSignInNetworkSetNeedTbsMethod ?: return false
+    val setNeedSigMethodName = symbols.autoSignInNetworkSetNeedSigMethod ?: return false
+    val tbConfigClassName = symbols.autoSignInTbConfigClass ?: return false
+    val serverAddressFieldName = symbols.autoSignInServerAddressField ?: return false
+    val coreApplicationClassName = symbols.autoSignInCoreApplicationClass ?: return false
+    val currentAccountMethodName = symbols.autoSignInCurrentAccountMethod ?: return false
+    if (symbols.autoSignInNetworkConstructorSpec != "java.lang.String") return false
+    return try {
+        val networkClass = safeFindClass(networkClassName, cl) ?: return false
+        networkClass.getDeclaredConstructor(String::class.java)
+        networkClass.declaredMethods.any { method ->
+            method.name == addPostDataMethodName &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.contentEquals(arrayOf(String::class.java, String::class.java))
+        } &&
+            networkClass.declaredMethods.any { method ->
+                method.name == postNetDataMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.isEmpty()
+            } &&
+            networkClass.declaredMethods.any { method ->
+                method.name == setNeedTbsMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.contentEquals(arrayOf(Boolean::class.javaPrimitiveType))
+            } &&
+            networkClass.declaredMethods.any { method ->
+                method.name == setNeedSigMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.contentEquals(arrayOf(Boolean::class.javaPrimitiveType))
+            } &&
+            isAutoSignInConfigValid(tbConfigClassName, serverAddressFieldName, cl) &&
+            isAutoSignInAccountValid(coreApplicationClassName, currentAccountMethodName, cl)
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isAutoSignInConfigValid(
+    tbConfigClassName: String,
+    serverAddressFieldName: String,
+    cl: ClassLoader,
+): Boolean {
+    val tbConfigClass = safeFindClass(tbConfigClassName, cl) ?: return false
+    return tbConfigClass.declaredFields.any { field ->
+        field.name == serverAddressFieldName &&
+            Modifier.isStatic(field.modifiers) &&
+            field.type == String::class.java
+    }
+}
+
+private fun isAutoSignInAccountValid(
+    coreApplicationClassName: String,
+    currentAccountMethodName: String,
+    cl: ClassLoader,
+): Boolean {
+    val coreApplicationClass = safeFindClass(coreApplicationClassName, cl) ?: return false
+    return coreApplicationClass.declaredMethods.any { method ->
+        method.name == currentAccountMethodName &&
+            Modifier.isStatic(method.modifiers) &&
+            method.parameterTypes.isEmpty() &&
+            method.returnType == String::class.java
+    }
+}
+
+private fun isAutoSignInHybridNativeProxyValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val proxyClassName = symbols.autoSignInHybridProxyClass ?: return false
+    val jsBridgeClassName = symbols.autoSignInHybridJsBridgeClass ?: return false
+    val nativeNetworkProxyMethodName = symbols.autoSignInHybridNativeNetworkProxyMethod ?: return false
+    val taskClassName = symbols.autoSignInHybridTaskClass ?: return false
+    val doInBackgroundMethodName = symbols.autoSignInHybridTaskDoInBackgroundMethod ?: return false
+    if (symbols.autoSignInHybridProxyConstructorSpec != "jsBridge") return false
+    if (
+        symbols.autoSignInHybridTaskConstructorSpec !=
+        "java.lang.String,java.lang.String,int,int,long,java.util.HashMap,android.webkit.WebView"
+    ) {
+        return false
+    }
+    return try {
+        val proxyClass = safeFindClass(proxyClassName, cl) ?: return false
+        val jsBridgeClass = safeFindClass(jsBridgeClassName, cl) ?: return false
+        val taskClass = safeFindClass(taskClassName, cl) ?: return false
+        proxyClass.declaredConstructors.any { constructor ->
+            constructor.parameterTypes.size == 1 &&
+                constructor.parameterTypes[0] == jsBridgeClass
+        } &&
+            jsBridgeClass.declaredMethods.any { method ->
+                method.name == nativeNetworkProxyMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.size == 7 &&
+                    method.parameterTypes[0] == WebView::class.java &&
+                    method.parameterTypes[1] == String::class.java &&
+                    method.parameterTypes[2] == String::class.java &&
+                    method.parameterTypes[3] == String::class.java &&
+                    method.parameterTypes[4] == JSONObject::class.java &&
+                    isIntType(method.parameterTypes[5]) &&
+                    isIntType(method.parameterTypes[6]) &&
+                    method.returnType != Void.TYPE
+            } &&
+            taskClass.declaredConstructors.any(::isAutoSignInHybridTaskConstructor) &&
+            taskClass.declaredMethods.any { method ->
+                method.name == doInBackgroundMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0].isArray &&
+                    method.parameterTypes[0].componentType == Any::class.java &&
+                    (java.util.Map::class.java.isAssignableFrom(method.returnType) ||
+                        method.returnType == Any::class.java)
+            }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isAutoSignInHybridTaskConstructor(constructor: java.lang.reflect.Constructor<*>): Boolean {
+    val types = constructor.parameterTypes
+    return types.size == 7 &&
+        types[0] == String::class.java &&
+        types[1] == String::class.java &&
+        isIntType(types[2]) &&
+        isIntType(types[3]) &&
+        types[4] == Long::class.javaPrimitiveType &&
+        java.util.HashMap::class.java.isAssignableFrom(types[5]) &&
+        types[6] == WebView::class.java
 }
 
 private fun isForumBottomSheetValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
@@ -1867,6 +2279,39 @@ private fun isOriginalImageValid(symbols: HookSymbols, cl: ClassLoader): Boolean
 private fun isDrawableResId(value: Int): Boolean {
     if ((value ushr 24) != 0x7F) return false
     return ((value ushr 16) and 0xFF) == 0x08
+}
+
+private fun findWebMethodInHierarchy(
+    clazz: Class<*>,
+    methodName: String,
+    predicate: (Method) -> Boolean,
+): Method? {
+    var current: Class<*>? = clazz
+    while (current != null && current != Any::class.java) {
+        val method = current.declaredMethods.firstOrNull { it.name == methodName && predicate(it) }
+        if (method != null) return method
+        current = current.superclass
+    }
+    return null
+}
+
+private fun isStringLoadUrlMethod(method: Method): Boolean {
+    return !Modifier.isStatic(method.modifiers) &&
+        method.returnType == Void.TYPE &&
+        method.parameterTypes.size == 1 &&
+        method.parameterTypes[0] == String::class.java
+}
+
+private fun isGetUrlMethod(method: Method): Boolean {
+    return !Modifier.isStatic(method.modifiers) &&
+        method.returnType == String::class.java &&
+        method.parameterTypes.isEmpty()
+}
+
+private fun isGetInnerWebViewMethod(method: Method): Boolean {
+    return !Modifier.isStatic(method.modifiers) &&
+        WebView::class.java.isAssignableFrom(method.returnType) &&
+        method.parameterTypes.isEmpty()
 }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =

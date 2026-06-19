@@ -36,6 +36,7 @@ class HookFeatureStatusDeriverTest {
         val status = HookFeatureStatusDeriver.derive(
             buildHookSymbols {
                 feedCardBindMethod = "com.tieba.FeedCard#bind"
+                feedCardBindMethodSpec = "com.tieba.FeedCard#bind|void|com.tieba.CardData"
                 homePersonalizeAnchorClasses = listOf(
                     StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS,
                 )

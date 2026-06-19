@@ -5,27 +5,30 @@ import com.forbidad4tieba.hook.symbol.model.HookSymbols
 
 internal data class HomeNativeGlassFeedInstallPlan(
     val bindMethodName: String?,
+    val bindMethodSpec: String?,
     val hasHomePersonalizePageClass: Boolean,
 ) {
     val hasHomeFeedTargets: Boolean
-        get() = bindMethodName != null && hasHomePersonalizePageClass
+        get() = bindMethodName != null && bindMethodSpec != null && hasHomePersonalizePageClass
 
     val shouldLogMissingBindMethod: Boolean
-        get() = hasHomeFeedTargets && bindMethodName == null
+        get() = hasHomePersonalizePageClass && (bindMethodName == null || bindMethodSpec == null)
 
     fun formatSkipLog(tag: String): String {
         return "$tag home feed glass SKIP: pageClass=$hasHomePersonalizePageClass, " +
-            "feedCardBind=${bindMethodName != null}"
+            "feedCardBind=${bindMethodName != null}, feedCardBindSpec=${bindMethodSpec != null}"
     }
 }
 
 internal fun resolveHomeNativeGlassFeedInstallPlan(symbols: HookSymbols): HomeNativeGlassFeedInstallPlan {
     val bindMethodName = symbols.feedCardBindMethod?.takeIf { it.isNotBlank() }
+    val bindMethodSpec = symbols.feedCardBindMethodSpec?.takeIf { it.isNotBlank() }
     val hasHomePersonalizePageClass = symbols.homePersonalizeAnchorClasses
         .orEmpty()
         .contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS)
     return HomeNativeGlassFeedInstallPlan(
         bindMethodName = bindMethodName,
+        bindMethodSpec = bindMethodSpec,
         hasHomePersonalizePageClass = hasHomePersonalizePageClass,
     )
 }

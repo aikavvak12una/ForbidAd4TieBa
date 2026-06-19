@@ -4,8 +4,8 @@ import android.os.SystemClock
 import android.view.View
 import android.webkit.WebView
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -82,32 +82,70 @@ object HomeSideBarWebBlockHook {
     @Volatile
     private var runtimeTargets: RuntimeTargets? = null
 
-    fun hook(classLoader: ClassLoader) {
+    fun hook(classLoader: ClassLoader, symbols: HookSymbols) {
         val mod = XposedCompat.module ?: return
         try {
-            val sideBarWebViewClass = XposedCompat.findClassOrNull(
-                StableTiebaHookPoints.HOME_SIDE_BAR_WEB_VIEW_CLASS,
-                classLoader,
-            )
+            val sideBarClassName = symbols.homeSideBarWebViewClass?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.logW("$TAG skipped: missing cached SideBarWebView class")
+                return
+            }
+            val tbWebViewClassName = symbols.homeSideBarTbWebViewClass?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.logW("$TAG skipped: missing cached TbWebView class")
+                return
+            }
+            val getWebViewMethodName = symbols.homeSideBarWebGetWebViewMethod?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.logW("$TAG skipped: missing cached getWebView method")
+                return
+            }
+            val getUrlMethodName = symbols.homeSideBarWebGetUrlMethod?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.logW("$TAG skipped: missing cached getUrl method")
+                return
+            }
+            val getInnerWebViewMethodName =
+                symbols.homeSideBarWebGetInnerWebViewMethod?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.logW("$TAG skipped: missing cached inner WebView method")
+                    return
+                }
+            val loadUrlMethodNames = symbols.homeSideBarWebLoadUrlMethods.orEmpty()
+                .filter { it.isNotBlank() }
+                .distinct()
+            if (loadUrlMethodNames.isEmpty()) {
+                XposedCompat.logW("$TAG skipped: missing cached load methods")
+                return
+            }
+
+            val sideBarWebViewClass = XposedCompat.findClassOrNull(sideBarClassName, classLoader)
             if (sideBarWebViewClass == null) {
-                XposedCompat.logW("$TAG skipped: SideBarWebView class not found")
+                XposedCompat.logW("$TAG skipped: class not found: $sideBarClassName")
                 return
             }
 
-            val tbWebViewClass = XposedCompat.findClassOrNull(
-                StableTiebaHookPoints.TB_WEB_VIEW_CLASS,
-                classLoader,
-            )
+            val tbWebViewClass = XposedCompat.findClassOrNull(tbWebViewClassName, classLoader)
             if (tbWebViewClass == null) {
-                XposedCompat.logW("$TAG skipped: TbWebView class not found")
+                XposedCompat.logW("$TAG skipped: class not found: $tbWebViewClassName")
                 return
             }
 
-            val getWebViewMethod = ReflectionUtils.findMethodInHierarchy(sideBarWebViewClass, "getWebView")
-            val getUrlMethod = ReflectionUtils.findMethodInHierarchy(tbWebViewClass, "getUrl")
-            val getInnerWebViewMethod = ReflectionUtils.findMethodInHierarchy(tbWebViewClass, "getInnerWebView")
+            val getWebViewMethod = ReflectionUtils.findMethodInHierarchy(
+                sideBarWebViewClass,
+                getWebViewMethodName,
+            )?.takeIf { method ->
+                tbWebViewClass.isAssignableFrom(method.returnType)
+            }
+            val getUrlMethod = ReflectionUtils.findMethodInHierarchy(
+                tbWebViewClass,
+                getUrlMethodName,
+            )?.takeIf { method ->
+                method.returnType == String::class.java
+            }
+            val getInnerWebViewMethod = ReflectionUtils.findMethodInHierarchy(
+                tbWebViewClass,
+                getInnerWebViewMethodName,
+            )?.takeIf { method ->
+                WebView::class.java.isAssignableFrom(method.returnType)
+            }
             if (getWebViewMethod == null || getUrlMethod == null || getInnerWebViewMethod == null) {
-                XposedCompat.logW("$TAG skipped: required WebView methods missing")
+                XposedCompat.logW("$TAG skipped: cached WebView methods mismatch")
                 return
             }
 
@@ -118,7 +156,11 @@ object HomeSideBarWebBlockHook {
             )
 
             var installedCount = 0
-            for (method in findSideBarUrlLoadMethods(sideBarWebViewClass)) {
+            for (methodName in loadUrlMethodNames) {
+                val method = findSideBarUrlLoadMethod(sideBarWebViewClass, methodName) ?: run {
+                    XposedCompat.logW("$TAG load method mismatch: $methodName")
+                    continue
+                }
                 val key = ReflectionUtils.methodSignature(method)
                 if (!installedMethodKeys.add(key)) continue
 
@@ -145,17 +187,21 @@ object HomeSideBarWebBlockHook {
         }
     }
 
-    private fun findSideBarUrlLoadMethods(sideBarWebViewClass: Class<*>): List<Method> {
-        return sideBarWebViewClass.declaredMethods
-            .asSequence()
-            .filter { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 1 &&
-                    method.parameterTypes[0] == String::class.java
-            }
-            .onEach { it.isAccessible = true }
-            .toList()
+    private fun findSideBarUrlLoadMethod(sideBarWebViewClass: Class<*>, methodName: String): Method? {
+        return try {
+            sideBarWebViewClass.getDeclaredMethod(methodName, String::class.java)
+                .takeIf(::isSideBarUrlLoadMethod)
+                ?.apply { isAccessible = true }
+        } catch (_: NoSuchMethodException) {
+            null
+        }
+    }
+
+    private fun isSideBarUrlLoadMethod(method: Method): Boolean {
+        return !Modifier.isStatic(method.modifiers) &&
+            method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 1 &&
+            method.parameterTypes[0] == String::class.java
     }
 
     private fun scheduleInjection(target: Any, triggerUrl: String) {

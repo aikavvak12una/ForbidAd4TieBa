@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import android.view.View
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 
 internal val FEED_CARD_TOUCH_METHODS = arrayOf(
@@ -25,6 +26,32 @@ internal val HOST_SKIN_TYPE_CHANGE_METHODS = arrayOf(
 
 internal const val HOME_RECOMMEND_CONTROL_FRAGMENT_CLASS =
     "com.baidu.tieba.homepage.framework.RecommendFrsControlFragment"
+internal const val BD_PAGE_CONTEXT_CLASS = "com.baidu.adp.base.BdPageContext"
+internal const val PB_POST_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.PostData"
+
+internal val SKIN_MANAGER_SHAPE_BACKGROUND_SIGNATURES = arrayOf(
+    arrayOf(View::class.java, Integer.TYPE, Integer.TYPE, Integer.TYPE),
+    arrayOf(View::class.java, Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE),
+    arrayOf(
+        View::class.java,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+    ),
+    arrayOf(
+        View::class.java,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+        Integer.TYPE,
+    ),
+)
 
 internal val CARD_COMPONENT_GLASS_CLASSES = arrayOf(
     StableTiebaHookPoints.FEED_CARD_REPLY_VIEW_CLASS,

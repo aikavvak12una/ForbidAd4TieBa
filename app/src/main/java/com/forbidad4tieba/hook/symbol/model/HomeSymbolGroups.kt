@@ -62,10 +62,22 @@ data class MainTabStructureSymbolsGroup(
 )
 
 data class HomeNativeGlassSymbolsGroup(
+    val topChrome: HomeNativeGlassTopChromeSymbolsGroup = HomeNativeGlassTopChromeSymbolsGroup(),
+    val subPbNextPage: HomeNativeGlassSubPbNextPageSymbolsGroup =
+        HomeNativeGlassSubPbNextPageSymbolsGroup(),
     val sortSwitch: HomeNativeGlassSortSwitchSymbolsGroup = HomeNativeGlassSortSwitchSymbolsGroup(),
     val enterForumCapsule: HomeNativeGlassEnterForumCapsuleSymbolsGroup = HomeNativeGlassEnterForumCapsuleSymbolsGroup(),
     val hostDarkModeSwitch: HomeNativeGlassHostDarkModeSwitchSymbolsGroup =
         HomeNativeGlassHostDarkModeSwitchSymbolsGroup(),
+)
+
+data class HomeNativeGlassTopChromeSymbolsGroup(
+    val homeNativeGlassTopChromeTabSelectedMethodSpecs: List<String>? = null,
+)
+
+data class HomeNativeGlassSubPbNextPageSymbolsGroup(
+    val homeNativeGlassSubPbSetNextPageMethod: String? = null,
+    val homeNativeGlassSubPbSetNextPageParamType: String? = null,
 )
 
 data class HomeNativeGlassSortSwitchSymbolsGroup(

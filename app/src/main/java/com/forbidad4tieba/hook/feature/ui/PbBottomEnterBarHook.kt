@@ -7,31 +7,43 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ViewExt
 import com.forbidad4tieba.hook.core.Api102ModuleFacade
+import com.forbidad4tieba.hook.symbol.model.PbBottomEnterBarHotTopicGuideSymbols
+import com.forbidad4tieba.hook.symbol.model.PbBottomEnterBarStableSymbols
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 
 object PbBottomEnterBarHook {
     private const val MAX_PREDRAW_SQUASH_CHECKS = 3
 
-    fun hook(cl: ClassLoader) {
+    internal fun hookStable(targets: PbBottomEnterBarStableSymbols) {
         val mod = XposedCompat.module ?: return
-        val installed = installBottomEnterBarHook(mod, cl) +
-            installHotTopicGuideHook(mod, cl) +
-            installPbEnterFrsAnimationTipHook(mod, cl)
+        val installed = installBottomEnterBarHook(mod, targets) +
+            installPbEnterFrsAnimationTipHook(mod, targets)
         if (installed == 0) {
-            XposedCompat.log("[PbBottomEnterBarHook] hook target NOT FOUND")
+            XposedCompat.log("[PbBottomEnterBarHook] stable hook target NOT FOUND")
         } else {
-            XposedCompat.log("[PbBottomEnterBarHook] hook INSTALLED: hooks=$installed")
+            XposedCompat.log("[PbBottomEnterBarHook] stable hooks INSTALLED: hooks=$installed")
         }
     }
 
-    private fun installBottomEnterBarHook(mod: Api102ModuleFacade, cl: ClassLoader): Int {
+    internal fun hookHotTopicGuide(targets: PbBottomEnterBarHotTopicGuideSymbols) {
+        val mod = XposedCompat.module ?: return
+        val installed = installHotTopicGuideHook(mod, targets)
+        if (installed == 0) {
+            XposedCompat.log("[PbBottomEnterBarHook] hot topic guide hook target NOT FOUND")
+        } else {
+            XposedCompat.log(
+                "[PbBottomEnterBarHook] hot topic guide hook INSTALLED: " +
+                    "hooks=$installed refresh=${targets.refreshMethods.size}",
+            )
+        }
+    }
+
+    private fun installBottomEnterBarHook(
+        mod: Api102ModuleFacade,
+        targets: PbBottomEnterBarStableSymbols,
+    ): Int {
         try {
-            val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_BOTTOM_ENTER_BAR_VIEW_CLASS, cl)
-            if (clazz == null) {
-                XposedCompat.log("[PbBottomEnterBarHook] class NOT FOUND: ${StableTiebaHookPoints.PB_BOTTOM_ENTER_BAR_VIEW_CLASS}")
-                return 0
-            }
+            val clazz = targets.bottomEnterBarViewClass ?: return 0
 
             var installed = 0
             for (ctor in clazz.declaredConstructors) {
@@ -47,8 +59,7 @@ object PbBottomEnterBarHook {
                 installed++
             }
 
-            for (method in clazz.declaredMethods) {
-                if (!isBottomEnterBarRefreshMethod(method)) continue
+            for (method in targets.bottomEnterBarRefreshMethods.distinct()) {
                 method.isAccessible = true
                 mod.hook(method).intercept { chain ->
                     val result = chain.proceed()
@@ -68,22 +79,13 @@ object PbBottomEnterBarHook {
         }
     }
 
-    private fun isBottomEnterBarRefreshMethod(method: Method): Boolean {
-        if (method.returnType != Void.TYPE) return false
-        val params = method.parameterTypes
-        return (method.name == "setData" && params.size == 1) ||
-            (method.name == "onChangeSkinType" && params.isEmpty())
-    }
-
-    private fun installHotTopicGuideHook(mod: Api102ModuleFacade, cl: ClassLoader): Int {
+    private fun installHotTopicGuideHook(
+        mod: Api102ModuleFacade,
+        targets: PbBottomEnterBarHotTopicGuideSymbols,
+    ): Int {
         try {
-            val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS, cl)
-            if (clazz == null) {
-                XposedCompat.log("[PbBottomEnterBarHook] class NOT FOUND: ${StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS}")
-                return 0
-            }
-
-            val totalViewMethod = resolveHotTopicTotalViewMethod(clazz) ?: return 0
+            val clazz = targets.guideClass
+            val totalViewMethod = targets.totalViewMethod.apply { isAccessible = true }
             var installed = 0
             for (ctor in clazz.declaredConstructors) {
                 ctor.isAccessible = true
@@ -97,8 +99,7 @@ object PbBottomEnterBarHook {
                 installed++
             }
 
-            for (method in clazz.declaredMethods) {
-                if (!isHotTopicGuideRefreshMethod(method)) continue
+            for (method in targets.refreshMethods.distinct()) {
                 method.isAccessible = true
                 mod.hook(method).intercept { chain ->
                     val result = chain.proceed()
@@ -117,13 +118,12 @@ object PbBottomEnterBarHook {
         }
     }
 
-    private fun installPbEnterFrsAnimationTipHook(mod: Api102ModuleFacade, cl: ClassLoader): Int {
+    private fun installPbEnterFrsAnimationTipHook(
+        mod: Api102ModuleFacade,
+        targets: PbBottomEnterBarStableSymbols,
+    ): Int {
         try {
-            val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.TB_ANIMATION_TIP_VIEW_CLASS, cl)
-            if (clazz == null) {
-                XposedCompat.logD("[PbBottomEnterBarHook] class NOT FOUND: ${StableTiebaHookPoints.TB_ANIMATION_TIP_VIEW_CLASS}")
-                return 0
-            }
+            val clazz = targets.enterFrsAnimationTipViewClass ?: return 0
 
             var installed = 0
             for (ctor in clazz.declaredConstructors) {
@@ -144,30 +144,6 @@ object PbBottomEnterBarHook {
             XposedCompat.log(t)
             return 0
         }
-    }
-
-    private fun resolveHotTopicTotalViewMethod(clazz: Class<*>): Method? {
-        val candidates = clazz.declaredMethods.filter { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                method.returnType == View::class.java
-        }
-        if (candidates.size != 1) {
-            XposedCompat.log(
-                "[PbBottomEnterBarHook] hot topic guide root view method NOT FOUND: " +
-                    "candidates=${candidates.size}"
-            )
-            return null
-        }
-        return candidates.first().apply { isAccessible = true }
-    }
-
-    private fun isHotTopicGuideRefreshMethod(method: Method): Boolean {
-        if (Modifier.isStatic(method.modifiers)) return false
-        if (method.returnType != Void.TYPE) return false
-        val params = method.parameterTypes
-        return params.isEmpty() ||
-            (params.size == 1 && params[0] == Int::class.javaPrimitiveType)
     }
 
     private fun squashHotTopicGuide(guide: Any, totalViewMethod: Method) {

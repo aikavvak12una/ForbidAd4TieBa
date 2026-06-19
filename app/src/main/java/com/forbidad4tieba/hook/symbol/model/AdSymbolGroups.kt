@@ -40,6 +40,7 @@ data class TypeAdapterSymbolsGroup(
 
 data class FeedCardSymbolsGroup(
     val feedCardBindMethod: String? = null,
+    val feedCardBindMethodSpec: String? = null,
     val feedCardDataListField: String? = null,
     val feedHeadParamsField: String? = null,
     val feedRecommendCardNestedDataMethod: String? = null,

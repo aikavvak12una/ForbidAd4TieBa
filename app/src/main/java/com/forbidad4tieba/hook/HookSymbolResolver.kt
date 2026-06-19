@@ -51,6 +51,13 @@ internal object HookSymbolResolver {
     private const val MAX_TIEBA_VERSION_CODE = 369558272L
     private const val VERSION_TYPE_META_NAME = "versionType"
     private const val OFFICIAL_VERSION_TYPE = "3"
+
+    private data class CachedMethodSpec(
+        val name: String,
+        val returnTypeName: String,
+        val parameterTypeNames: List<String>,
+    )
+
     private const val PLAIN_URL_CLICKABLE_SPAN_CLASS = "com.baidu.tieba.ui7"
     private const val PLAIN_URL_CLICKABLE_SPAN_TYPE_FIELD = "d"
     private const val PLAIN_URL_CLICKABLE_SPAN_URL_FIELD = "e"
@@ -186,7 +193,6 @@ internal object HookSymbolResolver {
     private const val PRIVATE_READ_RECEIPT_LOCAL_DATA_STATUS_METHOD = "getStatus"
     private const val PRIVATE_READ_RECEIPT_ACCOUNT_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
     private const val PRIVATE_READ_RECEIPT_CURRENT_ACCOUNT_METHOD = "getCurrentAccount"
-    private const val HYBRID_JS_BRIDGE_PROXY_CLASS = "com.baidu.tieba.h5power.HybridJsBridgePlugin_Proxy"
     private const val MOUNT_CARD_LINK_LAYOUT_CLASS =
         "com.baidu.tbadk.core.view.commonMountCard.TbMountCardLinkLayout"
     private const val MOUNT_CARD_LINK_INFO_DATA_CLASS = "com.baidu.tbadk.data.CardLinkInfoData"
@@ -240,21 +246,58 @@ internal object HookSymbolResolver {
 
     fun resolveAutoSignInHybridNativeProxySymbols(
         cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
     ): AutoSignInHybridNativeProxySymbols? {
         return try {
-            val proxyClass = safeFindClass(HYBRID_JS_BRIDGE_PROXY_CLASS, cl) ?: run {
-                XposedCompat.log("[AutoSignIn] hybrid native proxy skipped: proxy class not found")
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[AutoSignIn] hybrid native proxy skipped: scan symbols unavailable")
                 return null
             }
+            fun required(name: String, value: String?): String? {
+                return value?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[AutoSignIn] hybrid native proxy skipped: missing $name")
+                    null
+                }
+            }
+
+            val proxyClassName = required(
+                "autoSignInHybridProxyClass",
+                resolvedSymbols.autoSignInHybridProxyClass,
+            ) ?: return null
+            val proxyConstructorSpec = required(
+                "autoSignInHybridProxyConstructorSpec",
+                resolvedSymbols.autoSignInHybridProxyConstructorSpec,
+            ) ?: return null
+            val jsBridgeClassName = required(
+                "autoSignInHybridJsBridgeClass",
+                resolvedSymbols.autoSignInHybridJsBridgeClass,
+            ) ?: return null
+            val nativeNetworkProxyMethodName = required(
+                "autoSignInHybridNativeNetworkProxyMethod",
+                resolvedSymbols.autoSignInHybridNativeNetworkProxyMethod,
+            ) ?: return null
+            val taskClassName = required(
+                "autoSignInHybridTaskClass",
+                resolvedSymbols.autoSignInHybridTaskClass,
+            ) ?: return null
+            val taskConstructorSpec = required(
+                "autoSignInHybridTaskConstructorSpec",
+                resolvedSymbols.autoSignInHybridTaskConstructorSpec,
+            ) ?: return null
+            val doInBackgroundMethodName = required(
+                "autoSignInHybridTaskDoInBackgroundMethod",
+                resolvedSymbols.autoSignInHybridTaskDoInBackgroundMethod,
+            ) ?: return null
+            val proxyClass = safeFindClass(proxyClassName, cl) ?: error("proxy class not found: $proxyClassName")
+            val jsBridgeClass =
+                safeFindClass(jsBridgeClassName, cl) ?: error("js bridge class not found: $jsBridgeClassName")
             val proxyConstructor = proxyClass.declaredConstructors.singleOrNull { constructor ->
+                proxyConstructorSpec == "jsBridge" &&
                 constructor.parameterTypes.size == 1 &&
-                    !constructor.parameterTypes[0].isPrimitive
-            } ?: run {
-                XposedCompat.log("[AutoSignIn] hybrid native proxy skipped: proxy constructor mismatch")
-                return null
-            }
-            val jsBridgeClass = proxyConstructor.parameterTypes[0]
+                    constructor.parameterTypes[0] == jsBridgeClass
+            } ?: error("proxy constructor mismatch: $proxyClassName($jsBridgeClassName)")
             val nativeNetworkProxyMethod = jsBridgeClass.declaredMethods.singleOrNull { method ->
+                method.name == nativeNetworkProxyMethodName &&
                 !Modifier.isStatic(method.modifiers) &&
                     method.parameterTypes.size == 7 &&
                     method.parameterTypes[0] == android.webkit.WebView::class.java &&
@@ -265,32 +308,22 @@ internal object HookSymbolResolver {
                     isIntType(method.parameterTypes[5]) &&
                     isIntType(method.parameterTypes[6]) &&
                     method.returnType != Void.TYPE
-            } ?: run {
-                XposedCompat.log("[AutoSignIn] hybrid native proxy skipped: bridge method mismatch")
-                return null
-            }
-            val taskConstructor = findHybridNativeProxyTaskConstructor(jsBridgeClass, cl) ?: run {
-                XposedCompat.log("[AutoSignIn] hybrid native proxy skipped: task constructor mismatch")
-                return null
-            }
-            val taskClass = taskConstructor.declaringClass
-            val doInBackgroundMethod = taskClass.declaredMethods
-                .filter { method ->
+            } ?: error("bridge method mismatch: $jsBridgeClassName.$nativeNetworkProxyMethodName")
+            val taskClass = safeFindClass(taskClassName, cl) ?: error("task class not found: $taskClassName")
+            val taskConstructor = taskClass.declaredConstructors.singleOrNull { constructor ->
+                taskConstructorSpec ==
+                    "java.lang.String,java.lang.String,int,int,long,java.util.HashMap,android.webkit.WebView" &&
+                    isHybridNativeProxyTaskConstructor(constructor)
+            } ?: error("task constructor mismatch: $taskClassName")
+            val doInBackgroundMethod = taskClass.declaredMethods.singleOrNull { method ->
+                method.name == doInBackgroundMethodName &&
                     !Modifier.isStatic(method.modifiers) &&
-                        method.parameterTypes.size == 1 &&
-                        method.parameterTypes[0].isArray &&
-                        method.parameterTypes[0].componentType == Any::class.java &&
-                        (java.util.Map::class.java.isAssignableFrom(method.returnType) ||
-                            method.returnType == Any::class.java)
-                }
-                .sortedBy { method ->
-                    if (java.util.Map::class.java.isAssignableFrom(method.returnType)) 0 else 1
-                }
-                .firstOrNull()
-                ?: run {
-                    XposedCompat.log("[AutoSignIn] hybrid native proxy skipped: task doInBackground mismatch")
-                    return null
-                }
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0].isArray &&
+                    method.parameterTypes[0].componentType == Any::class.java &&
+                    (java.util.Map::class.java.isAssignableFrom(method.returnType) ||
+                        method.returnType == Any::class.java)
+            } ?: error("task doInBackground mismatch: $taskClassName.$doInBackgroundMethodName")
 
             nativeNetworkProxyMethod.isAccessible = true
             taskConstructor.isAccessible = true
@@ -312,32 +345,16 @@ internal object HookSymbolResolver {
         }
     }
 
-    private fun findHybridNativeProxyTaskConstructor(
-        jsBridgeClass: Class<*>,
-        cl: ClassLoader,
-    ): Constructor<*>? {
-        val candidates = LinkedHashSet<Class<*>>()
-        try {
-            jsBridgeClass.declaredClasses.forEach { candidates.add(it) }
-        } catch (_: Throwable) {
-        }
-        for (suffix in 'a'..'z') {
-            safeFindClass("${jsBridgeClass.name}\$$suffix", cl)?.let { candidates.add(it) }
-        }
-        return candidates
-            .asSequence()
-            .flatMap { clazz -> clazz.declaredConstructors.asSequence() }
-            .singleOrNull { constructor ->
-                val types = constructor.parameterTypes
-                types.size == 7 &&
-                    types[0] == String::class.java &&
-                    types[1] == String::class.java &&
-                    isIntType(types[2]) &&
-                    isIntType(types[3]) &&
-                    types[4] == Long::class.javaPrimitiveType &&
-                    java.util.HashMap::class.java.isAssignableFrom(types[5]) &&
-                    types[6] == android.webkit.WebView::class.java
-            }
+    private fun isHybridNativeProxyTaskConstructor(constructor: Constructor<*>): Boolean {
+        val types = constructor.parameterTypes
+        return types.size == 7 &&
+            types[0] == String::class.java &&
+            types[1] == String::class.java &&
+            isIntType(types[2]) &&
+            isIntType(types[3]) &&
+            types[4] == Long::class.javaPrimitiveType &&
+            java.util.HashMap::class.java.isAssignableFrom(types[5]) &&
+            types[6] == android.webkit.WebView::class.java
     }
 
     fun featureStatusMap(symbols: HookSymbols?): Map<String, HookFeatureStatus> {
@@ -1380,13 +1397,15 @@ internal object HookSymbolResolver {
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
     ): HomeNativeGlassHostDarkModeSwitchTargets? {
+        class OptionalSymbolMissing(message: String) : IllegalStateException(message)
+
         return try {
             val resolvedSymbols = symbols ?: run {
                 XposedCompat.log("[HomeNativeGlassHook] host dark mode switch skipped: scan symbols unavailable")
                 return null
             }
             fun required(name: String, value: String?): String {
-                return value?.takeIf { it.isNotBlank() } ?: error("missing $name")
+                return value?.takeIf { it.isNotBlank() } ?: throw OptionalSymbolMissing("missing $name")
             }
 
             val moreActivityClassName = required(
@@ -1474,7 +1493,11 @@ internal object HookSymbolResolver {
                 switchCallbackMethod = switchCallbackMethod,
             )
         } catch (t: Throwable) {
-            XposedCompat.log("[HomeNativeGlassHook] host dark mode switch symbol resolve FAILED: ${t.message}")
+            if (t is OptionalSymbolMissing) {
+                XposedCompat.log("[HomeNativeGlassHook] host dark mode switch skipped: ${t.message}")
+            } else {
+                XposedCompat.log("[HomeNativeGlassHook] host dark mode switch symbol resolve FAILED: ${t.message}")
+            }
             null
         }
     }
@@ -1845,6 +1868,177 @@ internal object HookSymbolResolver {
 
     private fun isPbFallingClearSignature(method: Method): Boolean {
         return method.returnType == Void.TYPE && method.parameterTypes.isEmpty()
+    }
+
+    fun resolvePbBottomEnterBarStableSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): PbBottomEnterBarStableSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[PbBottomEnterBarHook] stable skipped: scan symbols unavailable")
+                return null
+            }
+            val bottomClass = resolvedSymbols.pbBottomEnterBarViewClass
+                ?.takeIf { it.isNotBlank() }
+                ?.let { className ->
+                    safeFindClass(className, cl) ?: run {
+                        XposedCompat.log("[PbBottomEnterBarHook] stable skipped: bottom class not found: $className")
+                        null
+                    }
+                }
+            val bottomRefreshMethods = bottomClass?.let { clazz ->
+                resolvedSymbols.pbBottomEnterBarRefreshMethodSpecs.orEmpty()
+                    .mapNotNull { spec -> resolvePbBottomEnterBarRefreshMethod(clazz, spec, cl) }
+                    .distinct()
+            }.orEmpty()
+            val animationTipClass = resolvedSymbols.pbEnterFrsAnimationTipViewClass
+                ?.takeIf { it.isNotBlank() }
+                ?.let { className ->
+                    safeFindClass(className, cl) ?: run {
+                        XposedCompat.log("[PbBottomEnterBarHook] stable skipped: animation tip class not found: $className")
+                        null
+                    }
+                }
+            if (bottomClass == null && animationTipClass == null) {
+                XposedCompat.log("[PbBottomEnterBarHook] stable skipped: no cached stable targets resolved")
+                return null
+            }
+            bottomRefreshMethods.forEach { it.isAccessible = true }
+            PbBottomEnterBarStableSymbols(
+                bottomEnterBarViewClass = bottomClass,
+                bottomEnterBarRefreshMethods = bottomRefreshMethods,
+                enterFrsAnimationTipViewClass = animationTipClass,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[PbBottomEnterBarHook] stable symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
+    private fun resolvePbBottomEnterBarRefreshMethod(
+        targetClass: Class<*>,
+        spec: String,
+        cl: ClassLoader,
+    ): Method? {
+        val parts = spec.split('|', limit = 2)
+        if (parts.size != 2 || parts[0].isBlank()) {
+            XposedCompat.logD("[PbBottomEnterBarHook] invalid bottom refresh method spec: $spec")
+            return null
+        }
+        val paramTypes = if (parts[1].isBlank()) {
+            emptyArray<Class<*>>()
+        } else {
+            parts[1].split(',').map { typeName ->
+                PbEarlyAdInsertSymbolScanner.resolveType(typeName, cl) ?: run {
+                    XposedCompat.logD("[PbBottomEnterBarHook] bottom refresh param type not found: $typeName")
+                    return null
+                }
+            }.toTypedArray()
+        }
+        val method = try {
+            targetClass.getDeclaredMethod(parts[0].trim(), *paramTypes)
+        } catch (_: NoSuchMethodException) {
+            XposedCompat.logD("[PbBottomEnterBarHook] bottom refresh method not resolved: $spec")
+            return null
+        }
+        return method.takeIf(::isPbBottomEnterBarRefreshSignature) ?: run {
+            XposedCompat.logD("[PbBottomEnterBarHook] bottom refresh method mismatch: $spec")
+            null
+        }
+    }
+
+    private fun isPbBottomEnterBarRefreshSignature(method: Method): Boolean {
+        if (Modifier.isStatic(method.modifiers)) return false
+        if (method.returnType != Void.TYPE) return false
+        val params = method.parameterTypes
+        return (method.name == "setData" && params.size == 1) ||
+            (method.name == "onChangeSkinType" && params.isEmpty())
+    }
+
+    fun resolvePbBottomEnterBarHotTopicGuideSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): PbBottomEnterBarHotTopicGuideSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[PbBottomEnterBarHook] hot topic guide skipped: scan symbols unavailable")
+                return null
+            }
+            val totalViewMethodName = resolvedSymbols.pbHotTopicGuideTotalViewMethod
+                ?.takeIf { it.isNotBlank() }
+                ?: run {
+                    XposedCompat.log("[PbBottomEnterBarHook] hot topic guide skipped: missing total view method")
+                    return null
+                }
+            val guideClass = safeFindClass(StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS, cl) ?: run {
+                XposedCompat.log(
+                    "[PbBottomEnterBarHook] hot topic guide skipped: class not found: " +
+                        StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS,
+                )
+                return null
+            }
+            val totalViewMethod = guideClass.getDeclaredMethod(totalViewMethodName).takeIf { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.isEmpty() &&
+                    method.returnType == View::class.java
+            } ?: run {
+                XposedCompat.log(
+                    "[PbBottomEnterBarHook] hot topic guide skipped: total view method mismatch: " +
+                        "${guideClass.name}.$totalViewMethodName",
+                )
+                return null
+            }
+            val refreshMethods = resolvedSymbols.pbHotTopicGuideRefreshMethodSpecs.orEmpty()
+                .mapNotNull { spec -> resolvePbHotTopicGuideRefreshMethod(guideClass, spec) }
+                .distinct()
+            totalViewMethod.isAccessible = true
+            refreshMethods.forEach { it.isAccessible = true }
+            PbBottomEnterBarHotTopicGuideSymbols(
+                guideClass = guideClass,
+                totalViewMethod = totalViewMethod,
+                refreshMethods = refreshMethods,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[PbBottomEnterBarHook] hot topic guide symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
+    private fun resolvePbHotTopicGuideRefreshMethod(targetClass: Class<*>, spec: String): Method? {
+        val parts = spec.split('|', limit = 2)
+        if (parts.size != 2 || parts[0].isBlank()) {
+            XposedCompat.logD("[PbBottomEnterBarHook] invalid hot topic guide method spec: $spec")
+            return null
+        }
+        val paramTypes: Array<Class<*>> = when (parts[1].trim()) {
+            "" -> emptyArray()
+            "int" -> arrayOf(Integer.TYPE)
+            else -> {
+                XposedCompat.logD("[PbBottomEnterBarHook] unsupported hot topic guide method spec: $spec")
+                return null
+            }
+        }
+        val method = try {
+            targetClass.getDeclaredMethod(parts[0].trim(), *paramTypes)
+        } catch (_: NoSuchMethodException) {
+            XposedCompat.logD("[PbBottomEnterBarHook] hot topic guide method not resolved: $spec")
+            return null
+        }
+        return method.takeIf(::isPbHotTopicGuideRefreshSignature) ?: run {
+            XposedCompat.logD("[PbBottomEnterBarHook] hot topic guide method mismatch: $spec")
+            null
+        }
+    }
+
+    private fun isPbHotTopicGuideRefreshSignature(method: Method): Boolean {
+        if (Modifier.isStatic(method.modifiers)) return false
+        if (method.returnType != Void.TYPE) return false
+        val params = method.parameterTypes
+        return params.isEmpty() ||
+            (params.size == 1 && params[0] == Int::class.javaPrimitiveType)
     }
 
     fun resolvePbEarlyAdBlockSymbols(
@@ -2597,6 +2791,10 @@ internal object HookSymbolResolver {
                 XposedCompat.log("[FeedInfoLogHook] skipped: feedCardBindMethod missing")
                 return null
             }
+            val bindMethodSpec = resolvedSymbols.feedCardBindMethodSpec?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.log("[FeedInfoLogHook] skipped: feedCardBindMethodSpec missing")
+                return null
+            }
             val feedCardViewClass = safeFindClass(StableTiebaHookPoints.FEED_CARD_VIEW_CLASS, cl) ?: run {
                 XposedCompat.log(
                     "[FeedInfoLogHook] skipped: class not found: " +
@@ -2604,14 +2802,10 @@ internal object HookSymbolResolver {
                 )
                 return null
             }
-            val bindMethod = ReflectionUtils.findMethodInHierarchy(feedCardViewClass, bindMethodName) { method ->
-                method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 1 &&
-                    !method.parameterTypes[0].isPrimitive
-            } ?: run {
+            val bindMethod = resolveMethodByCachedSpec(feedCardViewClass, bindMethodSpec, bindMethodName) ?: run {
                 XposedCompat.log(
                     "[FeedInfoLogHook] skipped: method not found: " +
-                        "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.$bindMethodName(*)",
+                        "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.$bindMethodSpec",
                 )
                 return null
             }
@@ -3788,6 +3982,42 @@ internal object HookSymbolResolver {
         }
     }
 
+    fun resolveMethodByCachedSpec(clazz: Class<*>, spec: String, expectedName: String): Method? {
+        val parsed = parseCachedMethodSpec(spec) ?: return null
+        if (parsed.name != expectedName) return null
+        val paramTypes = parsed.parameterTypeNames.map { typeName ->
+            resolveCachedClassName(typeName, clazz.classLoader) ?: return null
+        }.toTypedArray()
+        val method = ReflectionUtils.findMethodInHierarchy(clazz, parsed.name, *paramTypes) ?: return null
+        return method.takeIf { it.returnType.name == parsed.returnTypeName }
+    }
+
+    private fun parseCachedMethodSpec(raw: String): CachedMethodSpec? {
+        val parts = raw.split('|', limit = 3)
+        if (parts.size != 3) return null
+        val name = parts[0].takeIf { it.isNotBlank() } ?: return null
+        val returnType = parts[1].takeIf { it.isNotBlank() } ?: return null
+        val params = parts[2].split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        return CachedMethodSpec(name, returnType, params)
+    }
+
+    private fun resolveCachedClassName(typeName: String, cl: ClassLoader?): Class<*>? {
+        return when (typeName) {
+            Void.TYPE.name -> Void.TYPE
+            Boolean::class.javaPrimitiveType!!.name -> Boolean::class.javaPrimitiveType
+            Byte::class.javaPrimitiveType!!.name -> Byte::class.javaPrimitiveType
+            Char::class.javaPrimitiveType!!.name -> Char::class.javaPrimitiveType
+            Short::class.javaPrimitiveType!!.name -> Short::class.javaPrimitiveType
+            Int::class.javaPrimitiveType!!.name -> Int::class.javaPrimitiveType
+            Long::class.javaPrimitiveType!!.name -> Long::class.javaPrimitiveType
+            Float::class.javaPrimitiveType!!.name -> Float::class.javaPrimitiveType
+            Double::class.javaPrimitiveType!!.name -> Double::class.javaPrimitiveType
+            else -> runCatching { Class.forName(typeName, false, cl) }.getOrNull()
+        }
+    }
+
     fun resolveHistorySearchSymbols(
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
@@ -3809,14 +4039,13 @@ internal object HookSymbolResolver {
                 return null
             }
             val updateMethodName = resolvedSymbols.historyActivityListUpdateMethod?.takeIf { it.isNotBlank() }
-            val updateMethod = updateMethodName?.let { methodName ->
-                ReflectionUtils.findMethodInHierarchy(activityClass, methodName) { target ->
-                    !Modifier.isStatic(target.modifiers) &&
-                        target.returnType == Void.TYPE &&
-                        target.parameterTypes.size == 1 &&
-                        (List::class.java.isAssignableFrom(target.parameterTypes[0]) ||
-                            ArrayList::class.java.isAssignableFrom(target.parameterTypes[0]))
-                }?.apply { isAccessible = true }
+            val updateMethodSpec = resolvedSymbols.historyActivityListUpdateMethodSpec?.takeIf { it.isNotBlank() }
+            val updateMethod = if (updateMethodName != null && updateMethodSpec != null) {
+                resolveMethodByCachedSpec(activityClass, updateMethodSpec, updateMethodName)?.apply {
+                    isAccessible = true
+                }
+            } else {
+                null
             }
             if (updateMethodName != null && updateMethod == null) {
                 XposedCompat.logD {
@@ -3835,6 +4064,10 @@ internal object HookSymbolResolver {
                 adapterSetListMethod = requireSymbol(
                     "historyAdapterSetListMethod",
                     resolvedSymbols.historyAdapterSetListMethod,
+                ),
+                adapterSetListMethodSpec = requireSymbol(
+                    "historyAdapterSetListMethodSpec",
+                    resolvedSymbols.historyAdapterSetListMethodSpec,
                 ),
                 listField = requireSymbol("historyListField", resolvedSymbols.historyListField),
                 activityNavBarField = requireSymbol(
@@ -3894,12 +4127,24 @@ internal object HookSymbolResolver {
                     "collectionPresenterListSetterMethod",
                     resolvedSymbols.collectionPresenterListSetterMethod,
                 ),
+                presenterListSetterMethodSpec = requireSymbol(
+                    "collectionPresenterListSetterMethodSpec",
+                    resolvedSymbols.collectionPresenterListSetterMethodSpec,
+                ),
                 modelField = requireSymbol("collectionModelField", resolvedSymbols.collectionModelField),
                 modelListGetterMethod = requireSymbol(
                     "collectionModelListGetterMethod",
                     resolvedSymbols.collectionModelListGetterMethod,
                 ),
+                modelListGetterMethodSpec = requireSymbol(
+                    "collectionModelListGetterMethodSpec",
+                    resolvedSymbols.collectionModelListGetterMethodSpec,
+                ),
                 modelParseMethod = requireSymbol("collectionModelParseMethod", resolvedSymbols.collectionModelParseMethod),
+                modelParseMethodSpec = requireSymbol(
+                    "collectionModelParseMethodSpec",
+                    resolvedSymbols.collectionModelParseMethodSpec,
+                ),
                 modelListField = requireSymbol("collectionModelListField", resolvedSymbols.collectionModelListField),
                 fragmentDisplayListField = requireSymbol(
                     "collectionFragmentDisplayListField",
@@ -4570,6 +4815,7 @@ internal object HookSymbolResolver {
         var feedPayloadMethod: String? = null
         var feedLoadMoreMethod: String? = null
         var feedCardBindMethod: String? = null
+        var feedCardBindMethodSpec: String? = null
         var feedCardDataListField: String? = null
         var feedHeadParamsField: String? = null
         var feedRecommendCardNestedDataMethod: String? = null
@@ -4592,6 +4838,14 @@ internal object HookSymbolResolver {
         var pbFallingInitMethod: String? = null
         var pbFallingShowMethod: String? = null
         var pbFallingClearMethod: String? = null
+        var pbBottomEnterBarViewClass: String? = null
+        var pbBottomEnterBarConstructorCount: Int? = null
+        var pbBottomEnterBarRefreshMethodSpecs: List<String>? = null
+        var pbEnterFrsAnimationTipViewClass: String? = null
+        var pbEnterFrsAnimationTipConstructorCount: Int? = null
+        var pbEnterFrsAnimationTipCallerClasses: List<String>? = null
+        var pbHotTopicGuideTotalViewMethod: String? = null
+        var pbHotTopicGuideRefreshMethodSpecs: List<String>? = null
         var pbEarlyAdInsertClass: String? = null
         var pbEarlyAdInsertMethodSpecs: List<String>? = null
         var pbAdBidCommonRequestModelClass: String? = null
@@ -4650,6 +4904,33 @@ internal object HookSymbolResolver {
         var mountCardLinkLayoutDataField: String? = null
         var mountCardLinkInfoDataClass: String? = null
         var mountCardLinkInfoGetUrlMethod: String? = null
+        var mineTabWebViewClass: String? = null
+        var mineTabWebLoadUrlMethod: String? = null
+        var mineTabWebGetUrlMethod: String? = null
+        var mineTabWebGetInnerWebViewMethod: String? = null
+        var homeSideBarWebViewClass: String? = null
+        var homeSideBarTbWebViewClass: String? = null
+        var homeSideBarWebGetWebViewMethod: String? = null
+        var homeSideBarWebGetUrlMethod: String? = null
+        var homeSideBarWebGetInnerWebViewMethod: String? = null
+        var homeSideBarWebLoadUrlMethods: List<String>? = null
+        var autoSignInNetworkClass: String? = null
+        var autoSignInNetworkConstructorSpec: String? = null
+        var autoSignInNetworkAddPostDataMethod: String? = null
+        var autoSignInNetworkPostNetDataMethod: String? = null
+        var autoSignInNetworkSetNeedTbsMethod: String? = null
+        var autoSignInNetworkSetNeedSigMethod: String? = null
+        var autoSignInTbConfigClass: String? = null
+        var autoSignInServerAddressField: String? = null
+        var autoSignInCoreApplicationClass: String? = null
+        var autoSignInCurrentAccountMethod: String? = null
+        var autoSignInHybridProxyClass: String? = null
+        var autoSignInHybridProxyConstructorSpec: String? = null
+        var autoSignInHybridJsBridgeClass: String? = null
+        var autoSignInHybridNativeNetworkProxyMethod: String? = null
+        var autoSignInHybridTaskClass: String? = null
+        var autoSignInHybridTaskConstructorSpec: String? = null
+        var autoSignInHybridTaskDoInBackgroundMethod: String? = null
         var forumBottomSheetViewClass: String? = null
         var forumBottomSheetInitScrollMethod: String? = null
         var autoRefreshTriggerMethod: String? = null
@@ -4683,10 +4964,13 @@ internal object HookSymbolResolver {
         var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
         var collectionPresenterField: String? = null
         var collectionPresenterListSetterMethod: String? = null
+        var collectionPresenterListSetterMethodSpec: String? = null
         var collectionPresenterAdapterField: String? = null
         var collectionModelField: String? = null
         var collectionModelListGetterMethod: String? = null
+        var collectionModelListGetterMethodSpec: String? = null
         var collectionModelParseMethod: String? = null
+        var collectionModelParseMethodSpec: String? = null
         var collectionModelListField: String? = null
         var collectionFragmentDisplayListField: String? = null
         var collectionActivityNavControllerField: String? = null
@@ -4697,8 +4981,10 @@ internal object HookSymbolResolver {
         var collectionEditModeMethod: String? = null
         var historyAdapterField: String? = null
         var historyAdapterSetListMethod: String? = null
+        var historyAdapterSetListMethodSpec: String? = null
         var historyListField: String? = null
         var historyActivityListUpdateMethod: String? = null
+        var historyActivityListUpdateMethodSpec: String? = null
         var historyActivityNavBarField: String? = null
         var historyThreadNameMethod: String? = null
         var historyForumNameMethod: String? = null
@@ -4750,6 +5036,9 @@ internal object HookSymbolResolver {
         var imageViewerShareIconResId: Int? = null
         var homeNativeGlassSubPbNextPageMoreViewId: Int? = null
         var homeNativeGlassPbReplyTitleDividerViewId: Int? = null
+        var homeNativeGlassTopChromeTabSelectedMethodSpecs: List<String>? = null
+        var homeNativeGlassSubPbSetNextPageMethod: String? = null
+        var homeNativeGlassSubPbSetNextPageParamType: String? = null
         var homeNativeGlassSortSwitchBackgroundPaintField: String? = null
         var homeNativeGlassSortSwitchSlideDrawMethod: String? = null
         var homeNativeGlassSortSwitchSlidePathField: String? = null
@@ -4818,6 +5107,7 @@ internal object HookSymbolResolver {
             FeedCardSymbolScanner.scanBind(candidatesWithWhitelist, cl, logger)
         }
         feedCardBindMethod = feedCardScan.bindMethod
+        feedCardBindMethodSpec = feedCardScan.bindMethodSpec
         feedCardDataListField = feedCardScan.dataListField
         runScanStep("ReplyServerResponseLogHook", logger, scanErrors, Unit) {
             ReplyVisibilityProbeSymbolScanner.scanReplyServerResponseLog(cl, logger)?.let { scan ->
@@ -4899,6 +5189,26 @@ internal object HookSymbolResolver {
         pbFallingShowMethod = pbFallingScan.showMethod
         pbFallingClearMethod = pbFallingScan.clearMethod
 
+        val pbBottomEnterBarScan = runScanStep(
+            "PbBottomEnterBarHook",
+            logger,
+            scanErrors,
+            PbBottomEnterBarScanSymbols(),
+        ) {
+            PbBottomEnterBarSymbolScanner.scan(cl, logger)
+        }
+        pbBottomEnterBarViewClass = pbBottomEnterBarScan.bottomEnterBarViewClass
+        pbBottomEnterBarConstructorCount = pbBottomEnterBarScan.bottomEnterBarConstructorCount
+        pbBottomEnterBarRefreshMethodSpecs =
+            pbBottomEnterBarScan.bottomEnterBarRefreshMethodSpecs.takeIf { it.isNotEmpty() }
+        pbEnterFrsAnimationTipViewClass = pbBottomEnterBarScan.enterFrsAnimationTipViewClass
+        pbEnterFrsAnimationTipConstructorCount = pbBottomEnterBarScan.enterFrsAnimationTipConstructorCount
+        pbEnterFrsAnimationTipCallerClasses =
+            pbBottomEnterBarScan.enterFrsAnimationTipCallerClasses.takeIf { it.isNotEmpty() }
+        pbHotTopicGuideTotalViewMethod = pbBottomEnterBarScan.hotTopicGuideTotalViewMethod
+        pbHotTopicGuideRefreshMethodSpecs =
+            pbBottomEnterBarScan.hotTopicGuideRefreshMethodSpecs.takeIf { it.isNotEmpty() }
+
         val pbEarlyAdInsertScan = runScanStep(
             "PbEarlyAdBlockHook",
             logger,
@@ -4959,6 +5269,60 @@ internal object HookSymbolResolver {
         enterForumWebLoadMethod = enterForumWebScan.webLoadMethod
         enterForumInitInfoDataClass = enterForumWebScan.initInfoDataClass
         enterForumInitInfoGetUrlMethod = enterForumWebScan.initInfoGetUrlMethod
+
+        val mineTabWebBlockScan = runScanStep(
+            "MineTabWebBlockHook",
+            logger,
+            scanErrors,
+            MineTabWebBlockScanSymbols(),
+        ) {
+            WebAdBlockSymbolScanner.scanMineTab(cl, logger)
+        }
+        mineTabWebViewClass = mineTabWebBlockScan.webViewClass
+        mineTabWebLoadUrlMethod = mineTabWebBlockScan.loadUrlMethod
+        mineTabWebGetUrlMethod = mineTabWebBlockScan.getUrlMethod
+        mineTabWebGetInnerWebViewMethod = mineTabWebBlockScan.getInnerWebViewMethod
+
+        val homeSideBarWebBlockScan = runScanStep(
+            "HomeSideBarWebBlockHook",
+            logger,
+            scanErrors,
+            HomeSideBarWebBlockScanSymbols(),
+        ) {
+            WebAdBlockSymbolScanner.scanHomeSideBar(cl, logger)
+        }
+        homeSideBarWebViewClass = homeSideBarWebBlockScan.sideBarWebViewClass
+        homeSideBarTbWebViewClass = homeSideBarWebBlockScan.tbWebViewClass
+        homeSideBarWebGetWebViewMethod = homeSideBarWebBlockScan.getWebViewMethod
+        homeSideBarWebGetUrlMethod = homeSideBarWebBlockScan.getUrlMethod
+        homeSideBarWebGetInnerWebViewMethod = homeSideBarWebBlockScan.getInnerWebViewMethod
+        homeSideBarWebLoadUrlMethods = homeSideBarWebBlockScan.loadUrlMethods.takeIf { it.isNotEmpty() }
+
+        val autoSignInScan = runScanStep(
+            "AutoSignInManager",
+            logger,
+            scanErrors,
+            AutoSignInScanSymbols(),
+        ) {
+            AutoSignInSymbolScanner.scan(cl, logger)
+        }
+        autoSignInNetworkClass = autoSignInScan.networkClass
+        autoSignInNetworkConstructorSpec = autoSignInScan.networkConstructorSpec
+        autoSignInNetworkAddPostDataMethod = autoSignInScan.addPostDataMethod
+        autoSignInNetworkPostNetDataMethod = autoSignInScan.postNetDataMethod
+        autoSignInNetworkSetNeedTbsMethod = autoSignInScan.setNeedTbsMethod
+        autoSignInNetworkSetNeedSigMethod = autoSignInScan.setNeedSigMethod
+        autoSignInTbConfigClass = autoSignInScan.tbConfigClass
+        autoSignInServerAddressField = autoSignInScan.serverAddressField
+        autoSignInCoreApplicationClass = autoSignInScan.coreApplicationClass
+        autoSignInCurrentAccountMethod = autoSignInScan.currentAccountMethod
+        autoSignInHybridProxyClass = autoSignInScan.hybridProxyClass
+        autoSignInHybridProxyConstructorSpec = autoSignInScan.hybridProxyConstructorSpec
+        autoSignInHybridJsBridgeClass = autoSignInScan.hybridJsBridgeClass
+        autoSignInHybridNativeNetworkProxyMethod = autoSignInScan.hybridNativeNetworkProxyMethod
+        autoSignInHybridTaskClass = autoSignInScan.hybridTaskClass
+        autoSignInHybridTaskConstructorSpec = autoSignInScan.hybridTaskConstructorSpec
+        autoSignInHybridTaskDoInBackgroundMethod = autoSignInScan.hybridTaskDoInBackgroundMethod
 
         val plainUrlSpanScan = runScanStep(
             "PlainUrlDirectBrowserHook.Direct",
@@ -5163,6 +5527,30 @@ internal object HookSymbolResolver {
         homeNativeGlassPbReplyTitleDividerViewId = homeNativeGlassResourceIds.pbReplyTitleDividerViewId
         val homeNativeGlassDynamicBackgroundColorIds = homeNativeGlassResourceIds.dynamicBackgroundColorIds
 
+        val homeNativeGlassTopChromeSymbols = runScanStep(
+            "HomeNativeGlassHook.TopChrome",
+            logger,
+            scanErrors,
+            HomeNativeGlassTopChromeSymbols(),
+        ) {
+            HomeNativeGlassSymbolScanner.scanTopChrome(cl, logger)
+        }
+        homeNativeGlassTopChromeTabSelectedMethodSpecs =
+            homeNativeGlassTopChromeSymbols.tabSelectedMethodSpecs.takeIf { it.isNotEmpty() }
+
+        val homeNativeGlassSubPbNextPageSymbols = runScanStep(
+            "HomeNativeGlassHook.SubPbNextPage",
+            logger,
+            scanErrors,
+            HomeNativeGlassSubPbNextPageSymbols(),
+        ) {
+            HomeNativeGlassSymbolScanner.scanSubPbNextPage(cl, logger)
+        }
+        homeNativeGlassSubPbSetNextPageMethod =
+            homeNativeGlassSubPbNextPageSymbols.methodName
+        homeNativeGlassSubPbSetNextPageParamType =
+            homeNativeGlassSubPbNextPageSymbols.parameterTypeName
+
         val homeNativeGlassSortSwitchSymbols = runScanStep(
             "HomeNativeGlassHook.SortSwitch",
             logger,
@@ -5239,10 +5627,13 @@ internal object HookSymbolResolver {
         }
         collectionPresenterField = collectionScan.presenterField
         collectionPresenterListSetterMethod = collectionScan.presenterListSetterMethod
+        collectionPresenterListSetterMethodSpec = collectionScan.presenterListSetterMethodSpec
         collectionPresenterAdapterField = collectionScan.presenterAdapterField
         collectionModelField = collectionScan.modelField
         collectionModelListGetterMethod = collectionScan.modelListGetterMethod
+        collectionModelListGetterMethodSpec = collectionScan.modelListGetterMethodSpec
         collectionModelParseMethod = collectionScan.modelParseMethod
+        collectionModelParseMethodSpec = collectionScan.modelParseMethodSpec
         collectionModelListField = collectionScan.modelListField
         collectionFragmentDisplayListField = collectionScan.fragmentDisplayListField
         collectionActivityNavControllerField = collectionScan.activityNavControllerField
@@ -5262,8 +5653,10 @@ internal object HookSymbolResolver {
         }
         historyAdapterField = historyScan.adapterField
         historyAdapterSetListMethod = historyScan.adapterSetListMethod
+        historyAdapterSetListMethodSpec = historyScan.adapterSetListMethodSpec
         historyListField = historyScan.listField
         historyActivityListUpdateMethod = historyScan.activityListUpdateMethod
+        historyActivityListUpdateMethodSpec = historyScan.activityListUpdateMethodSpec
         historyActivityNavBarField = historyScan.activityNavBarField
         historyThreadNameMethod = historyScan.threadNameMethod
         historyForumNameMethod = historyScan.forumNameMethod
@@ -5357,6 +5750,7 @@ internal object HookSymbolResolver {
             feedTemplatePayloadMethod = feedPayloadMethod
             feedTemplateLoadMoreMethod = feedLoadMoreMethod
             this.feedCardBindMethod = feedCardBindMethod
+            this.feedCardBindMethodSpec = feedCardBindMethodSpec
             this.feedCardDataListField = feedCardDataListField
             this.feedHeadParamsField = feedHeadParamsField
             this.feedRecommendCardNestedDataMethod = feedRecommendCardNestedDataMethod
@@ -5426,6 +5820,14 @@ internal object HookSymbolResolver {
             this.pbFallingInitMethod = pbFallingInitMethod
             this.pbFallingShowMethod = pbFallingShowMethod
             this.pbFallingClearMethod = pbFallingClearMethod
+            this.pbBottomEnterBarViewClass = pbBottomEnterBarViewClass
+            this.pbBottomEnterBarConstructorCount = pbBottomEnterBarConstructorCount
+            this.pbBottomEnterBarRefreshMethodSpecs = pbBottomEnterBarRefreshMethodSpecs
+            this.pbEnterFrsAnimationTipViewClass = pbEnterFrsAnimationTipViewClass
+            this.pbEnterFrsAnimationTipConstructorCount = pbEnterFrsAnimationTipConstructorCount
+            this.pbEnterFrsAnimationTipCallerClasses = pbEnterFrsAnimationTipCallerClasses
+            this.pbHotTopicGuideTotalViewMethod = pbHotTopicGuideTotalViewMethod
+            this.pbHotTopicGuideRefreshMethodSpecs = pbHotTopicGuideRefreshMethodSpecs
             this.pbEarlyAdInsertClass = pbEarlyAdInsertClass
             this.pbEarlyAdInsertMethodSpecs = pbEarlyAdInsertMethodSpecs
             this.pbAdBidCommonRequestModelClass = pbAdBidCommonRequestModelClass
@@ -5506,6 +5908,33 @@ internal object HookSymbolResolver {
             this.mountCardLinkLayoutDataField = mountCardLinkLayoutDataField
             this.mountCardLinkInfoDataClass = mountCardLinkInfoDataClass
             this.mountCardLinkInfoGetUrlMethod = mountCardLinkInfoGetUrlMethod
+            this.mineTabWebViewClass = mineTabWebViewClass
+            this.mineTabWebLoadUrlMethod = mineTabWebLoadUrlMethod
+            this.mineTabWebGetUrlMethod = mineTabWebGetUrlMethod
+            this.mineTabWebGetInnerWebViewMethod = mineTabWebGetInnerWebViewMethod
+            this.homeSideBarWebViewClass = homeSideBarWebViewClass
+            this.homeSideBarTbWebViewClass = homeSideBarTbWebViewClass
+            this.homeSideBarWebGetWebViewMethod = homeSideBarWebGetWebViewMethod
+            this.homeSideBarWebGetUrlMethod = homeSideBarWebGetUrlMethod
+            this.homeSideBarWebGetInnerWebViewMethod = homeSideBarWebGetInnerWebViewMethod
+            this.homeSideBarWebLoadUrlMethods = homeSideBarWebLoadUrlMethods
+            this.autoSignInNetworkClass = autoSignInNetworkClass
+            this.autoSignInNetworkConstructorSpec = autoSignInNetworkConstructorSpec
+            this.autoSignInNetworkAddPostDataMethod = autoSignInNetworkAddPostDataMethod
+            this.autoSignInNetworkPostNetDataMethod = autoSignInNetworkPostNetDataMethod
+            this.autoSignInNetworkSetNeedTbsMethod = autoSignInNetworkSetNeedTbsMethod
+            this.autoSignInNetworkSetNeedSigMethod = autoSignInNetworkSetNeedSigMethod
+            this.autoSignInTbConfigClass = autoSignInTbConfigClass
+            this.autoSignInServerAddressField = autoSignInServerAddressField
+            this.autoSignInCoreApplicationClass = autoSignInCoreApplicationClass
+            this.autoSignInCurrentAccountMethod = autoSignInCurrentAccountMethod
+            this.autoSignInHybridProxyClass = autoSignInHybridProxyClass
+            this.autoSignInHybridProxyConstructorSpec = autoSignInHybridProxyConstructorSpec
+            this.autoSignInHybridJsBridgeClass = autoSignInHybridJsBridgeClass
+            this.autoSignInHybridNativeNetworkProxyMethod = autoSignInHybridNativeNetworkProxyMethod
+            this.autoSignInHybridTaskClass = autoSignInHybridTaskClass
+            this.autoSignInHybridTaskConstructorSpec = autoSignInHybridTaskConstructorSpec
+            this.autoSignInHybridTaskDoInBackgroundMethod = autoSignInHybridTaskDoInBackgroundMethod
             this.forumBottomSheetViewClass = forumBottomSheetViewClass
             this.forumBottomSheetInitScrollMethod = forumBottomSheetInitScrollMethod
             this.autoRefreshTriggerMethod = autoRefreshTriggerMethod
@@ -5540,10 +5969,13 @@ internal object HookSymbolResolver {
 
             this.collectionPresenterField = collectionPresenterField
             this.collectionPresenterListSetterMethod = collectionPresenterListSetterMethod
+            this.collectionPresenterListSetterMethodSpec = collectionPresenterListSetterMethodSpec
             this.collectionPresenterAdapterField = collectionPresenterAdapterField
             this.collectionModelField = collectionModelField
             this.collectionModelListGetterMethod = collectionModelListGetterMethod
+            this.collectionModelListGetterMethodSpec = collectionModelListGetterMethodSpec
             this.collectionModelParseMethod = collectionModelParseMethod
+            this.collectionModelParseMethodSpec = collectionModelParseMethodSpec
             this.collectionModelListField = collectionModelListField
             this.collectionFragmentDisplayListField = collectionFragmentDisplayListField
             this.collectionActivityNavControllerField = collectionActivityNavControllerField
@@ -5555,8 +5987,10 @@ internal object HookSymbolResolver {
 
             this.historyAdapterField = historyAdapterField
             this.historyAdapterSetListMethod = historyAdapterSetListMethod
+            this.historyAdapterSetListMethodSpec = historyAdapterSetListMethodSpec
             this.historyListField = historyListField
             this.historyActivityListUpdateMethod = historyActivityListUpdateMethod
+            this.historyActivityListUpdateMethodSpec = historyActivityListUpdateMethodSpec
             this.historyActivityNavBarField = historyActivityNavBarField
             this.historyThreadNameMethod = historyThreadNameMethod
             this.historyForumNameMethod = historyForumNameMethod
@@ -5626,6 +6060,9 @@ internal object HookSymbolResolver {
                     subPbNextPageMoreViewId = homeNativeGlassSubPbNextPageMoreViewId,
                     pbReplyTitleDividerViewId = homeNativeGlassPbReplyTitleDividerViewId,
                     dynamicBackgroundColorIds = homeNativeGlassDynamicBackgroundColorIds,
+                    topChromeTabSelectedMethodSpecs = homeNativeGlassTopChromeTabSelectedMethodSpecs,
+                    subPbSetNextPageMethod = homeNativeGlassSubPbSetNextPageMethod,
+                    subPbSetNextPageParamType = homeNativeGlassSubPbSetNextPageParamType,
                     sortSwitchBackgroundPaintField = homeNativeGlassSortSwitchBackgroundPaintField,
                     sortSwitchSlideDrawMethod = homeNativeGlassSortSwitchSlideDrawMethod,
                     sortSwitchSlidePathField = homeNativeGlassSortSwitchSlidePathField,
@@ -5692,31 +6129,41 @@ internal object HookSymbolResolver {
         logger: ScanLogger?,
     ): HookSymbols {
         val versionInfo = readTargetAppVersionInfo(context, logger)
-            ?: return symbols.withScanSupport(ScanSupportState.UNKNOWN)
+            ?: return withDerivedFeatureStatus(
+                symbols.withScanSupport(ScanSupportState.UNKNOWN),
+            )
 
         if (
             versionInfo.versionCode > MAX_TIEBA_VERSION_CODE ||
             versionInfo.versionCode < MIN_TIEBA_VERSION_CODE
         ) {
-            return symbols.withScanSupport(
-                state = ScanSupportState.UNSUPPORTED_VERSION,
-                targetVersionCode = versionInfo.versionCode,
-                targetVersionName = versionInfo.versionName,
-                targetVersionType = null,
+            return withDerivedFeatureStatus(
+                symbols.withScanSupport(
+                    state = ScanSupportState.UNSUPPORTED_VERSION,
+                    targetVersionCode = versionInfo.versionCode,
+                    targetVersionName = versionInfo.versionName,
+                    targetVersionType = null,
+                ),
             )
         }
 
         val versionType = readTargetVersionType(context, logger)
-        return symbols.withScanSupport(
-            state = if (isOfficialTiebaVersionType(versionType)) {
-                ScanSupportState.SUPPORTED
-            } else {
-                ScanSupportState.NON_OFFICIAL
-            },
-            targetVersionCode = versionInfo.versionCode,
-            targetVersionName = versionInfo.versionName,
-            targetVersionType = versionType,
+        return withDerivedFeatureStatus(
+            symbols.withScanSupport(
+                state = if (isOfficialTiebaVersionType(versionType)) {
+                    ScanSupportState.SUPPORTED
+                } else {
+                    ScanSupportState.NON_OFFICIAL
+                },
+                targetVersionCode = versionInfo.versionCode,
+                targetVersionName = versionInfo.versionName,
+                targetVersionType = versionType,
+            ),
         )
+    }
+
+    private fun withDerivedFeatureStatus(symbols: HookSymbols): HookSymbols {
+        return symbols.withFeatureStatusMap(HookFeatureStatusDeriver.derive(symbols))
     }
 
     private fun readTargetAppVersionInfo(context: Context, logger: ScanLogger?): TargetAppVersionInfo? {

@@ -4,7 +4,12 @@ data class WebSymbols(
     val enterForum: EnterForumWebSymbolsGroup = EnterForumWebSymbolsGroup(),
     val plainUrl: PlainUrlSymbolsGroup = PlainUrlSymbolsGroup(),
     val mountCard: MountCardLinkSymbolsGroup = MountCardLinkSymbolsGroup(),
+    val adBlock: WebAdBlockSymbolsGroup = WebAdBlockSymbolsGroup(),
 )
+
+object WebAdBlockConstraints {
+    const val MINE_TAB_MIN_VERSION_CODE = 369491968L
+}
 
 data class EnterForumWebSymbolsGroup(
     val enterForumWebControllerClass: String? = null,
@@ -56,4 +61,25 @@ data class MountCardLinkSymbolsGroup(
     val mountCardLinkLayoutDataField: String? = null,
     val mountCardLinkInfoDataClass: String? = null,
     val mountCardLinkInfoGetUrlMethod: String? = null,
+)
+
+data class WebAdBlockSymbolsGroup(
+    val mineTab: MineTabWebBlockSymbolsGroup = MineTabWebBlockSymbolsGroup(),
+    val homeSideBar: HomeSideBarWebBlockSymbolsGroup = HomeSideBarWebBlockSymbolsGroup(),
+)
+
+data class MineTabWebBlockSymbolsGroup(
+    val mineTabWebViewClass: String? = null,
+    val mineTabWebLoadUrlMethod: String? = null,
+    val mineTabWebGetUrlMethod: String? = null,
+    val mineTabWebGetInnerWebViewMethod: String? = null,
+)
+
+data class HomeSideBarWebBlockSymbolsGroup(
+    val homeSideBarWebViewClass: String? = null,
+    val homeSideBarTbWebViewClass: String? = null,
+    val homeSideBarWebGetWebViewMethod: String? = null,
+    val homeSideBarWebGetUrlMethod: String? = null,
+    val homeSideBarWebGetInnerWebViewMethod: String? = null,
+    val homeSideBarWebLoadUrlMethods: List<String>? = null,
 )

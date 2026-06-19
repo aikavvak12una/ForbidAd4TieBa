@@ -36,6 +36,14 @@ internal class HookSymbolsBuilder {
     var pbFallingInitMethod: String? = null
     var pbFallingShowMethod: String? = null
     var pbFallingClearMethod: String? = null
+    var pbBottomEnterBarViewClass: String? = null
+    var pbBottomEnterBarConstructorCount: Int? = null
+    var pbBottomEnterBarRefreshMethodSpecs: List<String>? = null
+    var pbEnterFrsAnimationTipViewClass: String? = null
+    var pbEnterFrsAnimationTipConstructorCount: Int? = null
+    var pbEnterFrsAnimationTipCallerClasses: List<String>? = null
+    var pbHotTopicGuideTotalViewMethod: String? = null
+    var pbHotTopicGuideRefreshMethodSpecs: List<String>? = null
     var pbEarlyAdInsertClass: String? = null
     var pbEarlyAdInsertMethodSpecs: List<String>? = null
     var pbAdBidCommonRequestModelClass: String? = null
@@ -93,6 +101,33 @@ internal class HookSymbolsBuilder {
     var mountCardLinkLayoutDataField: String? = null
     var mountCardLinkInfoDataClass: String? = null
     var mountCardLinkInfoGetUrlMethod: String? = null
+    var mineTabWebViewClass: String? = null
+    var mineTabWebLoadUrlMethod: String? = null
+    var mineTabWebGetUrlMethod: String? = null
+    var mineTabWebGetInnerWebViewMethod: String? = null
+    var homeSideBarWebViewClass: String? = null
+    var homeSideBarTbWebViewClass: String? = null
+    var homeSideBarWebGetWebViewMethod: String? = null
+    var homeSideBarWebGetUrlMethod: String? = null
+    var homeSideBarWebGetInnerWebViewMethod: String? = null
+    var homeSideBarWebLoadUrlMethods: List<String>? = null
+    var autoSignInNetworkClass: String? = null
+    var autoSignInNetworkConstructorSpec: String? = null
+    var autoSignInNetworkAddPostDataMethod: String? = null
+    var autoSignInNetworkPostNetDataMethod: String? = null
+    var autoSignInNetworkSetNeedTbsMethod: String? = null
+    var autoSignInNetworkSetNeedSigMethod: String? = null
+    var autoSignInTbConfigClass: String? = null
+    var autoSignInServerAddressField: String? = null
+    var autoSignInCoreApplicationClass: String? = null
+    var autoSignInCurrentAccountMethod: String? = null
+    var autoSignInHybridProxyClass: String? = null
+    var autoSignInHybridProxyConstructorSpec: String? = null
+    var autoSignInHybridJsBridgeClass: String? = null
+    var autoSignInHybridNativeNetworkProxyMethod: String? = null
+    var autoSignInHybridTaskClass: String? = null
+    var autoSignInHybridTaskConstructorSpec: String? = null
+    var autoSignInHybridTaskDoInBackgroundMethod: String? = null
     var forumBottomSheetViewClass: String? = null
     var forumBottomSheetInitScrollMethod: String? = null
     var autoRefreshTriggerMethod: String? = null
@@ -126,10 +161,13 @@ internal class HookSymbolsBuilder {
     var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
     var collectionPresenterField: String? = null
     var collectionPresenterListSetterMethod: String? = null
+    var collectionPresenterListSetterMethodSpec: String? = null
     var collectionPresenterAdapterField: String? = null
     var collectionModelField: String? = null
     var collectionModelListGetterMethod: String? = null
+    var collectionModelListGetterMethodSpec: String? = null
     var collectionModelParseMethod: String? = null
+    var collectionModelParseMethodSpec: String? = null
     var collectionModelListField: String? = null
     var collectionFragmentDisplayListField: String? = null
     var collectionActivityNavControllerField: String? = null
@@ -140,8 +178,10 @@ internal class HookSymbolsBuilder {
     var collectionEditModeMethod: String? = null
     var historyAdapterField: String? = null
     var historyAdapterSetListMethod: String? = null
+    var historyAdapterSetListMethodSpec: String? = null
     var historyListField: String? = null
     var historyActivityListUpdateMethod: String? = null
+    var historyActivityListUpdateMethodSpec: String? = null
     var historyActivityNavBarField: String? = null
     var historyThreadNameMethod: String? = null
     var historyForumNameMethod: String? = null
@@ -206,6 +246,9 @@ internal class HookSymbolsBuilder {
     var homeNativeGlassSubPbNextPageMoreViewId: Int? = null
     var homeNativeGlassPbReplyTitleDividerViewId: Int? = null
     var homeNativeGlassDynamicBackgroundColorIds: List<Int> = emptyList()
+    var homeNativeGlassTopChromeTabSelectedMethodSpecs: List<String>? = null
+    var homeNativeGlassSubPbSetNextPageMethod: String? = null
+    var homeNativeGlassSubPbSetNextPageParamType: String? = null
     var homeNativeGlassSortSwitchBackgroundPaintField: String? = null
     var homeNativeGlassSortSwitchSlideDrawMethod: String? = null
     var homeNativeGlassSortSwitchSlidePathField: String? = null
@@ -223,6 +266,7 @@ internal class HookSymbolsBuilder {
     var homeNativeGlassHostDarkModeSwitchCallbackMethod: String? = null
     var pbCommonLayoutPreloaderGetOrDefaultMethod: String? = null
     var feedCardBindMethod: String? = null
+    var feedCardBindMethodSpec: String? = null
     var feedCardDataListField: String? = null
     var feedHeadParamsField: String? = null
     var feedRecommendCardNestedDataMethod: String? = null
@@ -321,6 +365,7 @@ internal class HookSymbolsBuilder {
                     pb = buildPbSymbols(),
                 ),
                 web = buildWebSymbols(),
+                signIn = buildSignInSymbols(),
                 privateMessage = buildPrivateMessageSymbols(),
                 collectionHistory = buildCollectionHistorySymbols(),
                 media = buildMediaSymbols(),
@@ -369,6 +414,13 @@ internal class HookSymbolsBuilder {
                 ),
             ),
             nativeGlass = HomeNativeGlassSymbolsGroup(
+                topChrome = HomeNativeGlassTopChromeSymbolsGroup(
+                    homeNativeGlassTopChromeTabSelectedMethodSpecs,
+                ),
+                subPbNextPage = HomeNativeGlassSubPbNextPageSymbolsGroup(
+                    homeNativeGlassSubPbSetNextPageMethod,
+                    homeNativeGlassSubPbSetNextPageParamType,
+                ),
                 sortSwitch = HomeNativeGlassSortSwitchSymbolsGroup(
                     homeNativeGlassSortSwitchBackgroundPaintField,
                     homeNativeGlassSortSwitchSlideDrawMethod,
@@ -411,6 +463,7 @@ internal class HookSymbolsBuilder {
             ),
             feedCard = FeedCardSymbolsGroup(
                 feedCardBindMethod,
+                feedCardBindMethodSpec,
                 feedCardDataListField,
                 feedHeadParamsField,
                 feedRecommendCardNestedDataMethod,
@@ -444,6 +497,34 @@ internal class HookSymbolsBuilder {
         )
     }
 
+    private fun buildSignInSymbols(): SignInSymbols {
+        return SignInSymbols(
+            autoSignIn = AutoSignInSymbolsGroup(
+                nativeNetwork = AutoSignInNativeNetworkSymbolsGroup(
+                    autoSignInNetworkClass,
+                    autoSignInNetworkConstructorSpec,
+                    autoSignInNetworkAddPostDataMethod,
+                    autoSignInNetworkPostNetDataMethod,
+                    autoSignInNetworkSetNeedTbsMethod,
+                    autoSignInNetworkSetNeedSigMethod,
+                    autoSignInTbConfigClass,
+                    autoSignInServerAddressField,
+                    autoSignInCoreApplicationClass,
+                    autoSignInCurrentAccountMethod,
+                ),
+                hybridNativeProxy = AutoSignInHybridNativeProxySymbolsGroup(
+                    autoSignInHybridProxyClass,
+                    autoSignInHybridProxyConstructorSpec,
+                    autoSignInHybridJsBridgeClass,
+                    autoSignInHybridNativeNetworkProxyMethod,
+                    autoSignInHybridTaskClass,
+                    autoSignInHybridTaskConstructorSpec,
+                    autoSignInHybridTaskDoInBackgroundMethod,
+                ),
+            ),
+        )
+    }
+
     private fun buildPbSymbols(): PbSymbols {
         return PbSymbols(
             ad = PbAdSymbolsGroup(
@@ -461,6 +542,16 @@ internal class HookSymbolsBuilder {
                 pbFallingInitMethod,
                 pbFallingShowMethod,
                 pbFallingClearMethod,
+            ),
+            bottomEnterBar = PbBottomEnterBarSymbolsGroup(
+                pbBottomEnterBarViewClass,
+                pbBottomEnterBarConstructorCount,
+                pbBottomEnterBarRefreshMethodSpecs,
+                pbEnterFrsAnimationTipViewClass,
+                pbEnterFrsAnimationTipConstructorCount,
+                pbEnterFrsAnimationTipCallerClasses,
+                pbHotTopicGuideTotalViewMethod,
+                pbHotTopicGuideRefreshMethodSpecs,
             ),
             comment = PbCommentSymbolsGroup(
                 bottomSheet = ForumBottomSheetSymbolsGroup(forumBottomSheetViewClass, forumBottomSheetInitScrollMethod),
@@ -602,6 +693,22 @@ internal class HookSymbolsBuilder {
                 mountCardLinkInfoDataClass,
                 mountCardLinkInfoGetUrlMethod,
             ),
+            adBlock = WebAdBlockSymbolsGroup(
+                mineTab = MineTabWebBlockSymbolsGroup(
+                    mineTabWebViewClass,
+                    mineTabWebLoadUrlMethod,
+                    mineTabWebGetUrlMethod,
+                    mineTabWebGetInnerWebViewMethod,
+                ),
+                homeSideBar = HomeSideBarWebBlockSymbolsGroup(
+                    homeSideBarWebViewClass,
+                    homeSideBarTbWebViewClass,
+                    homeSideBarWebGetWebViewMethod,
+                    homeSideBarWebGetUrlMethod,
+                    homeSideBarWebGetInnerWebViewMethod,
+                    homeSideBarWebLoadUrlMethods,
+                ),
+            ),
         )
     }
 
@@ -659,12 +766,15 @@ internal class HookSymbolsBuilder {
                 presenter = CollectionPresenterSymbolsGroup(
                     collectionPresenterField,
                     collectionPresenterListSetterMethod,
+                    collectionPresenterListSetterMethodSpec,
                     collectionPresenterAdapterField,
                 ),
                 model = CollectionModelSymbolsGroup(
                     collectionModelField,
                     collectionModelListGetterMethod,
+                    collectionModelListGetterMethodSpec,
                     collectionModelParseMethod,
+                    collectionModelParseMethodSpec,
                     collectionModelListField,
                 ),
                 fragment = CollectionFragmentSymbolsGroup(
@@ -683,8 +793,10 @@ internal class HookSymbolsBuilder {
                 activity = HistoryActivitySymbolsGroup(
                     historyAdapterField,
                     historyAdapterSetListMethod,
+                    historyAdapterSetListMethodSpec,
                     historyListField,
                     historyActivityListUpdateMethod,
+                    historyActivityListUpdateMethodSpec,
                     historyActivityNavBarField,
                 ),
                 threadData = HistoryThreadDataSymbolsGroup(

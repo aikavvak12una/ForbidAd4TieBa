@@ -3,6 +3,7 @@ package com.forbidad4tieba.hook.symbol.model
 data class HookPointSymbols(
     val primary: PrimaryHookPointSymbols = PrimaryHookPointSymbols(),
     val web: WebSymbols = WebSymbols(),
+    val signIn: SignInSymbols = SignInSymbols(),
     val privateMessage: PrivateMessageSymbols = PrivateMessageSymbols(),
     val collectionHistory: CollectionHistorySymbols = CollectionHistorySymbols(),
     val media: MediaHookPointSymbols = MediaHookPointSymbols(),

@@ -7,8 +7,9 @@ import android.view.View
 import android.webkit.WebView
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.Constants
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.symbol.model.HookSymbols
+import com.forbidad4tieba.hook.symbol.model.WebAdBlockConstraints
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -24,7 +25,6 @@ import java.util.concurrent.atomic.AtomicBoolean
  * an internal MonitorWebView or cached page directly, bypassing the inner WebView load callbacks.
  */
 object MineTabWebBlockHook {
-    private const val MIN_WEB_MINE_TAB_VERSION_CODE = 369491968L
     private const val MINE_TAB_PATH = "/mo/q/hybrid-main-forumtab/mineTab"
 
     private val INJECT_DELAYS_MS = longArrayOf(0L, 80L, 260L, 900L, 1800L)
@@ -85,24 +85,54 @@ object MineTabWebBlockHook {
     @Volatile
     private var versionEligible: Boolean? = null
 
-    fun hook(classLoader: ClassLoader) {
+    fun hook(classLoader: ClassLoader, symbols: HookSymbols) {
         val mod = XposedCompat.module ?: return
         try {
-            val tbWebViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.TB_WEB_VIEW_CLASS, classLoader)
+            val className = symbols.mineTabWebViewClass?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.logW("[MineTabWebBlockHook] skipped: missing cached class")
+                return
+            }
+            val loadUrlMethodName = symbols.mineTabWebLoadUrlMethod?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.logW("[MineTabWebBlockHook] skipped: missing cached loadUrl method")
+                return
+            }
+            val getUrlMethodName = symbols.mineTabWebGetUrlMethod?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.logW("[MineTabWebBlockHook] skipped: missing cached getUrl method")
+                return
+            }
+            val getInnerWebViewMethodName =
+                symbols.mineTabWebGetInnerWebViewMethod?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.logW("[MineTabWebBlockHook] skipped: missing cached inner WebView method")
+                    return
+                }
+
+            val tbWebViewClass = XposedCompat.findClassOrNull(className, classLoader)
             if (tbWebViewClass == null) {
-                XposedCompat.logW("[MineTabWebBlockHook] skipped: TbWebView class not found")
+                XposedCompat.logW("[MineTabWebBlockHook] skipped: class not found: $className")
                 return
             }
 
             val loadUrlMethod = ReflectionUtils.findMethodInHierarchy(
                 tbWebViewClass,
-                "loadUrl",
+                loadUrlMethodName,
                 String::class.java,
-            )
-            val getUrlMethod = ReflectionUtils.findMethodInHierarchy(tbWebViewClass, "getUrl")
-            val getInnerWebViewMethod = ReflectionUtils.findMethodInHierarchy(tbWebViewClass, "getInnerWebView")
+            )?.takeIf { method ->
+                method.returnType == Void.TYPE
+            }
+            val getUrlMethod = ReflectionUtils.findMethodInHierarchy(
+                tbWebViewClass,
+                getUrlMethodName,
+            )?.takeIf { method ->
+                method.returnType == String::class.java
+            }
+            val getInnerWebViewMethod = ReflectionUtils.findMethodInHierarchy(
+                tbWebViewClass,
+                getInnerWebViewMethodName,
+            )?.takeIf { method ->
+                WebView::class.java.isAssignableFrom(method.returnType)
+            }
             if (loadUrlMethod == null || getUrlMethod == null || getInnerWebViewMethod == null) {
-                XposedCompat.logW("[MineTabWebBlockHook] skipped: TbWebView methods missing")
+                XposedCompat.logW("[MineTabWebBlockHook] skipped: cached methods mismatch")
                 return
             }
             if (Modifier.isStatic(loadUrlMethod.modifiers)) {
@@ -239,7 +269,7 @@ object MineTabWebBlockHook {
             } else {
                 info.versionCode.toLong()
             }
-            versionCode >= MIN_WEB_MINE_TAB_VERSION_CODE
+            versionCode >= WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE
         } catch (t: Throwable) {
             if (versionWarningLogged.compareAndSet(false, true)) {
                 XposedCompat.logW("[MineTabWebBlockHook] target version unavailable: ${t.message}")

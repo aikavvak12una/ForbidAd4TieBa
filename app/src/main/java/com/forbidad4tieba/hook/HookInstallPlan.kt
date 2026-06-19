@@ -120,7 +120,6 @@ internal object HookInstallPlanner {
         val entries = ArrayList<HookInstallEntry>()
         val isMain = HookProcess.isMain(processName)
         if (isMain) {
-            entries += HookInstallEntry("PbBottomEnterBarHook") { cl -> PbBottomEnterBarHook.hook(cl) }
             entries += HookInstallEntry("UpgradePopWindowBlockHook") { cl -> UpgradePopWindowBlockHook.hook(cl) }
         }
         return HookInstallPlan(processName, "static", entries)
@@ -167,10 +166,12 @@ internal object HookInstallPlanner {
             entries += performanceEntries(settings)
             entries += HookInstallEntry("HelpCenterFooterBlockHook") { cl -> HelpCenterFooterBlockHook.hook(cl) }
             if (context.canInstallMineTabWebBlock(settings)) {
-                entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl) }
+                entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl, symbols) }
             }
             if (context.canInstallHomeSideBarWebBlock(settings)) {
-                entries += HookInstallEntry("HomeSideBarWebBlockHook") { cl -> HomeSideBarWebBlockHook.hook(cl) }
+                entries += HookInstallEntry("HomeSideBarWebBlockHook") { cl ->
+                    HomeSideBarWebBlockHook.hook(cl, symbols)
+                }
             }
             if (context.canInstallFollowedTabWeb(settings)) {
                 entries += HookInstallEntry("FollowedTabWebHook") { cl -> FollowedTabWebHook.hook(cl) }
@@ -234,6 +235,22 @@ internal object HookInstallPlanner {
 
         entries += HookInstallEntry("SettingsMenuHook") { cl -> SettingsMenuHook.hook(cl, symbols) }
         entries += HookInstallEntry("HomeSideBarSettingsEntryHook") { cl -> HomeSideBarSettingsEntryHook.hook(cl) }
+
+        if (context.canInstallPbBottomEnterBarStable()) {
+            entries += HookInstallEntry("PbBottomEnterBarHook.Stable") { cl ->
+                HookSymbolResolver.resolvePbBottomEnterBarStableSymbols(cl, symbols)?.let { targets ->
+                    PbBottomEnterBarHook.hookStable(targets)
+                }
+            }
+        }
+
+        if (context.canInstallPbBottomEnterBarHotTopicGuide()) {
+            entries += HookInstallEntry("PbBottomEnterBarHook.HotTopicGuide") { cl ->
+                HookSymbolResolver.resolvePbBottomEnterBarHotTopicGuideSymbols(cl, symbols)?.let { targets ->
+                    PbBottomEnterBarHook.hookHotTopicGuide(targets)
+                }
+            }
+        }
 
         if (feedListHook) {
             entries += HookInstallEntry("FeedAdHook") { cl ->

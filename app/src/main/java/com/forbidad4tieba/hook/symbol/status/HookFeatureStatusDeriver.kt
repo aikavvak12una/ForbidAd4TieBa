@@ -48,7 +48,47 @@ internal object HookFeatureStatusDeriver {
             HookFeatureStatus(state = HookFeatureState.FULL)
         }
 
-        out[HookFeatureKey.HIDE_PB_BOTTOM_BANNER] = HookFeatureStatus(state = HookFeatureState.HARD_CODED)
+        val pbBottomEnterBarReady =
+            !symbols.pbBottomEnterBarViewClass.isNullOrBlank() &&
+                (symbols.pbBottomEnterBarConstructorCount ?: 0) > 0
+        val pbBottomEnterBarComplete =
+            pbBottomEnterBarReady &&
+                !symbols.pbBottomEnterBarRefreshMethodSpecs.isNullOrEmpty()
+        val pbEnterFrsAnimationTipReady =
+            !symbols.pbEnterFrsAnimationTipViewClass.isNullOrBlank() &&
+                (symbols.pbEnterFrsAnimationTipConstructorCount ?: 0) > 0
+        val pbEnterFrsAnimationTipComplete =
+            pbEnterFrsAnimationTipReady &&
+                symbols.pbEnterFrsAnimationTipCallerClasses.orEmpty().containsAll(
+                    listOf(
+                        StableTiebaHookPoints.PB_VIEW_UTIL_KT_CLASS,
+                        StableTiebaHookPoints.SPRITE_ANIMATION_TIP_MANAGER_CLASS,
+                    ),
+                )
+        val pbHotTopicGuideReady =
+            !symbols.pbHotTopicGuideTotalViewMethod.isNullOrBlank() &&
+                !symbols.pbHotTopicGuideRefreshMethodSpecs.isNullOrEmpty()
+        val pbBottomBannerMissing = ArrayList<String>(3)
+        if (!pbBottomEnterBarComplete) {
+            pbBottomBannerMissing.add("PbBottomEnterBarHook.BottomEnterBarView")
+        }
+        if (!pbEnterFrsAnimationTipComplete) {
+            pbBottomBannerMissing.add("PbBottomEnterBarHook.AnimationTip")
+        }
+        if (!pbHotTopicGuideReady) {
+            pbBottomBannerMissing.add("PbBottomEnterBarHook.HotTopicGuide")
+        }
+        out[HookFeatureKey.HIDE_PB_BOTTOM_BANNER] = when {
+            pbBottomBannerMissing.isEmpty() -> HookFeatureStatus(state = HookFeatureState.FULL)
+            pbBottomEnterBarReady || pbEnterFrsAnimationTipReady || pbHotTopicGuideReady -> HookFeatureStatus(
+                state = HookFeatureState.PARTIAL,
+                missingOptional = pbBottomBannerMissing,
+            )
+            else -> HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = pbBottomBannerMissing,
+            )
+        }
         val freeCopyOptional = ArrayList<String>(3)
         if (symbols.freeCopyPopupMenuClass.isNullOrBlank()) freeCopyOptional.add("freeCopyPopupMenuClass")
         if (symbols.freeCopyPopupContentViewMethod.isNullOrBlank()) {
@@ -60,7 +100,65 @@ internal object HookFeatureStatusDeriver {
         } else {
             HookFeatureStatus(state = HookFeatureState.PARTIAL, missingOptional = freeCopyOptional)
         }
-        out[HookFeatureKey.AUTO_SIGN_IN] = HookFeatureStatus(state = HookFeatureState.HARD_CODED)
+
+        val autoSignInCritical = ArrayList<String>(10)
+        if (symbols.autoSignInNetworkClass.isNullOrBlank()) autoSignInCritical.add("autoSignInNetworkClass")
+        if (symbols.autoSignInNetworkConstructorSpec.isNullOrBlank()) {
+            autoSignInCritical.add("autoSignInNetworkConstructorSpec")
+        }
+        if (symbols.autoSignInNetworkAddPostDataMethod.isNullOrBlank()) {
+            autoSignInCritical.add("autoSignInNetworkAddPostDataMethod")
+        }
+        if (symbols.autoSignInNetworkPostNetDataMethod.isNullOrBlank()) {
+            autoSignInCritical.add("autoSignInNetworkPostNetDataMethod")
+        }
+        if (symbols.autoSignInNetworkSetNeedTbsMethod.isNullOrBlank()) {
+            autoSignInCritical.add("autoSignInNetworkSetNeedTbsMethod")
+        }
+        if (symbols.autoSignInNetworkSetNeedSigMethod.isNullOrBlank()) {
+            autoSignInCritical.add("autoSignInNetworkSetNeedSigMethod")
+        }
+        if (symbols.autoSignInTbConfigClass.isNullOrBlank()) autoSignInCritical.add("autoSignInTbConfigClass")
+        if (symbols.autoSignInServerAddressField.isNullOrBlank()) {
+            autoSignInCritical.add("autoSignInServerAddressField")
+        }
+        if (symbols.autoSignInCoreApplicationClass.isNullOrBlank()) {
+            autoSignInCritical.add("autoSignInCoreApplicationClass")
+        }
+        if (symbols.autoSignInCurrentAccountMethod.isNullOrBlank()) {
+            autoSignInCritical.add("autoSignInCurrentAccountMethod")
+        }
+        val autoSignInOptional = ArrayList<String>(7)
+        if (symbols.autoSignInHybridProxyClass.isNullOrBlank()) {
+            autoSignInOptional.add("autoSignInHybridProxyClass")
+        }
+        if (symbols.autoSignInHybridProxyConstructorSpec.isNullOrBlank()) {
+            autoSignInOptional.add("autoSignInHybridProxyConstructorSpec")
+        }
+        if (symbols.autoSignInHybridJsBridgeClass.isNullOrBlank()) {
+            autoSignInOptional.add("autoSignInHybridJsBridgeClass")
+        }
+        if (symbols.autoSignInHybridNativeNetworkProxyMethod.isNullOrBlank()) {
+            autoSignInOptional.add("autoSignInHybridNativeNetworkProxyMethod")
+        }
+        if (symbols.autoSignInHybridTaskClass.isNullOrBlank()) {
+            autoSignInOptional.add("autoSignInHybridTaskClass")
+        }
+        if (symbols.autoSignInHybridTaskConstructorSpec.isNullOrBlank()) {
+            autoSignInOptional.add("autoSignInHybridTaskConstructorSpec")
+        }
+        if (symbols.autoSignInHybridTaskDoInBackgroundMethod.isNullOrBlank()) {
+            autoSignInOptional.add("autoSignInHybridTaskDoInBackgroundMethod")
+        }
+        out[HookFeatureKey.AUTO_SIGN_IN] = when {
+            autoSignInCritical.isNotEmpty() -> HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = autoSignInCritical,
+                missingOptional = autoSignInOptional,
+            )
+            autoSignInOptional.isEmpty() -> HookFeatureStatus(state = HookFeatureState.FULL)
+            else -> HookFeatureStatus(state = HookFeatureState.PARTIAL, missingOptional = autoSignInOptional)
+        }
 
         val privateReadReceiptCritical = ArrayList<String>(19)
         if (symbols.privateReadReceiptModelClass.isNullOrBlank()) {
@@ -161,7 +259,7 @@ internal object HookFeatureStatusDeriver {
 
         val homeNativeGlassCritical = ArrayList<String>(1)
         val homeNativeGlassOptional = ArrayList<String>(12)
-        if (symbols.feedCardBindMethod.isNullOrBlank()) homeNativeGlassCritical.add("feedCardBindMethod")
+        if (symbols.feedCardBindMethodSpec.isNullOrBlank()) homeNativeGlassCritical.add("feedCardBindMethodSpec")
         if (!symbols.homePersonalizeAnchorClasses.orEmpty().contains(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS)) {
             homeNativeGlassOptional.add("homeNativeGlassPageClass")
         }
@@ -176,6 +274,21 @@ internal object HookFeatureStatusDeriver {
         }
         if (symbols.homeNativeGlassDynamicBackgroundColorIds.isEmpty()) {
             homeNativeGlassOptional.add("homeNativeGlassDynamicBackgroundColorIds")
+        }
+        val hasHomeNativeGlassTopChromeTabSelectedSpec = symbols.homeNativeGlassTopChromeTabSelectedMethodSpecs
+            .orEmpty()
+            .any { spec ->
+                val sep = spec.indexOf('#')
+                sep > 0 && sep < spec.lastIndex
+            }
+        if (!hasHomeNativeGlassTopChromeTabSelectedSpec) {
+            homeNativeGlassOptional.add("homeNativeGlassTopChromeTabSelectedMethodSpecs")
+        }
+        if (symbols.homeNativeGlassSubPbSetNextPageMethod.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassSubPbSetNextPageMethod")
+        }
+        if (symbols.homeNativeGlassSubPbSetNextPageParamType.isNullOrBlank()) {
+            homeNativeGlassOptional.add("homeNativeGlassSubPbSetNextPageParamType")
         }
         if (symbols.homeNativeGlassSortSwitchBackgroundPaintField.isNullOrBlank()) {
             homeNativeGlassOptional.add("homeNativeGlassSortSwitchBackgroundPaintField")
@@ -549,7 +662,7 @@ internal object HookFeatureStatusDeriver {
         val agreeServerLogReady =
             !symbols.replyVisibilityProbeAgreeResponseClass.isNullOrBlank() &&
                 !symbols.replyVisibilityProbeAgreeDecodeLogicMethod.isNullOrBlank()
-        val feedInfoLogReady = !symbols.feedCardBindMethod.isNullOrBlank()
+        val feedInfoLogReady = !symbols.feedCardBindMethodSpec.isNullOrBlank()
         val detailedLoggingMissing = buildList {
             if (!replyServerLogReady) add("ReplyServerResponseLogHook")
             if (!agreeServerLogReady) add("AgreeServerResponseLogHook")
@@ -902,8 +1015,38 @@ internal object HookFeatureStatusDeriver {
             ),
         )
 
-        out[HookFeatureKey.BLOCK_AD_MINE_TAB_WEB] = HookFeatureStatus(state = HookFeatureState.HARD_CODED)
-        out[HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB] = HookFeatureStatus(state = HookFeatureState.HARD_CODED)
+        val mineTabWebCritical = ArrayList<String>(5)
+        val mineTabTargetVersionCode = symbols.scanTargetVersionCode
+        when {
+            mineTabTargetVersionCode == null -> mineTabWebCritical.add("scanTargetVersionCode")
+            mineTabTargetVersionCode < WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE -> {
+                mineTabWebCritical.add(
+                    "scanTargetVersionCode<${WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE}",
+                )
+            }
+        }
+        if (symbols.mineTabWebViewClass.isNullOrBlank()) mineTabWebCritical.add("mineTabWebViewClass")
+        if (symbols.mineTabWebLoadUrlMethod.isNullOrBlank()) mineTabWebCritical.add("mineTabWebLoadUrlMethod")
+        if (symbols.mineTabWebGetUrlMethod.isNullOrBlank()) mineTabWebCritical.add("mineTabWebGetUrlMethod")
+        if (symbols.mineTabWebGetInnerWebViewMethod.isNullOrBlank()) {
+            mineTabWebCritical.add("mineTabWebGetInnerWebViewMethod")
+        }
+        out[HookFeatureKey.BLOCK_AD_MINE_TAB_WEB] = statusFromMissing(mineTabWebCritical)
+
+        out[HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB] = statusFromMissing(
+            listOfNotNull(
+                "homeSideBarWebViewClass".takeIf { symbols.homeSideBarWebViewClass.isNullOrBlank() },
+                "homeSideBarTbWebViewClass".takeIf { symbols.homeSideBarTbWebViewClass.isNullOrBlank() },
+                "homeSideBarWebGetWebViewMethod".takeIf {
+                    symbols.homeSideBarWebGetWebViewMethod.isNullOrBlank()
+                },
+                "homeSideBarWebGetUrlMethod".takeIf { symbols.homeSideBarWebGetUrlMethod.isNullOrBlank() },
+                "homeSideBarWebGetInnerWebViewMethod".takeIf {
+                    symbols.homeSideBarWebGetInnerWebViewMethod.isNullOrBlank()
+                },
+                "homeSideBarWebLoadUrlMethods".takeIf { symbols.homeSideBarWebLoadUrlMethods.isNullOrEmpty() },
+            ),
+        )
         out[HookFeatureKey.BLOCK_AD] = combineSubFeatureStatuses(
             listOf(
                 out.getValue(HookFeatureKey.BLOCK_AD_FEED),
@@ -1031,6 +1174,8 @@ internal object HookFeatureStatusDeriver {
             name.startsWith("StrategyAdHook.") -> features(HookFeatureKey.BLOCK_AD_STRATEGY)
             name.startsWith("SearchBoxTextAdHook.") -> features(HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT)
             name == "HomeTopBarRightSlotHook" -> features(HookFeatureKey.BLOCK_AD_HOME_TOP_BAR)
+            name == "PbBottomEnterBarHook" ||
+                name.startsWith("PbBottomEnterBarHook.") -> features(HookFeatureKey.HIDE_PB_BOTTOM_BANNER)
             name == "PbFallingAdHook" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name == "PbEarlyAdBlockHook" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name.startsWith("PbAdRequestBlockHook.") -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
@@ -1038,6 +1183,8 @@ internal object HookFeatureStatusDeriver {
             name.startsWith("ForumPageAdBlockHook") -> features(HookFeatureKey.BLOCK_AD_FORUM_PAGE)
             name.startsWith("EnterForumWebHook") -> features(HookFeatureKey.FILTER_ENTER_FORUM_WEB)
             name.startsWith("PlainUrlDirectBrowserHook.") -> features(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
+            name == "MineTabWebBlockHook" -> features(HookFeatureKey.BLOCK_AD_MINE_TAB_WEB)
+            name == "HomeSideBarWebBlockHook" -> features(HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB)
             name == "ForumNativeTopShiftBlockHook" -> features(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
             name == "AutoRefreshHook" -> features(HookFeatureKey.DISABLE_AUTO_REFRESH)
             name == "AutoLoadMoreHook.Config" -> features(HookFeatureKey.AUTO_LOAD_MORE)

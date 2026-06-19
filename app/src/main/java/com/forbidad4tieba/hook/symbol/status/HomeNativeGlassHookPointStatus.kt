@@ -4,11 +4,23 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 
 internal fun formatHomeNativeGlassHookPointStatusLines(symbols: HookSymbols): List<String> {
-    val out = ArrayList<String>(7)
+    val out = ArrayList<String>(9)
 
     fun has(value: String?): Boolean = !value.isNullOrBlank()
     fun has(value: Int?): Boolean = value != null && value != 0
     fun hasIntList(values: List<Int>?): Boolean = values.orEmpty().any { it != 0 }
+    fun hasTopChromeTabSelectedSpecs(): Boolean {
+        return symbols.homeNativeGlassTopChromeTabSelectedMethodSpecs
+            .orEmpty()
+            .any { spec ->
+                val sep = spec.indexOf('#')
+                sep > 0 && sep < spec.lastIndex
+            }
+    }
+    fun topChromeTarget(): String {
+        val specs = symbols.homeNativeGlassTopChromeTabSelectedMethodSpecs.orEmpty()
+        return if (specs.isEmpty()) "-" else specs.joinToString(",")
+    }
     fun hasHomeNativeGlassPageClass(): Boolean {
         return symbols.homePersonalizeAnchorClasses
             .orEmpty()
@@ -38,10 +50,10 @@ internal fun formatHomeNativeGlassHookPointStatusLines(symbols: HookSymbols): Li
     add(
         "HomeNativeGlassHook",
         "${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.<init> / " +
-            "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.${symbols.feedCardBindMethod}",
+            "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.${symbols.feedCardBindMethodSpec}",
         listOf(
             "homeNativeGlassPageClass" to hasHomeNativeGlassPageClass(),
-            "feedCardBindMethod" to has(symbols.feedCardBindMethod),
+            "feedCardBindMethodSpec" to has(symbols.feedCardBindMethodSpec),
         ),
     )
     add(
@@ -59,6 +71,25 @@ internal fun formatHomeNativeGlassHookPointStatusLines(symbols: HookSymbols): Li
         listOf(
             "homeNativeGlassDynamicBackgroundColorIds" to
                 hasIntList(symbols.homeNativeGlassDynamicBackgroundColorIds),
+        ),
+    )
+    add(
+        "HomeNativeGlassHook.TopChrome",
+        topChromeTarget(),
+        listOf(
+            "homeNativeGlassTopChromeTabSelectedMethodSpecs" to hasTopChromeTabSelectedSpecs(),
+        ),
+    )
+    add(
+        "HomeNativeGlassHook.SubPbNextPage",
+        "${StableTiebaHookPoints.BD_LIST_VIEW_CLASS}." +
+            "${symbols.homeNativeGlassSubPbSetNextPageMethod}" +
+            "(${symbols.homeNativeGlassSubPbSetNextPageParamType})",
+        listOf(
+            "homeNativeGlassSubPbSetNextPageMethod" to
+                has(symbols.homeNativeGlassSubPbSetNextPageMethod),
+            "homeNativeGlassSubPbSetNextPageParamType" to
+                has(symbols.homeNativeGlassSubPbSetNextPageParamType),
         ),
     )
     add(

@@ -66,6 +66,43 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "AutoSignInManager.NativeNetworkBridge",
+            "${symbols.autoSignInNetworkClass}.${symbols.autoSignInNetworkAddPostDataMethod}/" +
+                "${symbols.autoSignInNetworkPostNetDataMethod} " +
+                "config=${symbols.autoSignInTbConfigClass}[${symbols.autoSignInServerAddressField}] " +
+                "account=${symbols.autoSignInCoreApplicationClass}.${symbols.autoSignInCurrentAccountMethod}",
+            listOf(
+                "autoSignInNetworkClass" to has(symbols.autoSignInNetworkClass),
+                "autoSignInNetworkConstructorSpec" to has(symbols.autoSignInNetworkConstructorSpec),
+                "autoSignInNetworkAddPostDataMethod" to has(symbols.autoSignInNetworkAddPostDataMethod),
+                "autoSignInNetworkPostNetDataMethod" to has(symbols.autoSignInNetworkPostNetDataMethod),
+                "autoSignInNetworkSetNeedTbsMethod" to has(symbols.autoSignInNetworkSetNeedTbsMethod),
+                "autoSignInNetworkSetNeedSigMethod" to has(symbols.autoSignInNetworkSetNeedSigMethod),
+                "autoSignInTbConfigClass" to has(symbols.autoSignInTbConfigClass),
+                "autoSignInServerAddressField" to has(symbols.autoSignInServerAddressField),
+                "autoSignInCoreApplicationClass" to has(symbols.autoSignInCoreApplicationClass),
+                "autoSignInCurrentAccountMethod" to has(symbols.autoSignInCurrentAccountMethod),
+            ),
+        )
+        addOptional(
+            "AutoSignInManager.HybridNativeProxy",
+            "${symbols.autoSignInHybridJsBridgeClass}." +
+                "${symbols.autoSignInHybridNativeNetworkProxyMethod} " +
+                "task=${symbols.autoSignInHybridTaskClass}." +
+                symbols.autoSignInHybridTaskDoInBackgroundMethod,
+            listOf(
+                "autoSignInHybridProxyClass" to has(symbols.autoSignInHybridProxyClass),
+                "autoSignInHybridProxyConstructorSpec" to has(symbols.autoSignInHybridProxyConstructorSpec),
+                "autoSignInHybridJsBridgeClass" to has(symbols.autoSignInHybridJsBridgeClass),
+                "autoSignInHybridNativeNetworkProxyMethod" to
+                    has(symbols.autoSignInHybridNativeNetworkProxyMethod),
+                "autoSignInHybridTaskClass" to has(symbols.autoSignInHybridTaskClass),
+                "autoSignInHybridTaskConstructorSpec" to has(symbols.autoSignInHybridTaskConstructorSpec),
+                "autoSignInHybridTaskDoInBackgroundMethod" to
+                    has(symbols.autoSignInHybridTaskDoInBackgroundMethod),
+            ),
+        )
+        add(
             "HomeTabHook",
             "${symbols.homeTabClass}.${symbols.homeTabRebuildMethod}[${symbols.homeTabListField}]",
             listOf(
@@ -126,8 +163,8 @@ internal object HookSymbolStatusFormatter {
         )
         add(
             "FeedInfoLogHook.Bind",
-            "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.${symbols.feedCardBindMethod}",
-            listOf("feedCardBindMethod" to has(symbols.feedCardBindMethod)),
+            "${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.${symbols.feedCardBindMethodSpec}",
+            listOf("feedCardBindMethodSpec" to has(symbols.feedCardBindMethodSpec)),
         )
         add(
             "ReplyServerResponseLogHook",
@@ -290,6 +327,77 @@ internal object HookSymbolStatusFormatter {
                 "pbFallingClearMethod" to has(symbols.pbFallingClearMethod),
             ),
         )
+        run {
+            val hasViewClass = has(symbols.pbBottomEnterBarViewClass)
+            val hasConstructors = (symbols.pbBottomEnterBarConstructorCount ?: 0) > 0
+            val hasRefreshMethods = hasList(symbols.pbBottomEnterBarRefreshMethodSpecs)
+            val state = when {
+                !hasViewClass || !hasConstructors -> "MISSING"
+                !hasRefreshMethods -> "PARTIAL"
+                else -> "FOUND"
+            }
+            val missing = buildList {
+                if (!hasViewClass) add("pbBottomEnterBarViewClass")
+                if (!hasConstructors) add("pbBottomEnterBarConstructorCount")
+                if (!hasRefreshMethods) add("pbBottomEnterBarRefreshMethodSpecs")
+            }.joinToString(",").ifBlank { "-" }
+            out.add(
+                "HookPoint[PbBottomEnterBarHook.BottomEnterBarView] state=$state missing=$missing target=" +
+                    "${symbols.pbBottomEnterBarViewClass ?: StableTiebaHookPoints.PB_BOTTOM_ENTER_BAR_VIEW_CLASS}" +
+                    " constructors=${symbols.pbBottomEnterBarConstructorCount ?: "-"} refresh={" +
+                    listTarget(symbols.pbBottomEnterBarRefreshMethodSpecs) +
+                    "}",
+            )
+        }
+        run {
+            val requiredCallers = listOf(
+                StableTiebaHookPoints.PB_VIEW_UTIL_KT_CLASS,
+                StableTiebaHookPoints.SPRITE_ANIMATION_TIP_MANAGER_CLASS,
+            )
+            val callerClasses = symbols.pbEnterFrsAnimationTipCallerClasses.orEmpty()
+            val hasViewClass = has(symbols.pbEnterFrsAnimationTipViewClass)
+            val hasConstructors = (symbols.pbEnterFrsAnimationTipConstructorCount ?: 0) > 0
+            val hasCallers = callerClasses.containsAll(requiredCallers)
+            val state = when {
+                !hasViewClass || !hasConstructors -> "MISSING"
+                !hasCallers -> "PARTIAL"
+                else -> "FOUND"
+            }
+            val missing = buildList {
+                if (!hasViewClass) add("pbEnterFrsAnimationTipViewClass")
+                if (!hasConstructors) add("pbEnterFrsAnimationTipConstructorCount")
+                requiredCallers
+                    .filterNot { callerClasses.contains(it) }
+                    .forEach { add(it.substringAfterLast('.')) }
+            }.joinToString(",").ifBlank { "-" }
+            out.add(
+                "HookPoint[PbBottomEnterBarHook.AnimationTip] state=$state missing=$missing target=" +
+                    "${symbols.pbEnterFrsAnimationTipViewClass ?: StableTiebaHookPoints.TB_ANIMATION_TIP_VIEW_CLASS}" +
+                    " constructors=${symbols.pbEnterFrsAnimationTipConstructorCount ?: "-"} callers={" +
+                    listTarget(symbols.pbEnterFrsAnimationTipCallerClasses) +
+                    "}",
+            )
+        }
+        run {
+            val hasTotalView = has(symbols.pbHotTopicGuideTotalViewMethod)
+            val hasRefreshMethods = hasList(symbols.pbHotTopicGuideRefreshMethodSpecs)
+            val state = when {
+                !hasTotalView -> "MISSING"
+                !hasRefreshMethods -> "PARTIAL"
+                else -> "FOUND"
+            }
+            val missing = buildList {
+                if (!hasTotalView) add("pbHotTopicGuideTotalViewMethod")
+                if (!hasRefreshMethods) add("pbHotTopicGuideRefreshMethodSpecs")
+            }.joinToString(",").ifBlank { "-" }
+            out.add(
+                "HookPoint[PbBottomEnterBarHook.HotTopicGuide] state=$state missing=$missing target=" +
+                    "${StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS}." +
+                    "${symbols.pbHotTopicGuideTotalViewMethod} refresh={" +
+                    listTarget(symbols.pbHotTopicGuideRefreshMethodSpecs) +
+                    "}",
+            )
+        }
         add(
             "PbEarlyAdBlockHook",
             "${symbols.pbEarlyAdInsertClass}.{${listTarget(symbols.pbEarlyAdInsertMethodSpecs)}}",
@@ -371,7 +479,11 @@ internal object HookSymbolStatusFormatter {
         )
         addOptional(
             "ForumPageAdBlockHook.GameBarMapper",
-            "${symbols.forumPageMapperClass}.${symbols.forumBottomGameBarMapperMethod}",
+            if (has(symbols.forumPageMapperClass) && has(symbols.forumBottomGameBarMapperMethod)) {
+                "${symbols.forumPageMapperClass}.${symbols.forumBottomGameBarMapperMethod}"
+            } else {
+                "optional-absent"
+            },
             listOf(
                 "forumPageMapperClass" to has(symbols.forumPageMapperClass),
                 "forumBottomGameBarMapperMethod" to has(symbols.forumBottomGameBarMapperMethod),
@@ -391,8 +503,21 @@ internal object HookSymbolStatusFormatter {
         )
         addOptional(
             "ForumPageAdBlockHook.Dialog",
-            "${symbols.forumDialogControllerClass}.{${symbols.forumBusinessPromotShowMethod}," +
-                "${symbols.forumAnimationShowMethod}}",
+            if (
+                has(symbols.forumDialogControllerClass) &&
+                (has(symbols.forumBusinessPromotShowMethod) || has(symbols.forumAnimationShowMethod))
+            ) {
+                "${symbols.forumDialogControllerClass}.{" +
+                    listTarget(
+                        listOfNotNull(
+                            symbols.forumBusinessPromotShowMethod,
+                            symbols.forumAnimationShowMethod,
+                        ),
+                    ) +
+                    "}"
+            } else {
+                "optional-absent"
+            },
             listOf(
                 "forumDialogControllerClass" to has(symbols.forumDialogControllerClass),
                 "forumDialogDisplayMethod" to (
@@ -403,8 +528,15 @@ internal object HookSymbolStatusFormatter {
         )
         addOptional(
             "ForumPageAdBlockHook.FloatingBar",
-            "${symbols.forumGameFloatingBarControllerClass}.{${symbols.forumGameFloatingBarShowMethod}}" +
-                "[${symbols.forumGameFloatingBarField}]",
+            if (
+                has(symbols.forumGameFloatingBarControllerClass) &&
+                has(symbols.forumGameFloatingBarShowMethod)
+            ) {
+                "${symbols.forumGameFloatingBarControllerClass}.{${symbols.forumGameFloatingBarShowMethod}}" +
+                    "[${symbols.forumGameFloatingBarField}]"
+            } else {
+                "optional-absent"
+            },
             listOf(
                 "forumGameFloatingBarControllerClass" to has(symbols.forumGameFloatingBarControllerClass),
                 "forumGameFloatingBarShowMethod" to has(symbols.forumGameFloatingBarShowMethod),
@@ -483,6 +615,38 @@ internal object HookSymbolStatusFormatter {
                 "mountCardLinkLayoutDataField" to has(symbols.mountCardLinkLayoutDataField),
                 "mountCardLinkInfoDataClass" to has(symbols.mountCardLinkInfoDataClass),
                 "mountCardLinkInfoGetUrlMethod" to has(symbols.mountCardLinkInfoGetUrlMethod),
+            ),
+        )
+        add(
+            "MineTabWebBlockHook",
+            "${symbols.mineTabWebViewClass}.${symbols.mineTabWebLoadUrlMethod}(String) " +
+                "getUrl=${symbols.mineTabWebGetUrlMethod} " +
+                "inner=${symbols.mineTabWebGetInnerWebViewMethod} " +
+                "version=${symbols.scanTargetVersionCode ?: "-"} " +
+                "minVersion=${WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE}",
+            listOf(
+                "scanTargetVersionCode>=${WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE}" to (
+                    (symbols.scanTargetVersionCode ?: 0L) >= WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE
+                    ),
+                "mineTabWebViewClass" to has(symbols.mineTabWebViewClass),
+                "mineTabWebLoadUrlMethod" to has(symbols.mineTabWebLoadUrlMethod),
+                "mineTabWebGetUrlMethod" to has(symbols.mineTabWebGetUrlMethod),
+                "mineTabWebGetInnerWebViewMethod" to has(symbols.mineTabWebGetInnerWebViewMethod),
+            ),
+        )
+        add(
+            "HomeSideBarWebBlockHook",
+            "${symbols.homeSideBarWebViewClass}.{${listTarget(symbols.homeSideBarWebLoadUrlMethods)}} " +
+                "getWebView=${symbols.homeSideBarWebGetWebViewMethod} " +
+                "tb=${symbols.homeSideBarTbWebViewClass}.${symbols.homeSideBarWebGetUrlMethod}/" +
+                symbols.homeSideBarWebGetInnerWebViewMethod,
+            listOf(
+                "homeSideBarWebViewClass" to has(symbols.homeSideBarWebViewClass),
+                "homeSideBarTbWebViewClass" to has(symbols.homeSideBarTbWebViewClass),
+                "homeSideBarWebGetWebViewMethod" to has(symbols.homeSideBarWebGetWebViewMethod),
+                "homeSideBarWebGetUrlMethod" to has(symbols.homeSideBarWebGetUrlMethod),
+                "homeSideBarWebGetInnerWebViewMethod" to has(symbols.homeSideBarWebGetInnerWebViewMethod),
+                "homeSideBarWebLoadUrlMethods" to hasList(symbols.homeSideBarWebLoadUrlMethods),
             ),
         )
         add(
@@ -619,7 +783,14 @@ internal object HookSymbolStatusFormatter {
         )
         addOptional(
             "AiComponentDisableHook.PbPageBrowserAiEmojiCreation",
-            "$aiPbAiEmojiCreationPageBrowserViewClass.${symbols.aiPbPageBrowserAiEmojiCreationBindMethod}",
+            if (
+                has(symbols.aiPbPageBrowserAiEmojiCreationViewClass) &&
+                has(symbols.aiPbPageBrowserAiEmojiCreationBindMethod)
+            ) {
+                "$aiPbAiEmojiCreationPageBrowserViewClass.${symbols.aiPbPageBrowserAiEmojiCreationBindMethod}"
+            } else {
+                "optional-absent"
+            },
             listOf(
                 "aiPbPageBrowserAiEmojiCreationViewClass" to
                     has(symbols.aiPbPageBrowserAiEmojiCreationViewClass),
@@ -696,10 +867,15 @@ internal object HookSymbolStatusFormatter {
             listOf(
                 "collectionPresenterField" to has(symbols.collectionPresenterField),
                 "collectionPresenterListSetterMethod" to has(symbols.collectionPresenterListSetterMethod),
+                "collectionPresenterListSetterMethodSpec" to has(
+                    symbols.collectionPresenterListSetterMethodSpec,
+                ),
                 "collectionPresenterAdapterField" to has(symbols.collectionPresenterAdapterField),
                 "collectionModelField" to has(symbols.collectionModelField),
                 "collectionModelListGetterMethod" to has(symbols.collectionModelListGetterMethod),
+                "collectionModelListGetterMethodSpec" to has(symbols.collectionModelListGetterMethodSpec),
                 "collectionModelParseMethod" to has(symbols.collectionModelParseMethod),
+                "collectionModelParseMethodSpec" to has(symbols.collectionModelParseMethodSpec),
             ),
         )
         add(
@@ -728,8 +904,10 @@ internal object HookSymbolStatusFormatter {
             listOf(
                 "historyAdapterField" to has(symbols.historyAdapterField),
                 "historyAdapterSetListMethod" to has(symbols.historyAdapterSetListMethod),
+                "historyAdapterSetListMethodSpec" to has(symbols.historyAdapterSetListMethodSpec),
                 "historyListField" to has(symbols.historyListField),
                 "historyActivityListUpdateMethod" to has(symbols.historyActivityListUpdateMethod),
+                "historyActivityListUpdateMethodSpec" to has(symbols.historyActivityListUpdateMethodSpec),
                 "historyActivityNavBarField" to has(symbols.historyActivityNavBarField),
                 "historyThreadNameMethod" to has(symbols.historyThreadNameMethod),
                 "historyForumNameMethod" to has(symbols.historyForumNameMethod),

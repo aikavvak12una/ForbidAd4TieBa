@@ -4,6 +4,9 @@ internal data class HomeNativeGlassScanSymbols(
     val subPbNextPageMoreViewId: Int?,
     val pbReplyTitleDividerViewId: Int?,
     val dynamicBackgroundColorIds: List<Int>,
+    val topChromeTabSelectedMethodSpecs: List<String>?,
+    val subPbSetNextPageMethod: String?,
+    val subPbSetNextPageParamType: String?,
     val sortSwitchBackgroundPaintField: String?,
     val sortSwitchSlideDrawMethod: String?,
     val sortSwitchSlidePathField: String?,
@@ -26,6 +29,9 @@ internal fun HookSymbolsBuilder.applyHomeNativeGlassScan(scan: HomeNativeGlassSc
     homeNativeGlassSubPbNextPageMoreViewId = scan.subPbNextPageMoreViewId
     homeNativeGlassPbReplyTitleDividerViewId = scan.pbReplyTitleDividerViewId
     homeNativeGlassDynamicBackgroundColorIds = scan.dynamicBackgroundColorIds
+    homeNativeGlassTopChromeTabSelectedMethodSpecs = scan.topChromeTabSelectedMethodSpecs
+    homeNativeGlassSubPbSetNextPageMethod = scan.subPbSetNextPageMethod
+    homeNativeGlassSubPbSetNextPageParamType = scan.subPbSetNextPageParamType
     homeNativeGlassSortSwitchBackgroundPaintField = scan.sortSwitchBackgroundPaintField
     homeNativeGlassSortSwitchSlideDrawMethod = scan.sortSwitchSlideDrawMethod
     homeNativeGlassSortSwitchSlidePathField = scan.sortSwitchSlidePathField

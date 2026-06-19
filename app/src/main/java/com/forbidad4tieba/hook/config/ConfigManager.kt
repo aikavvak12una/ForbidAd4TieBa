@@ -197,12 +197,7 @@ object ConfigManager {
     @Volatile private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     @Volatile private var homeNativeGlassDarkModeActive: Boolean = false
 
-    private val scanIndependentFeatureKeys = setOf(
-        HookFeatureKey.AUTO_SIGN_IN,
-        HookFeatureKey.HIDE_PB_BOTTOM_BANNER,
-        HookFeatureKey.BLOCK_AD_MINE_TAB_WEB,
-        HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB,
-    )
+    private val scanIndependentFeatureKeys = emptySet<String>()
 
     @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
     @Volatile private var environmentWarningDialogActive: Boolean = false

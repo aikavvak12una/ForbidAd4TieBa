@@ -15,9 +15,12 @@ data class CollectionSymbolsGroup(
     fun isSearchComplete(): Boolean = hasRequired(
         presenter.collectionPresenterField,
         presenter.collectionPresenterListSetterMethod,
+        presenter.collectionPresenterListSetterMethodSpec,
         model.collectionModelField,
         model.collectionModelListGetterMethod,
+        model.collectionModelListGetterMethodSpec,
         model.collectionModelParseMethod,
+        model.collectionModelParseMethodSpec,
         model.collectionModelListField,
         fragment.collectionFragmentDisplayListField,
         fragment.collectionNavBarField,
@@ -27,13 +30,16 @@ data class CollectionSymbolsGroup(
 data class CollectionPresenterSymbolsGroup(
     val collectionPresenterField: String? = null,
     val collectionPresenterListSetterMethod: String? = null,
+    val collectionPresenterListSetterMethodSpec: String? = null,
     val collectionPresenterAdapterField: String? = null,
 )
 
 data class CollectionModelSymbolsGroup(
     val collectionModelField: String? = null,
     val collectionModelListGetterMethod: String? = null,
+    val collectionModelListGetterMethodSpec: String? = null,
     val collectionModelParseMethod: String? = null,
+    val collectionModelParseMethodSpec: String? = null,
     val collectionModelListField: String? = null,
 )
 
@@ -57,6 +63,7 @@ data class HistorySymbolsGroup(
     fun isSearchComplete(): Boolean = hasRequired(
         activity.historyAdapterField,
         activity.historyAdapterSetListMethod,
+        activity.historyAdapterSetListMethodSpec,
         activity.historyListField,
         activity.historyActivityNavBarField,
         threadData.historyThreadNameMethod,
@@ -72,8 +79,10 @@ data class HistorySymbolsGroup(
 data class HistoryActivitySymbolsGroup(
     val historyAdapterField: String? = null,
     val historyAdapterSetListMethod: String? = null,
+    val historyAdapterSetListMethodSpec: String? = null,
     val historyListField: String? = null,
     val historyActivityListUpdateMethod: String? = null,
+    val historyActivityListUpdateMethodSpec: String? = null,
     val historyActivityNavBarField: String? = null,
 )
 

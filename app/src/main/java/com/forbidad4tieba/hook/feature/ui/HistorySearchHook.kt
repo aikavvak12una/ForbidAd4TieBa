@@ -52,6 +52,12 @@ object HistorySearchHook {
         val liveId: Method?,
     )
 
+    private data class CachedMethodSpec(
+        val name: String,
+        val returnTypeName: String,
+        val parameterTypeNames: List<String>,
+    )
+
     private val sStates = Collections.synchronizedMap(WeakHashMap<Activity, ActivityState>())
     private val sAdapterSetterCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Method>())
     private val sHistoryAccessorCache = Collections.synchronizedMap(WeakHashMap<Class<*>, HistoryAccessor>())
@@ -410,13 +416,12 @@ object HistorySearchHook {
 
     private fun resolveAdapterSetListMethod(clazz: Class<*>): Method? {
         sAdapterSetterCache[clazz]?.let { return it }
-        val methodName = sRuntimeTargets?.adapterSetListMethod ?: return null
-        val resolved = findMethodInHierarchy(clazz, methodName) { method ->
-            method.parameterTypes.size == 1 &&
-                method.returnType == Void.TYPE &&
-                (List::class.java.isAssignableFrom(method.parameterTypes[0]) ||
-                    ArrayList::class.java.isAssignableFrom(method.parameterTypes[0]))
-        }?.apply { isAccessible = true }
+        val targets = sRuntimeTargets ?: return null
+        val resolved = findMethodByCachedSpec(
+            clazz = clazz,
+            spec = targets.adapterSetListMethodSpec,
+            expectedName = targets.adapterSetListMethod,
+        )?.apply { isAccessible = true }
         if (resolved != null) sAdapterSetterCache[clazz] = resolved
         return resolved
     }
@@ -462,7 +467,7 @@ object HistorySearchHook {
 
     private fun findGetter(clazz: Class<*>, name: String?): Method? {
         if (name.isNullOrBlank()) return null
-        return findMethodInHierarchy(clazz, name) { it.parameterTypes.isEmpty() }
+        return findExactMethodInHierarchy(clazz, name)
     }
 
     private fun readString(target: Any, method: Method?): String? {
@@ -515,8 +520,44 @@ object HistorySearchHook {
         return resolved
     }
 
-    private fun findMethodInHierarchy(clazz: Class<*>, name: String, predicate: (Method) -> Boolean): Method? {
-        return ReflectionUtils.findMethodInHierarchy(clazz, name, predicate)
+    private fun findExactMethodInHierarchy(clazz: Class<*>, name: String, vararg paramTypes: Class<*>): Method? {
+        return ReflectionUtils.findMethodInHierarchy(clazz, name, *paramTypes)
+    }
+
+    private fun findMethodByCachedSpec(clazz: Class<*>, spec: String, expectedName: String): Method? {
+        val parsed = parseCachedMethodSpec(spec) ?: return null
+        if (parsed.name != expectedName) return null
+        val paramTypes = parsed.parameterTypeNames.map { typeName ->
+            resolveClassName(typeName, clazz.classLoader) ?: return null
+        }.toTypedArray()
+        val method = findExactMethodInHierarchy(clazz, parsed.name, *paramTypes) ?: return null
+        return method.takeIf { it.returnType.name == parsed.returnTypeName }
+    }
+
+    private fun parseCachedMethodSpec(raw: String): CachedMethodSpec? {
+        val parts = raw.split('|', limit = 3)
+        if (parts.size != 3) return null
+        val name = parts[0].takeIf { it.isNotBlank() } ?: return null
+        val returnType = parts[1].takeIf { it.isNotBlank() } ?: return null
+        val params = parts[2].split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        return CachedMethodSpec(name, returnType, params)
+    }
+
+    private fun resolveClassName(typeName: String, cl: ClassLoader?): Class<*>? {
+        return when (typeName) {
+            Void.TYPE.name -> Void.TYPE
+            Boolean::class.javaPrimitiveType!!.name -> Boolean::class.javaPrimitiveType
+            Byte::class.javaPrimitiveType!!.name -> Byte::class.javaPrimitiveType
+            Char::class.javaPrimitiveType!!.name -> Char::class.javaPrimitiveType
+            Short::class.javaPrimitiveType!!.name -> Short::class.javaPrimitiveType
+            Int::class.javaPrimitiveType!!.name -> Int::class.javaPrimitiveType
+            Long::class.javaPrimitiveType!!.name -> Long::class.javaPrimitiveType
+            Float::class.javaPrimitiveType!!.name -> Float::class.javaPrimitiveType
+            Double::class.javaPrimitiveType!!.name -> Double::class.javaPrimitiveType
+            else -> runCatching { Class.forName(typeName, false, cl) }.getOrNull()
+        }
     }
 
     private fun isActivityAlive(activity: Activity): Boolean {
