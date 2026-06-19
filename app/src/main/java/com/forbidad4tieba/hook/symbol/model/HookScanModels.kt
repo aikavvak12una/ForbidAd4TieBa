@@ -102,6 +102,22 @@ internal data class EnterForumWebScanSymbols(
     val initInfoGetUrlMethod: String? = null,
 )
 
+internal data class MineTabWebBlockScanSymbols(
+    val webViewClass: String? = null,
+    val loadUrlMethod: String? = null,
+    val getUrlMethod: String? = null,
+    val getInnerWebViewMethod: String? = null,
+)
+
+internal data class HomeSideBarWebBlockScanSymbols(
+    val sideBarWebViewClass: String? = null,
+    val tbWebViewClass: String? = null,
+    val getWebViewMethod: String? = null,
+    val getUrlMethod: String? = null,
+    val getInnerWebViewMethod: String? = null,
+    val loadUrlMethods: List<String> = emptyList(),
+)
+
 internal data class RecommendCardNestedDataScanSymbols(
     val nestedDataMethod: String? = null,
     val nestedDataListField: String? = null,
@@ -115,6 +131,7 @@ internal data class FeedTemplateScanSymbols(
 
 internal data class FeedCardScanSymbols(
     val bindMethod: String? = null,
+    val bindMethodSpec: String? = null,
     val dataListField: String? = null,
     val feedHeadParamsField: String? = null,
 )
@@ -279,6 +296,17 @@ internal data class PbCommentInteractionScanSymbols(
     val gestureScaleListenerOnScaleMethod: String? = null,
 )
 
+internal data class PbBottomEnterBarScanSymbols(
+    val bottomEnterBarViewClass: String? = null,
+    val bottomEnterBarConstructorCount: Int? = null,
+    val bottomEnterBarRefreshMethodSpecs: List<String> = emptyList(),
+    val enterFrsAnimationTipViewClass: String? = null,
+    val enterFrsAnimationTipConstructorCount: Int? = null,
+    val enterFrsAnimationTipCallerClasses: List<String> = emptyList(),
+    val hotTopicGuideTotalViewMethod: String? = null,
+    val hotTopicGuideRefreshMethodSpecs: List<String> = emptyList(),
+)
+
 internal data class ImageViewerShareScanSymbols(
     val shareTrackBuilderClass: String? = null,
     val shareTrackBuildUrlMethod: String? = null,
@@ -326,6 +354,15 @@ internal data class HomeNativeGlassSortSwitchSymbols(
     val backgroundPaintField: String? = null,
     val slideDrawMethod: String? = null,
     val slidePathField: String? = null,
+)
+
+internal data class HomeNativeGlassTopChromeSymbols(
+    val tabSelectedMethodSpecs: List<String> = emptyList(),
+)
+
+internal data class HomeNativeGlassSubPbNextPageSymbols(
+    val methodName: String? = null,
+    val parameterTypeName: String? = null,
 )
 
 internal data class HomeNativeGlassEnterForumCapsuleSymbols(
@@ -462,10 +499,13 @@ internal data class DexEnterForumCapsuleMethodMatch(
 internal data class CollectionSearchScanSymbols(
     val presenterField: String? = null,
     val presenterListSetterMethod: String? = null,
+    val presenterListSetterMethodSpec: String? = null,
     val presenterAdapterField: String? = null,
     val modelField: String? = null,
     val modelListGetterMethod: String? = null,
+    val modelListGetterMethodSpec: String? = null,
     val modelParseMethod: String? = null,
+    val modelParseMethodSpec: String? = null,
     val modelListField: String? = null,
     val fragmentDisplayListField: String? = null,
     val activityNavControllerField: String? = null,
@@ -479,8 +519,10 @@ internal data class CollectionSearchScanSymbols(
 internal data class HistorySearchScanSymbols(
     val adapterField: String? = null,
     val adapterSetListMethod: String? = null,
+    val adapterSetListMethodSpec: String? = null,
     val listField: String? = null,
     val activityListUpdateMethod: String? = null,
+    val activityListUpdateMethodSpec: String? = null,
     val activityNavBarField: String? = null,
     val threadNameMethod: String? = null,
     val forumNameMethod: String? = null,
@@ -529,16 +571,39 @@ internal data class OriginalImageScanSymbols(
     val directStartMethod: String? = null,
 )
 
+internal data class AutoSignInScanSymbols(
+    val networkClass: String? = null,
+    val networkConstructorSpec: String? = null,
+    val addPostDataMethod: String? = null,
+    val postNetDataMethod: String? = null,
+    val setNeedTbsMethod: String? = null,
+    val setNeedSigMethod: String? = null,
+    val tbConfigClass: String? = null,
+    val serverAddressField: String? = null,
+    val coreApplicationClass: String? = null,
+    val currentAccountMethod: String? = null,
+    val hybridProxyClass: String? = null,
+    val hybridProxyConstructorSpec: String? = null,
+    val hybridJsBridgeClass: String? = null,
+    val hybridNativeNetworkProxyMethod: String? = null,
+    val hybridTaskClass: String? = null,
+    val hybridTaskConstructorSpec: String? = null,
+    val hybridTaskDoInBackgroundMethod: String? = null,
+)
+
 internal data class CollectionPresenterCandidate(
     val fieldName: String,
     val setterMethod: String,
+    val setterMethodSpec: String,
     val presenterClass: Class<*>,
 )
 
 internal data class CollectionModelCandidate(
     val fieldName: String,
     val getterMethod: String,
+    val getterMethodSpec: String,
     val parseMethod: String,
+    val parseMethodSpec: String,
     val listFieldName: String?,
 )
 
@@ -557,6 +622,7 @@ internal data class CollectionNavigationSymbols(
 internal data class HistoryAdapterCandidate(
     val fieldName: String,
     val setterMethod: String,
+    val setterMethodSpec: String,
 )
 
 internal data class HomeTabItemScanSymbols(

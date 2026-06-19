@@ -11,6 +11,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -22,6 +23,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
+import com.forbidad4tieba.hook.HookSymbolResolver
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
@@ -30,6 +32,7 @@ import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
+import java.lang.reflect.Modifier
 import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
@@ -123,6 +126,12 @@ object HomeNativeGlassHook {
     private val emManagerFromMethods = ConcurrentHashMap<Class<*>, Method>()
     private val emManagerFromMethodMissingClasses =
         Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
+    private val chromeNoArgViewMethods = ConcurrentHashMap<RuntimeMethodKey, Method>()
+    private val chromeNoArgViewMissingMethods =
+        Collections.newSetFromMap(ConcurrentHashMap<RuntimeMethodKey, Boolean>())
+    private val chromeBooleanMethods = ConcurrentHashMap<RuntimeMethodKey, Method>()
+    private val chromeBooleanMissingMethods =
+        Collections.newSetFromMap(ConcurrentHashMap<RuntimeMethodKey, Boolean>())
 
     @Volatile private var recyclerViewClass: Class<*>? = null
     private val backgroundStore = HomeNativeGlassBackgroundStore(
@@ -157,11 +166,15 @@ object HomeNativeGlassHook {
             }
             val pageConstructors = if (feedPlan.hasHomeFeedTargets) installPageConstructors(cl) else 0
             val hostSkinTypeHooks = installHostSkinTypeChangeHooks(cl)
-            val bindHooks = if (feedPlan.hasHomeFeedTargets && feedPlan.bindMethodName != null) {
-                installFeedCardBind(cl, feedPlan.bindMethodName)
+            val bindHooks = if (
+                feedPlan.hasHomeFeedTargets &&
+                feedPlan.bindMethodName != null &&
+                feedPlan.bindMethodSpec != null
+            ) {
+                installFeedCardBind(cl, feedPlan.bindMethodName, feedPlan.bindMethodSpec)
             } else {
                 if (feedPlan.shouldLogMissingBindMethod) {
-                    XposedCompat.log("$TAG recommend card SKIP: feedCardBindMethod not resolved")
+                    XposedCompat.log("$TAG recommend card SKIP: feedCardBindMethodSpec not resolved")
                 }
                 0
             }
@@ -295,6 +308,10 @@ object HomeNativeGlassHook {
         homeFeedCardStyleStates.clear()
         chromeGlassOriginalStates.clear()
         imageContainerRadiusStates.clear()
+        chromeNoArgViewMethods.clear()
+        chromeNoArgViewMissingMethods.clear()
+        chromeBooleanMethods.clear()
+        chromeBooleanMissingMethods.clear()
         backgroundDecodeKeys.clear()
         recyclerViewClass = null
         runtimeTargets = null
@@ -350,19 +367,19 @@ object HomeNativeGlassHook {
         return installedCount
     }
 
-    private fun installFeedCardBind(cl: ClassLoader, bindMethodName: String): Int {
+    private fun installFeedCardBind(cl: ClassLoader, bindMethodName: String, bindMethodSpec: String): Int {
         val mod = XposedCompat.module ?: return 0
         val feedCardViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.FEED_CARD_VIEW_CLASS, cl)
             ?: run {
                 XposedCompat.log("$TAG class NOT FOUND: ${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}")
                 return 0
             }
-        val bindMethod = ReflectionUtils.findMethodInHierarchy(feedCardViewClass, bindMethodName) { method ->
-            method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                !method.parameterTypes[0].isPrimitive
-        } ?: run {
-            XposedCompat.log("$TAG method NOT FOUND: ${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.$bindMethodName")
+        val bindMethod = HookSymbolResolver.resolveMethodByCachedSpec(
+            feedCardViewClass,
+            bindMethodSpec,
+            bindMethodName,
+        ) ?: run {
+            XposedCompat.log("$TAG method NOT FOUND: ${StableTiebaHookPoints.FEED_CARD_VIEW_CLASS}.$bindMethodSpec")
             return 0
         }
         bindMethod.isAccessible = true
@@ -436,9 +453,14 @@ object HomeNativeGlassHook {
                 XposedCompat.logD { "$TAG class NOT FOUND: ${StableTiebaHookPoints.PB_ABS_ACTIVITY_CLASS}" }
                 return 0
             }
+        val methods = listOfNotNull(
+            ReflectionUtils.findMethodInHierarchy(activityClass, "onCreate", Bundle::class.java)
+                ?.takeIf { it.returnType == Void.TYPE },
+            ReflectionUtils.findMethodInHierarchy(activityClass, "onChangeSkinType", java.lang.Integer.TYPE)
+                ?.takeIf { it.returnType == Void.TYPE },
+        )
         var installedCount = 0
-        for (method in activityClass.declaredMethods) {
-            if (!isPbCommentActivityBackgroundRefreshMethod(method)) continue
+        for (method in methods) {
             method.isAccessible = true
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
@@ -450,13 +472,6 @@ object HomeNativeGlassHook {
             installedCount++
         }
         return installedCount
-    }
-
-    private fun isPbCommentActivityBackgroundRefreshMethod(method: Method): Boolean {
-        if (method.returnType != Void.TYPE) return false
-        val params = method.parameterTypes
-        return (method.name == "onCreate" && params.size == 1 && params[0].name == "android.os.Bundle") ||
-            (method.name == "onChangeSkinType" && params.size == 1 && params[0] == java.lang.Integer.TYPE)
     }
 
     private fun installPbCommentSurfaceHooks(cl: ClassLoader): Int {
@@ -475,25 +490,22 @@ object HomeNativeGlassHook {
                 }
                 installedCount++
             }
-            for (method in surfaceClass.declaredMethods) {
-                if (!isNoArgVoidMethod(method, "onAttachedToWindow")) continue
-                method.isAccessible = true
-                mod.hook(method).intercept { chain ->
-                    val result = chain.proceed()
-                    (chain.thisObject as? View)?.let { surface ->
-                        rememberPbCommentSurfaceView(surface)
-                        schedulePbCommentSurfaceRefresh(surface)
+            ReflectionUtils.findMethodInHierarchy(surfaceClass, "onAttachedToWindow")
+                ?.takeIf { it.returnType == Void.TYPE }
+                ?.let { method ->
+                    method.isAccessible = true
+                    mod.hook(method).intercept { chain ->
+                        val result = chain.proceed()
+                        (chain.thisObject as? View)?.let { surface ->
+                            rememberPbCommentSurfaceView(surface)
+                            schedulePbCommentSurfaceRefresh(surface)
+                        }
+                        result
                     }
-                    result
+                    installedCount++
                 }
-                installedCount++
-            }
         }
         return installedCount
-    }
-
-    private fun isNoArgVoidMethod(method: Method, name: String): Boolean {
-        return method.name == name && method.returnType == Void.TYPE && method.parameterTypes.isEmpty()
     }
 
     private fun installPbCommentListItemGetViewHook(cl: ClassLoader): Int {
@@ -582,33 +594,56 @@ object HomeNativeGlassHook {
             }
             installedCount++
         }
-        for (method in subPbViewClass.declaredMethods) {
-            if (!isNoArgVoidMethod(method, "onAttachedToWindow")) continue
-            method.isAccessible = true
-            mod.hook(method).intercept { chain ->
-                val result = chain.proceed()
-                (chain.thisObject as? View)?.let { subPbView ->
-                    scheduleSubPbInputBarDynamicTint(subPbView)
+        ReflectionUtils.findMethodInHierarchy(subPbViewClass, "onAttachedToWindow")
+            ?.takeIf { it.returnType == Void.TYPE }
+            ?.let { method ->
+                method.isAccessible = true
+                mod.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    (chain.thisObject as? View)?.let { subPbView ->
+                        scheduleSubPbInputBarDynamicTint(subPbView)
+                    }
+                    result
                 }
-                result
+                installedCount++
             }
-            installedCount++
-        }
         return installedCount
     }
 
     private fun installSubPbNextPageGlassHook(cl: ClassLoader): Int {
         val mod = XposedCompat.module ?: return 0
+        val target = runtimeTargets?.subPbSetNextPageTarget ?: run {
+            XposedCompat.logD { "$TAG sub pb next page SKIP: setNextPage method not resolved" }
+            return 0
+        }
         val listViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.BD_LIST_VIEW_CLASS, cl)
             ?: run {
                 XposedCompat.logD { "$TAG class NOT FOUND: ${StableTiebaHookPoints.BD_LIST_VIEW_CLASS}" }
                 return 0
             }
-        val setNextPageMethod = findSubPbSetNextPageMethod(listViewClass)
+        val parameterType = resolveCachedParameterClass(target.parameterTypeName, cl)
             ?: run {
-                XposedCompat.logD { "$TAG method NOT FOUND: ${StableTiebaHookPoints.BD_LIST_VIEW_CLASS}.setNextPage" }
+                XposedCompat.logD {
+                    "$TAG sub pb next page parameter type unavailable: ${target.parameterTypeName}"
+                }
                 return 0
             }
+        val setNextPageMethod = XposedCompat.findMethodOrNull(
+            listViewClass,
+            target.methodName,
+            parameterType,
+        )
+        if (
+            setNextPageMethod == null ||
+            setNextPageMethod.returnType != Void.TYPE ||
+            Modifier.isStatic(setNextPageMethod.modifiers)
+        ) {
+            XposedCompat.logD {
+                "$TAG sub pb next page method unavailable: " +
+                    "${StableTiebaHookPoints.BD_LIST_VIEW_CLASS}.${target.methodName}(${target.parameterTypeName})"
+            }
+            return 0
+        }
         setNextPageMethod.isAccessible = true
         mod.hook(setNextPageMethod).intercept { chain ->
             val result = chain.proceed()
@@ -622,11 +657,17 @@ object HomeNativeGlassHook {
         return 1
     }
 
-    private fun findSubPbSetNextPageMethod(listViewClass: Class<*>): Method? {
-        return listViewClass.declaredMethods.firstOrNull { method ->
-            method.name == StableTiebaHookPoints.METHOD_SET_NEXT_PAGE &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1
+    private fun resolveCachedParameterClass(typeName: String, cl: ClassLoader): Class<*>? {
+        return when (typeName) {
+            "boolean" -> java.lang.Boolean.TYPE
+            "byte" -> java.lang.Byte.TYPE
+            "char" -> java.lang.Character.TYPE
+            "short" -> java.lang.Short.TYPE
+            "int" -> Integer.TYPE
+            "long" -> java.lang.Long.TYPE
+            "float" -> java.lang.Float.TYPE
+            "double" -> java.lang.Double.TYPE
+            else -> XposedCompat.findClassOrNull(typeName, cl)
         }
     }
 
@@ -649,8 +690,14 @@ object HomeNativeGlassHook {
             }
             installedCount++
         }
-        for (method in navigationBarClass.declaredMethods) {
-            if (!isSubPbNavigationBarSkinRefreshMethod(method)) continue
+        resolveCachedParameterClass(BD_PAGE_CONTEXT_CLASS, cl)?.let { pageContextClass ->
+            XposedCompat.findMethodOrNull(
+                navigationBarClass,
+                "onChangeSkinType",
+                pageContextClass,
+                java.lang.Integer.TYPE,
+            )
+        }?.let { method ->
             method.isAccessible = true
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
@@ -662,13 +709,6 @@ object HomeNativeGlassHook {
             installedCount++
         }
         return installedCount
-    }
-
-    private fun isSubPbNavigationBarSkinRefreshMethod(method: Method): Boolean {
-        return method.name == "onChangeSkinType" &&
-            method.returnType == Void.TYPE &&
-            method.parameterTypes.size == 2 &&
-            method.parameterTypes[1] == java.lang.Integer.TYPE
     }
 
     private fun installPbCommentItemFrameHooks(cl: ClassLoader): Int {
@@ -690,8 +730,11 @@ object HomeNativeGlassHook {
             }
             installedCount++
         }
-        for (method in itemFrameClass.declaredMethods) {
-            if (!isPbCommentItemFrameBindMarkerMethod(method)) continue
+        XposedCompat.findMethodOrNull(
+            itemFrameClass,
+            "setPageStartFrom",
+            java.lang.Integer.TYPE,
+        )?.let { method ->
             method.isAccessible = true
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
@@ -704,12 +747,6 @@ object HomeNativeGlassHook {
             installedCount++
         }
         return installedCount
-    }
-
-    private fun isPbCommentItemFrameBindMarkerMethod(method: Method): Boolean {
-        if (method.returnType != Void.TYPE || method.parameterTypes.size != 1) return false
-        return method.name == "setLogParamData" ||
-            (method.name == "setPageStartFrom" && method.parameterTypes[0] == java.lang.Integer.TYPE)
     }
 
     private fun installPbSubPbLayoutHooks(cl: ClassLoader): Int {
@@ -731,8 +768,17 @@ object HomeNativeGlassHook {
             }
             installedCount++
         }
-        for (method in subPbLayoutClass.declaredMethods) {
-            if (!isPbSubPbLayoutBindMarkerMethod(method)) continue
+        val postDataClass = resolveCachedParameterClass(PB_POST_DATA_CLASS, cl)
+        if (postDataClass != null) {
+            XposedCompat.findMethodOrNull(
+                subPbLayoutClass,
+                "setData",
+                postDataClass,
+                View::class.java,
+            )
+        } else {
+            null
+        }?.let { method ->
             method.isAccessible = true
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
@@ -745,12 +791,6 @@ object HomeNativeGlassHook {
             installedCount++
         }
         return installedCount
-    }
-
-    private fun isPbSubPbLayoutBindMarkerMethod(method: Method): Boolean {
-        if (method.name != "setData" || method.returnType != Void.TYPE) return false
-        val params = method.parameterTypes
-        return params.size == 2 && View::class.java.isAssignableFrom(params[1])
     }
 
     private fun installPbReplyTitleViewHolderHooks(cl: ClassLoader): Int {
@@ -791,11 +831,18 @@ object HomeNativeGlassHook {
                 }
                 return 0
             }
-        val method = preloaderClass.declaredMethods.singleOrNull { candidate ->
-            candidate.name == methodName && isPbCommonLayoutPreloaderGetOrDefaultMethod(candidate)
-        } ?: run {
+        val method = XposedCompat.findMethodOrNull(
+            preloaderClass,
+            methodName,
+            Context::class.java,
+            java.lang.Boolean.TYPE,
+            Integer.TYPE,
+            Class::class.java,
+        )
+        if (method == null || !View::class.java.isAssignableFrom(method.returnType)) {
             XposedCompat.logD {
-                "$TAG method NOT FOUND: ${StableTiebaHookPoints.PB_COMMON_LAYOUT_PRELOADER_CLASS}.$methodName"
+                "$TAG common layout preloader method unavailable: " +
+                    "${StableTiebaHookPoints.PB_COMMON_LAYOUT_PRELOADER_CLASS}.$methodName"
             }
             return 0
         }
@@ -809,16 +856,6 @@ object HomeNativeGlassHook {
             result
         }
         return 1
-    }
-
-    private fun isPbCommonLayoutPreloaderGetOrDefaultMethod(method: Method): Boolean {
-        if (method.returnType != View::class.java) return false
-        val params = method.parameterTypes
-        return params.size == 4 &&
-            params[0].name == "android.content.Context" &&
-            params[1] == Boolean::class.javaPrimitiveType &&
-            params[2] == java.lang.Integer.TYPE &&
-            Class::class.java.isAssignableFrom(params[3])
     }
 
     private fun installPbDynamicBackgroundColorHooks(cl: ClassLoader): Int {
@@ -1042,8 +1079,12 @@ object HomeNativeGlassHook {
     private fun installSkinManagerShapeBackgroundBlock(skinManagerClass: Class<*>): Int {
         val mod = XposedCompat.module ?: return 0
         var installedCount = 0
-        for (method in skinManagerClass.declaredMethods) {
-            if (!isSkinManagerShapeBackgroundMethod(method)) continue
+        for (parameterTypes in SKIN_MANAGER_SHAPE_BACKGROUND_SIGNATURES) {
+            val method = XposedCompat.findMethodOrNull(
+                skinManagerClass,
+                "setBackgroundShapeDrawable",
+                *parameterTypes,
+            ) ?: continue
             method.isAccessible = true
             mod.hook(method).intercept { chain ->
                 val view = chain.args.getOrNull(0) as? View
@@ -1060,14 +1101,6 @@ object HomeNativeGlassHook {
             installedCount++
         }
         return installedCount
-    }
-
-    private fun isSkinManagerShapeBackgroundMethod(method: Method): Boolean {
-        if (method.name != "setBackgroundShapeDrawable" || method.returnType != Void.TYPE) return false
-        val params = method.parameterTypes
-        return params.size in 4..8 &&
-            params[0] == View::class.java &&
-            params.drop(1).all { it == java.lang.Integer.TYPE }
     }
 
     private fun afterSkinManagerPbBackgroundWrite(view: View) {
@@ -1260,12 +1293,9 @@ object HomeNativeGlassHook {
 
         var installedCount = 0
         fun hookNoArgVoidMethod(methodName: String, label: String) {
-            val method = controllerClass.declaredMethods.singleOrNull { candidate ->
-                candidate.name == methodName &&
-                    candidate.parameterTypes.isEmpty() &&
-                    candidate.returnType == Void.TYPE
-            } ?: run {
-                XposedCompat.logD { "$TAG enter forum capsule $label method NOT FOUND: $methodName" }
+            val method = XposedCompat.findMethodOrNull(controllerClass, methodName)
+            if (method == null || method.returnType != Void.TYPE || Modifier.isStatic(method.modifiers)) {
+                XposedCompat.logD { "$TAG enter forum capsule $label method unavailable: $methodName" }
                 return
             }
             method.isAccessible = true
@@ -1291,6 +1321,10 @@ object HomeNativeGlassHook {
 
     private fun installHomeTopTabObservers(cl: ClassLoader): Int {
         val mod = XposedCompat.module ?: return 0
+        val tabSelectedTargets = runtimeTargets
+            ?.topChromeTabSelectedMethods
+            .orEmpty()
+            .groupBy { it.className }
         var installedCount = 0
         for (className in HOME_TOP_CHROME_CLASSES) {
             val clazz = XposedCompat.findClassOrNull(className, cl)
@@ -1309,25 +1343,34 @@ object HomeNativeGlassHook {
                 }
                 installedCount++
             }
-            for (method in clazz.declaredMethods) {
-                when {
-                    isTopTabSelectedMethod(method) -> {
-                        method.isAccessible = true
-                        mod.hook(method).intercept { chain ->
-                            val result = chain.proceed()
-                            val topChrome = chain.thisObject as? View
-                            if (topChrome != null) {
-                                val itemType = (chain.args.getOrNull(1) as? Number)?.toInt()
-                                if (itemType != null) {
-                                    topChromeTabTypes[topChrome] = itemType
-                                }
-                                scheduleHomeTopChromeRefresh(topChrome)
-                            }
-                            result
-                        }
-                        installedCount++
+            for (target in tabSelectedTargets[className].orEmpty()) {
+                val method = XposedCompat.findMethodOrNull(
+                    clazz,
+                    target.methodName,
+                    Integer.TYPE,
+                    Integer.TYPE,
+                )
+                if (method == null || method.returnType != Void.TYPE || Modifier.isStatic(method.modifiers)) {
+                    XposedCompat.logD {
+                        "$TAG top chrome tab selected method unavailable: " +
+                            "${target.className}#${target.methodName}"
                     }
+                    continue
                 }
+                method.isAccessible = true
+                mod.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    val topChrome = chain.thisObject as? View
+                    if (topChrome != null) {
+                        val itemType = (chain.args.getOrNull(1) as? Number)?.toInt()
+                        if (itemType != null) {
+                            topChromeTabTypes[topChrome] = itemType
+                        }
+                        scheduleHomeTopChromeRefresh(topChrome)
+                    }
+                    result
+                }
+                installedCount++
             }
         }
         installedCount += installHomeRecommendFragmentRefreshHooks(cl)
@@ -1363,13 +1406,6 @@ object HomeNativeGlassHook {
             installedCount++
         }
         return installedCount
-    }
-
-    private fun isTopTabSelectedMethod(method: Method): Boolean {
-        return method.returnType == Void.TYPE &&
-            method.parameterTypes.size == 2 &&
-            method.parameterTypes[0] == java.lang.Integer.TYPE &&
-            method.parameterTypes[1] == java.lang.Integer.TYPE
     }
 
     private fun scheduleHomeTopChromeRefresh(topChrome: View) {
@@ -4959,7 +4995,17 @@ object HomeNativeGlassHook {
 
     private fun invokeNoArgView(target: View, methodName: String): View? {
         return try {
-            findMethodInHierarchy(target.javaClass, methodName)?.invoke(target) as? View
+            cachedRuntimeMethodInHierarchy(
+                target.javaClass,
+                methodName,
+                "()View",
+                chromeNoArgViewMethods,
+                chromeNoArgViewMissingMethods,
+                validate = { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        View::class.java.isAssignableFrom(method.returnType)
+                },
+            )?.invoke(target) as? View
         } catch (_: Throwable) {
             null
         }
@@ -4967,13 +5013,44 @@ object HomeNativeGlassHook {
 
     private fun invokeBooleanMethod(target: View, methodName: String, value: Boolean): Boolean {
         return try {
-            findMethodInHierarchy(target.javaClass, methodName, java.lang.Boolean.TYPE)
+            cachedRuntimeMethodInHierarchy(
+                target.javaClass,
+                methodName,
+                "(boolean)",
+                chromeBooleanMethods,
+                chromeBooleanMissingMethods,
+                validate = { method ->
+                    !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE
+                },
+                java.lang.Boolean.TYPE,
+            )
                 ?.invoke(target, value)
                 ?: return false
             true
         } catch (_: Throwable) {
             false
         }
+    }
+
+    private fun cachedRuntimeMethodInHierarchy(
+        clazz: Class<*>,
+        name: String,
+        signature: String,
+        cache: ConcurrentHashMap<RuntimeMethodKey, Method>,
+        missing: MutableSet<RuntimeMethodKey>,
+        validate: (Method) -> Boolean,
+        vararg paramTypes: Class<*>,
+    ): Method? {
+        val key = RuntimeMethodKey(clazz, name, signature)
+        cache[key]?.let { return it }
+        if (missing.contains(key)) return null
+        val method = findMethodInHierarchy(clazz, name, *paramTypes)
+        if (method != null && validate(method)) {
+            cache[key] = method
+            return method
+        }
+        missing.add(key)
+        return null
     }
 
     private fun applyHomeSearchBoxGlassForMatchingViews(root: View, page: View?, shouldApply: Boolean) {
@@ -5964,4 +6041,9 @@ object HomeNativeGlassHook {
         return null
     }
 
+    private data class RuntimeMethodKey(
+        val clazz: Class<*>,
+        val name: String,
+        val signature: String,
+    )
 }

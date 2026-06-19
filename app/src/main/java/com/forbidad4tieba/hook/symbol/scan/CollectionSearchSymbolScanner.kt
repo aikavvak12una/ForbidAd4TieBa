@@ -4,6 +4,7 @@ import com.forbidad4tieba.hook.symbol.model.*
 
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.view.View
+import java.lang.reflect.Method
 
 internal object CollectionSearchSymbolScanner {
     private const val COLLECTION_ACTIVITY_CLASS = "com.baidu.tieba.myCollection.CollectTabActivity"
@@ -33,10 +34,13 @@ internal object CollectionSearchSymbolScanner {
             val out = CollectionSearchScanSymbols(
                 presenterField = presenterCandidate?.fieldName,
                 presenterListSetterMethod = presenterCandidate?.setterMethod,
+                presenterListSetterMethodSpec = presenterCandidate?.setterMethodSpec,
                 presenterAdapterField = adapterSymbols.presenterAdapterField,
                 modelField = modelCandidate?.fieldName,
                 modelListGetterMethod = modelCandidate?.getterMethod,
+                modelListGetterMethodSpec = modelCandidate?.getterMethodSpec,
                 modelParseMethod = modelCandidate?.parseMethod,
+                modelParseMethodSpec = modelCandidate?.parseMethodSpec,
                 modelListField = modelCandidate?.listFieldName,
                 fragmentDisplayListField = fragmentDisplayListField,
                 activityNavControllerField = navigationSymbols.activityNavControllerField,
@@ -61,8 +65,13 @@ internal object CollectionSearchSymbolScanner {
 
 private fun resolveCollectionPresenterCandidate(fragmentClass: Class<*>): CollectionPresenterCandidate? {
     val candidates = collectInstanceFields(fragmentClass).mapNotNull { field ->
-        val setter = resolveListSetterMethodName(field.type, preferredName = "w") ?: return@mapNotNull null
-        CollectionPresenterCandidate(fieldName = field.name, setterMethod = setter, presenterClass = field.type)
+        val setter = resolveListSetterMethod(field.type, preferredName = "w") ?: return@mapNotNull null
+        CollectionPresenterCandidate(
+            fieldName = field.name,
+            setterMethod = setter.name,
+            setterMethodSpec = encodeMethodSpec(setter),
+            presenterClass = field.type,
+        )
     }
     return candidates.minWithOrNull(
         compareBy<CollectionPresenterCandidate>(
@@ -77,13 +86,15 @@ private fun resolveCollectionPresenterCandidate(fragmentClass: Class<*>): Collec
 
 private fun resolveCollectionModelCandidate(fragmentClass: Class<*>): CollectionModelCandidate? {
     val candidates = collectInstanceFields(fragmentClass).mapNotNull { field ->
-        val getter = resolveListGetterMethodName(field.type, preferredName = "n") ?: return@mapNotNull null
-        val parse = resolveParseMethodName(field.type, preferredName = "t") ?: return@mapNotNull null
+        val getter = resolveListGetterMethod(field.type, preferredName = "n") ?: return@mapNotNull null
+        val parse = resolveParseMethod(field.type, preferredName = "t") ?: return@mapNotNull null
         val listField = resolveListFieldName(field.type, preferredName = "d")
         CollectionModelCandidate(
             fieldName = field.name,
-            getterMethod = getter,
-            parseMethod = parse,
+            getterMethod = getter.name,
+            getterMethodSpec = encodeMethodSpec(getter),
+            parseMethod = parse.name,
+            parseMethodSpec = encodeMethodSpec(parse),
             listFieldName = listField,
         )
     }
@@ -208,6 +219,38 @@ private fun hasNavigationAddCustomViewMethod(clazz: Class<*>): Boolean {
     }
 }
 
+private fun resolveListSetterMethod(clazz: Class<*>, preferredName: String): Method? {
+    val candidates = collectInstanceMethods(clazz).filter { method ->
+        method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 1 &&
+            isListType(method.parameterTypes[0])
+    }
+    return pickMethod(candidates, preferredName)
+}
+
+private fun resolveListGetterMethod(clazz: Class<*>, preferredName: String): Method? {
+    val candidates = collectInstanceMethods(clazz).filter { method ->
+        method.parameterTypes.isEmpty() && isListType(method.returnType)
+    }
+    return pickMethod(candidates, preferredName)
+}
+
+private fun resolveParseMethod(clazz: Class<*>, preferredName: String): Method? {
+    val candidates = collectInstanceMethods(clazz).filter { method ->
+        method.returnType != Void.TYPE &&
+            method.parameterTypes.size == 1 &&
+            method.parameterTypes[0] == String::class.java &&
+            isListType(method.returnType)
+    }
+    return pickMethod(candidates, preferredName)
+}
+
+private fun encodeMethodSpec(method: Method): String {
+    return method.name + "|" +
+        method.returnType.name + "|" +
+        method.parameterTypes.joinToString(",") { it.name }
+}
+
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
         ScanReflection.safeFindClass(name, cl)
@@ -236,6 +279,9 @@ private fun hasNavigationAddCustomViewMethod(clazz: Class<*>): Boolean {
 
     private fun pickMethodName(methods: List<java.lang.reflect.Method>, preferredName: String): String? =
         ScanReflection.pickMethodName(methods, preferredName)
+
+    private fun pickMethod(methods: List<java.lang.reflect.Method>, preferredName: String): java.lang.reflect.Method? =
+        ScanReflection.pickMethod(methods, preferredName)
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)

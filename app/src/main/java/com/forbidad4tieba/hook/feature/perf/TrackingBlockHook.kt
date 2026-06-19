@@ -17,22 +17,75 @@ object TrackingBlockHook {
     private const val TAG = "[TrackingBlockHook]"
     private val installed = AtomicBoolean(false)
 
-    /**
-     * 已知统计和埋点 SDK 入口。
-     * 格式为 className 对应需要短路的 methodNames。
-     */
+    private data class MethodTarget(
+        val className: String,
+        val methodName: String,
+        val returnTypeName: String,
+        val parameterTypeNames: List<String> = emptyList(),
+        val staticMethod: Boolean,
+    )
+
     private val TRACKING_TARGETS = arrayOf(
-        // 字节 AppLog，很多百度应用会内置
-        "com.bytedance.embedapplog.AppLog" to arrayOf("init", "onEventV3", "setHeaderInfo"),
-        // 百度 Loki 日志系统
-        "com.baidu.searchbox.logsystem.basic.LokiReporter" to arrayOf("report", "reportSync"),
-        "com.baidu.searchbox.logsystem.basic.LokiService" to arrayOf("onStartCommand"),
-        // 百度性能监控
-        "com.baidu.tieba.service.PerformMonitorService" to arrayOf("onStartCommand"),
-        // 百度 UBC 用户行为采集
-        "com.baidu.tbadk.core.ubc.UBCAgent" to arrayOf("onEvent", "onPageStart", "onPageEnd"),
-        // 百度统计
-        "com.baidu.mobstat.StatService" to arrayOf("onEvent", "onPageStart", "onPageEnd", "start"),
+        MethodTarget(
+            className = "com.baidu.searchbox.logsystem.basic.LokiService",
+            methodName = "onStartCommand",
+            returnTypeName = "int",
+            parameterTypeNames = listOf("android.content.Intent", "int", "int"),
+            staticMethod = false,
+        ),
+        MethodTarget(
+            className = "com.baidu.mobstat.StatService",
+            methodName = "onEvent",
+            returnTypeName = "void",
+            parameterTypeNames = listOf(
+                "android.content.Context",
+                "java.lang.String",
+                "java.lang.String",
+                "int",
+                "java.util.Map",
+            ),
+            staticMethod = true,
+        ),
+        MethodTarget(
+            className = "com.baidu.mobstat.StatService",
+            methodName = "onEvent",
+            returnTypeName = "void",
+            parameterTypeNames = listOf(
+                "android.content.Context",
+                "java.lang.String",
+                "java.lang.String",
+                "int",
+            ),
+            staticMethod = true,
+        ),
+        MethodTarget(
+            className = "com.baidu.mobstat.StatService",
+            methodName = "onEvent",
+            returnTypeName = "void",
+            parameterTypeNames = listOf("android.content.Context", "java.lang.String", "java.lang.String"),
+            staticMethod = true,
+        ),
+        MethodTarget(
+            className = "com.baidu.mobstat.StatService",
+            methodName = "onPageStart",
+            returnTypeName = "void",
+            parameterTypeNames = listOf("android.content.Context", "java.lang.String"),
+            staticMethod = true,
+        ),
+        MethodTarget(
+            className = "com.baidu.mobstat.StatService",
+            methodName = "onPageEnd",
+            returnTypeName = "void",
+            parameterTypeNames = listOf("android.content.Context", "java.lang.String"),
+            staticMethod = true,
+        ),
+        MethodTarget(
+            className = "com.baidu.mobstat.StatService",
+            methodName = "start",
+            returnTypeName = "void",
+            parameterTypeNames = listOf("android.content.Context"),
+            staticMethod = true,
+        ),
     )
 
     fun hook(cl: ClassLoader) {
@@ -48,27 +101,20 @@ object TrackingBlockHook {
         }
 
         var totalInstalled = 0
-        for ((className, methodNames) in TRACKING_TARGETS) {
-            val clazz = XposedCompat.findClassOrNull(className, cl) ?: continue
-            for (methodName in methodNames) {
-                val methods = clazz.declaredMethods.filter { method ->
-                    method.name == methodName
-                }
-                for (method in methods) {
-                    try {
-                        method.isAccessible = true
-                        mod.hook(method).intercept { chain ->
-                            if (ConfigManager.isMonitorSyncComponentsDisabled) {
-                                return@intercept nullReturnValue(method)
-                            }
-                            chain.proceed()
-                        }
-                        totalInstalled++
-                    } catch (t: Throwable) {
-                        // Some methods may not be hookable; keep a concise diagnostic.
-                        XposedCompat.logD { "$TAG hook $className.${method.name} skipped: ${t.message}" }
+        for (target in TRACKING_TARGETS) {
+            val clazz = XposedCompat.findClassOrNull(target.className, cl) ?: continue
+            val method = resolveExactMethod(clazz, target, cl) ?: continue
+            try {
+                method.isAccessible = true
+                mod.hook(method).intercept { chain ->
+                    if (ConfigManager.isMonitorSyncComponentsDisabled) {
+                        return@intercept nullReturnValue(method)
                     }
+                    chain.proceed()
                 }
+                totalInstalled++
+            } catch (t: Throwable) {
+                XposedCompat.logD { "$TAG hook ${target.className}.${target.methodName} skipped: ${t.message}" }
             }
         }
 
@@ -86,6 +132,50 @@ object TrackingBlockHook {
             Long::class.javaPrimitiveType -> 0L
             Void.TYPE -> null
             else -> null
+        }
+    }
+
+    private fun resolveExactMethod(clazz: Class<*>, target: MethodTarget, cl: ClassLoader): Method? {
+        val parameterTypes = target.parameterTypeNames.map { typeName ->
+            resolveClass(typeName, cl) ?: run {
+                XposedCompat.logD { "$TAG parameter class NOT FOUND: ${target.className}.${target.methodName} $typeName" }
+                return null
+            }
+        }.toTypedArray()
+        val method = try {
+            clazz.getDeclaredMethod(target.methodName, *parameterTypes)
+        } catch (_: NoSuchMethodException) {
+            XposedCompat.logD { "$TAG method NOT FOUND: ${target.className}.${target.methodName}" }
+            return null
+        }
+        val isStatic = Modifier.isStatic(method.modifiers)
+        if (isStatic != target.staticMethod) {
+            XposedCompat.logD { "$TAG method skipped: static mismatch ${target.className}.${target.methodName}" }
+            return null
+        }
+        val returnType = resolveClass(target.returnTypeName, cl) ?: return null
+        if (method.returnType != returnType) {
+            XposedCompat.logD {
+                "$TAG method skipped: return mismatch ${target.className}.${target.methodName} " +
+                    "${method.returnType.name} != ${returnType.name}"
+            }
+            return null
+        }
+        return method
+    }
+
+    private fun resolveClass(typeName: String, cl: ClassLoader): Class<*>? {
+        return when (typeName) {
+            "void" -> Void.TYPE
+            "boolean" -> Boolean::class.javaPrimitiveType
+            "byte" -> Byte::class.javaPrimitiveType
+            "char" -> Char::class.javaPrimitiveType
+            "short" -> Short::class.javaPrimitiveType
+            "int" -> Int::class.javaPrimitiveType
+            "long" -> Long::class.javaPrimitiveType
+            "float" -> Float::class.javaPrimitiveType
+            "double" -> Double::class.javaPrimitiveType
+            else -> XposedCompat.findClassOrNull(typeName, cl)
         }
     }
 }

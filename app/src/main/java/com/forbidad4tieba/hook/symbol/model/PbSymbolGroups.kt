@@ -3,6 +3,7 @@ package com.forbidad4tieba.hook.symbol.model
 data class PbSymbols(
     val ad: PbAdSymbolsGroup = PbAdSymbolsGroup(),
     val falling: PbFallingSymbolsGroup = PbFallingSymbolsGroup(),
+    val bottomEnterBar: PbBottomEnterBarSymbolsGroup = PbBottomEnterBarSymbolsGroup(),
     val comment: PbCommentSymbolsGroup = PbCommentSymbolsGroup(),
     val gestureScale: PbGestureScaleSymbolsGroup = PbGestureScaleSymbolsGroup(),
     val likeAutoReply: PbLikeAutoReplySymbolsGroup = PbLikeAutoReplySymbolsGroup(),
@@ -32,6 +33,17 @@ data class PbFallingSymbolsGroup(
     val pbFallingInitMethod: String? = null,
     val pbFallingShowMethod: String? = null,
     val pbFallingClearMethod: String? = null,
+)
+
+data class PbBottomEnterBarSymbolsGroup(
+    val pbBottomEnterBarViewClass: String? = null,
+    val pbBottomEnterBarConstructorCount: Int? = null,
+    val pbBottomEnterBarRefreshMethodSpecs: List<String>? = null,
+    val pbEnterFrsAnimationTipViewClass: String? = null,
+    val pbEnterFrsAnimationTipConstructorCount: Int? = null,
+    val pbEnterFrsAnimationTipCallerClasses: List<String>? = null,
+    val pbHotTopicGuideTotalViewMethod: String? = null,
+    val pbHotTopicGuideRefreshMethodSpecs: List<String>? = null,
 )
 
 data class PbCommentSymbolsGroup(

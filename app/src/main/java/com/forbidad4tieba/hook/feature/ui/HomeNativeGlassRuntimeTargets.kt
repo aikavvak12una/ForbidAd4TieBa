@@ -15,6 +15,13 @@ internal fun resolveHomeNativeGlassRuntimeTargets(symbols: HookSymbols): Runtime
         dynamicBackgroundColorIds = symbols.homeNativeGlassDynamicBackgroundColorIds
             .filter { it != 0 }
             .toSet(),
+        topChromeTabSelectedMethods = symbols.homeNativeGlassTopChromeTabSelectedMethodSpecs
+            .orEmpty()
+            .mapNotNull(::parseHomeTopChromeTabSelectedTarget),
+        subPbSetNextPageTarget = parseHomeSubPbSetNextPageTarget(
+            methodName = symbols.homeNativeGlassSubPbSetNextPageMethod,
+            parameterTypeName = symbols.homeNativeGlassSubPbSetNextPageParamType,
+        ),
         sortSwitchBackgroundPaintField =
             symbols.homeNativeGlassSortSwitchBackgroundPaintField?.takeIf { it.isNotBlank() },
         sortSwitchSlideDrawMethod =
@@ -34,4 +41,22 @@ internal fun resolveHomeNativeGlassRuntimeTargets(symbols: HookSymbols): Runtime
         pbCommonLayoutPreloaderGetOrDefaultMethod =
             symbols.pbCommonLayoutPreloaderGetOrDefaultMethod?.takeIf { it.isNotBlank() },
     )
+}
+
+private fun parseHomeTopChromeTabSelectedTarget(spec: String): HomeTopChromeTabSelectedTarget? {
+    val sep = spec.indexOf('#')
+    if (sep <= 0 || sep == spec.lastIndex) return null
+    val className = spec.substring(0, sep).trim()
+    val methodName = spec.substring(sep + 1).trim()
+    if (className.isEmpty() || methodName.isEmpty()) return null
+    return HomeTopChromeTabSelectedTarget(className = className, methodName = methodName)
+}
+
+private fun parseHomeSubPbSetNextPageTarget(
+    methodName: String?,
+    parameterTypeName: String?,
+): HomeSubPbSetNextPageTarget? {
+    val method = methodName?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val parameterType = parameterTypeName?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return HomeSubPbSetNextPageTarget(methodName = method, parameterTypeName = parameterType)
 }

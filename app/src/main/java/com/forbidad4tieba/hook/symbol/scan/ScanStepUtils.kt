@@ -2,6 +2,9 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
+import java.lang.reflect.Constructor
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 
 internal inline fun <T> scanSubStep(
     tag: String,
@@ -14,6 +17,14 @@ internal inline fun <T> scanSubStep(
     } catch (t: Throwable) {
         val detail = HookSymbolScanDiagnostics.formatScanException(t)
         if (isRecoverableCandidateReflectionFailure(tag, t)) {
+            val context = HookSymbolScanSession.get()
+            if (context?.shouldLogRecoverableProbeIssue(tag) == true) {
+                HookSymbolScanDiagnostics.log(
+                    logger,
+                    "$tag recoverable probe skipped: " +
+                        HookSymbolScanDiagnostics.sanitizeScanStatusText(detail),
+                )
+            }
             return fallback
         }
         HookSymbolScanSession.get()?.scanErrors?.let { errors ->
@@ -57,4 +68,48 @@ internal fun unpackScanParts(raw: String, expectedParts: Int): List<String?> {
         parts.add(null)
     }
     return parts
+}
+
+internal fun scanDeclaredMethods(tag: String, clazz: Class<*>, logger: ScanLogger?): List<Method>? =
+    scanSubStep("$tag.Methods", logger, null) {
+        clazz.declaredMethods.toList()
+    }
+
+internal fun scanDeclaredFields(tag: String, clazz: Class<*>, logger: ScanLogger?): List<Field>? =
+    scanSubStep("$tag.Fields", logger, null) {
+        clazz.declaredFields.toList()
+    }
+
+internal fun scanDeclaredConstructors(
+    tag: String,
+    clazz: Class<*>,
+    logger: ScanLogger?,
+): List<Constructor<*>>? =
+    scanSubStep("$tag.Constructors", logger, null) {
+        clazz.declaredConstructors.toList()
+    }
+
+internal fun scanInstanceMethods(tag: String, clazz: Class<*>, logger: ScanLogger?): List<Method>? =
+    scanSubStep("$tag.InstanceMethods", logger, null) {
+        ScanReflection.collectInstanceMethods(clazz)
+    }
+
+internal fun scanInstanceFields(tag: String, clazz: Class<*>, logger: ScanLogger?): List<Field>? =
+    scanSubStep("$tag.InstanceFields", logger, null) {
+        ScanReflection.collectInstanceFields(clazz)
+    }
+
+internal fun <T> selectUniqueScanCandidate(
+    tag: String,
+    candidates: Iterable<T>,
+    logger: ScanLogger?,
+    describe: (T) -> String,
+): T? {
+    val matches = candidates.toList()
+    if (matches.size == 1) return matches.single()
+    HookSymbolScanDiagnostics.log(
+        logger,
+        "$tag candidates=" + matches.joinToString(",") { describe(it) }.ifBlank { "-" },
+    )
+    return null
 }

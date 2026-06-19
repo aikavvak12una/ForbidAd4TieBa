@@ -59,6 +59,10 @@ internal object HomeNativeGlassSymbolScanner {
         "com.baidu.tieba.R\$color",
         "com.baidu.searchbox.livenps.R\$color",
     )
+    private val TOP_CHROME_CLASSES = listOf(
+        StableTiebaHookPoints.HOME_SCROLL_TAB_BAR_LAYOUT_CLASS,
+        StableTiebaHookPoints.HOME_FIXED_APP_BAR_LAYOUT_CLASS,
+    )
 
     fun scanResourceIds(context: Context, cl: ClassLoader, logger: ScanLogger?): HomeNativeGlassResourceIds {
         fun resolveId(resourceName: String): Int? {
@@ -230,6 +234,65 @@ internal object HomeNativeGlassSymbolScanner {
             backgroundPaintField = backgroundPaint?.name,
             slideDrawMethod = slideDrawMethod?.name,
             slidePathField = slidePath?.name,
+        )
+    }
+
+    fun scanTopChrome(cl: ClassLoader, logger: ScanLogger?): HomeNativeGlassTopChromeSymbols {
+        val specs = ArrayList<String>(TOP_CHROME_CLASSES.size)
+        for (className in TOP_CHROME_CLASSES) {
+            val clazz = safeFindClass(className, cl)
+            if (clazz == null) {
+                log(logger, "homeNativeGlassTopChrome: class missing $className")
+                continue
+            }
+            val candidates = declaredMethods("TopChrome.${clazz.name}", clazz, logger)
+                ?.filter(::isTopChromeTabSelectedMethod)
+                ?: continue
+            val method = candidates.singleOrNull()
+            if (method == null) {
+                log(
+                    logger,
+                    "homeNativeGlassTopChrome: tab selected method candidates for $className=" +
+                        candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
+                )
+                continue
+            }
+            specs.add(encodeClassMethodSpec(clazz, method))
+        }
+        log(
+            logger,
+            "homeNativeGlassTopChrome: tabSelected=" +
+                specs.joinToString(",").ifBlank { "-" },
+        )
+        return HomeNativeGlassTopChromeSymbols(tabSelectedMethodSpecs = specs)
+    }
+
+    fun scanSubPbNextPage(cl: ClassLoader, logger: ScanLogger?): HomeNativeGlassSubPbNextPageSymbols {
+        val clazz = safeFindClass(StableTiebaHookPoints.BD_LIST_VIEW_CLASS, cl)
+            ?: run {
+                log(logger, "homeNativeGlassSubPbNextPage: class missing ${StableTiebaHookPoints.BD_LIST_VIEW_CLASS}")
+                return HomeNativeGlassSubPbNextPageSymbols()
+            }
+        val candidates = declaredMethods("SubPbNextPage.${clazz.name}", clazz, logger)
+            ?.filter(::isSubPbSetNextPageMethod)
+            ?: return HomeNativeGlassSubPbNextPageSymbols()
+        val method = candidates.singleOrNull()
+        if (method == null) {
+            log(
+                logger,
+                "homeNativeGlassSubPbNextPage: setNextPage candidates=" +
+                    candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
+            )
+            return HomeNativeGlassSubPbNextPageSymbols()
+        }
+        val paramType = method.parameterTypes[0].name
+        log(
+            logger,
+            "homeNativeGlassSubPbNextPage matched: ${clazz.name}.${method.name}($paramType)",
+        )
+        return HomeNativeGlassSubPbNextPageSymbols(
+            methodName = method.name,
+            parameterTypeName = paramType,
         )
     }
 
@@ -770,6 +833,25 @@ internal object HomeNativeGlassSymbolScanner {
         return !Modifier.isStatic(method.modifiers) &&
             method.parameterTypes.isEmpty() &&
             method.returnType == Void.TYPE
+    }
+
+    private fun isTopChromeTabSelectedMethod(method: Method): Boolean {
+        return !Modifier.isStatic(method.modifiers) &&
+            method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 2 &&
+            isIntType(method.parameterTypes[0]) &&
+            isIntType(method.parameterTypes[1])
+    }
+
+    private fun isSubPbSetNextPageMethod(method: Method): Boolean {
+        return method.name == StableTiebaHookPoints.METHOD_SET_NEXT_PAGE &&
+            !Modifier.isStatic(method.modifiers) &&
+            method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 1
+    }
+
+    private fun encodeClassMethodSpec(clazz: Class<*>, method: Method): String {
+        return "${clazz.name}#${method.name}"
     }
 
     private fun selectHostDarkModeSwitchCallbackMethod(

@@ -65,16 +65,55 @@ class ConfigManagerTest {
     }
 
     @Test
-    fun scanIndependentFeaturesAreAvailableBeforeScanStateIsApplied() {
+    fun autoSignInRemainsUnknownUntilScanStateIsApplied() {
         assertEquals(
             ConfigManager.KEY_ENABLE_AUTO_SIGN_IN,
             ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
         )
         assertEquals(
-            ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ConfigManager.ScanFeatureAvailabilityState.UNKNOWN,
             ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
         )
-        assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+        assertFalse(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+    }
+
+    @Test
+    fun autoSignInAvailabilityFollowsScanStatus() {
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.AUTO_SIGN_IN to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ),
+        ) {
+            assertEquals(
+                ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+                ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
+            )
+            assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+        }
+
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.AUTO_SIGN_IN to ConfigManager.ScanFeatureAvailabilityState.PARTIAL,
+            ),
+        ) {
+            assertEquals(
+                ConfigManager.ScanFeatureAvailabilityState.PARTIAL,
+                ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
+            )
+            assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+        }
+
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.AUTO_SIGN_IN to ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+            ),
+        ) {
+            assertEquals(
+                ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+                ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
+            )
+            assertFalse(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+        }
     }
 
     @Test

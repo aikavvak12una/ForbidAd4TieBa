@@ -17,6 +17,8 @@ data class HookSymbols(
         get() = hookPoints.primary.pb
     val web: WebSymbols
         get() = hookPoints.web
+    val signIn: SignInSymbols
+        get() = hookPoints.signIn
     val privateMessage: PrivateMessageSymbols
         get() = hookPoints.privateMessage
     val collectionHistory: CollectionHistorySymbols
@@ -96,6 +98,22 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.falling.pbFallingShowMethod
     val pbFallingClearMethod: String?
         get() = hookPoints.primary.pb.falling.pbFallingClearMethod
+    val pbBottomEnterBarViewClass: String?
+        get() = hookPoints.primary.pb.bottomEnterBar.pbBottomEnterBarViewClass
+    val pbBottomEnterBarConstructorCount: Int?
+        get() = hookPoints.primary.pb.bottomEnterBar.pbBottomEnterBarConstructorCount
+    val pbBottomEnterBarRefreshMethodSpecs: List<String>?
+        get() = hookPoints.primary.pb.bottomEnterBar.pbBottomEnterBarRefreshMethodSpecs
+    val pbEnterFrsAnimationTipViewClass: String?
+        get() = hookPoints.primary.pb.bottomEnterBar.pbEnterFrsAnimationTipViewClass
+    val pbEnterFrsAnimationTipConstructorCount: Int?
+        get() = hookPoints.primary.pb.bottomEnterBar.pbEnterFrsAnimationTipConstructorCount
+    val pbEnterFrsAnimationTipCallerClasses: List<String>?
+        get() = hookPoints.primary.pb.bottomEnterBar.pbEnterFrsAnimationTipCallerClasses
+    val pbHotTopicGuideTotalViewMethod: String?
+        get() = hookPoints.primary.pb.bottomEnterBar.pbHotTopicGuideTotalViewMethod
+    val pbHotTopicGuideRefreshMethodSpecs: List<String>?
+        get() = hookPoints.primary.pb.bottomEnterBar.pbHotTopicGuideRefreshMethodSpecs
     val pbEarlyAdInsertClass: String?
         get() = hookPoints.primary.pb.ad.earlyInsert.pbEarlyAdInsertClass
     val pbEarlyAdInsertMethodSpecs: List<String>?
@@ -210,6 +228,60 @@ data class HookSymbols(
         get() = hookPoints.web.mountCard.mountCardLinkInfoDataClass
     val mountCardLinkInfoGetUrlMethod: String?
         get() = hookPoints.web.mountCard.mountCardLinkInfoGetUrlMethod
+    val mineTabWebViewClass: String?
+        get() = hookPoints.web.adBlock.mineTab.mineTabWebViewClass
+    val mineTabWebLoadUrlMethod: String?
+        get() = hookPoints.web.adBlock.mineTab.mineTabWebLoadUrlMethod
+    val mineTabWebGetUrlMethod: String?
+        get() = hookPoints.web.adBlock.mineTab.mineTabWebGetUrlMethod
+    val mineTabWebGetInnerWebViewMethod: String?
+        get() = hookPoints.web.adBlock.mineTab.mineTabWebGetInnerWebViewMethod
+    val homeSideBarWebViewClass: String?
+        get() = hookPoints.web.adBlock.homeSideBar.homeSideBarWebViewClass
+    val homeSideBarTbWebViewClass: String?
+        get() = hookPoints.web.adBlock.homeSideBar.homeSideBarTbWebViewClass
+    val homeSideBarWebGetWebViewMethod: String?
+        get() = hookPoints.web.adBlock.homeSideBar.homeSideBarWebGetWebViewMethod
+    val homeSideBarWebGetUrlMethod: String?
+        get() = hookPoints.web.adBlock.homeSideBar.homeSideBarWebGetUrlMethod
+    val homeSideBarWebGetInnerWebViewMethod: String?
+        get() = hookPoints.web.adBlock.homeSideBar.homeSideBarWebGetInnerWebViewMethod
+    val homeSideBarWebLoadUrlMethods: List<String>?
+        get() = hookPoints.web.adBlock.homeSideBar.homeSideBarWebLoadUrlMethods
+    val autoSignInNetworkClass: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInNetworkClass
+    val autoSignInNetworkConstructorSpec: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInNetworkConstructorSpec
+    val autoSignInNetworkAddPostDataMethod: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInNetworkAddPostDataMethod
+    val autoSignInNetworkPostNetDataMethod: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInNetworkPostNetDataMethod
+    val autoSignInNetworkSetNeedTbsMethod: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInNetworkSetNeedTbsMethod
+    val autoSignInNetworkSetNeedSigMethod: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInNetworkSetNeedSigMethod
+    val autoSignInTbConfigClass: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInTbConfigClass
+    val autoSignInServerAddressField: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInServerAddressField
+    val autoSignInCoreApplicationClass: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInCoreApplicationClass
+    val autoSignInCurrentAccountMethod: String?
+        get() = hookPoints.signIn.autoSignIn.nativeNetwork.autoSignInCurrentAccountMethod
+    val autoSignInHybridProxyClass: String?
+        get() = hookPoints.signIn.autoSignIn.hybridNativeProxy.autoSignInHybridProxyClass
+    val autoSignInHybridProxyConstructorSpec: String?
+        get() = hookPoints.signIn.autoSignIn.hybridNativeProxy.autoSignInHybridProxyConstructorSpec
+    val autoSignInHybridJsBridgeClass: String?
+        get() = hookPoints.signIn.autoSignIn.hybridNativeProxy.autoSignInHybridJsBridgeClass
+    val autoSignInHybridNativeNetworkProxyMethod: String?
+        get() = hookPoints.signIn.autoSignIn.hybridNativeProxy.autoSignInHybridNativeNetworkProxyMethod
+    val autoSignInHybridTaskClass: String?
+        get() = hookPoints.signIn.autoSignIn.hybridNativeProxy.autoSignInHybridTaskClass
+    val autoSignInHybridTaskConstructorSpec: String?
+        get() = hookPoints.signIn.autoSignIn.hybridNativeProxy.autoSignInHybridTaskConstructorSpec
+    val autoSignInHybridTaskDoInBackgroundMethod: String?
+        get() = hookPoints.signIn.autoSignIn.hybridNativeProxy.autoSignInHybridTaskDoInBackgroundMethod
     val forumBottomSheetViewClass: String?
         get() = hookPoints.primary.pb.comment.bottomSheet.forumBottomSheetViewClass
     val forumBottomSheetInitScrollMethod: String?
@@ -276,14 +348,20 @@ data class HookSymbols(
         get() = hookPoints.collectionHistory.collection.presenter.collectionPresenterField
     val collectionPresenterListSetterMethod: String?
         get() = hookPoints.collectionHistory.collection.presenter.collectionPresenterListSetterMethod
+    val collectionPresenterListSetterMethodSpec: String?
+        get() = hookPoints.collectionHistory.collection.presenter.collectionPresenterListSetterMethodSpec
     val collectionPresenterAdapterField: String?
         get() = hookPoints.collectionHistory.collection.presenter.collectionPresenterAdapterField
     val collectionModelField: String?
         get() = hookPoints.collectionHistory.collection.model.collectionModelField
     val collectionModelListGetterMethod: String?
         get() = hookPoints.collectionHistory.collection.model.collectionModelListGetterMethod
+    val collectionModelListGetterMethodSpec: String?
+        get() = hookPoints.collectionHistory.collection.model.collectionModelListGetterMethodSpec
     val collectionModelParseMethod: String?
         get() = hookPoints.collectionHistory.collection.model.collectionModelParseMethod
+    val collectionModelParseMethodSpec: String?
+        get() = hookPoints.collectionHistory.collection.model.collectionModelParseMethodSpec
     val collectionModelListField: String?
         get() = hookPoints.collectionHistory.collection.model.collectionModelListField
     val collectionFragmentDisplayListField: String?
@@ -304,10 +382,14 @@ data class HookSymbols(
         get() = hookPoints.collectionHistory.history.activity.historyAdapterField
     val historyAdapterSetListMethod: String?
         get() = hookPoints.collectionHistory.history.activity.historyAdapterSetListMethod
+    val historyAdapterSetListMethodSpec: String?
+        get() = hookPoints.collectionHistory.history.activity.historyAdapterSetListMethodSpec
     val historyListField: String?
         get() = hookPoints.collectionHistory.history.activity.historyListField
     val historyActivityListUpdateMethod: String?
         get() = hookPoints.collectionHistory.history.activity.historyActivityListUpdateMethod
+    val historyActivityListUpdateMethodSpec: String?
+        get() = hookPoints.collectionHistory.history.activity.historyActivityListUpdateMethodSpec
     val historyActivityNavBarField: String?
         get() = hookPoints.collectionHistory.history.activity.historyActivityNavBarField
     val historyThreadNameMethod: String?
@@ -436,6 +518,12 @@ data class HookSymbols(
         get() = resources.homeNativeGlassPbReplyTitleDividerViewId
     val homeNativeGlassDynamicBackgroundColorIds: List<Int>
         get() = resources.homeNativeGlassDynamicBackgroundColorIds
+    val homeNativeGlassTopChromeTabSelectedMethodSpecs: List<String>?
+        get() = hookPoints.primary.home.nativeGlass.topChrome.homeNativeGlassTopChromeTabSelectedMethodSpecs
+    val homeNativeGlassSubPbSetNextPageMethod: String?
+        get() = hookPoints.primary.home.nativeGlass.subPbNextPage.homeNativeGlassSubPbSetNextPageMethod
+    val homeNativeGlassSubPbSetNextPageParamType: String?
+        get() = hookPoints.primary.home.nativeGlass.subPbNextPage.homeNativeGlassSubPbSetNextPageParamType
     val homeNativeGlassSortSwitchBackgroundPaintField: String?
         get() = hookPoints.primary.home.nativeGlass.sortSwitch.homeNativeGlassSortSwitchBackgroundPaintField
     val homeNativeGlassSortSwitchSlideDrawMethod: String?
@@ -477,6 +565,8 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.misc.commonLayoutPreloader.pbCommonLayoutPreloaderGetOrDefaultMethod
     val feedCardBindMethod: String?
         get() = hookPoints.primary.ad.feedCard.feedCardBindMethod
+    val feedCardBindMethodSpec: String?
+        get() = hookPoints.primary.ad.feedCard.feedCardBindMethodSpec
     val feedCardDataListField: String?
         get() = hookPoints.primary.ad.feedCard.feedCardDataListField
     val feedHeadParamsField: String?
@@ -741,6 +831,14 @@ data class HookSymbols(
             put("pbFallingInitMethod", pbFallingInitMethod)
             put("pbFallingShowMethod", pbFallingShowMethod)
             put("pbFallingClearMethod", pbFallingClearMethod)
+            put("pbBottomEnterBarViewClass", pbBottomEnterBarViewClass)
+            put("pbBottomEnterBarConstructorCount", pbBottomEnterBarConstructorCount)
+            putStringArray("pbBottomEnterBarRefreshMethodSpecs", pbBottomEnterBarRefreshMethodSpecs)
+            put("pbEnterFrsAnimationTipViewClass", pbEnterFrsAnimationTipViewClass)
+            put("pbEnterFrsAnimationTipConstructorCount", pbEnterFrsAnimationTipConstructorCount)
+            putStringArray("pbEnterFrsAnimationTipCallerClasses", pbEnterFrsAnimationTipCallerClasses)
+            put("pbHotTopicGuideTotalViewMethod", pbHotTopicGuideTotalViewMethod)
+            putStringArray("pbHotTopicGuideRefreshMethodSpecs", pbHotTopicGuideRefreshMethodSpecs)
             put("pbEarlyAdInsertClass", pbEarlyAdInsertClass)
             putStringArray("pbEarlyAdInsertMethodSpecs", pbEarlyAdInsertMethodSpecs)
             put("pbAdBidCommonRequestModelClass", pbAdBidCommonRequestModelClass)
@@ -798,6 +896,33 @@ data class HookSymbols(
             put("mountCardLinkLayoutDataField", mountCardLinkLayoutDataField)
             put("mountCardLinkInfoDataClass", mountCardLinkInfoDataClass)
             put("mountCardLinkInfoGetUrlMethod", mountCardLinkInfoGetUrlMethod)
+            put("mineTabWebViewClass", mineTabWebViewClass)
+            put("mineTabWebLoadUrlMethod", mineTabWebLoadUrlMethod)
+            put("mineTabWebGetUrlMethod", mineTabWebGetUrlMethod)
+            put("mineTabWebGetInnerWebViewMethod", mineTabWebGetInnerWebViewMethod)
+            put("homeSideBarWebViewClass", homeSideBarWebViewClass)
+            put("homeSideBarTbWebViewClass", homeSideBarTbWebViewClass)
+            put("homeSideBarWebGetWebViewMethod", homeSideBarWebGetWebViewMethod)
+            put("homeSideBarWebGetUrlMethod", homeSideBarWebGetUrlMethod)
+            put("homeSideBarWebGetInnerWebViewMethod", homeSideBarWebGetInnerWebViewMethod)
+            putStringArray("homeSideBarWebLoadUrlMethods", homeSideBarWebLoadUrlMethods)
+            put("autoSignInNetworkClass", autoSignInNetworkClass)
+            put("autoSignInNetworkConstructorSpec", autoSignInNetworkConstructorSpec)
+            put("autoSignInNetworkAddPostDataMethod", autoSignInNetworkAddPostDataMethod)
+            put("autoSignInNetworkPostNetDataMethod", autoSignInNetworkPostNetDataMethod)
+            put("autoSignInNetworkSetNeedTbsMethod", autoSignInNetworkSetNeedTbsMethod)
+            put("autoSignInNetworkSetNeedSigMethod", autoSignInNetworkSetNeedSigMethod)
+            put("autoSignInTbConfigClass", autoSignInTbConfigClass)
+            put("autoSignInServerAddressField", autoSignInServerAddressField)
+            put("autoSignInCoreApplicationClass", autoSignInCoreApplicationClass)
+            put("autoSignInCurrentAccountMethod", autoSignInCurrentAccountMethod)
+            put("autoSignInHybridProxyClass", autoSignInHybridProxyClass)
+            put("autoSignInHybridProxyConstructorSpec", autoSignInHybridProxyConstructorSpec)
+            put("autoSignInHybridJsBridgeClass", autoSignInHybridJsBridgeClass)
+            put("autoSignInHybridNativeNetworkProxyMethod", autoSignInHybridNativeNetworkProxyMethod)
+            put("autoSignInHybridTaskClass", autoSignInHybridTaskClass)
+            put("autoSignInHybridTaskConstructorSpec", autoSignInHybridTaskConstructorSpec)
+            put("autoSignInHybridTaskDoInBackgroundMethod", autoSignInHybridTaskDoInBackgroundMethod)
             put("forumBottomSheetViewClass", forumBottomSheetViewClass)
             put("forumBottomSheetInitScrollMethod", forumBottomSheetInitScrollMethod)
             put("autoRefreshTriggerMethod", autoRefreshTriggerMethod)
@@ -832,10 +957,13 @@ data class HookSymbols(
 
             put("collectionPresenterField", collectionPresenterField)
             put("collectionPresenterListSetterMethod", collectionPresenterListSetterMethod)
+            put("collectionPresenterListSetterMethodSpec", collectionPresenterListSetterMethodSpec)
             put("collectionPresenterAdapterField", collectionPresenterAdapterField)
             put("collectionModelField", collectionModelField)
             put("collectionModelListGetterMethod", collectionModelListGetterMethod)
+            put("collectionModelListGetterMethodSpec", collectionModelListGetterMethodSpec)
             put("collectionModelParseMethod", collectionModelParseMethod)
+            put("collectionModelParseMethodSpec", collectionModelParseMethodSpec)
             put("collectionModelListField", collectionModelListField)
             put("collectionFragmentDisplayListField", collectionFragmentDisplayListField)
             put("collectionActivityNavControllerField", collectionActivityNavControllerField)
@@ -847,8 +975,10 @@ data class HookSymbols(
 
             put("historyAdapterField", historyAdapterField)
             put("historyAdapterSetListMethod", historyAdapterSetListMethod)
+            put("historyAdapterSetListMethodSpec", historyAdapterSetListMethodSpec)
             put("historyListField", historyListField)
             put("historyActivityListUpdateMethod", historyActivityListUpdateMethod)
+            put("historyActivityListUpdateMethodSpec", historyActivityListUpdateMethodSpec)
             put("historyActivityNavBarField", historyActivityNavBarField)
             put("historyThreadNameMethod", historyThreadNameMethod)
             put("historyForumNameMethod", historyForumNameMethod)
@@ -920,6 +1050,12 @@ data class HookSymbols(
                 homeNativeGlassDynamicBackgroundColorIds.forEach { array.put(it) }
                 put("homeNativeGlassDynamicBackgroundColorIds", array)
             }
+            putStringArray(
+                "homeNativeGlassTopChromeTabSelectedMethodSpecs",
+                homeNativeGlassTopChromeTabSelectedMethodSpecs,
+            )
+            put("homeNativeGlassSubPbSetNextPageMethod", homeNativeGlassSubPbSetNextPageMethod)
+            put("homeNativeGlassSubPbSetNextPageParamType", homeNativeGlassSubPbSetNextPageParamType)
             put(
                 "homeNativeGlassSortSwitchBackgroundPaintField",
                 homeNativeGlassSortSwitchBackgroundPaintField,
@@ -983,6 +1119,7 @@ data class HookSymbols(
             put("pbCommonLayoutPreloaderGetOrDefaultMethod", pbCommonLayoutPreloaderGetOrDefaultMethod)
 
             put("feedCardBindMethod", feedCardBindMethod)
+            put("feedCardBindMethodSpec", feedCardBindMethodSpec)
             put("feedCardDataListField", feedCardDataListField)
             put("feedHeadParamsField", feedHeadParamsField)
             put("feedRecommendCardNestedDataMethod", feedRecommendCardNestedDataMethod)
@@ -1114,7 +1251,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 10
+        const val CACHE_SCHEMA_VERSION = 20
 
         fun unsupported(
             featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
@@ -1208,6 +1345,19 @@ data class HookSymbols(
                     pbFallingInitMethod = obj.optStringOrNull("pbFallingInitMethod")
                     pbFallingShowMethod = obj.optStringOrNull("pbFallingShowMethod")
                     pbFallingClearMethod = obj.optStringOrNull("pbFallingClearMethod")
+                    pbBottomEnterBarViewClass = obj.optStringOrNull("pbBottomEnterBarViewClass")
+                    pbBottomEnterBarConstructorCount = obj.optIntOrNull("pbBottomEnterBarConstructorCount")
+                    pbBottomEnterBarRefreshMethodSpecs =
+                        obj.optStringArray("pbBottomEnterBarRefreshMethodSpecs").takeIf { it.isNotEmpty() }
+                    pbEnterFrsAnimationTipViewClass = obj.optStringOrNull("pbEnterFrsAnimationTipViewClass")
+                    pbEnterFrsAnimationTipConstructorCount =
+                        obj.optIntOrNull("pbEnterFrsAnimationTipConstructorCount")
+                    pbEnterFrsAnimationTipCallerClasses =
+                        obj.optStringArray("pbEnterFrsAnimationTipCallerClasses").takeIf { it.isNotEmpty() }
+                    pbHotTopicGuideTotalViewMethod =
+                        obj.optStringOrNull("pbHotTopicGuideTotalViewMethod")
+                    pbHotTopicGuideRefreshMethodSpecs =
+                        obj.optStringArray("pbHotTopicGuideRefreshMethodSpecs").takeIf { it.isNotEmpty() }
                     pbEarlyAdInsertClass = obj.optStringOrNull("pbEarlyAdInsertClass")
                     pbEarlyAdInsertMethodSpecs = obj.optStringArray("pbEarlyAdInsertMethodSpecs")
                         .takeIf { it.isNotEmpty() }
@@ -1268,6 +1418,47 @@ data class HookSymbols(
                     mountCardLinkLayoutDataField = obj.optStringOrNull("mountCardLinkLayoutDataField")
                     mountCardLinkInfoDataClass = obj.optStringOrNull("mountCardLinkInfoDataClass")
                     mountCardLinkInfoGetUrlMethod = obj.optStringOrNull("mountCardLinkInfoGetUrlMethod")
+                    mineTabWebViewClass = obj.optStringOrNull("mineTabWebViewClass")
+                    mineTabWebLoadUrlMethod = obj.optStringOrNull("mineTabWebLoadUrlMethod")
+                    mineTabWebGetUrlMethod = obj.optStringOrNull("mineTabWebGetUrlMethod")
+                    mineTabWebGetInnerWebViewMethod = obj.optStringOrNull("mineTabWebGetInnerWebViewMethod")
+                    homeSideBarWebViewClass = obj.optStringOrNull("homeSideBarWebViewClass")
+                    homeSideBarTbWebViewClass = obj.optStringOrNull("homeSideBarTbWebViewClass")
+                    homeSideBarWebGetWebViewMethod = obj.optStringOrNull("homeSideBarWebGetWebViewMethod")
+                    homeSideBarWebGetUrlMethod = obj.optStringOrNull("homeSideBarWebGetUrlMethod")
+                    homeSideBarWebGetInnerWebViewMethod =
+                        obj.optStringOrNull("homeSideBarWebGetInnerWebViewMethod")
+                    homeSideBarWebLoadUrlMethods = obj.optStringArray("homeSideBarWebLoadUrlMethods")
+                        .takeIf { it.isNotEmpty() }
+                    autoSignInNetworkClass = obj.optStringOrNull("autoSignInNetworkClass")
+                    autoSignInNetworkConstructorSpec =
+                        obj.optStringOrNull("autoSignInNetworkConstructorSpec")
+                    autoSignInNetworkAddPostDataMethod =
+                        obj.optStringOrNull("autoSignInNetworkAddPostDataMethod")
+                    autoSignInNetworkPostNetDataMethod =
+                        obj.optStringOrNull("autoSignInNetworkPostNetDataMethod")
+                    autoSignInNetworkSetNeedTbsMethod =
+                        obj.optStringOrNull("autoSignInNetworkSetNeedTbsMethod")
+                    autoSignInNetworkSetNeedSigMethod =
+                        obj.optStringOrNull("autoSignInNetworkSetNeedSigMethod")
+                    autoSignInTbConfigClass = obj.optStringOrNull("autoSignInTbConfigClass")
+                    autoSignInServerAddressField = obj.optStringOrNull("autoSignInServerAddressField")
+                    autoSignInCoreApplicationClass =
+                        obj.optStringOrNull("autoSignInCoreApplicationClass")
+                    autoSignInCurrentAccountMethod =
+                        obj.optStringOrNull("autoSignInCurrentAccountMethod")
+                    autoSignInHybridProxyClass = obj.optStringOrNull("autoSignInHybridProxyClass")
+                    autoSignInHybridProxyConstructorSpec =
+                        obj.optStringOrNull("autoSignInHybridProxyConstructorSpec")
+                    autoSignInHybridJsBridgeClass =
+                        obj.optStringOrNull("autoSignInHybridJsBridgeClass")
+                    autoSignInHybridNativeNetworkProxyMethod =
+                        obj.optStringOrNull("autoSignInHybridNativeNetworkProxyMethod")
+                    autoSignInHybridTaskClass = obj.optStringOrNull("autoSignInHybridTaskClass")
+                    autoSignInHybridTaskConstructorSpec =
+                        obj.optStringOrNull("autoSignInHybridTaskConstructorSpec")
+                    autoSignInHybridTaskDoInBackgroundMethod =
+                        obj.optStringOrNull("autoSignInHybridTaskDoInBackgroundMethod")
                     forumBottomSheetViewClass = obj.optStringOrNull("forumBottomSheetViewClass")
                     forumBottomSheetInitScrollMethod = obj.optStringOrNull("forumBottomSheetInitScrollMethod")
                     autoRefreshTriggerMethod = obj.optStringOrNull("autoRefreshTriggerMethod")
@@ -1305,10 +1496,15 @@ data class HookSymbols(
 
                     collectionPresenterField = obj.optStringOrNull("collectionPresenterField")
                     collectionPresenterListSetterMethod = obj.optStringOrNull("collectionPresenterListSetterMethod")
+                    collectionPresenterListSetterMethodSpec =
+                        obj.optStringOrNull("collectionPresenterListSetterMethodSpec")
                     collectionPresenterAdapterField = obj.optStringOrNull("collectionPresenterAdapterField")
                     collectionModelField = obj.optStringOrNull("collectionModelField")
                     collectionModelListGetterMethod = obj.optStringOrNull("collectionModelListGetterMethod")
+                    collectionModelListGetterMethodSpec =
+                        obj.optStringOrNull("collectionModelListGetterMethodSpec")
                     collectionModelParseMethod = obj.optStringOrNull("collectionModelParseMethod")
+                    collectionModelParseMethodSpec = obj.optStringOrNull("collectionModelParseMethodSpec")
                     collectionModelListField = obj.optStringOrNull("collectionModelListField")
                     collectionFragmentDisplayListField = obj.optStringOrNull("collectionFragmentDisplayListField")
                     collectionActivityNavControllerField = obj.optStringOrNull("collectionActivityNavControllerField")
@@ -1320,8 +1516,11 @@ data class HookSymbols(
 
                     historyAdapterField = obj.optStringOrNull("historyAdapterField")
                     historyAdapterSetListMethod = obj.optStringOrNull("historyAdapterSetListMethod")
+                    historyAdapterSetListMethodSpec = obj.optStringOrNull("historyAdapterSetListMethodSpec")
                     historyListField = obj.optStringOrNull("historyListField")
                     historyActivityListUpdateMethod = obj.optStringOrNull("historyActivityListUpdateMethod")
+                    historyActivityListUpdateMethodSpec =
+                        obj.optStringOrNull("historyActivityListUpdateMethodSpec")
                     historyActivityNavBarField = obj.optStringOrNull("historyActivityNavBarField")
                     historyThreadNameMethod = obj.optStringOrNull("historyThreadNameMethod")
                     historyForumNameMethod = obj.optStringOrNull("historyForumNameMethod")
@@ -1390,6 +1589,13 @@ data class HookSymbols(
                     homeNativeGlassPbReplyTitleDividerViewId = obj.optIntOrNull("homeNativeGlassPbReplyTitleDividerViewId")
                     homeNativeGlassDynamicBackgroundColorIds =
                         obj.optIntArray("homeNativeGlassDynamicBackgroundColorIds")
+                    homeNativeGlassTopChromeTabSelectedMethodSpecs =
+                        obj.optStringArray("homeNativeGlassTopChromeTabSelectedMethodSpecs")
+                            .takeIf { it.isNotEmpty() }
+                    homeNativeGlassSubPbSetNextPageMethod =
+                        obj.optStringOrNull("homeNativeGlassSubPbSetNextPageMethod")
+                    homeNativeGlassSubPbSetNextPageParamType =
+                        obj.optStringOrNull("homeNativeGlassSubPbSetNextPageParamType")
                     homeNativeGlassSortSwitchBackgroundPaintField =
                         obj.optStringOrNull("homeNativeGlassSortSwitchBackgroundPaintField")
                     homeNativeGlassSortSwitchSlideDrawMethod =
@@ -1424,6 +1630,7 @@ data class HookSymbols(
                         obj.optStringOrNull("pbCommonLayoutPreloaderGetOrDefaultMethod")
 
                     feedCardBindMethod = obj.optStringOrNull("feedCardBindMethod")
+                    feedCardBindMethodSpec = obj.optStringOrNull("feedCardBindMethodSpec")
                     feedCardDataListField = obj.optStringOrNull("feedCardDataListField")
                     feedHeadParamsField = obj.optStringOrNull("feedHeadParamsField")
                     feedRecommendCardNestedDataMethod = obj.optStringOrNull("feedRecommendCardNestedDataMethod")

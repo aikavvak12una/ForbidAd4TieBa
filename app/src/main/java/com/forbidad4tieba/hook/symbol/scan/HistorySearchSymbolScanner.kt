@@ -4,6 +4,7 @@ import com.forbidad4tieba.hook.symbol.model.*
 
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.view.View
+import java.lang.reflect.Method
 
 internal object HistorySearchSymbolScanner {
     private const val HISTORY_ACTIVITY_CLASS = "com.baidu.tieba.myCollection.history.PbHistoryActivity"
@@ -31,18 +32,14 @@ internal object HistorySearchSymbolScanner {
                     ),
                 )?.name
 
+            val activityListUpdateMethod = resolveActivityListUpdateMethod(activityClass)
             val out = HistorySearchScanSymbols(
                 adapterField = adapterCandidate?.fieldName,
                 adapterSetListMethod = adapterCandidate?.setterMethod,
+                adapterSetListMethodSpec = adapterCandidate?.setterMethodSpec,
                 listField = listField,
-                activityListUpdateMethod = pickMethodName(
-                    methods = collectInstanceMethods(activityClass).filter { method ->
-                        method.returnType == Void.TYPE &&
-                            method.parameterTypes.size == 1 &&
-                            isListType(method.parameterTypes[0])
-                    },
-                    preferredName = "g",
-                ),
+                activityListUpdateMethod = activityListUpdateMethod?.name,
+                activityListUpdateMethodSpec = activityListUpdateMethod?.let(::encodeMethodSpec),
                 activityNavBarField = resolveHistoryNavigationFieldName(activityClass),
                 threadNameMethod = resolveHistoryDataStringGetterName(historyDataMethods, "getThreadName"),
                 forumNameMethod = resolveHistoryDataStringGetterName(historyDataMethods, "getForumName"),
@@ -79,8 +76,12 @@ private fun resolveHistoryNavigationFieldName(activityClass: Class<*>): String? 
 
 private fun resolveHistoryAdapterCandidate(activityClass: Class<*>): HistoryAdapterCandidate? {
     val candidates = collectInstanceFields(activityClass).mapNotNull { field ->
-        val setter = resolveListSetterMethodName(field.type, preferredName = "g") ?: return@mapNotNull null
-        HistoryAdapterCandidate(fieldName = field.name, setterMethod = setter)
+        val setter = resolveListSetterMethod(field.type, preferredName = "g") ?: return@mapNotNull null
+        HistoryAdapterCandidate(
+            fieldName = field.name,
+            setterMethod = setter.name,
+            setterMethodSpec = encodeMethodSpec(setter),
+        )
     }
     return candidates.minWithOrNull(
         compareBy<HistoryAdapterCandidate>(
@@ -91,6 +92,30 @@ private fun resolveHistoryAdapterCandidate(activityClass: Class<*>): HistoryAdap
             { it.fieldName },
         ),
     )
+}
+
+private fun resolveActivityListUpdateMethod(activityClass: Class<*>): Method? {
+    val candidates = collectInstanceMethods(activityClass).filter { method ->
+        method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 1 &&
+            isListType(method.parameterTypes[0])
+    }
+    return pickMethod(candidates, preferredName = "g")
+}
+
+private fun resolveListSetterMethod(clazz: Class<*>, preferredName: String): Method? {
+    val candidates = collectInstanceMethods(clazz).filter { method ->
+        method.returnType == Void.TYPE &&
+            method.parameterTypes.size == 1 &&
+            isListType(method.parameterTypes[0])
+    }
+    return pickMethod(candidates, preferredName)
+}
+
+private fun encodeMethodSpec(method: Method): String {
+    return method.name + "|" +
+        method.returnType.name + "|" +
+        method.parameterTypes.joinToString(",") { it.name }
 }
 
 
@@ -111,13 +136,10 @@ private fun resolveHistoryAdapterCandidate(activityClass: Class<*>): HistoryAdap
     private fun collectInstanceMethods(clazz: Class<*>): List<java.lang.reflect.Method> =
         ScanReflection.collectInstanceMethods(clazz)
 
-    private fun resolveListSetterMethodName(clazz: Class<*>, preferredName: String): String? =
-        ScanReflection.resolveListSetterMethodName(clazz, preferredName)
-
     private fun isListType(type: Class<*>): Boolean = ScanReflection.isListType(type)
 
-    private fun pickMethodName(methods: List<java.lang.reflect.Method>, preferredName: String): String? =
-        ScanReflection.pickMethodName(methods, preferredName)
+    private fun pickMethod(methods: List<Method>, preferredName: String?): Method? =
+        ScanReflection.pickMethod(methods, preferredName)
 
     private fun resolveHistoryDataStringGetterName(
         methods: List<java.lang.reflect.Method>,

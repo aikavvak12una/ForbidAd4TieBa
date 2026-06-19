@@ -9,7 +9,6 @@ import android.widget.Toast
 import com.forbidad4tieba.hook.symbol.model.AutoSignInHybridNativeProxySymbols
 import com.forbidad4tieba.hook.HookSymbolResolver
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
 import org.json.JSONObject
@@ -728,30 +727,76 @@ object AutoSignInManager {
             nativeBridgeCache[loader]?.let { return it }
         }
         return try {
-            val netClass = Class.forName(StableTiebaHookPoints.NETWORK_CLASS, false, loader)
-            val tbConfigClass = Class.forName(StableTiebaHookPoints.TB_CONFIG_CLASS, false, loader)
-            val coreAppClass = Class.forName(StableTiebaHookPoints.TBADK_CORE_APPLICATION_CLASS, false, loader)
-            val hybridNativeProxy = HookSymbolResolver.resolveAutoSignInHybridNativeProxySymbols(loader)
+            val symbols = HookSymbolResolver.getMemorySymbols() ?: run {
+                XposedCompat.log("$TAG: native network bridge skipped - scan symbols unavailable")
+                return null
+            }
+            fun required(name: String, value: String?): String? {
+                return value?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("$TAG: native network bridge skipped - missing $name")
+                    null
+                }
+            }
+
+            val networkClassName = required("autoSignInNetworkClass", symbols.autoSignInNetworkClass)
+                ?: return null
+            required("autoSignInNetworkConstructorSpec", symbols.autoSignInNetworkConstructorSpec)
+                ?: return null
+            val addPostDataMethodName = required(
+                "autoSignInNetworkAddPostDataMethod",
+                symbols.autoSignInNetworkAddPostDataMethod,
+            ) ?: return null
+            val postNetDataMethodName = required(
+                "autoSignInNetworkPostNetDataMethod",
+                symbols.autoSignInNetworkPostNetDataMethod,
+            ) ?: return null
+            val setNeedTbsMethodName = required(
+                "autoSignInNetworkSetNeedTbsMethod",
+                symbols.autoSignInNetworkSetNeedTbsMethod,
+            ) ?: return null
+            val setNeedSigMethodName = required(
+                "autoSignInNetworkSetNeedSigMethod",
+                symbols.autoSignInNetworkSetNeedSigMethod,
+            ) ?: return null
+            val tbConfigClassName = required("autoSignInTbConfigClass", symbols.autoSignInTbConfigClass)
+                ?: return null
+            val serverAddressFieldName = required(
+                "autoSignInServerAddressField",
+                symbols.autoSignInServerAddressField,
+            ) ?: return null
+            val coreApplicationClassName = required(
+                "autoSignInCoreApplicationClass",
+                symbols.autoSignInCoreApplicationClass,
+            ) ?: return null
+            val currentAccountMethodName = required(
+                "autoSignInCurrentAccountMethod",
+                symbols.autoSignInCurrentAccountMethod,
+            ) ?: return null
+
+            val netClass = Class.forName(networkClassName, false, loader)
+            val tbConfigClass = Class.forName(tbConfigClassName, false, loader)
+            val coreAppClass = Class.forName(coreApplicationClassName, false, loader)
+            val hybridNativeProxy = HookSymbolResolver.resolveAutoSignInHybridNativeProxySymbols(loader, symbols)
             val bridge = NativeNetworkBridge(
                 netCtor = netClass.getDeclaredConstructor(String::class.java).apply { isAccessible = true },
                 addPostDataMethod = netClass.getDeclaredMethod(
-                    StableTiebaHookPoints.METHOD_ADD_POST_DATA,
+                    addPostDataMethodName,
                     String::class.java,
                     String::class.java,
                 ).apply { isAccessible = true },
-                postNetDataMethod = netClass.getDeclaredMethod(StableTiebaHookPoints.METHOD_POST_NET_DATA)
+                postNetDataMethod = netClass.getDeclaredMethod(postNetDataMethodName)
                     .apply { isAccessible = true },
                 setNeedTbsMethod = netClass.getDeclaredMethod(
-                    StableTiebaHookPoints.METHOD_SET_NEED_TBS,
+                    setNeedTbsMethodName,
                     Boolean::class.javaPrimitiveType,
                 ).apply { isAccessible = true },
                 setNeedSigMethod = netClass.getDeclaredMethod(
-                    StableTiebaHookPoints.METHOD_SET_NEED_SIG,
+                    setNeedSigMethodName,
                     Boolean::class.javaPrimitiveType,
                 ).apply { isAccessible = true },
-                serverAddressField = tbConfigClass.getDeclaredField(StableTiebaHookPoints.FIELD_SERVER_ADDRESS)
+                serverAddressField = tbConfigClass.getDeclaredField(serverAddressFieldName)
                     .apply { isAccessible = true },
-                getCurrentAccountMethod = coreAppClass.getDeclaredMethod(StableTiebaHookPoints.METHOD_GET_CURRENT_ACCOUNT)
+                getCurrentAccountMethod = coreAppClass.getDeclaredMethod(currentAccountMethodName)
                     .apply { isAccessible = true },
                 hybridNativeProxy = hybridNativeProxy,
             )

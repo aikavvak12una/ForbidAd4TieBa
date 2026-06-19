@@ -146,6 +146,29 @@ internal class HookInstallContext(
                 )
     }
 
+    fun canInstallPbBottomEnterBarStable(): Boolean {
+        return isMain &&
+            available(HookFeatureKey.HIDE_PB_BOTTOM_BANNER) &&
+            hasPbBottomEnterBarStablePath()
+    }
+
+    fun canInstallPbBottomEnterBarHotTopicGuide(): Boolean {
+        return isMain &&
+            available(HookFeatureKey.HIDE_PB_BOTTOM_BANNER) &&
+            !symbols.pbHotTopicGuideTotalViewMethod.isNullOrBlank() &&
+            !symbols.pbHotTopicGuideRefreshMethodSpecs.isNullOrEmpty()
+    }
+
+    private fun hasPbBottomEnterBarStablePath(): Boolean {
+        val hasBottomEnterBarView =
+            !symbols.pbBottomEnterBarViewClass.isNullOrBlank() &&
+                (symbols.pbBottomEnterBarConstructorCount ?: 0) > 0
+        val hasAnimationTip =
+            !symbols.pbEnterFrsAnimationTipViewClass.isNullOrBlank() &&
+                (symbols.pbEnterFrsAnimationTipConstructorCount ?: 0) > 0
+        return hasBottomEnterBarView || hasAnimationTip
+    }
+
     fun canInstallCustomPostFilter(settings: SettingsSnapshot): Boolean {
         return settings.isCustomPostFilterEnabled && available(HookFeatureKey.ENABLE_CUSTOM_POST_FILTER)
     }
@@ -185,14 +208,30 @@ internal class HookInstallContext(
         return canInstallAdBlockSubFeature(
             settings.isMineTabWebAdBlockEnabled,
             HookFeatureKey.BLOCK_AD_MINE_TAB_WEB,
-        )
+        ) && hasMineTabWebBlockPath()
     }
 
     fun canInstallHomeSideBarWebBlock(settings: SettingsSnapshot): Boolean {
         return canInstallAdBlockSubFeature(
             settings.isHomeSideBarWebAdBlockEnabled,
             HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB,
-        )
+        ) && hasHomeSideBarWebBlockPath()
+    }
+
+    private fun hasMineTabWebBlockPath(): Boolean {
+        return !symbols.mineTabWebViewClass.isNullOrBlank() &&
+            !symbols.mineTabWebLoadUrlMethod.isNullOrBlank() &&
+            !symbols.mineTabWebGetUrlMethod.isNullOrBlank() &&
+            !symbols.mineTabWebGetInnerWebViewMethod.isNullOrBlank()
+    }
+
+    private fun hasHomeSideBarWebBlockPath(): Boolean {
+        return !symbols.homeSideBarWebViewClass.isNullOrBlank() &&
+            !symbols.homeSideBarTbWebViewClass.isNullOrBlank() &&
+            !symbols.homeSideBarWebGetWebViewMethod.isNullOrBlank() &&
+            !symbols.homeSideBarWebGetUrlMethod.isNullOrBlank() &&
+            !symbols.homeSideBarWebGetInnerWebViewMethod.isNullOrBlank() &&
+            !symbols.homeSideBarWebLoadUrlMethods.isNullOrEmpty()
     }
 
     fun canInstallForumNativeTopShift(): Boolean = available(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)

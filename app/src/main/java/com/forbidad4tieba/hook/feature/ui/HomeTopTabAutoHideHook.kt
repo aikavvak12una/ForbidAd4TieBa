@@ -18,6 +18,8 @@ object HomeTopTabAutoHideHook {
         "com.google.android.material.appbar.AppBarLayout\$LayoutParams"
     private const val APP_BAR_SCROLLING_VIEW_BEHAVIOR_CLASS =
         "com.google.android.material.appbar.AppBarLayout\$ScrollingViewBehavior"
+    private const val COORDINATOR_LAYOUT_BEHAVIOR_CLASS =
+        "androidx.coordinatorlayout.widget.CoordinatorLayout\$Behavior"
     private const val METHOD_DISPATCH_NESTED_PRE_SCROLL = "dispatchNestedPreScroll"
     private const val METHOD_DISPATCH_ON_PAGE_SELECTED = "dispatchOnPageSelected"
     private const val METHOD_SET_FORM = "setForm"
@@ -397,7 +399,7 @@ object HomeTopTabAutoHideHook {
         val layoutParams = appBar.layoutParams ?: return null
         val layoutParamMethods = behaviorMethods(layoutParams.javaClass) ?: return null
         val behavior = try {
-            layoutParamMethods.getBehavior?.invoke(layoutParams)
+            layoutParamMethods.getBehavior.invoke(layoutParams)
         } catch (t: Throwable) {
             if (behaviorErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.log("[HomeTopTabAutoHideHook] get appbar behavior FAILED: ${t.message}")
@@ -582,7 +584,7 @@ object HomeTopTabAutoHideHook {
         behaviorCtor ?: return false
         val methods = behaviorMethods(layoutParams.javaClass) ?: return false
         return try {
-            val currentBehavior = methods.getBehavior?.invoke(layoutParams)
+            val currentBehavior = methods.getBehavior.invoke(layoutParams)
             if (currentBehavior != null && behaviorCtor.declaringClass.isInstance(currentBehavior)) {
                 false
             } else {
@@ -697,18 +699,13 @@ object HomeTopTabAutoHideHook {
         behaviorMethodCache[clazz]?.let { return it }
         if (behaviorMethodMissCache.contains(clazz)) return null
         return try {
-            val setBehavior = clazz.methods.firstOrNull { method ->
-                method.name == "setBehavior" && method.parameterTypes.size == 1
-            } ?: clazz.declaredMethods.firstOrNull { method ->
-                method.name == "setBehavior" && method.parameterTypes.size == 1
-            } ?: throw NoSuchMethodException("setBehavior")
-            val getBehavior = clazz.methods.firstOrNull { method ->
-                method.name == "getBehavior" && method.parameterTypes.isEmpty()
-            } ?: clazz.declaredMethods.firstOrNull { method ->
-                method.name == "getBehavior" && method.parameterTypes.isEmpty()
-            }
+            val loader = clazz.classLoader ?: throw ClassNotFoundException(COORDINATOR_LAYOUT_BEHAVIOR_CLASS)
+            val behaviorClass = XposedCompat.findClassOrNull(COORDINATOR_LAYOUT_BEHAVIOR_CLASS, loader)
+                ?: throw ClassNotFoundException(COORDINATOR_LAYOUT_BEHAVIOR_CLASS)
+            val setBehavior = clazz.getMethod("setBehavior", behaviorClass)
+            val getBehavior = clazz.getMethod("getBehavior")
             setBehavior.isAccessible = true
-            getBehavior?.isAccessible = true
+            getBehavior.isAccessible = true
             val methods = BehaviorMethods(setBehavior, getBehavior)
             behaviorMethodCache[clazz] = methods
             methods
@@ -797,7 +794,7 @@ object HomeTopTabAutoHideHook {
 
     private data class BehaviorMethods(
         val setBehavior: Method,
-        val getBehavior: Method?,
+        val getBehavior: Method,
     )
 
     private data class OffsetMethods(

@@ -117,6 +117,12 @@ object CollectionSearchHook {
         val getCurrentAccountMethod: Method,
     )
 
+    private data class CachedMethodSpec(
+        val name: String,
+        val returnTypeName: String,
+        val parameterTypeNames: List<String>,
+    )
+
     private val sFragmentStates = Collections.synchronizedMap(WeakHashMap<Any, FilterState>())
     private val sActivityStates = Collections.synchronizedMap(WeakHashMap<Activity, ActivityState>())
     private val sPresenterOwners = Collections.synchronizedMap(WeakHashMap<Any, Any>())
@@ -988,9 +994,8 @@ object CollectionSearchHook {
         val mod = XposedCompat.module ?: return
         dbg { "installAdapterFooterHook class=${adapterClass.name}" }
 
-        val getCount = findMethodInHierarchy(adapterClass, "getCount") { method ->
-            method.parameterTypes.isEmpty() &&
-                (method.returnType == Int::class.javaPrimitiveType || method.returnType == Int::class.java)
+        val getCount = findExactMethodInHierarchy(adapterClass, "getCount")?.takeIf { method ->
+            method.returnType == Int::class.javaPrimitiveType || method.returnType == Int::class.java
         }
         if (getCount != null) {
             getCount.isAccessible = true
@@ -1007,10 +1012,12 @@ object CollectionSearchHook {
             }
         }
 
-        val isEnabled = findMethodInHierarchy(adapterClass, "isEnabled") { method ->
-            method.parameterTypes.size == 1 &&
-                (method.parameterTypes[0] == Int::class.javaPrimitiveType || method.parameterTypes[0] == Int::class.java) &&
-                (method.returnType == Boolean::class.javaPrimitiveType || method.returnType == Boolean::class.java)
+        val isEnabled = findExactMethodInHierarchy(
+            adapterClass,
+            "isEnabled",
+            Int::class.javaPrimitiveType!!,
+        )?.takeIf { method ->
+            method.returnType == Boolean::class.javaPrimitiveType || method.returnType == Boolean::class.java
         }
         if (isEnabled != null) {
             isEnabled.isAccessible = true
@@ -1031,13 +1038,14 @@ object CollectionSearchHook {
             }
         }
 
-        val getView = adapterClass.declaredMethods.firstOrNull { method ->
-            method.name == "getView" &&
-                method.parameterTypes.size == 3 &&
-                (method.parameterTypes[0] == Int::class.javaPrimitiveType || method.parameterTypes[0] == Int::class.java) &&
-                View::class.java.isAssignableFrom(method.parameterTypes[1]) &&
-                ViewGroup::class.java.isAssignableFrom(method.parameterTypes[2]) &&
-                View::class.java.isAssignableFrom(method.returnType)
+        val getView = findExactMethodInHierarchy(
+            adapterClass,
+            "getView",
+            Int::class.javaPrimitiveType!!,
+            View::class.java,
+            ViewGroup::class.java,
+        )?.takeIf { method ->
+            View::class.java.isAssignableFrom(method.returnType)
         } ?: return
 
         getView.isAccessible = true
@@ -1164,12 +1172,16 @@ object CollectionSearchHook {
     }
 
     private fun findBooleanVoidMethod(clazz: Class<*>, methodName: String): Method? {
-        return findMethodInHierarchy(clazz, methodName) { method ->
-            method.parameterTypes.size == 1 &&
-                method.returnType == Void.TYPE &&
-                (method.parameterTypes[0] == Boolean::class.javaPrimitiveType ||
-                    method.parameterTypes[0] == Boolean::class.java)
-        }
+        return findExactMethodInHierarchy(
+            clazz,
+            methodName,
+            Boolean::class.javaPrimitiveType!!,
+        )?.takeIf { it.returnType == Void.TYPE }
+            ?: findExactMethodInHierarchy(
+                clazz,
+                methodName,
+                Boolean::class.java,
+            )?.takeIf { it.returnType == Void.TYPE }
     }
 
     private fun resolveNetworkBridge(cl: ClassLoader?): NetworkBridge? {
@@ -1532,13 +1544,12 @@ object CollectionSearchHook {
 
     private fun resolvePresenterListSetter(clazz: Class<*>): Method? {
         sPresenterListSetterCache[clazz]?.let { return it }
-        val methodName = sRuntimeTargets?.presenterListSetterMethod ?: return null
-        val resolved = findMethodInHierarchy(clazz, methodName) {
-            it.parameterTypes.size == 1 &&
-                (List::class.java.isAssignableFrom(it.parameterTypes[0]) ||
-                    ArrayList::class.java.isAssignableFrom(it.parameterTypes[0])) &&
-                it.returnType == Void.TYPE
-        }
+        val targets = sRuntimeTargets ?: return null
+        val resolved = findMethodByCachedSpec(
+            clazz = clazz,
+            spec = targets.presenterListSetterMethodSpec,
+            expectedName = targets.presenterListSetterMethod,
+        )
         resolved?.isAccessible = true
         if (resolved != null) sPresenterListSetterCache[clazz] = resolved
         return resolved
@@ -1558,12 +1569,12 @@ object CollectionSearchHook {
 
     private fun resolveModelListGetter(clazz: Class<*>): Method? {
         sModelListGetterCache[clazz]?.let { return it }
-        val methodName = sRuntimeTargets?.modelListGetterMethod ?: return null
-        val resolved = findMethodInHierarchy(clazz, methodName) {
-            it.parameterTypes.isEmpty() &&
-                (List::class.java.isAssignableFrom(it.returnType) ||
-                    ArrayList::class.java.isAssignableFrom(it.returnType))
-        }
+        val targets = sRuntimeTargets ?: return null
+        val resolved = findMethodByCachedSpec(
+            clazz = clazz,
+            spec = targets.modelListGetterMethodSpec,
+            expectedName = targets.modelListGetterMethod,
+        )
         resolved?.isAccessible = true
         if (resolved != null) sModelListGetterCache[clazz] = resolved
         return resolved
@@ -1571,12 +1582,12 @@ object CollectionSearchHook {
 
     private fun resolveModelParseMethod(clazz: Class<*>): Method? {
         sModelParseMethodCache[clazz]?.let { return it }
-        val methodName = sRuntimeTargets?.modelParseMethod ?: return null
-        val resolved = findMethodInHierarchy(clazz, methodName) {
-            it.parameterTypes.size == 1 &&
-                it.parameterTypes[0] == String::class.java &&
-                (List::class.java.isAssignableFrom(it.returnType) || ArrayList::class.java.isAssignableFrom(it.returnType))
-        }
+        val targets = sRuntimeTargets ?: return null
+        val resolved = findMethodByCachedSpec(
+            clazz = clazz,
+            spec = targets.modelParseMethodSpec,
+            expectedName = targets.modelParseMethod,
+        )
         resolved?.isAccessible = true
         if (resolved != null) sModelParseMethodCache[clazz] = resolved
         return resolved
@@ -1649,22 +1660,6 @@ object CollectionSearchHook {
         return field
     }
 
-    private fun findFieldValue(instance: Any, predicate: (Any) -> Boolean): Any? {
-        var current: Class<*>? = instance.javaClass
-        while (current != null) {
-            for (field in current.declaredFields) {
-                if (Modifier.isStatic(field.modifiers)) continue
-                runCatching {
-                    field.isAccessible = true
-                    val value = field.get(instance) ?: return@runCatching
-                    if (predicate(value)) return value
-                }
-            }
-            current = current.superclass
-        }
-        return null
-    }
-
     private fun findFieldInHierarchy(clazz: Class<*>, name: String): Field? {
         synchronized(sFieldLookupCache) {
             val cached = sFieldLookupCache[clazz]
@@ -1688,8 +1683,44 @@ object CollectionSearchHook {
         return resolved
     }
 
-    private fun findMethodInHierarchy(clazz: Class<*>, name: String, predicate: (Method) -> Boolean): Method? {
-        return ReflectionUtils.findMethodInHierarchy(clazz, name, predicate)
+    private fun findExactMethodInHierarchy(clazz: Class<*>, name: String, vararg paramTypes: Class<*>): Method? {
+        return ReflectionUtils.findMethodInHierarchy(clazz, name, *paramTypes)
+    }
+
+    private fun findMethodByCachedSpec(clazz: Class<*>, spec: String, expectedName: String): Method? {
+        val parsed = parseCachedMethodSpec(spec) ?: return null
+        if (parsed.name != expectedName) return null
+        val paramTypes = parsed.parameterTypeNames.map { typeName ->
+            resolveClassName(typeName, clazz.classLoader) ?: return null
+        }.toTypedArray()
+        val method = findExactMethodInHierarchy(clazz, parsed.name, *paramTypes) ?: return null
+        return method.takeIf { it.returnType.name == parsed.returnTypeName }
+    }
+
+    private fun parseCachedMethodSpec(raw: String): CachedMethodSpec? {
+        val parts = raw.split('|', limit = 3)
+        if (parts.size != 3) return null
+        val name = parts[0].takeIf { it.isNotBlank() } ?: return null
+        val returnType = parts[1].takeIf { it.isNotBlank() } ?: return null
+        val params = parts[2].split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        return CachedMethodSpec(name, returnType, params)
+    }
+
+    private fun resolveClassName(typeName: String, cl: ClassLoader?): Class<*>? {
+        return when (typeName) {
+            Void.TYPE.name -> Void.TYPE
+            Boolean::class.javaPrimitiveType!!.name -> Boolean::class.javaPrimitiveType
+            Byte::class.javaPrimitiveType!!.name -> Byte::class.javaPrimitiveType
+            Char::class.javaPrimitiveType!!.name -> Char::class.javaPrimitiveType
+            Short::class.javaPrimitiveType!!.name -> Short::class.javaPrimitiveType
+            Int::class.javaPrimitiveType!!.name -> Int::class.javaPrimitiveType
+            Long::class.javaPrimitiveType!!.name -> Long::class.javaPrimitiveType
+            Float::class.javaPrimitiveType!!.name -> Float::class.javaPrimitiveType
+            Double::class.javaPrimitiveType!!.name -> Double::class.javaPrimitiveType
+            else -> runCatching { Class.forName(typeName, false, cl) }.getOrNull()
+        }
     }
 
     private fun buildMarkSearchText(mark: Any): String {
@@ -1722,7 +1753,7 @@ object CollectionSearchHook {
 
     private fun findGetter(clazz: Class<*>, vararg names: String): Method? {
         names.forEach { name ->
-            findMethodInHierarchy(clazz, name) { it.parameterTypes.isEmpty() }?.let {
+            findExactMethodInHierarchy(clazz, name)?.let {
                 it.isAccessible = true
                 return it
             }
@@ -1771,9 +1802,9 @@ object CollectionSearchHook {
             return runCatching { (cached.invoke(activity) as? Boolean) == true }.getOrDefault(false)
         }
 
-        val method = findMethodInHierarchy(clazz, targetMethodName) {
-            it.parameterTypes.isEmpty() && isBooleanType(it.returnType)
-        } ?: return false
+        val method = findExactMethodInHierarchy(clazz, targetMethodName)
+            ?.takeIf { isBooleanType(it.returnType) }
+            ?: return false
         sEditModeMethodCache[clazz] = method
         return runCatching { (method.invoke(activity) as? Boolean) == true }.getOrDefault(false)
     }
@@ -1803,7 +1834,7 @@ object CollectionSearchHook {
     }
 
     private fun collectFragments(manager: Any, queue: ArrayDeque<Any>) {
-        val method = findMethodInHierarchy(manager.javaClass, "getFragments") { it.parameterTypes.isEmpty() } ?: return
+        val method = findExactMethodInHierarchy(manager.javaClass, "getFragments") ?: return
         val raw = runCatching { method.invoke(manager) }.getOrNull()
         when (raw) {
             is List<*> -> raw.filterNotNull().forEach { queue.addLast(it) }
@@ -1821,7 +1852,7 @@ object CollectionSearchHook {
     }
 
     private fun callNoArgMethod(target: Any, methodName: String): Any? {
-        val method = findMethodInHierarchy(target.javaClass, methodName) { it.parameterTypes.isEmpty() } ?: return null
+        val method = findExactMethodInHierarchy(target.javaClass, methodName) ?: return null
         return runCatching { method.invoke(target) }.getOrNull()
     }
 

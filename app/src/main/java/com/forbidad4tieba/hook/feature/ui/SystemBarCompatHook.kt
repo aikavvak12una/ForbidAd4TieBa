@@ -466,14 +466,13 @@ object SystemBarCompatHook {
         return try {
             var current: Class<*>? = target.javaClass
             while (current != null && current != Any::class.java) {
-                val method = current.declaredMethods.firstOrNull {
-                    it.name == methodName && it.parameterTypes.isEmpty()
-                }
-                if (method != null) {
+                try {
+                    val method = current.getDeclaredMethod(methodName)
                     method.isAccessible = true
                     return method.invoke(target) as? View
+                } catch (_: NoSuchMethodException) {
+                    current = current.superclass
                 }
-                current = current.superclass
             }
             null
         } catch (_: Throwable) {

@@ -86,6 +86,8 @@ internal data class RuntimeTargets(
     val subPbNextPageMoreViewId: Int?,
     val pbReplyTitleDividerViewId: Int?,
     val dynamicBackgroundColorIds: Set<Int>,
+    val topChromeTabSelectedMethods: List<HomeTopChromeTabSelectedTarget>,
+    val subPbSetNextPageTarget: HomeSubPbSetNextPageTarget?,
     val sortSwitchBackgroundPaintField: String?,
     val sortSwitchSlideDrawMethod: String?,
     val sortSwitchSlidePathField: String?,
@@ -95,6 +97,16 @@ internal data class RuntimeTargets(
     val enterForumCapsuleViewField: String?,
     val enterForumCapsuleTitleField: String?,
     val pbCommonLayoutPreloaderGetOrDefaultMethod: String?,
+)
+
+internal data class HomeTopChromeTabSelectedTarget(
+    val className: String,
+    val methodName: String,
+)
+
+internal data class HomeSubPbSetNextPageTarget(
+    val methodName: String,
+    val parameterTypeName: String,
 )
 
 internal data class HomeFeedCardStyleState(

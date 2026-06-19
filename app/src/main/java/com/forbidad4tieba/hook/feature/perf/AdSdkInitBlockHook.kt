@@ -18,22 +18,61 @@ object AdSdkInitBlockHook {
     private const val TAG = "[AdSdkInitBlockHook]"
     private val installed = AtomicBoolean(false)
 
-    /**
-     * 已知广告 SDK 初始化入口。
-     * 每一项表示 className 对应需要提前返回的 methodName 列表。
-     */
+    private data class MethodTarget(
+        val className: String,
+        val methodName: String,
+        val returnTypeName: String,
+        val parameterTypeNames: List<String> = emptyList(),
+    )
+
     private val AD_SDK_INIT_TARGETS = arrayOf(
-        // 百度 Mobads SDK
-        "com.baidu.mobads.sdk.api.BaiduAdManager" to arrayOf("init"),
-        "com.baidu.mobads.sdk.internal.a" to arrayOf("a"),
-        // 字节 Pangle SDK
-        "com.bytedance.sdk.openadsdk.TTAdSdk" to arrayOf("init", "start"),
-        // 快手广告 SDK
-        "com.kwad.sdk.api.KsAdSDK" to arrayOf("init", "start"),
-        // QQ 广告 SDK，腾讯广点通
-        "com.qq.e.comm.managers.GDTAdSdk" to arrayOf("init", "initWith"),
-        // 广告聚合平台 Ubix SSP
-        "com.ubix.ssp.UbixSdk" to arrayOf("init"),
+        MethodTarget(
+            className = "com.bytedance.sdk.openadsdk.TTAdSdk",
+            methodName = "init",
+            returnTypeName = "boolean",
+            parameterTypeNames = listOf(
+                "android.content.Context",
+                "com.bytedance.sdk.openadsdk.TTAdConfig",
+            ),
+        ),
+        MethodTarget(
+            className = "com.bytedance.sdk.openadsdk.TTAdSdk",
+            methodName = "start",
+            returnTypeName = "void",
+            parameterTypeNames = listOf("com.bytedance.sdk.openadsdk.TTAdSdk\$Callback"),
+        ),
+        MethodTarget(
+            className = "com.kwad.sdk.api.KsAdSDK",
+            methodName = "init",
+            returnTypeName = "boolean",
+            parameterTypeNames = listOf(
+                "android.content.Context",
+                "com.kwad.sdk.api.SdkConfig",
+            ),
+        ),
+        MethodTarget(
+            className = "com.kwad.sdk.api.KsAdSDK",
+            methodName = "start",
+            returnTypeName = "void",
+        ),
+        MethodTarget(
+            className = "com.qq.e.comm.managers.GDTAdSdk",
+            methodName = "init",
+            returnTypeName = "void",
+            parameterTypeNames = listOf("android.content.Context", "java.lang.String"),
+        ),
+        MethodTarget(
+            className = "com.qq.e.comm.managers.GDTAdSdk",
+            methodName = "initWithoutStart",
+            returnTypeName = "void",
+            parameterTypeNames = listOf("android.content.Context", "java.lang.String"),
+        ),
+        MethodTarget(
+            className = "com.qq.e.comm.managers.GDTAdSdk",
+            methodName = "start",
+            returnTypeName = "void",
+            parameterTypeNames = listOf("com.qq.e.comm.managers.GDTAdSdk\$OnStartListener"),
+        ),
     )
 
     fun hook(cl: ClassLoader) {
@@ -49,27 +88,20 @@ object AdSdkInitBlockHook {
         }
 
         var totalInstalled = 0
-        for ((className, methodNames) in AD_SDK_INIT_TARGETS) {
-            val clazz = XposedCompat.findClassOrNull(className, cl) ?: continue
-            for (methodName in methodNames) {
-                val methods = clazz.declaredMethods.filter { method ->
-                    method.name == methodName && Modifier.isStatic(method.modifiers)
-                }
-                for (method in methods) {
-                    try {
-                        method.isAccessible = true
-                        mod.hook(method).intercept { chain ->
-                            if (ConfigManager.isAdSdkComponentsDisabled) {
-                                return@intercept nullReturnValue(method)
-                            }
-                            chain.proceed()
-                        }
-                        totalInstalled++
-                    } catch (t: Throwable) {
-                        // Some methods may not be hookable; keep a concise diagnostic.
-                        XposedCompat.logD { "$TAG hook $className.${method.name} skipped: ${t.message}" }
+        for (target in AD_SDK_INIT_TARGETS) {
+            val clazz = XposedCompat.findClassOrNull(target.className, cl) ?: continue
+            val method = resolveExactMethod(clazz, target, cl) ?: continue
+            try {
+                method.isAccessible = true
+                mod.hook(method).intercept { chain ->
+                    if (ConfigManager.isAdSdkComponentsDisabled) {
+                        return@intercept nullReturnValue(method)
                     }
+                    chain.proceed()
                 }
+                totalInstalled++
+            } catch (t: Throwable) {
+                XposedCompat.logD { "$TAG hook ${target.className}.${target.methodName} skipped: ${t.message}" }
             }
         }
 
@@ -87,6 +119,49 @@ object AdSdkInitBlockHook {
             Long::class.javaPrimitiveType -> 0L
             Void.TYPE -> null
             else -> null
+        }
+    }
+
+    private fun resolveExactMethod(clazz: Class<*>, target: MethodTarget, cl: ClassLoader): Method? {
+        val parameterTypes = target.parameterTypeNames.map { typeName ->
+            resolveClass(typeName, cl) ?: run {
+                XposedCompat.logD { "$TAG parameter class NOT FOUND: ${target.className}.${target.methodName} $typeName" }
+                return null
+            }
+        }.toTypedArray()
+        val method = try {
+            clazz.getDeclaredMethod(target.methodName, *parameterTypes)
+        } catch (_: NoSuchMethodException) {
+            XposedCompat.logD { "$TAG method NOT FOUND: ${target.className}.${target.methodName}" }
+            return null
+        }
+        if (!Modifier.isStatic(method.modifiers)) {
+            XposedCompat.logD { "$TAG method skipped: non-static ${target.className}.${target.methodName}" }
+            return null
+        }
+        val returnType = resolveClass(target.returnTypeName, cl) ?: return null
+        if (method.returnType != returnType) {
+            XposedCompat.logD {
+                "$TAG method skipped: return mismatch ${target.className}.${target.methodName} " +
+                    "${method.returnType.name} != ${returnType.name}"
+            }
+            return null
+        }
+        return method
+    }
+
+    private fun resolveClass(typeName: String, cl: ClassLoader): Class<*>? {
+        return when (typeName) {
+            "void" -> Void.TYPE
+            "boolean" -> Boolean::class.javaPrimitiveType
+            "byte" -> Byte::class.javaPrimitiveType
+            "char" -> Char::class.javaPrimitiveType
+            "short" -> Short::class.javaPrimitiveType
+            "int" -> Int::class.javaPrimitiveType
+            "long" -> Long::class.javaPrimitiveType
+            "float" -> Float::class.javaPrimitiveType
+            "double" -> Double::class.javaPrimitiveType
+            else -> XposedCompat.findClassOrNull(typeName, cl)
         }
     }
 }

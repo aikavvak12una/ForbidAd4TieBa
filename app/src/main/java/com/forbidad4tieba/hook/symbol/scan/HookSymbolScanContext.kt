@@ -7,9 +7,14 @@ import java.lang.reflect.Method
 import java.util.IdentityHashMap
 
 internal class HookSymbolScanContext(private val classLoader: ClassLoader) {
+    private companion object {
+        const val MAX_RECOVERABLE_PROBE_LOGS = 20
+    }
+
     private val classCache = HashMap<String, Class<*>?>()
     private val instanceFieldsCache = IdentityHashMap<Class<*>, List<Field>>()
     private val instanceMethodsCache = IdentityHashMap<Class<*>, List<Method>>()
+    private val recoverableProbeIssueTags = LinkedHashSet<String>()
     var scanErrors: MutableList<String>? = null
 
     fun findClass(name: String, cl: ClassLoader): Class<*>? {
@@ -32,6 +37,13 @@ internal class HookSymbolScanContext(private val classLoader: ClassLoader) {
         val resolved = ScanReflection.collectInstanceMethodsUncached(clazz)
         instanceMethodsCache[clazz] = resolved
         return resolved
+    }
+
+    fun shouldLogRecoverableProbeIssue(tag: String): Boolean {
+        if (recoverableProbeIssueTags.contains(tag)) return false
+        if (recoverableProbeIssueTags.size >= MAX_RECOVERABLE_PROBE_LOGS) return false
+        recoverableProbeIssueTags.add(tag)
+        return true
     }
 }
 

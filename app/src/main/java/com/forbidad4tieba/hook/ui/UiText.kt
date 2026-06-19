@@ -366,7 +366,7 @@ object UiText {
         fun scanTiebaVersionNotAdapted(targetVersionName: String): String =
             "当前贴吧版本未适配，部分功能可能异常，建议切换到${targetVersionName}"
         fun scanFeatureAbnormal(targetVersionName: String): String =
-            "部分功能异常，建议切换到贴吧${targetVersionName}"
+            "部分功能异常或者目前版本不存在该类型广告/功能，建议切换到贴吧${targetVersionName}"
         fun modelScoreThresholdInvalid(model: String): String = "$model 阈值无效"
         fun modelScoreAutoPercentileLabel(percentile: Int): String = "P$percentile"
         fun modelScoreAutoPercentileEnabled(percentile: Int, value: String): String = "已启用 P$percentile 自动应用：$value"
