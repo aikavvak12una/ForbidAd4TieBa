@@ -429,14 +429,24 @@ object HomeNativeGlassHook {
     private fun installCardComponentHooks(cl: ClassLoader): Int {
         val mod = XposedCompat.module ?: return 0
         var installedCount = 0
-        for (className in CARD_COMPONENT_GLASS_CLASSES) {
+        for (className in CARD_COMPONENT_GLASS_CLASSES + HOME_BLOCKED_CARD_COMPONENT_CLASSES) {
             val componentClass = XposedCompat.findClassOrNull(className, cl) ?: continue
+            val shouldBlockComponent = className in HOME_BLOCKED_CARD_COMPONENT_CLASSES
             for (ctor in componentClass.declaredConstructors) {
                 ctor.isAccessible = true
                 mod.hook(ctor).intercept { chain ->
                     val result = chain.proceed()
                     (chain.thisObject as? View)?.let { componentView ->
-                        rememberCardComponentView(componentView)
+                        if (shouldBlockComponent) {
+                            collapseBlockedHomeCardComponent(componentView)
+                            componentView.post { collapseBlockedHomeCardComponent(componentView) }
+                            componentView.postDelayed(
+                                { collapseBlockedHomeCardComponent(componentView) },
+                                CARD_COMPONENT_BOOTSTRAP_REFRESH_DELAYS_MS.last(),
+                            )
+                        } else {
+                            rememberCardComponentView(componentView)
+                        }
                     }
                     result
                 }
@@ -4087,9 +4097,54 @@ object HomeNativeGlassHook {
         val searchRoot = findPbReplyBarSearchRoot(anchor, activity) ?: return
         val capsule = findPbReplyBarInputCapsule(searchRoot) ?: return
         val frameColor = resolvePbCachedDynamicTintColor(capsule) ?: return
+        applyPbReplyBarFrameDynamicTint(searchRoot, capsule, frameColor)
         val capsuleColor = offsetPbReplyBarInputCapsuleColor(frameColor)
         setPbReplyBarInputCapsuleDynamicBackground(capsule, capsuleColor)
         applyPbReplyBarGestureNavigationBridge(activity, capsule, frameColor)
+    }
+
+    private fun applyPbReplyBarFrameDynamicTint(searchRoot: View, capsule: View, color: Int) {
+        val target = findPbReplyBarFrameBackgroundTarget(searchRoot, capsule) ?: return
+        setPbReplyBarFrameDynamicBackground(target, color)
+    }
+
+    private fun findPbReplyBarFrameBackgroundTarget(searchRoot: View, capsule: View): View? {
+        findPbReplyBarFrameAncestor(capsule, searchRoot, exactOnly = true)?.let { return it }
+        return findPbReplyBarFrameAncestor(capsule, searchRoot, exactOnly = false)
+    }
+
+    private fun findPbReplyBarFrameAncestor(capsule: View, boundary: View, exactOnly: Boolean): View? {
+        var current = capsule.parent as? View
+        var depth = 0
+        var fallback: View? = null
+        while (current != null && depth <= PB_REPLY_BAR_INPUT_FRAME_PARENT_SCAN_DEPTH) {
+            if (current.javaClass.name == StableTiebaHookPoints.PB_BOTTOM_ENTER_BAR_VIEW_CLASS) return current
+            if (!exactOnly && fallback == null && isPbReplyBarFrameBackgroundCandidate(current, capsule)) {
+                fallback = current
+            }
+            if (current === boundary) break
+            current = current.parent as? View
+            depth++
+        }
+        return if (exactOnly) null else fallback
+    }
+
+    private fun isPbReplyBarFrameBackgroundCandidate(view: View, capsule: View): Boolean {
+        if (view === capsule || isInsideSubPbView(view)) return false
+        if (view !is ViewGroup) return false
+        if (!isNearWindowBottom(view)) return false
+        if (!isWideLayout(view)) return false
+        val maxHeight = (view.resources.displayMetrics.density * PB_REPLY_BAR_INPUT_FRAME_MAX_HEIGHT_DP).toInt()
+        val height = max(view.height, view.measuredHeight)
+        if (height in 1..maxHeight) return true
+        val layoutHeight = view.layoutParams?.height ?: return false
+        return layoutHeight in 1..maxHeight ||
+            (layoutHeight == ViewGroup.LayoutParams.WRAP_CONTENT && height in 1..maxHeight)
+    }
+
+    private fun setPbReplyBarFrameDynamicBackground(view: View, color: Int) {
+        clearNativePressVisual(view)
+        setBackgroundColorPreservingPadding(view, color)
     }
 
     private fun applyPbReplyBarGestureNavigationBridge(activity: Activity, anchor: View, color: Int) {
@@ -5205,6 +5260,45 @@ object HomeNativeGlassHook {
         }.onFailure {
             cardComponentAttachRefreshInstalled.remove(view)
             runCatching { view.removeOnAttachStateChangeListener(attachListener) }
+        }
+    }
+
+    private fun collapseBlockedHomeCardComponent(view: View) {
+        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (view.parent != null && !isInsideHomeNativePage(view)) return
+
+        var changed = false
+        if (view.visibility != View.GONE) {
+            view.visibility = View.GONE
+            changed = true
+        }
+        if (view.alpha != 0f) {
+            view.alpha = 0f
+            changed = true
+        }
+        if (view.minimumHeight != 0) {
+            view.minimumHeight = 0
+            changed = true
+        }
+        if (
+            view.paddingLeft != 0 ||
+            view.paddingTop != 0 ||
+            view.paddingRight != 0 ||
+            view.paddingBottom != 0
+        ) {
+            view.setPadding(0, 0, 0, 0)
+            changed = true
+        }
+        val params = view.layoutParams
+        if (params != null && params.height != 0) {
+            params.height = 0
+            view.layoutParams = params
+            changed = true
+        }
+        clearNativePressVisual(view)
+        if (changed) {
+            view.requestLayout()
+            view.invalidate()
         }
     }
 
