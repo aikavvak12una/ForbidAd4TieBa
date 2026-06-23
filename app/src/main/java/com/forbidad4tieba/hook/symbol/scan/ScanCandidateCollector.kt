@@ -79,12 +79,13 @@ internal object ScanCandidateCollector {
         }
 
         val sourcePaths = appSourcePaths(context)
-        val bridge = DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger)
+        val cachedBridge = HookSymbolScanSession.get()?.dexKitBridge(sourcePaths, logger)
+        val bridge = cachedBridge ?: DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger)
         if (bridge == null) {
             log(logger, "list classes by DexKit failed: apk source path unavailable or bridge open failed")
             return buildResult(obfuscated, expanded, logger)
         }
-        bridge.use { scanBridge ->
+        fun collectWithBridge(scanBridge: com.forbidad4tieba.hook.symbol.dexkit.DexKitScanBridge) {
             for (packagePrefix in TARGET_SCAN_PACKAGE_PREFIXES) {
                 try {
                     val classes = scanBridge.bridge.findClass(
@@ -111,6 +112,11 @@ internal object ScanCandidateCollector {
                     )
                 }
             }
+        }
+        if (cachedBridge != null) {
+            collectWithBridge(bridge)
+        } else {
+            bridge.use(::collectWithBridge)
         }
         return buildResult(obfuscated, expanded, logger)
     }
