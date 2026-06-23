@@ -4745,10 +4745,12 @@ internal object HookSymbolResolver {
 
     private inline fun <T> withScanContext(cl: ClassLoader, block: () -> T): T {
         val previous = HookSymbolScanSession.get()
-        HookSymbolScanSession.set(HookSymbolScanContext(cl))
+        val context = HookSymbolScanContext(cl)
+        HookSymbolScanSession.set(context)
         return try {
             block()
         } finally {
+            context.close()
             HookSymbolScanSession.set(previous)
         }
     }

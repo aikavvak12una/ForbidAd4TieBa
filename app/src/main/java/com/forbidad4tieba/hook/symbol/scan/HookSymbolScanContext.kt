@@ -1,12 +1,14 @@
 package com.forbidad4tieba.hook.symbol.scan
 
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitScanBridge
 import com.forbidad4tieba.hook.symbol.model.*
 
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.IdentityHashMap
 
-internal class HookSymbolScanContext(private val classLoader: ClassLoader) {
+internal class HookSymbolScanContext(private val classLoader: ClassLoader) : AutoCloseable {
     private companion object {
         const val MAX_RECOVERABLE_PROBE_LOGS = 20
     }
@@ -14,6 +16,7 @@ internal class HookSymbolScanContext(private val classLoader: ClassLoader) {
     private val classCache = HashMap<String, Class<*>?>()
     private val instanceFieldsCache = IdentityHashMap<Class<*>, List<Field>>()
     private val instanceMethodsCache = IdentityHashMap<Class<*>, List<Method>>()
+    private val dexKitBridgeCache = HashMap<String, DexKitScanBridge?>()
     private val recoverableProbeIssueTags = LinkedHashSet<String>()
     var scanErrors: MutableList<String>? = null
 
@@ -39,11 +42,29 @@ internal class HookSymbolScanContext(private val classLoader: ClassLoader) {
         return resolved
     }
 
+    fun dexKitBridge(sourcePaths: List<String>, logger: ScanLogger?): DexKitScanBridge? {
+        val key = sourcePaths.distinct().joinToString(separator = "\u0000")
+        if (dexKitBridgeCache.containsKey(key)) return dexKitBridgeCache[key]
+        val bridge = DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger)
+        dexKitBridgeCache[key] = bridge
+        return bridge
+    }
+
     fun shouldLogRecoverableProbeIssue(tag: String): Boolean {
         if (recoverableProbeIssueTags.contains(tag)) return false
         if (recoverableProbeIssueTags.size >= MAX_RECOVERABLE_PROBE_LOGS) return false
         recoverableProbeIssueTags.add(tag)
         return true
+    }
+
+    override fun close() {
+        dexKitBridgeCache.values.filterNotNull().distinctBy { System.identityHashCode(it) }.forEach { bridge ->
+            try {
+                bridge.close()
+            } catch (_: Throwable) {
+            }
+        }
+        dexKitBridgeCache.clear()
     }
 }
 

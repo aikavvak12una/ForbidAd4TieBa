@@ -720,9 +720,14 @@ internal object DexKitSemanticScanner {
         fallback: T,
         block: (DexKitBridge) -> T,
     ): T {
-        val bridge = DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger) ?: return fallback
+        val cachedBridge = HookSymbolScanSession.get()?.dexKitBridge(sourcePaths, logger)
+        val bridge = cachedBridge ?: DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger) ?: return fallback
         return try {
-            bridge.use { block(it.bridge) }
+            if (cachedBridge != null) {
+                block(bridge.bridge)
+            } else {
+                bridge.use { block(it.bridge) }
+            }
         } catch (t: Throwable) {
             recordIssue(logger, tag, HookSymbolScanDiagnostics.formatScanException(t))
             fallback
