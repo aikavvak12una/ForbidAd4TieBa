@@ -6,7 +6,6 @@ import com.forbidad4tieba.hook.symbol.model.ScanLogger
 
 internal object ImageViewerShareSymbolScanner {
     private const val SHARE_ITEM_CLASS = "com.baidu.tbadk.coreExtra.share.ShareItem"
-    private const val TIEBA_DRAWABLE_CLASS = "com.baidu.tieba.R\$drawable"
 
     fun scan(
         context: Context,
@@ -160,16 +159,7 @@ internal object ImageViewerShareSymbolScanner {
             candidates = candidates,
             cl = cl,
             logger = logger,
-        ) ?: run {
-            val match = ScanReflection.runRules(
-                listOf(TIEBA_DRAWABLE_CLASS),
-                cl,
-                listOf(ImageViewerShareIconResourceRule()),
-                logger,
-                "imageViewerShareIcon",
-            )
-            match?.fieldName?.toIntOrNull()
-        }
+        )
         return ImageViewerShareScanSymbols(iconResId = iconResId)
     }
 

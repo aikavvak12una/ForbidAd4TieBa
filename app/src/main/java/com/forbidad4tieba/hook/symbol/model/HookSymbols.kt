@@ -1257,7 +1257,7 @@ data class HookSymbols(
 
     companion object {
         const val CACHE_SCHEMA_VERSION = 21
-        const val DEXKIT_RULE_VERSION = 13
+        const val DEXKIT_RULE_VERSION = 14
 
         fun unsupported(
             featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
