@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import com.forbidad4tieba.hook.symbol.model.DexPbAdBidModelMatch
 import com.forbidad4tieba.hook.symbol.model.DexPbAdBidScanSymbols
 import com.forbidad4tieba.hook.symbol.model.PbAdBidScanSymbols
@@ -311,7 +312,7 @@ internal object PbAdBidSymbolScanner {
             return DexPbAdBidScanSymbols()
         }
 
-        val rawDexScan = DexShareIconScanner.scanPbAdBid(sourcePaths, logger)
+        val rawDexScan = DexKitSemanticScanner.scanPbAdBid(sourcePaths, logger)
         val matches = rawDexScan.modelMatches
         val commonMatch = chooseUniqueDexMatch(
             tag = "pbAdBid.commonDex",

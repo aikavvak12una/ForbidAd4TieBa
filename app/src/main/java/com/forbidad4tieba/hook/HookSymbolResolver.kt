@@ -4739,7 +4739,8 @@ internal object HookSymbolResolver {
         if (symbols.source == "unsupported") return true
         return (symbols.source == "scan" || symbols.source == "partial") &&
             symbols.createdAt > 0L &&
-            symbols.cacheSchemaVersion == HookSymbols.CACHE_SCHEMA_VERSION
+            symbols.cacheSchemaVersion == HookSymbols.CACHE_SCHEMA_VERSION &&
+            symbols.dexKitRuleVersion == HookSymbols.DEXKIT_RULE_VERSION
     }
 
     private inline fun <T> withScanContext(cl: ClassLoader, block: () -> T): T {

@@ -1,14 +1,23 @@
 package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
-import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
 import com.forbidad4tieba.hook.symbol.model.ScanCandidateSet
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
-import dalvik.system.BaseDexClassLoader
-import dalvik.system.DexFile
+import org.luckypray.dexkit.query.FindClass
+import org.luckypray.dexkit.query.enums.StringMatchType
+import org.luckypray.dexkit.query.matchers.ClassMatcher
 
 internal object ScanCandidateCollector {
+    private const val TAG = "ScanCandidateCollector"
+    private val TARGET_SCAN_PACKAGE_PREFIXES = listOf(
+        "com.baidu.tieba",
+        "com.baidu.tbadk",
+        "com.baidu.adp.widget.ListView",
+        "com.baidu.searchbox.task.view.mainactivity",
+    )
+
     private val EXPANDED_SCAN_PACKAGE_PREFIXES = listOf(
         "com.baidu.tieba.ad.",
         "com.baidu.tieba.browser.",
@@ -54,7 +63,6 @@ internal object ScanCandidateCollector {
         "ViewModel",
     )
 
-    @Suppress("DEPRECATION")
     fun collect(context: Context, cl: ClassLoader, logger: ScanLogger?): ScanCandidateSet {
         val obfuscated = ArrayList<String>(512)
         val expanded = ArrayList<String>(1024)
@@ -70,73 +78,50 @@ internal object ScanCandidateCollector {
             }
         }
 
-        try {
-            var currentCl: ClassLoader? = cl
-            var missingDexFileField = 0
-            var firstDexFileFieldError: String? = null
-            while (currentCl != null) {
-                if (currentCl is BaseDexClassLoader) {
-                    val pathListField = XposedCompat.findField(currentCl::class.java, "pathList")
-                    val pathList = pathListField.get(currentCl)!!
-                    val dexElementsField = XposedCompat.findField(pathList::class.java, "dexElements")
-                    val dexElements = dexElementsField.get(pathList) as Array<*>
-
-                    for (element in dexElements) {
-                        if (element == null) continue
-                        val dexFileField = try {
-                            XposedCompat.findField(element::class.java, "dexFile")
-                        } catch (t: Throwable) {
-                            missingDexFileField++
-                            if (firstDexFileFieldError == null) {
-                                firstDexFileFieldError = HookSymbolScanDiagnostics.formatScanException(t)
-                            }
-                            null
-                        } ?: continue
-                        val dexFile = dexFileField.get(element) as? DexFile ?: continue
-                        val entries = dexFile.entries()
-                        while (entries.hasMoreElements()) {
-                            collectClassName(entries.nextElement())
-                        }
-                    }
-                }
-                currentCl = currentCl.parent
-            }
-            if (missingDexFileField > 0) {
-                log(
-                    logger,
-                    "list classes skipped dex elements without dexFile field=$missingDexFileField" +
-                        (firstDexFileFieldError?.let { ", firstException=$it" } ?: ""),
-                )
-            }
-        } catch (t: Throwable) {
-            log(logger, "list classes from dex path list failed: ${t.message}")
-            XposedCompat.log(t)
-        }
-
-        if (obfuscated.isNotEmpty() || expanded.isNotEmpty()) {
+        val sourcePaths = appSourcePaths(context)
+        val bridge = DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger)
+        if (bridge == null) {
+            log(logger, "list classes by DexKit failed: apk source path unavailable or bridge open failed")
             return buildResult(obfuscated, expanded, logger)
         }
-
-        val sourceDir = context.applicationInfo?.sourceDir ?: return ScanCandidateSet(emptyList(), emptyList())
-        var dexFile: DexFile? = null
-        try {
-            dexFile = DexFile(sourceDir)
-            val entries = dexFile.entries()
-            while (entries.hasMoreElements()) {
-                collectClassName(entries.nextElement())
-            }
-        } catch (t: Throwable) {
-            XposedCompat.log("[ScanCandidateCollector] list classes fallback failed: ${t.message}")
-            log(logger, "list classes fallback failed: ${t.message}")
-            XposedCompat.log(t)
-        } finally {
-            try {
-                dexFile?.close()
-            } catch (t: Throwable) {
-                XposedCompat.logD("ScanCandidateCollector: ${t.message}")
+        bridge.use { scanBridge ->
+            for (packagePrefix in TARGET_SCAN_PACKAGE_PREFIXES) {
+                try {
+                    val classes = scanBridge.bridge.findClass(
+                        FindClass.create()
+                            .searchPackages(packagePrefix)
+                            .matcher(
+                                ClassMatcher.create().className(
+                                    packagePrefix,
+                                    StringMatchType.StartsWith,
+                                ),
+                            ),
+                    )
+                    classes.forEach { classData ->
+                        collectClassName(classData.name)
+                    }
+                } catch (t: Throwable) {
+                    HookSymbolScanDiagnostics.recordScanIssue(
+                        logger = logger,
+                        tag = "$TAG.$packagePrefix",
+                        errors = HookSymbolScanSession.get()?.scanErrors ?: mutableListOf(),
+                        detail = HookSymbolScanDiagnostics.sanitizeScanStatusText(
+                            HookSymbolScanDiagnostics.formatScanException(t),
+                        ),
+                    )
+                }
             }
         }
         return buildResult(obfuscated, expanded, logger)
+    }
+
+    private fun appSourcePaths(context: Context): List<String> {
+        return buildList {
+            context.applicationInfo?.sourceDir?.takeIf { it.isNotBlank() }?.let(::add)
+            context.applicationInfo?.splitSourceDirs?.forEach { path ->
+                if (!path.isNullOrBlank()) add(path)
+            }
+        }.distinct().filter { it.isNotBlank() }
     }
 
     private fun buildResult(

@@ -7,6 +7,7 @@ import android.content.Context
 import android.view.View
 import android.widget.EditText
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -122,7 +123,7 @@ internal object PbLikeAutoReplySymbolScanner {
             log(logger, "pbLikeAutoReplyDex: apk source path unavailable")
             return null
         }
-        val matches = DexShareIconScanner.scanPbLikeAgreeClick(
+        val matches = DexKitSemanticScanner.scanPbLikeAgreeClick(
             sourcePaths = sourcePaths,
             ownerClassName = agreeViewClass.name,
             logger = logger,

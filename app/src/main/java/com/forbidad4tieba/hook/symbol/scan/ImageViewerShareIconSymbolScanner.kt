@@ -5,6 +5,7 @@ import com.forbidad4tieba.hook.symbol.model.*
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import android.content.Context
 import android.widget.ImageView
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -35,7 +36,13 @@ internal object ImageViewerShareIconSymbolScanner {
                 listOf(owner.className) + nested
             }
             .distinct()
-        val match = DexShareIconScanner.scan(sourcePaths, ownerClassNames, cl, logger)
+        val match = DexKitSemanticScanner.scanShareIcon(
+            sourcePaths = sourcePaths,
+            ownerClassNames = ownerClassNames,
+            cl = cl,
+            resolveDrawableResource = { name -> resolveDrawableResource(context, cl, name, logger) },
+            logger = logger,
+        )
         if (match != null) {
             log(
                 logger,
@@ -50,6 +57,79 @@ internal object ImageViewerShareIconSymbolScanner {
             .joinToString(",") { "${it.className}:${it.score}" }
         log(logger, "imageViewerShareIconDex: no drawable constant matched, owners=$ownerPreview")
         return null
+    }
+
+    private fun resolveDrawableResource(
+        context: Context,
+        cl: ClassLoader,
+        name: String,
+        logger: ScanLogger?,
+    ): Int? {
+        val byResources = context.resources.getIdentifier(name, "drawable", context.packageName)
+        if (isResolvedDrawableResource(context, byResources, logger, "resources.getIdentifier($name)")) {
+            return byResources
+        }
+        val byRClass = resolveRIntField(cl, "com.baidu.tieba.R\$drawable", name, logger)
+        if (isResolvedDrawableResource(context, byRClass, logger, "com.baidu.tieba.R.drawable.$name")) {
+            return byRClass
+        }
+        val byLivenpsRClass = resolveRIntField(cl, "com.baidu.searchbox.livenps.R\$drawable", name, logger)
+        if (isResolvedDrawableResource(
+                context,
+                byLivenpsRClass,
+                logger,
+                "com.baidu.searchbox.livenps.R.drawable.$name",
+            )
+        ) {
+            return byLivenpsRClass
+        }
+        log(logger, "imageViewerShareIconDex: drawable resource missing $name")
+        return null
+    }
+
+    private fun resolveRIntField(
+        cl: ClassLoader,
+        className: String,
+        fieldName: String,
+        logger: ScanLogger?,
+    ): Int? {
+        val clazz = safeFindClass(className, cl) ?: return null
+        val field = try {
+            clazz.getDeclaredField(fieldName)
+        } catch (_: NoSuchFieldException) {
+            null
+        } catch (t: Throwable) {
+            log(logger, "imageViewerShareIconDex: read field failed $className.$fieldName: ${t.message}")
+            null
+        } ?: return null
+        return try {
+            field.isAccessible = true
+            field.getInt(null).takeIf { it != 0 }
+        } catch (t: Throwable) {
+            log(logger, "imageViewerShareIconDex: get field failed $className.$fieldName: ${t.message}")
+            null
+        }
+    }
+
+    private fun isResolvedDrawableResource(
+        context: Context,
+        id: Int?,
+        logger: ScanLogger?,
+        source: String,
+    ): Boolean {
+        if (id == null || id <= 0) return false
+        return try {
+            val typeName = context.resources.getResourceTypeName(id)
+            val entryName = context.resources.getResourceEntryName(id)
+            val accepted = typeName == "drawable" && entryName.contains("share", ignoreCase = true)
+            if (!accepted) {
+                log(logger, "imageViewerShareIconDex: rejected $source=$id type=$typeName entry=$entryName")
+            }
+            accepted
+        } catch (t: Throwable) {
+            log(logger, "imageViewerShareIconDex: rejected $source=$id: ${t.message}")
+            false
+        }
     }
 
     private fun findOwnerCandidates(

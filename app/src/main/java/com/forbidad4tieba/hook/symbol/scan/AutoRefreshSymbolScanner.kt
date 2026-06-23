@@ -4,6 +4,7 @@ import com.forbidad4tieba.hook.symbol.model.*
 
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import android.content.Context
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -58,7 +59,7 @@ internal object AutoRefreshSymbolScanner {
             return null
         }
 
-        val matches = DexShareIconScanner.scanAutoRefresh(
+        val matches = DexKitSemanticScanner.scanAutoRefresh(
             sourcePaths = sourcePaths,
             ownerClassName = StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS,
             logger = logger,
@@ -123,7 +124,7 @@ internal object AutoRefreshSymbolScanner {
         log(logger, "autoRefresh diag: voidNoArgMethods=$methods")
 
         val sourcePaths = appSourcePaths(context)
-        val candidates = DexShareIconScanner.scanAutoRefresh(
+        val candidates = DexKitSemanticScanner.scanAutoRefresh(
             sourcePaths = sourcePaths,
             ownerClassName = StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS,
             logger = logger,

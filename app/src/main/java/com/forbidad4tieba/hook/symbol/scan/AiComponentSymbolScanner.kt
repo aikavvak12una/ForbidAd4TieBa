@@ -5,6 +5,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import com.forbidad4tieba.hook.symbol.model.AiComponentScanSymbols
 import com.forbidad4tieba.hook.symbol.model.DexAiComponentInitMatch
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
@@ -400,7 +401,7 @@ internal object AiComponentSymbolScanner {
             log(logger, "aiComponent.pbAiEmojiCreationDex: no app source paths")
             return null
         }
-        val match = DexShareIconScanner.scanPbPageBrowserAiEmojiCreation(sourcePaths, logger) ?: return null
+        val match = DexKitSemanticScanner.scanPbPageBrowserAiEmojiCreation(sourcePaths, logger) ?: return null
         val viewClass = safeFindClass(match.viewClassName, cl) ?: run {
             log(logger, "aiComponent.pbAiEmojiCreationDex: page browser view not loadable: ${match.viewClassName}")
             return null
@@ -599,7 +600,7 @@ internal object AiComponentSymbolScanner {
         }
         val ownerMethods = declaredMethodsForScan("ImageViewerJumpButton.${ownerClass.name}.Init", ownerClass, logger)
             ?: return null
-        val matches = DexShareIconScanner.scanImageViewerJumpButtonInit(
+        val matches = DexKitSemanticScanner.scanImageViewerJumpButtonInit(
             sourcePaths = sourcePaths,
             ownerClassName = ownerClass.name,
             logger = logger,
@@ -661,7 +662,7 @@ internal object AiComponentSymbolScanner {
         }
         val inputContainerMethods = declaredMethodsForScan("PbNewInputContainer.AiWriteInit", inputContainerClass, logger)
             ?: return null
-        val dexMatches = DexShareIconScanner.scanAiWriteInit(
+        val dexMatches = DexKitSemanticScanner.scanAiWriteInit(
             sourcePaths = sourcePaths,
             ownerClassName = inputContainerClass.name,
             logger = logger,
@@ -700,7 +701,7 @@ internal object AiComponentSymbolScanner {
         }
         val inputContainerMethods = declaredMethodsForScan("PbNewInputContainer.SpriteMemeInit", inputContainerClass, logger)
             ?: return null
-        val matches = DexShareIconScanner.scanSpriteMemeInit(
+        val matches = DexKitSemanticScanner.scanSpriteMemeInit(
             sourcePaths = sourcePaths,
             ownerClassName = inputContainerClass.name,
             logger = logger,

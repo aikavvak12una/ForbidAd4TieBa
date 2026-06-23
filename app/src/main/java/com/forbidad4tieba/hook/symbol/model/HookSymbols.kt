@@ -741,6 +741,8 @@ data class HookSymbols(
         get() = meta.createdAt
     val cacheSchemaVersion: Int
         get() = meta.cacheSchemaVersion
+    val dexKitRuleVersion: Int
+        get() = meta.dexKitRuleVersion
 
     fun withFeatureStatusMap(featureStatusMap: Map<String, HookFeatureStatus>): HookSymbols {
         return withMeta(
@@ -751,6 +753,7 @@ data class HookSymbols(
                 source = meta.source,
                 createdAt = meta.createdAt,
                 cacheSchemaVersion = meta.cacheSchemaVersion,
+                dexKitRuleVersion = meta.dexKitRuleVersion,
             ),
         )
     }
@@ -774,6 +777,7 @@ data class HookSymbols(
                 source = meta.source,
                 createdAt = meta.createdAt,
                 cacheSchemaVersion = meta.cacheSchemaVersion,
+                dexKitRuleVersion = meta.dexKitRuleVersion,
             ),
         )
     }
@@ -1247,11 +1251,13 @@ data class HookSymbols(
             put("source", source)
             put("createdAt", createdAt)
             put("cacheSchemaVersion", cacheSchemaVersion)
+            put("dexKitRuleVersion", dexKitRuleVersion)
         }.toString()
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 20
+        const val CACHE_SCHEMA_VERSION = 21
+        const val DEXKIT_RULE_VERSION = 7
 
         fun unsupported(
             featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
@@ -1761,6 +1767,7 @@ data class HookSymbols(
                     source = obj.optString("source", "unsupported")
                     createdAt = obj.optLong("createdAt", 0L)
                     cacheSchemaVersion = obj.optInt("cacheSchemaVersion", 0)
+                    dexKitRuleVersion = obj.optInt("dexKitRuleVersion", 0)
                 }
             } catch (_: Throwable) {
                 null
