@@ -12,6 +12,15 @@ import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object ImageViewerShareIconSymbolScanner {
+    fun scanHostButtonResource(
+        context: Context,
+        cl: ClassLoader,
+        logger: ScanLogger?,
+    ): Int? {
+        return resolveDrawableResource(context, cl, "icon_pure_topbar_share", logger)
+            ?.also { log(logger, "imageViewerShareIconHost matched: icon_pure_topbar_share icon=$it") }
+    }
+
     fun scanFromDex(
         context: Context,
         candidates: List<String>,
@@ -121,7 +130,8 @@ internal object ImageViewerShareIconSymbolScanner {
         return try {
             val typeName = context.resources.getResourceTypeName(id)
             val entryName = context.resources.getResourceEntryName(id)
-            val accepted = typeName == "drawable" && entryName.contains("share", ignoreCase = true)
+            val accepted = typeName == "drawable" &&
+                (entryName.contains("share", ignoreCase = true) || source.contains("share", ignoreCase = true))
             if (!accepted) {
                 log(logger, "imageViewerShareIconDex: rejected $source=$id type=$typeName entry=$entryName")
             }
