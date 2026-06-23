@@ -36,6 +36,9 @@ object AboutInfoManager {
     private const val TELEMETRY_ACCOUNT_ID_FIRST_DELAY_MS = 5000L
     private const val TELEMETRY_ACCOUNT_ID_RETRY_COUNT = 2
     private const val TELEMETRY_ACCOUNT_ID_RETRY_DELAY_MS = 5000L
+    private const val REMOTE_CONTROLS_ACCOUNT_ID_FIRST_DELAY_MS = 1000L
+    private const val REMOTE_CONTROLS_ACCOUNT_ID_RETRY_COUNT = 5
+    private const val REMOTE_CONTROLS_ACCOUNT_ID_RETRY_DELAY_MS = 2000L
     private const val PATCH_CONFIG_ASSET_PATH = "assets/npatch/config.json"
     private const val PATCH_MANIFEST_META_KEY = "npatch"
     private const val PATCH_EMBEDDED_MODULE_PREFIX = "assets/npatch/modules/"
@@ -61,10 +64,13 @@ object AboutInfoManager {
     private val pendingRemoteCustomDialogs = ArrayDeque<RemoteCustomDialog>()
     private val seenRemoteCustomDialogKeys = LinkedHashSet<String>()
     private val telemetryAccountRetryRunning = AtomicBoolean(false)
+    private val remoteControlsAccountRetryRunning = AtomicBoolean(false)
     @Volatile private var pendingTelemetryConfigs: List<TelemetryConfig> = emptyList()
+    @Volatile private var pendingAccountRemoteControls: RemoteControls? = null
     @Volatile private var runtimeEnvironmentCache: RuntimeEnvironment? = null
     @Volatile private var startupFetchThread: Thread? = null
     @Volatile private var telemetryRetryThread: Thread? = null
+    @Volatile private var remoteControlsRetryThread: Thread? = null
 
     data class AboutItem(
         val title: String,
@@ -282,6 +288,7 @@ object AboutInfoManager {
     fun hotReloadBusyReason(): String? {
         if (startupFetchThread?.isAlive == true) return "about startup fetch active"
         if (telemetryRetryThread?.isAlive == true) return "about telemetry retry active"
+        if (remoteControlsRetryThread?.isAlive == true) return "about remote controls retry active"
         return null
     }
 
@@ -289,10 +296,13 @@ object AboutInfoManager {
         cachedRemoteItems = emptyList()
         startupFetchTriggered = false
         pendingTelemetryConfigs = emptyList()
+        pendingAccountRemoteControls = null
         runtimeEnvironmentCache = null
         telemetryAccountRetryRunning.set(false)
+        remoteControlsAccountRetryRunning.set(false)
         startupFetchThread = null
         telemetryRetryThread = null
+        remoteControlsRetryThread = null
         synchronized(remoteCustomDialogLock) {
             pendingRemoteCustomDialogs.clear()
             seenRemoteCustomDialogKeys.clear()
@@ -762,16 +772,25 @@ object AboutInfoManager {
         }
     }
 
-    private fun applyRemoteControls(context: Context, controls: RemoteControls) {
+    private fun applyRemoteControls(
+        context: Context,
+        controls: RemoteControls,
+        allowAccountRetry: Boolean = true,
+    ) {
         val environment = collectRuntimeEnvironment(context)
         val level = environment.environmentRatingLevel
         val levelControls = controls.forLevel(level)
+        val accountId = TiebaAccountIdentity.currentAccountId(context)
+        if (accountId == null && allowAccountRetry && remoteControlsDependOnAccountId(controls)) {
+            pendingAccountRemoteControls = controls
+            scheduleRemoteControlsAccountRetry(context)
+        }
         val evaluatedRules = evaluateRemoteRules(
             context = context,
             rules = controls.rules,
             conditionContext = RemoteConditionContext(
                 environment = environment,
-                accountId = TiebaAccountIdentity.currentAccountId(context),
+                accountId = accountId,
             ),
         )
         ConfigManager.applyRemoteEnvironmentControls(
@@ -788,6 +807,68 @@ object AboutInfoManager {
                 "matchedRules=${evaluatedRules.matchedRuleCount} " +
                 "customDialogs=${evaluatedRules.customDialogs.size}"
         )
+    }
+
+    private fun scheduleRemoteControlsAccountRetry(context: Context) {
+        if (!remoteControlsAccountRetryRunning.compareAndSet(false, true)) {
+            XposedCompat.logD("[AboutInfo] remote controls account retry already scheduled")
+            return
+        }
+        val appContext = context.applicationContext ?: context
+        val worker = thread(start = false, name = "tbhook-remote-controls-account-retry", isDaemon = true) {
+            try {
+                Thread.sleep(REMOTE_CONTROLS_ACCOUNT_ID_FIRST_DELAY_MS)
+                for (attempt in 0..REMOTE_CONTROLS_ACCOUNT_ID_RETRY_COUNT) {
+                    val controls = pendingAccountRemoteControls
+                    if (controls == null) {
+                        XposedCompat.logD("[AboutInfo] remote controls account retry stopped: no pending controls")
+                        return@thread
+                    }
+                    if (TiebaAccountIdentity.currentAccountId(appContext) != null) {
+                        XposedCompat.logD("[AboutInfo] remote controls account id ready at attempt=${attempt + 1}")
+                        pendingAccountRemoteControls = null
+                        applyRemoteControls(appContext, controls, allowAccountRetry = false)
+                        return@thread
+                    }
+                    if (attempt < REMOTE_CONTROLS_ACCOUNT_ID_RETRY_COUNT) {
+                        Thread.sleep(REMOTE_CONTROLS_ACCOUNT_ID_RETRY_DELAY_MS)
+                    }
+                }
+                XposedCompat.logD("[AboutInfo] remote controls skipped: account id unavailable after retry")
+            } catch (t: Throwable) {
+                XposedCompat.logD("[AboutInfo] remote controls account retry stopped: ${t.message}")
+            } finally {
+                remoteControlsAccountRetryRunning.set(false)
+                if (remoteControlsRetryThread === Thread.currentThread()) {
+                    remoteControlsRetryThread = null
+                }
+            }
+        }
+        remoteControlsRetryThread = worker
+        worker.start()
+    }
+
+    private fun remoteControlsDependOnAccountId(controls: RemoteControls): Boolean {
+        return controls.rules.any { rule ->
+            rule.enabled && remoteConditionReferencesField(rule.condition, "account_id")
+        }
+    }
+
+    private fun remoteConditionReferencesField(condition: JSONObject?, fieldName: String): Boolean {
+        if (condition == null) return false
+        if (condition.optString("field", "").trim() == fieldName) return true
+        condition.optJSONArray("all")?.let { conditions ->
+            for (i in 0 until conditions.length()) {
+                if (remoteConditionReferencesField(conditions.optJSONObject(i), fieldName)) return true
+            }
+        }
+        condition.optJSONArray("any")?.let { conditions ->
+            for (i in 0 until conditions.length()) {
+                if (remoteConditionReferencesField(conditions.optJSONObject(i), fieldName)) return true
+            }
+        }
+        if (remoteConditionReferencesField(condition.optJSONObject("not"), fieldName)) return true
+        return false
     }
 
     private fun evaluateRemoteRules(
