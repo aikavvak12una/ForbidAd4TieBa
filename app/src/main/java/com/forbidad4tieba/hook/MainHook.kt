@@ -52,6 +52,7 @@ class MainHook : XposedModule() {
     private val hotReloadManagedThreadNames = setOf(
         "tbhook-about-startup-fetch",
         "tbhook-telemetry-account-retry",
+        "tbhook-remote-controls-account-retry",
         "tbhook-auto-signin",
         "tbhook-model-score-stats",
         "tbhook-block-count-stats",
