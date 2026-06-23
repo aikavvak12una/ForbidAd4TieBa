@@ -151,22 +151,24 @@ internal object ImageViewerShareSymbolScanner {
         cl: ClassLoader,
         logger: ScanLogger?,
     ): ImageViewerShareScanSymbols {
-        val match = ScanReflection.runRules(
-            listOf(TIEBA_DRAWABLE_CLASS),
-            cl,
-            listOf(ImageViewerShareIconResourceRule()),
-            logger,
-            "imageViewerShareIcon",
-        )
-        val iconResId = if (match != null) {
-            match.fieldName.toIntOrNull()
-        } else {
-            ImageViewerShareIconSymbolScanner.scanFromDex(
-                context = context,
-                candidates = candidates,
-                cl = cl,
-                logger = logger,
+        val iconResId = ImageViewerShareIconSymbolScanner.scanHostButtonResource(
+            context = context,
+            cl = cl,
+            logger = logger,
+        ) ?: ImageViewerShareIconSymbolScanner.scanFromDex(
+            context = context,
+            candidates = candidates,
+            cl = cl,
+            logger = logger,
+        ) ?: run {
+            val match = ScanReflection.runRules(
+                listOf(TIEBA_DRAWABLE_CLASS),
+                cl,
+                listOf(ImageViewerShareIconResourceRule()),
+                logger,
+                "imageViewerShareIcon",
             )
+            match?.fieldName?.toIntOrNull()
         }
         return ImageViewerShareScanSymbols(iconResId = iconResId)
     }
