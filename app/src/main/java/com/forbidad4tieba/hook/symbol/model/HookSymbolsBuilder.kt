@@ -354,6 +354,7 @@ internal class HookSymbolsBuilder {
     var source: String = "unsupported"
     var createdAt: Long = 0L
     var cacheSchemaVersion: Int = HookSymbols.CACHE_SCHEMA_VERSION
+    var dexKitRuleVersion: Int = HookSymbols.DEXKIT_RULE_VERSION
 
     fun build(): HookSymbols {
         return HookSymbols(
@@ -927,6 +928,7 @@ internal class HookSymbolsBuilder {
             source = source,
             createdAt = createdAt,
             cacheSchemaVersion = cacheSchemaVersion,
+            dexKitRuleVersion = dexKitRuleVersion,
         )
     }
 }

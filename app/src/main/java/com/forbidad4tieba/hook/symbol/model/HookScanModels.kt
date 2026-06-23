@@ -388,6 +388,7 @@ internal data class DexHostDarkModeSwitchMatch(
     val getterMethodName: String,
     val score: Int,
     val evidence: String,
+    val callbackMethodName: String? = null,
 )
 
 internal data class HomeNativeGlassEnterForumCapsuleClassCandidate(

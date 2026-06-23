@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import com.forbidad4tieba.hook.symbol.model.ForumPageAdScanSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import java.lang.reflect.Constructor
@@ -509,7 +510,7 @@ internal object ForumPageAdSymbolScanner {
             log(logger, "forumPageAd.floatingBarDex: no app source paths")
             return null
         }
-        val match = DexShareIconScanner.scanGameFloatingBar(sourcePaths, logger) ?: return null
+        val match = DexKitSemanticScanner.scanGameFloatingBar(sourcePaths, logger) ?: return null
         val controllerClass = safeFindClass(match.controllerClassName, cl) ?: run {
             log(logger, "forumPageAd.floatingBarDex: class not loadable: ${match.controllerClassName}")
             return null

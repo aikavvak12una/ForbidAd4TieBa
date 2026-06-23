@@ -14,6 +14,7 @@ data class ScanMeta(
     val source: String = "unsupported",
     val createdAt: Long = 0L,
     val cacheSchemaVersion: Int = HookSymbols.CACHE_SCHEMA_VERSION,
+    val dexKitRuleVersion: Int = HookSymbols.DEXKIT_RULE_VERSION,
 )
 
 data class ScanAvailabilityMeta(

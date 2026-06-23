@@ -7,6 +7,7 @@ import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -302,24 +303,20 @@ internal object HomeNativeGlassSymbolScanner {
         logger: ScanLogger?,
     ): HomeNativeGlassHostDarkModeSwitchSymbols {
         val moreActivityClass = safeFindClass(MORE_ACTIVITY_CLASS, cl) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: class missing $MORE_ACTIVITY_CLASS")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+            return missingHostDarkModeSwitch(logger, "class missing $MORE_ACTIVITY_CLASS")
         }
         val switchClass = safeFindClass(BD_SWITCH_VIEW_CLASS, cl) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: class missing $BD_SWITCH_VIEW_CLASS")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+            return missingHostDarkModeSwitch(logger, "class missing $BD_SWITCH_VIEW_CLASS")
         }
         val switchMethods = declaredMethods("HostDarkModeSwitch.Switch", switchClass, logger) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: switch declaredMethods unavailable")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+            return missingHostDarkModeSwitch(logger, "switch declaredMethods unavailable")
         }
-        val switchFields = collectInstanceFields("HostDarkModeSwitch.Switch", switchClass, logger) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: switch fields unavailable")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        val switchFields = declaredFields("HostDarkModeSwitch.Switch", switchClass, logger)
+            ?.filter { field -> !Modifier.isStatic(field.modifiers) } ?: run {
+            return missingHostDarkModeSwitch(logger, "switch fields unavailable")
         }
         val stateField = selectHostSwitchStateField(switchFields, logger) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: state field missing")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+            return missingHostDarkModeSwitch(logger, "state field missing")
         }
         val setOnMethod = selectHostSwitchNamedNoArgVoidMethod(
             switchMethods,
@@ -327,8 +324,7 @@ internal object HomeNativeGlassSymbolScanner {
             "setOn",
             logger,
         ) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: set on method missing")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+            return missingHostDarkModeSwitch(logger, "set on method missing")
         }
         val setOffMethod = selectHostSwitchNamedNoArgVoidMethod(
             switchMethods,
@@ -336,16 +332,15 @@ internal object HomeNativeGlassSymbolScanner {
             "setOff",
             logger,
         ) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: set off method missing")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+            return missingHostDarkModeSwitch(logger, "set off method missing")
         }
 
-        val fields = collectInstanceFields("HostDarkModeSwitch.Activity", moreActivityClass, logger) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: activity fields unavailable")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        val fields = declaredFields("HostDarkModeSwitch.Activity", moreActivityClass, logger)
+            ?.filter { field -> !Modifier.isStatic(field.modifiers) } ?: run {
+            return missingHostDarkModeSwitch(logger, "activity fields unavailable")
         }
         val controllerMethodGroups = fields.mapNotNull { field ->
-            val methods = collectInstanceMethods("HostDarkModeSwitch.Controller.${field.type.name}", field.type, logger)
+            val methods = declaredMethods("HostDarkModeSwitch.Controller.${field.type.name}", field.type, logger)
                 ?.filter { method ->
                     !Modifier.isStatic(method.modifiers) &&
                         method.parameterTypes.isEmpty() &&
@@ -376,7 +371,7 @@ internal object HomeNativeGlassSymbolScanner {
 
         val sourcePaths = appSourcePaths(context)
         val dexMatches = if (sourcePaths.isNotEmpty() && controllerFields.isNotEmpty()) {
-            DexShareIconScanner.scanHostDarkModeSwitch(
+            DexKitSemanticScanner.scanHostDarkModeSwitch(
                 sourcePaths = sourcePaths,
                 controllerFields = controllerFields,
                 logger = logger,
@@ -391,6 +386,7 @@ internal object HomeNativeGlassSymbolScanner {
                     "homeNativeGlassHostDarkModeSwitch: dex matches=" +
                         dexMatches.take(4).joinToString(",") {
                             "${it.controllerFieldName}.${it.getterMethodName}" +
+                                "/callback=${it.callbackMethodName ?: "-"}" +
                                 "/score=${it.score}[${it.evidence}]"
                         },
                 )
@@ -421,30 +417,35 @@ internal object HomeNativeGlassSymbolScanner {
         )
 
         if (candidates.isEmpty()) {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: controller field missing")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+            return missingHostDarkModeSwitch(
+                logger,
+                "controller field missing, activityFields=${fields.joinToString(",") { "${it.name}:${it.type.name}" }}",
+            )
         }
         val best = candidates.first()
         if (candidates.size > 1 && candidates[1].score == best.score) {
-            log(
+            return missingHostDarkModeSwitch(
                 logger,
-                "homeNativeGlassHostDarkModeSwitch: ambiguous candidates=" +
+                "ambiguous candidates=" +
                     candidates.joinToString(",") { "${it.field.name}.${it.getter.name}/score=${it.score}" },
             )
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
         }
-        val activityMethods = collectInstanceMethods("HostDarkModeSwitch.Activity", moreActivityClass, logger) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: activity methods unavailable")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+        val activityMethods = declaredMethods("HostDarkModeSwitch.Activity", moreActivityClass, logger) ?: run {
+            return missingHostDarkModeSwitch(logger, "activity methods unavailable")
         }
-        val callbackMethod = selectHostDarkModeSwitchCallbackMethod(
+        val callbackMethod = selectHostDarkModeSwitchCallbackMethodByName(
+            activityMethods = activityMethods,
+            callbackMethodName = best.dexMatch?.callbackMethodName,
+            switchViewType = best.getter.returnType,
+            switchStateType = stateField.type,
+            logger = logger,
+        ) ?: selectHostDarkModeSwitchCallbackMethod(
             activityMethods,
             best.getter.returnType,
             stateField.type,
             logger,
         ) ?: run {
-            log(logger, "homeNativeGlassHostDarkModeSwitch: switch callback missing")
-            return HomeNativeGlassHostDarkModeSwitchSymbols()
+            return missingHostDarkModeSwitch(logger, "switch callback missing")
         }
         log(
             logger,
@@ -510,7 +511,7 @@ internal object HomeNativeGlassSymbolScanner {
         val sourcePaths = appSourcePaths(context)
         val scannedCandidates = classCandidates.take(ENTER_FORUM_CAPSULE_CLASS_SCAN_LIMIT)
         val dexMatchesByClass = if (sourcePaths.isNotEmpty()) {
-            DexShareIconScanner.scanEnterForumCapsules(
+            DexKitSemanticScanner.scanEnterForumCapsules(
                 sourcePaths = sourcePaths,
                 ownerClassNames = scannedCandidates.map { it.clazz.name },
                 logger = logger,
@@ -880,6 +881,46 @@ internal object HomeNativeGlassSymbolScanner {
         return null
     }
 
+    private fun selectHostDarkModeSwitchCallbackMethodByName(
+        activityMethods: List<Method>,
+        callbackMethodName: String?,
+        switchViewType: Class<*>,
+        switchStateType: Class<*>,
+        logger: ScanLogger?,
+    ): Method? {
+        if (callbackMethodName.isNullOrBlank()) return null
+        val candidates = activityMethods.filter { method ->
+            method.name == callbackMethodName && isHostDarkModeSwitchCallbackMethod(
+                method,
+                switchViewType,
+                switchStateType,
+            )
+        }
+        if (candidates.size == 1) return candidates.first()
+        if (candidates.isNotEmpty()) {
+            log(
+                logger,
+                "homeNativeGlassHostDarkModeSwitch: named callback ambiguous candidates=" +
+                    candidates.joinToString(",") { describeMethodShape(it) },
+            )
+        }
+        return null
+    }
+
+    private fun isHostDarkModeSwitchCallbackMethod(
+        method: Method,
+        switchViewType: Class<*>,
+        switchStateType: Class<*>,
+    ): Boolean {
+        val params = method.parameterTypes
+        return !Modifier.isStatic(method.modifiers) &&
+            method.returnType == Void.TYPE &&
+            params.size == 2 &&
+            View::class.java.isAssignableFrom(params[0]) &&
+            params[0].isAssignableFrom(switchViewType) &&
+            params[1] == switchStateType
+    }
+
     private fun selectHostSwitchStateField(
         fields: List<Field>,
         logger: ScanLogger?,
@@ -937,6 +978,18 @@ internal object HomeNativeGlassSymbolScanner {
         val score: Int,
         val dexMatch: DexHostDarkModeSwitchMatch?,
     )
+
+    private fun missingHostDarkModeSwitch(
+        logger: ScanLogger?,
+        detail: String,
+    ): HomeNativeGlassHostDarkModeSwitchSymbols {
+        val tag = "HomeNativeGlassHook.HostDarkModeSwitch"
+        val message = HookSymbolScanDiagnostics.sanitizeScanStatusText(detail)
+        HookSymbolScanSession.get()?.scanErrors?.let { errors ->
+            HookSymbolScanDiagnostics.recordScanIssue(logger, tag, errors, message)
+        } ?: log(logger, "homeNativeGlassHostDarkModeSwitch: $message")
+        return HomeNativeGlassHostDarkModeSwitchSymbols()
+    }
 
     private fun resolveRIdField(
         cl: ClassLoader,
