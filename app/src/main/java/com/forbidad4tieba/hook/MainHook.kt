@@ -262,7 +262,8 @@ class MainHook : XposedModule() {
         cl: ClassLoader,
         fromHotReload: Boolean,
     ) {
-        if (sAppContext == null) {
+        val firstApplicationReady = sAppContext == null
+        if (firstApplicationReady) {
             sAppContext = app
             ConfigManager.init(app)
             XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
@@ -290,11 +291,6 @@ class MainHook : XposedModule() {
                 if (startupSettings.isTitanPatchBlockEnabled || startupSettings.isDetailedLoggingEnabled) {
                     runStartupTask("log Titan startup") {
                         logTitanStartupIfNeeded(app, cl)
-                    }
-                }
-                if (startupSettings.isAutoSignInEnabled && (!fromHotReload || restoreAutoSignInAfterHotReload)) {
-                    runStartupTask("schedule auto sign in") {
-                        scheduleAutoSignIn(app)
                     }
                 }
             } else {
@@ -330,6 +326,16 @@ class MainHook : XposedModule() {
         }
         val isMainProcess = HookProcess.isMain(processName)
         val settingsSnapshot = ConfigManager.snapshot()
+        if (
+            firstApplicationReady &&
+            isMainProcess &&
+            settingsSnapshot.isAutoSignInEnabled &&
+            (!fromHotReload || restoreAutoSignInAfterHotReload)
+        ) {
+            runStartupTask("schedule auto sign in") {
+                scheduleAutoSignIn(app)
+            }
+        }
         if (isMainProcess) {
             ConfigManager.formatPerformanceStatusLines(settingsSnapshot).forEach { line ->
                 XposedCompat.log("[MainHook] > $line")
