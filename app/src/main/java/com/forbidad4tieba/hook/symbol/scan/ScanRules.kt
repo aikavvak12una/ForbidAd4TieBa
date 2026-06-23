@@ -275,46 +275,6 @@ internal class ForumBottomSheetInitScrollRule(
     }
 }
 
-internal class AutoRefreshTriggerRule(
-    private val preferredMethodNames: List<String> = listOf("w1"),
-) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
-
-    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
-        if (cls.name != "com.baidu.tieba.homepage.personalize.PersonalizePageView") return null
-
-        val methods = scanRuleMethods("AutoRefreshTriggerRule", cls, logger)?.filter { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.isEmpty() &&
-                method.name.length <= 3 &&
-                method.name.endsWith("1") &&
-                method.name.firstOrNull()?.isLowerCase() == true
-        } ?: return null
-        if (methods.isEmpty()) return null
-
-        val targetMethod = preferredMethodNames
-            .asSequence()
-            .mapNotNull { preferred -> methods.singleOrNull { it.name == preferred } }
-            .firstOrNull()
-            ?: return null
-
-        var score = 80
-        val preferredIdx = preferredMethodNames.indexOf(targetMethod.name)
-        if (preferredIdx >= 0) {
-            score += (20 - preferredIdx * 3)
-        }
-        if (targetMethod.name.length == 2) score += 6
-        score -= methods.size / 2
-        return ScanMatch(
-            className = cls.name,
-            methodName = targetMethod.name,
-            fieldName = "",
-            score = score,
-        )
-    }
-}
-
 internal class AutoLoadMoreConfigRule(
     private val parserClassName: String,
     private val preferredMethodName: String = "a",
@@ -1546,86 +1506,6 @@ internal class ImageViewerShareItemViewRule : ScanRule() {
             fieldName = "",
             score = score,
         )
-    }
-}
-
-internal class ImageViewerShareIconResourceRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
-
-    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
-        if (cls.name != "com.baidu.tieba.R\$drawable") return null
-        val fieldMatch = (scanRuleFields("ImageViewerShareIconResourceRule", cls, logger) ?: return null)
-            .asSequence()
-            .filter { field ->
-                Modifier.isStatic(field.modifiers) &&
-                    field.type == Int::class.javaPrimitiveType
-            }
-            .mapNotNull { field ->
-                val score = scoreShareIconResourceName(field.name)
-                if (score > 0) field to score else null
-            }
-            .maxWithOrNull(
-                compareBy<Pair<java.lang.reflect.Field, Int>>(
-                    { it.second },
-                    { -it.first.name.length },
-                    { it.first.name },
-                ),
-            ) ?: return null
-        val field = fieldMatch.first
-        val resId = scanSubStep("ScanRules.ImageViewerShareIconResourceRule.${field.name}.ResourceId", logger, null) {
-            field.isAccessible = true
-            field.getInt(null)
-        }?.takeIf { it != 0 } ?: return null
-        return ScanMatch(
-            className = cls.name,
-            methodName = field.name,
-            fieldName = resId.toString(),
-            score = fieldMatch.second,
-        )
-    }
-
-    private fun scoreShareIconResourceName(name: String): Int {
-        val lower = name.lowercase()
-        if (!lower.contains("share")) return 0
-
-        var score = 50
-        if (lower == "icon_pure_pb_bottom_share24_svg") score += 90
-        if (lower == "icon_pb_bottom_share_n") score += 50
-        if (lower.startsWith("icon_")) score += 12
-        if (lower.contains("pb")) score += 36
-        if (lower.contains("bottom")) score += 30
-        if (lower.contains("pure")) score += 20
-        if (lower.contains("24")) score += 10
-        if (lower.contains("svg")) score += 10
-
-        val unrelatedMarkers = listOf(
-            "wechat",
-            "weibo",
-            "qq",
-            "qzone",
-            "yy",
-            "friend",
-            "card",
-            "live",
-            "play",
-            "hot",
-            "nav",
-            "topbar",
-            "recommend",
-            "loading",
-            "background",
-            "dialog",
-            "input",
-            "sdk",
-            "webview",
-            "bubble",
-            "topic",
-            "tei",
-        )
-        for (marker in unrelatedMarkers) {
-            if (lower.contains(marker)) score -= 80
-        }
-        return if (score >= 100) score else 0
     }
 }
 

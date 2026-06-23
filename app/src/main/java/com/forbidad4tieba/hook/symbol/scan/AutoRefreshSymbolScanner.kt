@@ -11,29 +11,9 @@ import java.lang.reflect.Modifier
 
 internal object AutoRefreshSymbolScanner {
     fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): String? {
-        val targetClass = safeFindClass(StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: run {
-            log(logger, "autoRefresh: class not found: ${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}")
-            return null
-        }
         val dexMatch = scanFromDex(context, cl, logger)
         if (dexMatch != null) return dexMatch
 
-        if (appSourcePaths(context).isNotEmpty()) {
-            logDiagnostics(context, cl, logger)
-            return null
-        }
-
-        val ruleMatch = scanSubStep("AutoRefreshHook.TriggerRule", logger, null as ScanMatch?) {
-            AutoRefreshTriggerRule().match(targetClass, cl)
-        }
-        if (ruleMatch != null) {
-            log(
-                logger,
-                "autoRefresh matched by AutoRefreshTriggerRule fallback: " +
-                    "${ruleMatch.className}.${ruleMatch.methodName} score=${ruleMatch.score}",
-            )
-            return ruleMatch.methodName
-        }
         logDiagnostics(context, cl, logger)
         return null
     }
