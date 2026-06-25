@@ -49,6 +49,8 @@ object UiText {
         const val CUSTOM_POST_FILTER_HELP_DESC = "屏蔽求助帖和悬赏互动帖子"
         const val CUSTOM_POST_FILTER_SCORE_LABEL = "屏蔽打分帖"
         const val CUSTOM_POST_FILTER_SCORE_DESC = "按打分帖特征屏蔽整张帖子卡片"
+        const val CUSTOM_POST_FILTER_LOTTERY_LABEL = "屏蔽抽奖贴"
+        const val CUSTOM_POST_FILTER_LOTTERY_DESC = "按抽奖卡片特征屏蔽整张帖子卡片"
         const val CUSTOM_POST_FILTER_RECOMMEND_FORUM_LABEL = "屏蔽可能感兴趣的吧"
         const val CUSTOM_POST_FILTER_RECOMMEND_FORUM_DESC = "整块屏蔽首页推荐里的推荐吧卡片"
         const val CUSTOM_POST_FILTER_UNFOLLOWED_FORUM_LABEL = "屏蔽未关注的吧"

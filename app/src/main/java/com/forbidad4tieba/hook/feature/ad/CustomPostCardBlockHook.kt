@@ -472,6 +472,12 @@ object CustomPostCardBlockHook {
             if (map.containsKey("thread_type")) score += 3
             if (map.containsKey("card_type")) score += 4
         }
+        if (rules.lottery) {
+            if (map.containsKey("card_type")) score += 5
+            if (map.containsKey("thread_type")) score += 4
+            if (map.containsKey("title")) score += 2
+            if (map.containsKey("abstract")) score += 2
+        }
         if (rules.live && map.containsKey("recom_type")) score += 4
         if (rules.unfollowedForum) {
             if (map.containsKey("forum_is_liked")) score += 4

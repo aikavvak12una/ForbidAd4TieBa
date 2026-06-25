@@ -8,13 +8,17 @@ internal object CustomPostFilterMatcher {
     private const val GAME_EXT_KEY = "game_ext"
     private const val THREAD_TYPE_NORMAL = "0"
     private const val THREAD_TYPE_SCORE = "75"
+    private const val THREAD_TYPE_LOTTERY = "76"
     private const val CARD_TYPE_NORMAL = "normal"
     private const val CARD_TYPE_QUESTION = "question"
     private const val CARD_TYPE_NORMAL_SCORE = "normalScore"
+    private const val CARD_TYPE_BRAND_LOTTERY_AD = "brandLotteryAd"
     private const val SPECIAL_THREAD_TRUE = "1"
     private const val FORUM_LIKED_FALSE = "0"
     private const val PAGE_FROM_RECOMMEND = "recommend"
     private const val RECOM_TYPE_LIVE = "3"
+    private val LOTTERY_PRIMARY_TEXT_MARKERS = arrayOf("抽奖", "大奖", "中奖")
+    private val LOTTERY_CONTEXT_TEXT_MARKERS = arrayOf("活动时间", "开奖时间", "活动奖品", "盖楼")
     private val RECOMMEND_FORUM_TEMPLATE_KEYS = setOf(
         "recommend_card_forum_attention",
         "recommend_card_person_attention",
@@ -35,6 +39,7 @@ internal object CustomPostFilterMatcher {
         val gameBooking: Boolean,
         val help: Boolean,
         val score: Boolean,
+        val lottery: Boolean,
         val live: Boolean,
         val recommendForum: Boolean,
         val unfollowedForum: Boolean,
@@ -47,6 +52,7 @@ internal object CustomPostFilterMatcher {
             gameBooking ||
                 help ||
                 score ||
+                lottery ||
                 live ||
                 unfollowedForum ||
                 forumKeyword ||
@@ -67,6 +73,7 @@ internal object CustomPostFilterMatcher {
             gameBooking = settings.isPostGameBookingFilterEnabled,
             help = settings.isPostHelpFilterEnabled,
             score = settings.isPostScoreFilterEnabled,
+            lottery = settings.isPostLotteryFilterEnabled,
             live = settings.isPostLiveFilterEnabled,
             recommendForum = settings.isPostRecommendForumFilterEnabled,
             unfollowedForum = settings.isPostUnfollowedForumFilterEnabled,
@@ -141,6 +148,8 @@ internal object CustomPostFilterMatcher {
         val forumLiked = params.stringValue("forum_is_liked")
         val forumName = params.stringValue("forum_name")
         val pageFrom = params.stringValue("page_from")
+        val title = params.stringValue("title")
+        val abstractText = params.stringValue("abstract")
         if (rules.live &&
             recomType == RECOM_TYPE_LIVE
         ) {
@@ -148,6 +157,15 @@ internal object CustomPostFilterMatcher {
                 blocked = true,
                 reason = "custom_post_type:live:recom_type=$recomType",
             )
+        }
+        if (rules.lottery) {
+            val lotterySignal = findLotterySignal(threadType, cardType, title, abstractText)
+            if (lotterySignal != null) {
+                return Decision(
+                    blocked = true,
+                    reason = "custom_post_type:lottery:$lotterySignal",
+                )
+            }
         }
         if (rules.help &&
             threadType == THREAD_TYPE_NORMAL &&
@@ -237,6 +255,7 @@ internal object CustomPostFilterMatcher {
             gameBooking ||
             help ||
             score ||
+            lottery ||
             live ||
             recommendForum ||
             unfollowedForum ||
@@ -256,6 +275,33 @@ internal object CustomPostFilterMatcher {
             "feed_score" -> PostType.SCORE
             in RECOMMEND_FORUM_TEMPLATE_KEYS -> PostType.RECOMMEND_FORUM
             else -> null
+        }
+    }
+
+    private fun findLotterySignal(
+        threadType: String?,
+        cardType: String?,
+        title: String?,
+        abstractText: String?,
+    ): String? {
+        if (cardType == CARD_TYPE_BRAND_LOTTERY_AD) {
+            return "card_type=$CARD_TYPE_BRAND_LOTTERY_AD"
+        }
+        if (threadType != THREAD_TYPE_LOTTERY) return null
+        val text = buildString {
+            if (!title.isNullOrBlank()) append(title)
+            if (!abstractText.isNullOrBlank()) {
+                if (isNotEmpty()) append(' ')
+                append(abstractText)
+            }
+        }
+        if (text.isBlank()) return null
+        val hasPrimary = LOTTERY_PRIMARY_TEXT_MARKERS.any { text.contains(it) }
+        val hasContext = LOTTERY_CONTEXT_TEXT_MARKERS.any { text.contains(it) }
+        return if (hasPrimary && hasContext) {
+            "thread_type=$THREAD_TYPE_LOTTERY,text=lottery_markers"
+        } else {
+            null
         }
     }
 
