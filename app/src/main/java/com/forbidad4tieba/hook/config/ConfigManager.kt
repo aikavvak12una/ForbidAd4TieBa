@@ -178,6 +178,7 @@ object ConfigManager {
     const val KEY_FILTER_POST_GAME_BOOKING = "filter_post_game_booking"
     const val KEY_FILTER_POST_HELP = "filter_post_help"
     const val KEY_FILTER_POST_SCORE = "filter_post_score"
+    const val KEY_FILTER_POST_LOTTERY = "filter_post_lottery"
     const val KEY_FILTER_POST_LIVE = "filter_post_live"
     const val KEY_FILTER_POST_RECOMMEND_FORUM = "filter_post_recommend_forum"
     const val KEY_FILTER_POST_UNFOLLOWED_FORUM = "filter_post_unfollowed_forum"
@@ -343,6 +344,7 @@ object ConfigManager {
     val isPostGameBookingFilterEnabled: Boolean get() = settingsSnapshot.isPostGameBookingFilterEnabled
     val isPostHelpFilterEnabled: Boolean get() = settingsSnapshot.isPostHelpFilterEnabled
     val isPostScoreFilterEnabled: Boolean get() = settingsSnapshot.isPostScoreFilterEnabled
+    val isPostLotteryFilterEnabled: Boolean get() = settingsSnapshot.isPostLotteryFilterEnabled
     val isPostLiveFilterEnabled: Boolean get() = settingsSnapshot.isPostLiveFilterEnabled
     val isPostRecommendForumFilterEnabled: Boolean
         get() = settingsSnapshot.isPostRecommendForumFilterEnabled
@@ -862,6 +864,7 @@ object ConfigManager {
             isPostGameBookingFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_GAME_BOOKING),
             isPostHelpFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_HELP),
             isPostScoreFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_SCORE),
+            isPostLotteryFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_LOTTERY),
             isPostLiveFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_LIVE),
             isPostRecommendForumFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_RECOMMEND_FORUM),
             isPostUnfollowedForumFilterEnabled = customPostFilterChildBoolean(KEY_FILTER_POST_UNFOLLOWED_FORUM),
@@ -1081,6 +1084,7 @@ object ConfigManager {
             KEY_FILTER_POST_GAME_BOOKING,
             KEY_FILTER_POST_HELP,
             KEY_FILTER_POST_SCORE,
+            KEY_FILTER_POST_LOTTERY,
             KEY_FILTER_POST_LIVE,
             KEY_FILTER_POST_RECOMMEND_FORUM,
             KEY_FILTER_POST_UNFOLLOWED_FORUM,

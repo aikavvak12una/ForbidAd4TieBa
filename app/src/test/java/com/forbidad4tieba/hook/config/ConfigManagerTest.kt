@@ -152,6 +152,7 @@ class ConfigManagerTest {
                 mapOf(
                     ConfigManager.KEY_ENABLE_CUSTOM_POST_FILTER to false,
                     ConfigManager.KEY_FILTER_POST_VOTE to true,
+                    ConfigManager.KEY_FILTER_POST_LOTTERY to true,
                     ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD to true,
                     ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD_LIST to "alpha,beta",
                     ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
@@ -161,6 +162,7 @@ class ConfigManagerTest {
 
             assertFalse(snapshot.isCustomPostFilterEnabled)
             assertFalse(snapshot.isPostVoteFilterEnabled)
+            assertFalse(snapshot.isPostLotteryFilterEnabled)
             assertFalse(snapshot.isPostForumKeywordFilterEnabled)
             assertTrue(snapshot.postForumKeywordList.isEmpty())
             assertFalse(snapshot.isPostModelScoreFilterEnabled)
@@ -179,6 +181,7 @@ class ConfigManagerTest {
                 mapOf(
                     ConfigManager.KEY_ENABLE_CUSTOM_POST_FILTER to true,
                     ConfigManager.KEY_FILTER_POST_VOTE to true,
+                    ConfigManager.KEY_FILTER_POST_LOTTERY to true,
                     ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD to true,
                     ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD_LIST to "alpha,beta",
                     ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
@@ -188,6 +191,7 @@ class ConfigManagerTest {
 
             assertTrue(snapshot.isCustomPostFilterEnabled)
             assertTrue(snapshot.isPostVoteFilterEnabled)
+            assertTrue(snapshot.isPostLotteryFilterEnabled)
             assertTrue(snapshot.isPostForumKeywordFilterEnabled)
             assertEquals(listOf("alpha", "beta"), snapshot.postForumKeywordList)
             assertTrue(snapshot.isPostModelScoreFilterEnabled)

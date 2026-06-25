@@ -114,6 +114,7 @@ internal object SettingsMenuGroupBuilder {
             SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_GAME_BOOKING_LABEL, UiText.Settings.CUSTOM_POST_FILTER_GAME_BOOKING_DESC, ConfigManager.KEY_FILTER_POST_GAME_BOOKING, true, false),
             SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_HELP_LABEL, UiText.Settings.CUSTOM_POST_FILTER_HELP_DESC, ConfigManager.KEY_FILTER_POST_HELP, true, false),
             SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_SCORE_LABEL, UiText.Settings.CUSTOM_POST_FILTER_SCORE_DESC, ConfigManager.KEY_FILTER_POST_SCORE, true, false),
+            SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_LOTTERY_LABEL, UiText.Settings.CUSTOM_POST_FILTER_LOTTERY_DESC, ConfigManager.KEY_FILTER_POST_LOTTERY, true, false),
             SwitchItem(UiText.Settings.CUSTOM_POST_FILTER_RECOMMEND_FORUM_LABEL, UiText.Settings.CUSTOM_POST_FILTER_RECOMMEND_FORUM_DESC, ConfigManager.KEY_FILTER_POST_RECOMMEND_FORUM, true, false),
         )
         if (restrictedFeaturesUnlocked) {

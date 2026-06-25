@@ -68,6 +68,7 @@ data class SettingsSnapshot(
     val isPostGameBookingFilterEnabled: Boolean = false,
     val isPostHelpFilterEnabled: Boolean = false,
     val isPostScoreFilterEnabled: Boolean = false,
+    val isPostLotteryFilterEnabled: Boolean = false,
     val isPostLiveFilterEnabled: Boolean = false,
     val isPostRecommendForumFilterEnabled: Boolean = false,
     val isPostUnfollowedForumFilterEnabled: Boolean = false,
