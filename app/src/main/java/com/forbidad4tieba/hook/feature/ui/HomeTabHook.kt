@@ -39,22 +39,19 @@ object HomeTabHook {
     private const val TAB_TYPE_MATERIAL = 9
     private const val TAB_TYPE_WEB_ACTIVITY = 202
 
-    private const val TAB_CODE_RECOMMEND = "recommend"
-    private const val TAB_CODE_LIVE = "live"
-    private const val TAB_CODE_MATERIAL = "material"
-    private const val TAB_CODE_FOLLOWED = "my_followed"
-    private const val TAB_CODE_FOLLOWED_ALT = "myfollowed"
-    private const val TAB_CODE_FOLLOWED_ALT_2 = "followed"
+    private const val TAB_CODE_RECOMMEND = ConfigManager.HOME_TOP_TAB_CODE_RECOMMEND
+    private const val TAB_CODE_LIVE = ConfigManager.HOME_TOP_TAB_CODE_LIVE
+    private const val TAB_CODE_MATERIAL = ConfigManager.HOME_TOP_TAB_CODE_MATERIAL
+    private const val TAB_CODE_FOLLOWED = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED
+    private const val TAB_CODE_FOLLOWED_ALT = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED_ALT
+    private const val TAB_CODE_FOLLOWED_ALT_2 = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED_ALT_2
 
     private val TAB_NAME_FOLLOWED = UiText.Settings.HOME_TOP_TAB_FOLLOWED_LABEL
-    private val TAB_NAME_MATERIAL = UiText.Settings.HOME_TOP_TAB_MATERIAL_LABEL
-    private val TAB_NAME_RECOMMEND = UiText.Settings.HOME_TOP_TAB_RECOMMEND_LABEL
-    private val TAB_NAME_LIVE = UiText.Settings.HOME_TOP_TAB_LIVE_LABEL
     private const val TAB_URL_FOLLOWED =
         "https://tieba.baidu.com/mo/q/hybrid-usergrow-base/myFollowed/hybrid" +
             "?customfullscreen=1&nonavigationbar=1&loadingSignal=1&nohead=1&skin=default" +
             "&tbhook_from_home_top_tab=1"
-    private const val TAB_URL_FOLLOWED_PATH = "hybrid-usergrow-base/myfollowed/hybrid"
+    private const val TAB_URL_FOLLOWED_PATH = ConfigManager.HOME_TOP_TAB_URL_FOLLOWED_PATH
 
     private data class FollowedTemplateContext(
         val itemClass: Class<*>?,
@@ -89,6 +86,7 @@ object HomeTabHook {
                 @Suppress("UNCHECKED_CAST")
                 val list = resolveMutableListField(chain.thisObject) as? MutableList<Any?>
                 if (list != null) {
+                    publishHomeTopTabCatalog(list)
                     val templateContext = resolveFollowedTemplateContext(list)
                     val sizeBefore = list.size
                     val filteredCount = filterTabsInPlace(list, currentSelection)
@@ -98,10 +96,8 @@ object HomeTabHook {
                             "[HomeTabHook] > top tabs rebuilt: $sizeBefore -> ${list.size}, " +
                                 "removed=$filteredCount, followedAdded=${followedSync.added}, " +
                                 "followedRemoved=${followedSync.removed}, followedFailed=${followedSync.failed}, " +
-                                "selection=(material=${currentSelection.materialEnabled}, " +
-                                "recommend=${currentSelection.recommendEnabled}, " +
-                                "live=${currentSelection.liveEnabled}, " +
-                                "followed=${currentSelection.followedEnabled})"
+                                "disabledKeys=${currentSelection.disabledKeys.size}, " +
+                                "followed=${currentSelection.followedEnabled}"
                         }
                     }
                 }
@@ -117,16 +113,35 @@ object HomeTabHook {
     }
 
     private fun currentSelectionOrNull(): ConfigManager.HomeTopTabSelection? {
-        val settings = ConfigManager.snapshot()
-        if (!settings.isHomeTopTabsCustomEnabled) return null
-        return ConfigManager.normalizeHomeTopTabSelection(
-            ConfigManager.HomeTopTabSelection(
-                materialEnabled = settings.isHomeTopTabMaterialEnabled,
-                recommendEnabled = settings.isHomeTopTabRecommendEnabled,
-                liveEnabled = settings.isHomeTopTabLiveEnabled,
-                followedEnabled = settings.isHomeTopTabFollowedEnabled,
-            ),
-        )
+        if (!ConfigManager.snapshot().isHomeTopTabsCustomEnabled) return null
+        return ConfigManager.resolveHomeTopTabSelection()
+    }
+
+    private fun publishHomeTopTabCatalog(list: List<Any?>) {
+        if (list.isEmpty()) return
+        val entries = ArrayList<ConfigManager.HomeTopTabCatalogEntry>(list.size)
+        for (index in list.indices) {
+            val tabItem = list[index] ?: continue
+            val tabType = resolveTabType(tabItem)
+            val tabCode = resolveTabCode(tabItem)
+            val tabUrl = resolveTabUrl(tabItem)
+            val key = ConfigManager.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl) ?: continue
+            if (key == ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED) continue
+            ConfigManager.buildHomeTopTabCatalogEntry(
+                type = tabType.takeIf { it >= 0 },
+                code = tabCode,
+                label = resolveTabName(tabItem),
+                url = tabUrl,
+                order = index,
+            )?.let(entries::add)
+        }
+        if (entries.isEmpty()) return
+        val context = ConfigManager.getAppContext() ?: return
+        runCatching {
+            ConfigManager.updateHomeTopTabCatalog(context, entries)
+        }.onFailure { t ->
+            XposedCompat.logD { "[HomeTabHook] update top tab catalog ignored: ${t.message}" }
+        }
     }
 
     private fun filterTabsInPlace(
@@ -155,13 +170,8 @@ object HomeTabHook {
         tabUrl: String?,
         selection: ConfigManager.HomeTopTabSelection,
     ): Boolean {
-        return when (resolveTargetTab(tabType, tabCode, tabUrl)) {
-            HomeTopTargetTab.MATERIAL -> !selection.materialEnabled
-            HomeTopTargetTab.RECOMMEND -> !selection.recommendEnabled
-            HomeTopTargetTab.LIVE -> !selection.liveEnabled
-            HomeTopTargetTab.FOLLOWED -> !selection.followedEnabled
-            HomeTopTargetTab.OTHER -> false
-        }
+        val key = ConfigManager.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl)
+        return !selection.isTabKeyEnabled(key)
     }
 
     private fun resolveTargetTab(tabType: Int, tabCode: String?, tabUrl: String?): HomeTopTargetTab {
@@ -526,6 +536,20 @@ object HomeTabHook {
         if (urlField != null) {
             val value = try {
                 normalizeNonBlank(urlField.get(item) as? String)
+            } catch (_: Throwable) {
+                null
+            }
+            if (value != null) return value
+        }
+        return null
+    }
+
+    private fun resolveTabName(item: Any): String? {
+        val cls = item.javaClass
+        val nameField = resolveNameField(cls)
+        if (nameField != null) {
+            val value = try {
+                normalizeNonBlank(nameField.get(item) as? String)
             } catch (_: Throwable) {
                 null
             }

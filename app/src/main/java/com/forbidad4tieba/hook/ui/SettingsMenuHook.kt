@@ -4170,14 +4170,8 @@ object SettingsMenuHook {
         try {
             val density = context.resources.displayMetrics.density
             val padding = settingsDialogPadding(density)
-
-            val persistedSelection = ConfigManager.HomeTopTabSelection(
-                materialEnabled = prefs.getBoolean(ConfigManager.KEY_HOME_TOP_TAB_MATERIAL, true),
-                recommendEnabled = prefs.getBoolean(ConfigManager.KEY_HOME_TOP_TAB_RECOMMEND, true),
-                liveEnabled = prefs.getBoolean(ConfigManager.KEY_HOME_TOP_TAB_LIVE, true),
-                followedEnabled = prefs.getBoolean(ConfigManager.KEY_HOME_TOP_TAB_FOLLOWED, true),
-            )
-            val initialSelection = persistedSelection
+            val catalog = ConfigManager.readHomeTopTabCatalog(context)
+            val disabledKeys = ConfigManager.readHomeTopTabDisabledKeys(prefs)
 
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -4188,59 +4182,34 @@ object SettingsMenuHook {
                 )
             }
 
-            val materialRow = createSwitchRow(
-                context = context,
-                prefs = prefs,
-                label = UiText.Settings.HOME_TOP_TAB_MATERIAL_LABEL,
-                description = null,
-                prefKey = null,
-                padding = padding,
-                enabled = true,
-                defaultValue = initialSelection.materialEnabled,
-            )
-            val recommendRow = createSwitchRow(
-                context = context,
-                prefs = prefs,
-                label = UiText.Settings.HOME_TOP_TAB_RECOMMEND_LABEL,
-                description = null,
-                prefKey = null,
-                padding = padding,
-                enabled = true,
-                defaultValue = initialSelection.recommendEnabled,
-            )
-            val liveRow = createSwitchRow(
-                context = context,
-                prefs = prefs,
-                label = UiText.Settings.HOME_TOP_TAB_LIVE_LABEL,
-                description = null,
-                prefKey = null,
-                padding = padding,
-                enabled = true,
-                defaultValue = initialSelection.liveEnabled,
-            )
-            val followedRow = createSwitchRow(
-                context = context,
-                prefs = prefs,
-                label = UiText.Settings.HOME_TOP_TAB_FOLLOWED_LABEL,
-                description = null,
-                prefKey = null,
-                padding = padding,
-                enabled = true,
-                defaultValue = initialSelection.followedEnabled,
+            data class RowState(
+                val entry: ConfigManager.HomeTopTabCatalogEntry,
+                val switchView: Switch,
             )
 
-            root.addView(materialRow)
-            root.addView(recommendRow)
-            root.addView(liveRow)
-            root.addView(followedRow)
-
-            val materialSwitch = findSwitchView(materialRow)
-            val recommendSwitch = findSwitchView(recommendRow)
-            val liveSwitch = findSwitchView(liveRow)
-            val followedSwitch = findSwitchView(followedRow)
-            if (materialSwitch == null || recommendSwitch == null || liveSwitch == null || followedSwitch == null) {
-                XposedCompat.logW("[SettingsMenuHook] showHomeTopTabDialog failed: switch view missing")
-                return
+            val rows = ArrayList<RowState>(catalog.size)
+            catalog.forEachIndexed { index, entry ->
+                val label = when (entry.key) {
+                    ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED -> UiText.Settings.HOME_TOP_TAB_FOLLOWED_LABEL
+                    else -> entry.label.ifBlank { UiText.Settings.homeTopTabFallbackLabel(index + 1) }
+                }
+                val row = createSwitchRow(
+                    context = context,
+                    prefs = prefs,
+                    label = label,
+                    description = null,
+                    prefKey = null,
+                    padding = padding,
+                    enabled = true,
+                    defaultValue = entry.key !in disabledKeys,
+                )
+                val switchView = findSwitchView(row)
+                if (switchView == null) {
+                    XposedCompat.logW("[SettingsMenuHook] showHomeTopTabDialog failed: switch view missing")
+                    return
+                }
+                rows += RowState(entry, switchView)
+                root.addView(row)
             }
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
@@ -4252,23 +4221,50 @@ object SettingsMenuHook {
             dialog.setOnShowListener {
                 dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val rawSelection = ConfigManager.HomeTopTabSelection(
-                        materialEnabled = materialSwitch.isChecked,
-                        recommendEnabled = recommendSwitch.isChecked,
-                        liveEnabled = liveSwitch.isChecked,
-                        followedEnabled = followedSwitch.isChecked,
-                    )
-                    if (!rawSelection.hasEnabledTab()) {
+                    val hasHostCatalog = rows.any { it.entry.source == ConfigManager.HOME_TOP_TAB_SOURCE_HOST }
+                    if (hasHostCatalog && rows.none { it.switchView.isChecked }) {
                         Toast.makeText(context, UiText.Settings.HOME_TOP_TAB_AT_LEAST_ONE, Toast.LENGTH_SHORT).show()
                         return@setOnClickListener
                     }
-                    val normalized = ConfigManager.normalizeHomeTopTabSelection(rawSelection)
+                    val nextDisabledKeys = rows.asSequence()
+                        .filter { !it.switchView.isChecked }
+                        .map { it.entry.key }
+                        .toCollection(LinkedHashSet())
+                        .let(ConfigManager::expandHomeTopTabDisabledKeys)
 
                     prefs.edit()
-                        .putBoolean(ConfigManager.KEY_HOME_TOP_TAB_MATERIAL, normalized.materialEnabled)
-                        .putBoolean(ConfigManager.KEY_HOME_TOP_TAB_RECOMMEND, normalized.recommendEnabled)
-                        .putBoolean(ConfigManager.KEY_HOME_TOP_TAB_LIVE, normalized.liveEnabled)
-                        .putBoolean(ConfigManager.KEY_HOME_TOP_TAB_FOLLOWED, normalized.followedEnabled)
+                        .putString(
+                            ConfigManager.KEY_HOME_TOP_TAB_DISABLED_KEYS,
+                            ConfigManager.serializeHomeTopTabDisabledKeys(nextDisabledKeys),
+                        )
+                        .putBoolean(
+                            ConfigManager.KEY_HOME_TOP_TAB_MATERIAL,
+                            ConfigManager.isLegacyHomeTopTabEnabled(
+                                nextDisabledKeys,
+                                ConfigManager.HOME_TOP_TAB_KEY_MATERIAL,
+                            ),
+                        )
+                        .putBoolean(
+                            ConfigManager.KEY_HOME_TOP_TAB_RECOMMEND,
+                            ConfigManager.isLegacyHomeTopTabEnabled(
+                                nextDisabledKeys,
+                                ConfigManager.HOME_TOP_TAB_KEY_RECOMMEND,
+                            ),
+                        )
+                        .putBoolean(
+                            ConfigManager.KEY_HOME_TOP_TAB_LIVE,
+                            ConfigManager.isLegacyHomeTopTabEnabled(
+                                nextDisabledKeys,
+                                ConfigManager.HOME_TOP_TAB_KEY_LIVE,
+                            ),
+                        )
+                        .putBoolean(
+                            ConfigManager.KEY_HOME_TOP_TAB_FOLLOWED,
+                            ConfigManager.isLegacyHomeTopTabEnabled(
+                                nextDisabledKeys,
+                                ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED,
+                            ),
+                        )
                         .apply()
                     Toast.makeText(
                         context,

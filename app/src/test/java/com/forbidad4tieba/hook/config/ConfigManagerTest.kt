@@ -229,6 +229,7 @@ class ConfigManagerTest {
             assertFalse(snapshot.isHomeTopTabRecommendEnabled)
             assertFalse(snapshot.isHomeTopTabLiveEnabled)
             assertFalse(snapshot.isHomeTopTabFollowedEnabled)
+            assertTrue(snapshot.homeTopTabDisabledKeys.isEmpty())
             assertFalse(snapshot.isBottomTabsCustomEnabled)
             assertFalse(snapshot.isBottomTabHomeEnabled)
             assertFalse(snapshot.isBottomTabEnterForumEnabled)
@@ -269,12 +270,49 @@ class ConfigManagerTest {
             assertFalse(snapshot.isHomeTopTabRecommendEnabled)
             assertTrue(snapshot.isHomeTopTabLiveEnabled)
             assertFalse(snapshot.isHomeTopTabFollowedEnabled)
+            assertTrue(ConfigManager.HOME_TOP_TAB_KEY_RECOMMEND in snapshot.homeTopTabDisabledKeys)
+            assertTrue(ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED in snapshot.homeTopTabDisabledKeys)
             assertTrue(snapshot.isBottomTabsCustomEnabled)
             assertTrue(snapshot.isBottomTabHomeEnabled)
             assertFalse(snapshot.isBottomTabEnterForumEnabled)
             assertTrue(snapshot.isBottomTabRetailStoreEnabled)
             assertFalse(snapshot.isBottomTabMessageEnabled)
             assertTrue(snapshot.isBottomTabMineEnabled)
+        }
+    }
+
+    @Test
+    fun dynamicHomeTopTabDisabledKeysDriveRuntimeSelection() {
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.SIMPLIFY_HOME_TOP_TABS to
+                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ),
+        ) {
+            val disabled = setOf(
+                ConfigManager.HOME_TOP_TAB_KEY_RECOMMEND,
+                ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED,
+                "code:custom",
+            )
+            val expandedDisabled = ConfigManager.expandHomeTopTabDisabledKeys(disabled)
+            val snapshot = buildSnapshot(
+                mapOf(
+                    ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
+                    ConfigManager.KEY_HOME_TOP_TAB_MATERIAL to true,
+                    ConfigManager.KEY_HOME_TOP_TAB_RECOMMEND to true,
+                    ConfigManager.KEY_HOME_TOP_TAB_LIVE to true,
+                    ConfigManager.KEY_HOME_TOP_TAB_FOLLOWED to true,
+                    ConfigManager.KEY_HOME_TOP_TAB_DISABLED_KEYS to
+                        ConfigManager.serializeHomeTopTabDisabledKeys(disabled),
+                ),
+            )
+
+            assertTrue(snapshot.isHomeTopTabsCustomEnabled)
+            assertTrue(snapshot.isHomeTopTabMaterialEnabled)
+            assertFalse(snapshot.isHomeTopTabRecommendEnabled)
+            assertTrue(snapshot.isHomeTopTabLiveEnabled)
+            assertFalse(snapshot.isHomeTopTabFollowedEnabled)
+            assertEquals(expandedDisabled, snapshot.homeTopTabDisabledKeys)
         }
     }
 

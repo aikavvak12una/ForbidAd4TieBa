@@ -16,6 +16,7 @@ data class SettingsSnapshot(
     val isHomeTopTabRecommendEnabled: Boolean = true,
     val isHomeTopTabLiveEnabled: Boolean = true,
     val isHomeTopTabFollowedEnabled: Boolean = true,
+    val homeTopTabDisabledKeys: Set<String> = emptySet(),
     val isHomeTabAutoHideEnabled: Boolean = false,
     val isBottomTabsCustomEnabled: Boolean = false,
     val isBottomTabHomeEnabled: Boolean = true,
