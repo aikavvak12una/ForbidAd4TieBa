@@ -88,7 +88,8 @@ android {
     }
     packaging {
         jniLibs {
-            useLegacyPackaging = true
+            // LSPosed loads module JNI libs from base.apk!/lib/<abi>, which requires STORED entries.
+            useLegacyPackaging = false
         }
         resources {
             excludes += setOf(
