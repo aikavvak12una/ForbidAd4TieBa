@@ -105,7 +105,7 @@ object UiText {
         const val CUSTOM_POST_FILTER_MODEL_CDNN_LTR_DESC = "排序融合分"
 
         const val SIMPLIFY_HOME_TAB_LABEL = "自定义首页顶部 Tab"
-        const val SIMPLIFY_HOME_TAB_DESC = "配置有料、推荐、直播、关注 Tab 显示"
+        const val SIMPLIFY_HOME_TAB_DESC = "配置首页顶部 Tab 显示"
         const val AUTO_HIDE_HOME_TAB_LABEL = "浏览时隐藏 Tab "
         const val AUTO_HIDE_HOME_TAB_DESC = "浏览首页信息流时随滚动收起 Tab 栏"
         const val SIMPLIFY_BOTTOM_TAB_LABEL = "自定义底部 Tab"
@@ -325,6 +325,7 @@ object UiText {
         const val HOME_TOP_TAB_FOLLOWED_LABEL = "关注"
         const val HOME_TOP_TAB_AT_LEAST_ONE = "至少保留一个首页顶部 Tab"
         const val HOME_TOP_TAB_SAVED = "首页顶部 Tab 配置已保存"
+        fun homeTopTabFallbackLabel(index: Int): String = "顶部 Tab $index"
         const val BOTTOM_TAB_DIALOG_TITLE = SIMPLIFY_BOTTOM_TAB_LABEL
         const val BOTTOM_TAB_HOME_LABEL = "首页"
         const val BOTTOM_TAB_ENTER_FORUM_LABEL = "进吧"
