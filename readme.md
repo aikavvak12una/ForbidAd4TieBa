@@ -5,7 +5,7 @@
 
 ForbidAd4TieBa 是一个贴吧净化 Xposed 模块，用于自定义信息流推荐内容
 
-## 安装与入口
+## 安装
 
 在支持现代 libxposed api102 的框架中启用模块，不支持免root框架
 
