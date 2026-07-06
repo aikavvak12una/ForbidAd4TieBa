@@ -38,6 +38,7 @@ import com.forbidad4tieba.hook.feature.ui.ForumNativeTopShiftBlockHook
 import com.forbidad4tieba.hook.feature.ui.FreeCopyHook
 import com.forbidad4tieba.hook.feature.ui.HistorySearchHook
 import com.forbidad4tieba.hook.feature.ui.HomeBottomTabAutoHideHook
+import com.forbidad4tieba.hook.feature.ui.HomeFeedPromptBarBlockHook
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHook
 import com.forbidad4tieba.hook.feature.ui.HomeSideBarSettingsEntryHook
 import com.forbidad4tieba.hook.feature.ui.HomeTabHook
@@ -124,6 +125,9 @@ internal object HookInstallPlanner {
         val isMain = HookProcess.isMain(processName)
         if (isMain) {
             entries += HookInstallEntry("UpgradePopWindowBlockHook") { cl -> UpgradePopWindowBlockHook.hook(cl) }
+            entries += HookInstallEntry("HomeFeedPromptBarBlockHook") { cl ->
+                HomeFeedPromptBarBlockHook.hook(cl)
+            }
         }
         return HookInstallPlan(processName, "static", entries)
     }

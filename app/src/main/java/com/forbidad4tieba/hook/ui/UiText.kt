@@ -196,6 +196,7 @@ object UiText {
         const val DISABLE_PB_AUTO_EXPAND_LABEL = "吧页面禁止自动展开"
         const val IMAGE_NATIVE_SHARE_LABEL = "图片添加原生分享功能"
         const val BLOCK_UPDATE_DIALOG_LABEL = "屏蔽更新升级弹窗"
+        const val BLOCK_HOME_FEED_PROMPT_BAR_LABEL = "屏蔽首页浏览方式切换提示"
         const val COLLECTION_SEARCH_LABEL = "收藏搜索"
         const val HISTORY_SEARCH_LABEL = "浏览历史搜索"
         const val DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL = "禁用最后一张图左滑跳转"
@@ -212,6 +213,7 @@ object UiText {
             DISABLE_PB_AUTO_EXPAND_LABEL,
             IMAGE_NATIVE_SHARE_LABEL,
             BLOCK_UPDATE_DIALOG_LABEL,
+            BLOCK_HOME_FEED_PROMPT_BAR_LABEL,
             COLLECTION_SEARCH_LABEL,
             HISTORY_SEARCH_LABEL,
             DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL,
