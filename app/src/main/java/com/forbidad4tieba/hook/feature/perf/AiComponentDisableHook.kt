@@ -28,15 +28,14 @@ object AiComponentDisableHook {
 
         try {
             mod.hook(targets.spriteMemeEnableMethod).intercept { false }
-            mod.hook(targets.pbInitSpriteMemeMethod).intercept { null }
             mod.hook(targets.pbInitAiWriteMethod).intercept { null }
             val pbAiEmojiCreationHooks = installPbAiEmojiCreationHooks(mod, targets)
 
             XposedCompat.log(
                 "[AiComponentDisableHook] hooks INSTALLED: " +
                     "sprite=${targets.spriteMemeEnableMethod.declaringClass.name}.${targets.spriteMemeEnableMethod.name}, " +
-                    "pb=${targets.pbInitSpriteMemeMethod.declaringClass.name}." +
-                    "{${targets.pbInitSpriteMemeMethod.name},${targets.pbInitAiWriteMethod.name}}, " +
+                    "pbAiWrite=${targets.pbInitAiWriteMethod.declaringClass.name}.${targets.pbInitAiWriteMethod.name}, " +
+                    "pbSpriteInitKept=${targets.pbInitSpriteMemeMethod.declaringClass.name}.${targets.pbInitSpriteMemeMethod.name}, " +
                     "pbAiEmoji=$pbAiEmojiCreationHooks",
             )
         } catch (t: Throwable) {
