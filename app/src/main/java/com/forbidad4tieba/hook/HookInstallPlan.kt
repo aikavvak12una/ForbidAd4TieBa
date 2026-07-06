@@ -41,6 +41,7 @@ import com.forbidad4tieba.hook.feature.ui.HomeBottomTabAutoHideHook
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHook
 import com.forbidad4tieba.hook.feature.ui.HomeSideBarSettingsEntryHook
 import com.forbidad4tieba.hook.feature.ui.HomeTabHook
+import com.forbidad4tieba.hook.feature.ui.HomeTabRedDotBlockHook
 import com.forbidad4tieba.hook.feature.ui.HomeTopBarRightSlotHook
 import com.forbidad4tieba.hook.feature.ui.HomeTopTabAutoHideHook
 import com.forbidad4tieba.hook.feature.ui.ImageViewerSwipeEnterForumBlockHook
@@ -163,6 +164,9 @@ internal object HookInstallPlanner {
         if (context.isMain && settings.isHomeTabAutoHideEnabled) {
             entries += HookInstallEntry("HomeTopTabAutoHideHook") { cl -> HomeTopTabAutoHideHook.hook(cl) }
             entries += HookInstallEntry("HomeBottomTabAutoHideHook") { cl -> HomeBottomTabAutoHideHook.hook(cl) }
+        }
+        if (context.isMain && settings.isHomeTabRedDotHidden) {
+            entries += HookInstallEntry("HomeTabRedDotBlockHook") { cl -> HomeTabRedDotBlockHook.hook(cl) }
         }
         if (context.canInstallHomeNativeGlass(settings)) {
             entries += HookInstallEntry("BottomTabTopLineHook") { cl -> BottomTabTopLineHook.hook(cl) }
