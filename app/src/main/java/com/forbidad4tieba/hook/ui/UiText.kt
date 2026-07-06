@@ -201,6 +201,8 @@ object UiText {
         const val DEFAULT_NOTIFY_TAB_DESC = "进入消息页时默认显示通知"
         const val CLEAN_SHARE_TRACKING_LABEL = "安全分享"
         const val CLEAN_SHARE_TRACKING_DESC = "移除分享链接中的追踪参数"
+        const val PRIVACY_IDENTIFIER_BLOCK_LABEL = "阻断 CUID / UUID 历史标识"
+        const val CRASH_REPORT_BLOCK_LABEL = "阻断崩溃与异常上报"
         val DEFAULT_ENABLED_FEATURES = listOf(
             HIDE_PB_BOTTOM_BANNER_LABEL,
             DISABLE_PB_GESTURE_FONT_SCALE_LABEL,
@@ -213,6 +215,8 @@ object UiText {
             DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL,
             DEFAULT_NOTIFY_TAB_LABEL,
             CLEAN_SHARE_TRACKING_LABEL,
+            PRIVACY_IDENTIFIER_BLOCK_LABEL,
+            CRASH_REPORT_BLOCK_LABEL,
         ).joinToString("\n")
         const val AUTO_SIGN_IN_LABEL = "自动签到"
         const val AUTO_SIGN_IN_DESC = "启动时按官方批量规则自动签到"
