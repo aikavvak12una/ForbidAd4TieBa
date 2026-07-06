@@ -46,9 +46,9 @@ internal object HookSymbolResolver {
     private const val KEY_CACHE_MODULE_VERSION = HookSymbolCacheKeys.MODULE_VERSION
     private const val KEY_SYMBOL_VERIFIED_FP = HookSymbolCacheKeys.VERIFIED_FP
     // Update these target version bounds when adapting a new Tieba release.
-    private const val TARGET_TIEBA_VERSION_NAME = "22.7.3.0"
+    private const val TARGET_TIEBA_VERSION_NAME = "22.8.1.0"
     private const val MIN_TIEBA_VERSION_CODE = 369098752L
-    private const val MAX_TIEBA_VERSION_CODE = 369558272L
+    private const val MAX_TIEBA_VERSION_CODE = 369623296L
     private const val VERSION_TYPE_META_NAME = "versionType"
     private const val OFFICIAL_VERSION_TYPE = "3"
 

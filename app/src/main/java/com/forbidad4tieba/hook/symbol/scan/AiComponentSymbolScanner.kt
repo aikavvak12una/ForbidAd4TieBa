@@ -24,8 +24,6 @@ internal object AiComponentSymbolScanner {
         "com.baidu.tbadk.editortools.pb.PbNewInputContainer"
     private const val AI_PB_NEW_EDITOR_INPUT_SHOW_TYPE_CLASS =
         "com.baidu.tbadk.editortools.pb.PbNewEditorTool\$InputShowType"
-    private const val AI_PB_NEW_INPUT_INIT_SPRITE_MEME_METHOD = "e0"
-    private const val AI_PB_NEW_INPUT_INIT_AI_WRITE_METHOD = "X"
     private const val AI_IMAGE_JUMP_BUTTON_LAYOUT_CLASS =
         "com.baidu.tbadk.coreExtra.view.ImageJumpButtonLayout"
     private const val AI_IMAGE_VIEWER_BOTTOM_LAYOUT_CLASS =
@@ -80,17 +78,7 @@ internal object AiComponentSymbolScanner {
             val spriteMemePanClass = safeFindClass(AI_SPRITE_MEME_PAN_CLASS, cl)
             val enableMethod = resolveAiSpriteMemeEnableMethod(controllerClass, cl, logger)
             val initSpriteMemeMethod = scanSpriteMemeInitMethodFromDex(context, inputContainerClass, logger)
-                ?: resolveNamedPbNewInputContextInitMethod(
-                    inputContainerClass,
-                    AI_PB_NEW_INPUT_INIT_SPRITE_MEME_METHOD,
-                    logger,
-                )
             val initAiWriteMethod = scanAiWriteInitMethodFromDex(context, inputContainerClass, logger)
-                ?: resolveNamedPbNewInputContextInitMethod(
-                    inputContainerClass,
-                    AI_PB_NEW_INPUT_INIT_AI_WRITE_METHOD,
-                    logger,
-                )
 
             if (!isAiPbNewInputContainerClassValidForScan(inputContainerClass, spriteMemePanClass, logger)) {
                 log(logger, "aiComponent: PbNewInputContainer structure mismatch")
@@ -794,26 +782,6 @@ internal object AiComponentSymbolScanner {
             logger,
             "aiComponent: SpriteMeme enable method " +
                 "candidates=${candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" }}",
-        )
-        return null
-    }
-
-    private fun resolveNamedPbNewInputContextInitMethod(
-        inputContainerClass: Class<*>,
-        methodName: String,
-        logger: ScanLogger?,
-    ): Method? {
-        val methods = declaredMethodsForScan("PbNewInputContainer.$methodName", inputContainerClass, logger)
-            ?: return null
-        val candidates = methods.filter { method ->
-            method.name == methodName && isPbNewInputContextInitMethod(method)
-        }
-        val method = candidates.singleOrNull()
-        if (method != null) return method
-        log(
-            logger,
-            "aiComponent: PbNewInputContainer.$methodName candidates=" +
-                candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
         )
         return null
     }
