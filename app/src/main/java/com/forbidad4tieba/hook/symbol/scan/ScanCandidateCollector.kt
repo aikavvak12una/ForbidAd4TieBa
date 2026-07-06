@@ -5,6 +5,7 @@ import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
 import com.forbidad4tieba.hook.symbol.model.ScanCandidateSet
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
+import dalvik.system.DexFile
 import org.luckypray.dexkit.query.FindClass
 import org.luckypray.dexkit.query.enums.StringMatchType
 import org.luckypray.dexkit.query.matchers.ClassMatcher
@@ -68,21 +69,24 @@ internal object ScanCandidateCollector {
         val expanded = ArrayList<String>(1024)
 
         fun collectClassName(name: String) {
-            if (!isTargetAppClassName(name)) return
-            val shortName = name.substringAfterLast('.')
-            if (isLikelyObfuscatedShortName(shortName)) {
-                obfuscated.add(name)
-            }
-            if (isExpandedScanClassName(name)) {
-                expanded.add(name)
+            when (classifyClassName(name)) {
+                ScanCandidateKind.OBFUSCATED -> obfuscated.add(name)
+                ScanCandidateKind.EXPANDED -> expanded.add(name)
+                ScanCandidateKind.BOTH -> {
+                    obfuscated.add(name)
+                    expanded.add(name)
+                }
+                null -> Unit
             }
         }
 
         val sourcePaths = appSourcePaths(context)
         val cachedBridge = HookSymbolScanSession.get()?.dexKitBridge(sourcePaths, logger)
         val bridge = cachedBridge ?: DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger)
+        var dexKitPackageFailures = 0
         if (bridge == null) {
             log(logger, "list classes by DexKit failed: apk source path unavailable or bridge open failed")
+            collectClassNamesFromDexFiles(sourcePaths, logger, ::collectClassName)
             return buildResult(obfuscated, expanded, logger)
         }
         fun collectWithBridge(scanBridge: com.forbidad4tieba.hook.symbol.dexkit.DexKitScanBridge) {
@@ -102,6 +106,7 @@ internal object ScanCandidateCollector {
                         collectClassName(classData.name)
                     }
                 } catch (t: Throwable) {
+                    dexKitPackageFailures += 1
                     HookSymbolScanDiagnostics.recordScanIssue(
                         logger = logger,
                         tag = "$TAG.$packagePrefix",
@@ -118,7 +123,54 @@ internal object ScanCandidateCollector {
         } else {
             bridge.use(::collectWithBridge)
         }
+        if (dexKitPackageFailures > 0 || obfuscated.isEmpty() || expanded.isEmpty()) {
+            log(
+                logger,
+                "list classes by DexKit incomplete; trying DexFile fallback: " +
+                    "failures=$dexKitPackageFailures obfuscated=${obfuscated.size} expanded=${expanded.size}",
+            )
+            collectClassNamesFromDexFiles(sourcePaths, logger, ::collectClassName)
+        }
         return buildResult(obfuscated, expanded, logger)
+    }
+
+    private fun collectClassNamesFromDexFiles(
+        sourcePaths: List<String>,
+        logger: ScanLogger?,
+        collectClassName: (String) -> Unit,
+    ) {
+        if (sourcePaths.isEmpty()) {
+            log(logger, "list classes by DexFile skipped: apk source path unavailable")
+            return
+        }
+        var entries = 0
+        for (path in sourcePaths) {
+            var dexFile: DexFile? = null
+            try {
+                dexFile = DexFile(path)
+                val classNames = dexFile.entries()
+                while (classNames.hasMoreElements()) {
+                    entries += 1
+                    collectClassName(classNames.nextElement())
+                }
+            } catch (t: Throwable) {
+                HookSymbolScanDiagnostics.recordScanIssue(
+                    logger = logger,
+                    tag = "$TAG.DexFile",
+                    errors = HookSymbolScanSession.get()?.scanErrors ?: mutableListOf(),
+                    detail = HookSymbolScanDiagnostics.sanitizeScanStatusText(
+                        HookSymbolScanDiagnostics.formatScanException(t),
+                    ),
+                )
+            } finally {
+                try {
+                    dexFile?.close()
+                } catch (_: Throwable) {
+                    // Nothing actionable during scan cleanup.
+                }
+            }
+        }
+        log(logger, "list classes by DexFile entries=$entries")
     }
 
     private fun appSourcePaths(context: Context): List<String> {
@@ -142,6 +194,20 @@ internal object ScanCandidateCollector {
         log(logger, "obfuscated root classes listed: ${result.obfuscated.size}")
         log(logger, "expanded scan classes listed: ${result.expanded.size}")
         return result
+    }
+
+    internal fun classifyClassName(name: String): ScanCandidateKind? {
+        if (!isTargetAppClassName(name)) return null
+        val shortName = name.substringAfterLast('.')
+        if (shortName == "R" || shortName.startsWith("R\$")) return null
+        val obfuscated = isLikelyObfuscatedShortName(shortName)
+        val expanded = isExpandedScanClassName(name)
+        return when {
+            obfuscated && expanded -> ScanCandidateKind.BOTH
+            obfuscated -> ScanCandidateKind.OBFUSCATED
+            expanded -> ScanCandidateKind.EXPANDED
+            else -> null
+        }
     }
 
     private fun isTargetAppClassName(name: String): Boolean {
@@ -168,5 +234,11 @@ internal object ScanCandidateCollector {
 
     private fun log(logger: ScanLogger?, line: String) {
         HookSymbolScanDiagnostics.log(logger, line)
+    }
+
+    internal enum class ScanCandidateKind {
+        OBFUSCATED,
+        EXPANDED,
+        BOTH,
     }
 }

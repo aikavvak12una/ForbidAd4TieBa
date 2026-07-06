@@ -185,12 +185,6 @@ internal object DexKitSemanticScanner {
                 score += 35
                 evidence += "frame"
             }
-            if (method.invokes.any { it.declaredClassName == "com.baidu.tieba.ms6" }) {
-                score += 35
-                evidence += "aiWriteFrameFactory"
-            }
-            if (method.methodName == "X") score += 42
-            if (method.methodName == "a0") score += 12
             score.takeIf { it >= 80 }?.let {
                 val hasFrameClick = "frame" in evidence && "click" in evidence
                 DexAiComponentInitMatch(
@@ -222,7 +216,6 @@ internal object DexKitSemanticScanner {
                 score += 60
                 evidence += "panField"
             }
-            if (method.methodName == "e0") score += 42
             score.takeIf { it >= 110 }?.let {
                 DexAiComponentInitMatch(method.methodName, it, evidence.joinToString(","))
             }
