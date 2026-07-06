@@ -90,6 +90,7 @@ object ConfigManager {
     const val KEY_HOME_TOP_TAB_DISABLED_KEYS = "home_top_tab_disabled_keys"
     const val KEY_HOME_TOP_TAB_CATALOG_JSON = "home_top_tab_catalog_json"
     const val KEY_AUTO_HIDE_HOME_TAB = "auto_hide_home_tab"
+    const val KEY_HIDE_HOME_TAB_RED_DOT = "hide_home_tab_red_dot"
     const val KEY_SIMPLIFY_BOTTOM_TABS = "simplify_bottom_tabs"
     const val KEY_CUSTOM_BOTTOM_TABS = KEY_SIMPLIFY_BOTTOM_TABS
     const val KEY_BOTTOM_TAB_HOME = "bottom_tab_home"
@@ -334,6 +335,7 @@ object ConfigManager {
     val isHomeTopTabLiveEnabled: Boolean get() = settingsSnapshot.isHomeTopTabLiveEnabled
     val isHomeTopTabFollowedEnabled: Boolean get() = settingsSnapshot.isHomeTopTabFollowedEnabled
     val isHomeTabAutoHideEnabled: Boolean get() = settingsSnapshot.isHomeTabAutoHideEnabled
+    val isHomeTabRedDotHidden: Boolean get() = settingsSnapshot.isHomeTabRedDotHidden
     val isBottomTabsCustomEnabled: Boolean get() = settingsSnapshot.isBottomTabsCustomEnabled
     val isBottomTabHomeEnabled: Boolean get() = settingsSnapshot.isBottomTabHomeEnabled
     val isBottomTabEnterForumEnabled: Boolean get() = settingsSnapshot.isBottomTabEnterForumEnabled
@@ -811,6 +813,7 @@ object ConfigManager {
             isHomeTopTabFollowedEnabled = homeTopTabSelection.followedEnabled,
             homeTopTabDisabledKeys = homeTopTabSelection.disabledKeys,
             isHomeTabAutoHideEnabled = featureBoolean(KEY_AUTO_HIDE_HOME_TAB),
+            isHomeTabRedDotHidden = featureBoolean(KEY_HIDE_HOME_TAB_RED_DOT),
             isBottomTabsCustomEnabled = bottomTabsCustomEnabled,
             isBottomTabHomeEnabled = bottomTabSelection.homeEnabled,
             isBottomTabEnterForumEnabled = bottomTabSelection.enterForumEnabled,

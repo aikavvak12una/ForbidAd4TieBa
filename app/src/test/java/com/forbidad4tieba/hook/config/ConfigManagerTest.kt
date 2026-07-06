@@ -57,11 +57,13 @@ class ConfigManagerTest {
     fun nonScanPreferencesAreAvailableWithoutScanState() {
         assertNull(ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION))
         assertNull(ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_FORCE_FEED_UI_OPT))
+        assertNull(ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT))
         assertEquals(
             ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
             ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION),
         )
         assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_FORCE_FEED_UI_OPT))
+        assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT))
     }
 
     @Test
@@ -279,6 +281,19 @@ class ConfigManagerTest {
             assertFalse(snapshot.isBottomTabMessageEnabled)
             assertTrue(snapshot.isBottomTabMineEnabled)
         }
+    }
+
+    @Test
+    fun homeTabRedDotBlockIsScanIndependentAndDefaultsOff() {
+        val defaultSnapshot = buildSnapshot(emptyMap())
+        val enabledSnapshot = buildSnapshot(
+            mapOf(
+                ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT to true,
+            ),
+        )
+
+        assertFalse(defaultSnapshot.isHomeTabRedDotHidden)
+        assertTrue(enabledSnapshot.isHomeTabRedDotHidden)
     }
 
     @Test

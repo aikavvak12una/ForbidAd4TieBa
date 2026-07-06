@@ -70,6 +70,7 @@ object StableTiebaHookPoints {
     const val AGREE_VIEW_CLASS = "com.baidu.tbadk.core.view.AgreeView"
     const val AGREE_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.AgreeData"
     const val PB_NEW_INPUT_CONTAINER_CLASS = "com.baidu.tbadk.editortools.pb.PbNewInputContainer"
+    const val MESSAGE_RED_DOT_VIEW_CLASS = "com.baidu.tbadk.core.view.MessageRedDotView"
     const val SUB_PB_REPLY_ADAPTER_CLASS =
         "com.baidu.tieba.pb.pb.sub.adapter.SubPbReplyAdapter"
     const val NEW_SUB_PB_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.sub.NewSubPbActivity"
@@ -95,6 +96,8 @@ object StableTiebaHookPoints {
         "com.baidu.tieba.homepage.framework.indicator.ScrollTabBarLayout"
     const val HOME_FIXED_APP_BAR_LAYOUT_CLASS =
         "com.baidu.tieba.homepage.framework.indicator.FixedAppBarLayout"
+    const val HOME_SLIDING_INDEX_TAB_VIEW_CLASS =
+        "com.baidu.tieba.homepage.framework.indicator.SlidingIndexTabView"
 
     // Host widgets plus AndroidX / support-library classes bundled by the host.
     const val TB_SEARCH_BOX_VIEW_CLASS = "com.baidu.tbadk.widget.TbSearchBoxView"
@@ -119,6 +122,8 @@ object StableTiebaHookPoints {
     const val IMAGE_VIEWER_ACTIVITY_CLASS = "com.baidu.tieba.image.ImageViewerActivity"
     const val MSG_CENTER_CONTAINER_VIEW_MODEL_CLASS =
         "com.baidu.tieba.immessagecenter.msgtab.ui.vm.MsgCenterContainerViewModel"
+    const val MSG_TAB_SIDE_NAVIGATION_ADAPTER_CLASS =
+        "com.baidu.tieba.immessagecenter.msgtab.ui.adapter.MsgTabSideNavigationAdapter"
     const val COLLECT_TAB_ACTIVITY_CLASS = "com.baidu.tieba.myCollection.CollectTabActivity"
     const val COLLECTION_THREAD_FRAGMENT_CLASS = "com.baidu.tieba.myCollection.ThreadFragment"
     const val PB_HISTORY_ACTIVITY_CLASS = "com.baidu.tieba.myCollection.history.PbHistoryActivity"
@@ -165,6 +170,7 @@ object StableTiebaHookPoints {
     const val METHOD_IS_HOME_PRE_LOAD_MORE_OPT = "isHomePreLoadMoreOpt"
     const val METHOD_SET_GUIDE_VISIBILITY = "setGuideVisibility"
     const val METHOD_SET_GUIDE_TOUCHING = "setGuideTouching"
+    const val METHOD_SET_RED_DOT_VISIBLE = "setRedDotVisible"
     const val METHOD_FIND_TYPE = "findType"
     const val METHOD_SEND_MESSAGE = "sendMessage"
     const val METHOD_GET_DATA = "getData"
