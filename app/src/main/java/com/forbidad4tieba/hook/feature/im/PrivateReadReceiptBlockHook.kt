@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 object PrivateReadReceiptBlockHook {
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val installed = AtomicBoolean(false)
-    private val allowedReadMsgIdByPeer = ConcurrentHashMap<Long, Long>()
+    private val syncDispatchDepth = ThreadLocal.withInitial { 0 }
     private val submittedReadWireMsgIdByPeer = ConcurrentHashMap<Long, Long>()
 
     private data class ReadBoundary(
@@ -42,8 +42,7 @@ object PrivateReadReceiptBlockHook {
                 val response = chain.args.firstOrNull() ?: return@intercept result
                 val error = readIntMethod(targets.responseErrorMethod, response) ?: return@intercept result
                 if (error == 0) {
-                    val boundary = updateAllowedBoundaryAfterSend(targets, model)
-                    sendBoundaryReadReceipt(targets, boundary)
+                    syncReadStateAfterSendAck(targets, model)
                 }
                 result
             }
@@ -68,50 +67,25 @@ object PrivateReadReceiptBlockHook {
                     return@intercept true
                 }
 
-                val allowedMsgId = allowedReadMsgIdByPeer[peerUid] ?: 0L
-                val allowedWireMsgId = allowedMsgId / 100L
-                if (allowedWireMsgId <= 0L) {
+                if ((syncDispatchDepth.get() ?: 0) > 0) {
                     XposedCompat.logD(
-                        "[PrivateReadReceiptBlockHook] block read receipt: no boundary " +
+                        "[PrivateReadReceiptBlockHook] allow sync read receipt after send: " +
                             "peer=$peerUid requested=$requestedWireMsgId",
                     )
-                    showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
-                    return@intercept true
-                }
-                var intercepted = false
-                val finalWireMsgId = if (requestedWireMsgId > allowedWireMsgId) {
-                    val updated = runCatching {
-                        targets.requestMsgIdField.setLong(message, allowedWireMsgId)
-                    }.isSuccess
-                    if (!updated) {
-                        XposedCompat.log(
-                            "[PrivateReadReceiptBlockHook] block read receipt: downgrade failed " +
-                                "peer=$peerUid requested=$requestedWireMsgId allowed=$allowedWireMsgId",
-                        )
-                        showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
-                        return@intercept true
+                    val sent = chain.proceed()
+                    if (sent == true) {
+                        submittedReadWireMsgIdByPeer.merge(peerUid, requestedWireMsgId, ::maxOf)
+                        showToast(UiText.PrivateReadReceipt.TOAST_STATE_SYNCED)
                     }
-                    intercepted = true
-                    XposedCompat.logD(
-                        "[PrivateReadReceiptBlockHook] downgrade read receipt: " +
-                            "peer=$peerUid requested=$requestedWireMsgId allowed=$allowedWireMsgId",
-                    )
-                    allowedWireMsgId
-                } else {
-                    XposedCompat.logD(
-                        "[PrivateReadReceiptBlockHook] allow read receipt: " +
-                            "peer=$peerUid requested=$requestedWireMsgId boundary=$allowedWireMsgId",
-                    )
-                    requestedWireMsgId
+                    return@intercept sent
                 }
-                val result = chain.proceed()
-                if (result == true) {
-                    submittedReadWireMsgIdByPeer.merge(peerUid, finalWireMsgId, ::maxOf)
-                    if (intercepted) {
-                        showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
-                    }
-                }
-                result
+
+                XposedCompat.logD(
+                    "[PrivateReadReceiptBlockHook] block read receipt: " +
+                        "peer=$peerUid requested=$requestedWireMsgId",
+                )
+                showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
+                true
             }
 
             XposedCompat.log(
@@ -126,36 +100,39 @@ object PrivateReadReceiptBlockHook {
         }
     }
 
-    private fun updateAllowedBoundaryAfterSend(targets: PrivateReadReceiptSymbols, model: Any?): ReadBoundary? {
-        if (model == null) return null
+    private fun syncReadStateAfterSendAck(targets: PrivateReadReceiptSymbols, model: Any?) {
+        if (model == null) return
+        val boundary = readLatestPeerBoundary(targets, model)
+        val previousDepth = syncDispatchDepth.get() ?: 0
+        syncDispatchDepth.set(previousDepth + 1)
+        try {
+            runCatching {
+                targets.modelReadDispatchMethod.invoke(model)
+            }.onFailure { t ->
+                XposedCompat.log("[PrivateReadReceiptBlockHook] sync read state failed: ${t.message}")
+            }
+            sendBoundaryReadReceipt(targets, boundary)
+        } finally {
+            syncDispatchDepth.set(previousDepth)
+        }
+    }
+
+    private fun readLatestPeerBoundary(targets: PrivateReadReceiptSymbols, model: Any): ReadBoundary? {
         return runCatching {
             val currentAccount = targets.currentAccountMethod.invoke(null) as? String
             val currentUid = currentAccount?.toLongOrNull()?.takeIf { it > 0L } ?: return@runCatching null
             val pageData = targets.modelDataField.get(model) ?: return@runCatching null
             val messages = targets.pageDataChatListMethod.invoke(pageData) as? List<*> ?: return@runCatching null
-            if (messages.isEmpty()) return@runCatching null
-
-            var peerUid = 0L
-            var boundaryMsgId = 0L
             for (index in messages.size - 1 downTo 0) {
                 val message = messages[index] ?: continue
                 val userId = readLongMethod(targets.chatMessageUserIdMethod, message) ?: continue
-                if (userId > 0L && userId != currentUid) {
-                    peerUid = userId
-                    boundaryMsgId = readLongMethod(targets.chatMessageMsgIdMethod, message) ?: 0L
-                    break
-                }
+                if (userId <= 0L || userId == currentUid) continue
+                val msgId = readLongMethod(targets.chatMessageMsgIdMethod, message) ?: continue
+                if (msgId > 0L) return@runCatching ReadBoundary(userId, msgId)
             }
-            if (peerUid > 0L) {
-                allowedReadMsgIdByPeer[peerUid] = boundaryMsgId.coerceAtLeast(0L)
-                XposedCompat.logD(
-                    "[PrivateReadReceiptBlockHook] boundary updated: peer=$peerUid " +
-                        "boundary=${boundaryMsgId.coerceAtLeast(0L)} reason=send_success size=${messages.size}",
-                )
-                ReadBoundary(peerUid, boundaryMsgId.coerceAtLeast(0L)).takeIf { it.msgId > 0L }
-            } else {
-                null
-            }
+            null
+        }.onFailure { t ->
+            XposedCompat.log("[PrivateReadReceiptBlockHook] read boundary failed: ${t.message}")
         }.getOrNull()
     }
 
@@ -166,34 +143,26 @@ object PrivateReadReceiptBlockHook {
         val submitted = submittedReadWireMsgIdByPeer[boundary.peerUid] ?: 0L
         if (submitted >= wireMsgId) {
             XposedCompat.logD(
-                "[PrivateReadReceiptBlockHook] skip direct read receipt: " +
+                "[PrivateReadReceiptBlockHook] skip sync read receipt: " +
                     "peer=${boundary.peerUid} wire=$wireMsgId submitted=$submitted",
             )
             return
         }
         runCatching {
-            val manager = targets.messageManagerGetInstanceMethod.invoke(null)
+            val manager = targets.messageManagerGetInstanceMethod.invoke(null) ?: return
             val request = targets.requestConstructor.newInstance(wireMsgId, boundary.peerUid)
-            XposedCompat.logD(
-                "[PrivateReadReceiptBlockHook] direct read receipt after send ack: " +
-                    "peer=${boundary.peerUid} wire=$wireMsgId",
-            )
-            val sent = targets.messageManagerSendMethod.invoke(manager, request) as? Boolean ?: false
-            if (sent) {
-                submittedReadWireMsgIdByPeer.merge(boundary.peerUid, wireMsgId, ::maxOf)
-                showToast(UiText.PrivateReadReceipt.TOAST_STATE_SYNCED)
-            }
+            targets.messageManagerSendMethod.invoke(manager, request)
         }.onFailure { t ->
-            XposedCompat.log("[PrivateReadReceiptBlockHook] direct read receipt failed: ${t.message}")
+            XposedCompat.log("[PrivateReadReceiptBlockHook] direct sync read receipt failed: ${t.message}")
         }
-    }
-
-    private fun readLongMethod(method: Method, receiver: Any): Long? {
-        return (method.invoke(receiver) as? Number)?.toLong()
     }
 
     private fun readIntMethod(method: Method, receiver: Any): Int? {
         return (method.invoke(receiver) as? Number)?.toInt()
+    }
+
+    private fun readLongMethod(method: Method, receiver: Any): Long? {
+        return (method.invoke(receiver) as? Number)?.toLong()
     }
 
     private fun readLongField(field: java.lang.reflect.Field, receiver: Any): Long? {

@@ -219,7 +219,6 @@ object UiText {
             DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL,
             DEFAULT_NOTIFY_TAB_LABEL,
             CLEAN_SHARE_TRACKING_LABEL,
-            PRIVACY_IDENTIFIER_BLOCK_LABEL,
             CRASH_REPORT_BLOCK_LABEL,
         ).joinToString("\n")
         const val AUTO_SIGN_IN_LABEL = "自动签到"
