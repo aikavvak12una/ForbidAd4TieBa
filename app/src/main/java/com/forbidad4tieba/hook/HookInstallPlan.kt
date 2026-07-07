@@ -26,7 +26,6 @@ import com.forbidad4tieba.hook.feature.perf.PbPerformanceModeHook
 import com.forbidad4tieba.hook.feature.perf.TrackingBlockHook
 import com.forbidad4tieba.hook.feature.perf.VideoPreloadBlockHook
 import com.forbidad4tieba.hook.feature.privacy.CrashReportBlockHook
-import com.forbidad4tieba.hook.feature.privacy.PrivacyIdentifierBlockHook
 import com.forbidad4tieba.hook.feature.share.ImageViewerNativeShareHook
 import com.forbidad4tieba.hook.feature.share.ShareTrackingParamCleanerHook
 import com.forbidad4tieba.hook.feature.ui.AutoLoadMoreHook
@@ -140,7 +139,6 @@ internal object HookInstallPlanner {
         val entries = ArrayList<HookInstallEntry>()
         val context = HookInstallContext(processName, symbols)
 
-        entries += HookInstallEntry("PrivacyIdentifierBlockHook") { cl -> PrivacyIdentifierBlockHook.hook(cl) }
         entries += HookInstallEntry("CrashReportBlockHook") { cl -> CrashReportBlockHook.hook(cl) }
 
         if (context.canInstallFreeCopy()) {
