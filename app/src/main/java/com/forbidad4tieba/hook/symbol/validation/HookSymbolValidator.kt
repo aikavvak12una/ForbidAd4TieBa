@@ -145,7 +145,11 @@ internal object HookSymbolValidator {
             symbols.privateReadReceiptModelReadDispatchMethod != null ||
             symbols.privateReadReceiptMessageManagerClass != null ||
             symbols.privateReadReceiptMessageManagerGetInstanceMethod != null ||
+            symbols.privateReadReceiptMessageManagerGetSocketClientMethod != null ||
             symbols.privateReadReceiptMessageSendMethod != null ||
+            symbols.privateReadReceiptMessageBaseClass != null ||
+            symbols.privateReadReceiptSocketClientClass != null ||
+            symbols.privateReadReceiptSocketDuplicateCheckMethod != null ||
             symbols.privateReadReceiptRequestClass != null ||
             symbols.privateReadReceiptModelBaseClass != null ||
             symbols.privateReadReceiptCommitResponseClass != null ||
@@ -1092,8 +1096,12 @@ private fun isPrivateReadReceiptValid(symbols: HookSymbols, cl: ClassLoader): Bo
     val modelReadMethodName = symbols.privateReadReceiptModelReadDispatchMethod ?: return false
     val messageManagerClassName = symbols.privateReadReceiptMessageManagerClass ?: return false
     val messageManagerGetInstanceMethodName = symbols.privateReadReceiptMessageManagerGetInstanceMethod ?: return false
+    val messageManagerGetSocketClientMethodName =
+        symbols.privateReadReceiptMessageManagerGetSocketClientMethod ?: return false
     val messageSendMethodName = symbols.privateReadReceiptMessageSendMethod ?: return false
     val messageBaseClassName = symbols.privateReadReceiptMessageBaseClass ?: return false
+    val socketClientClassName = symbols.privateReadReceiptSocketClientClass ?: return false
+    val socketDuplicateCheckMethodName = symbols.privateReadReceiptSocketDuplicateCheckMethod ?: return false
     val requestClassName = symbols.privateReadReceiptRequestClass ?: return false
     val modelBaseClassName = symbols.privateReadReceiptModelBaseClass ?: return false
     val commitResponseClassName = symbols.privateReadReceiptCommitResponseClass ?: return false
@@ -1116,6 +1124,7 @@ private fun isPrivateReadReceiptValid(symbols: HookSymbols, cl: ClassLoader): Bo
         val modelClass = safeFindClass(modelClassName, cl) ?: return false
         val messageManagerClass = safeFindClass(messageManagerClassName, cl) ?: return false
         val messageBaseClass = safeFindClass(messageBaseClassName, cl) ?: return false
+        val socketClientClass = safeFindClass(socketClientClassName, cl) ?: return false
         val requestClass = safeFindClass(requestClassName, cl) ?: return false
         requestClass.declaredConstructors.singleOrNull { ctor ->
             ctor.parameterTypes.size == 2 &&
@@ -1147,6 +1156,19 @@ private fun isPrivateReadReceiptValid(symbols: HookSymbols, cl: ClassLoader): Bo
                 Modifier.isStatic(method.modifiers) &&
                 method.parameterTypes.isEmpty() &&
                 method.returnType == messageManagerClass
+        } ?: return false
+        messageManagerClass.declaredMethods.singleOrNull { method ->
+            method.name == messageManagerGetSocketClientMethodName &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == socketClientClass
+        } ?: return false
+        socketClientClass.declaredMethods.singleOrNull { method ->
+            method.name == socketDuplicateCheckMethodName &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Boolean::class.javaPrimitiveType &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0].isAssignableFrom(requestClass)
         } ?: return false
         modelBaseClass.declaredMethods.singleOrNull { method ->
             method.name == processAckMethodName &&

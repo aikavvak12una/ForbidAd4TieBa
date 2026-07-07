@@ -24,8 +24,11 @@ data class PrivateReadReceiptModelSymbolsGroup(
 data class PrivateReadReceiptMessageSymbolsGroup(
     val privateReadReceiptMessageManagerClass: String? = null,
     val privateReadReceiptMessageManagerGetInstanceMethod: String? = null,
+    val privateReadReceiptMessageManagerGetSocketClientMethod: String? = null,
     val privateReadReceiptMessageSendMethod: String? = null,
     val privateReadReceiptMessageBaseClass: String? = null,
+    val privateReadReceiptSocketClientClass: String? = null,
+    val privateReadReceiptSocketDuplicateCheckMethod: String? = null,
 )
 
 data class PrivateReadReceiptRequestSymbolsGroup(

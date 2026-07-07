@@ -14,6 +14,7 @@ internal object PrivateReadReceiptSymbolScanner {
     private val MODEL_READ_DISPATCH_CANDIDATES = arrayOf("h1", "K2")
     private const val MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
     private const val MESSAGE_MANAGER_GET_INSTANCE_METHOD = "getInstance"
+    private const val MESSAGE_MANAGER_GET_SOCKET_CLIENT_METHOD = "getSocketClient"
     private const val MESSAGE_BASE_CLASS = "com.baidu.adp.framework.message.Message"
     private const val MESSAGE_SEND_METHOD = "sendMessage"
     private const val REQUEST_CLASS =
@@ -198,6 +199,27 @@ internal object PrivateReadReceiptSymbolScanner {
             log(logger, "privateReadReceipt: MessageManager.getInstance() not found")
             return PrivateReadReceiptScanSymbols()
         }
+        val messageManagerGetSocketClientMethod = messageManagerMethods.singleOrNull { method ->
+            method.name == MESSAGE_MANAGER_GET_SOCKET_CLIENT_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType != Void.TYPE
+        } ?: run {
+            log(logger, "privateReadReceipt: MessageManager.getSocketClient() not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val socketClientClass = messageManagerGetSocketClientMethod.returnType
+        val socketClientMethods = declaredMethods("SocketClient", socketClientClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val socketDuplicateCheckMethod = socketClientMethods.singleOrNull { method ->
+            !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Boolean::class.javaPrimitiveType &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0].isAssignableFrom(requestClass)
+        } ?: run {
+            log(logger, "privateReadReceipt: socket duplicate check method not found")
+            return PrivateReadReceiptScanSymbols()
+        }
         val processAckMethod = modelBaseMethods.singleOrNull { method ->
             method.name == PROCESS_ACK_METHOD &&
                 !Modifier.isStatic(method.modifiers) &&
@@ -303,8 +325,11 @@ internal object PrivateReadReceiptSymbolScanner {
             modelReadDispatchMethod = modelReadDispatchMethod.name,
             messageManagerClass = messageManagerClass.name,
             messageManagerGetInstanceMethod = messageManagerGetInstanceMethod.name,
+            messageManagerGetSocketClientMethod = messageManagerGetSocketClientMethod.name,
             messageSendMethod = messageSendMethod.name,
             messageBaseClass = messageBaseClass.name,
+            socketClientClass = socketClientClass.name,
+            socketDuplicateCheckMethod = socketDuplicateCheckMethod.name,
             requestClass = requestClass.name,
             modelBaseClass = modelBaseClass.name,
             commitResponseClass = commitResponseClass.name,

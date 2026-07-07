@@ -106,11 +106,12 @@ object PrivateReadReceiptBlockHook {
         val previousDepth = syncDispatchDepth.get() ?: 0
         syncDispatchDepth.set(previousDepth + 1)
         try {
-            runCatching {
+            val hostSynced = runCatching {
                 targets.modelReadDispatchMethod.invoke(model)
             }.onFailure { t ->
                 XposedCompat.log("[PrivateReadReceiptBlockHook] sync read state failed: ${t.message}")
-            }
+            }.isSuccess
+            if (!hostSynced) return
             sendBoundaryReadReceipt(targets, boundary)
         } finally {
             syncDispatchDepth.set(previousDepth)
@@ -151,10 +152,40 @@ object PrivateReadReceiptBlockHook {
         runCatching {
             val manager = targets.messageManagerGetInstanceMethod.invoke(null) ?: return
             val request = targets.requestConstructor.newInstance(wireMsgId, boundary.peerUid)
+            when (isDuplicateReadReceipt(targets, manager, request)) {
+                true -> {
+                    XposedCompat.logD(
+                        "[PrivateReadReceiptBlockHook] skip sync read receipt: " +
+                            "peer=${boundary.peerUid} wire=$wireMsgId duplicate=true",
+                    )
+                    return@runCatching
+                }
+                false -> Unit
+                null -> {
+                    XposedCompat.log(
+                        "[PrivateReadReceiptBlockHook] skip sync read receipt: duplicate check unavailable",
+                    )
+                    return@runCatching
+                }
+            }
             targets.messageManagerSendMethod.invoke(manager, request)
         }.onFailure { t ->
             XposedCompat.log("[PrivateReadReceiptBlockHook] direct sync read receipt failed: ${t.message}")
         }
+    }
+
+    private fun isDuplicateReadReceipt(
+        targets: PrivateReadReceiptSymbols,
+        manager: Any,
+        request: Any,
+    ): Boolean? {
+        return runCatching {
+            val socketClient = targets.messageManagerGetSocketClientMethod.invoke(manager)
+                ?: return@runCatching null
+            targets.socketDuplicateCheckMethod.invoke(socketClient, request) as? Boolean
+        }.onFailure { t ->
+            XposedCompat.log("[PrivateReadReceiptBlockHook] duplicate check failed: ${t.message}")
+        }.getOrNull()
     }
 
     private fun readIntMethod(method: Method, receiver: Any): Int? {

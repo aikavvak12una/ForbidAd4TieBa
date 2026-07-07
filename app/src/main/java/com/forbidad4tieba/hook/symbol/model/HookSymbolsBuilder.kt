@@ -76,8 +76,11 @@ internal class HookSymbolsBuilder {
     var privateReadReceiptModelReadDispatchMethod: String? = null
     var privateReadReceiptMessageManagerClass: String? = null
     var privateReadReceiptMessageManagerGetInstanceMethod: String? = null
+    var privateReadReceiptMessageManagerGetSocketClientMethod: String? = null
     var privateReadReceiptMessageSendMethod: String? = null
     var privateReadReceiptMessageBaseClass: String? = null
+    var privateReadReceiptSocketClientClass: String? = null
+    var privateReadReceiptSocketDuplicateCheckMethod: String? = null
     var privateReadReceiptRequestClass: String? = null
     var privateReadReceiptModelBaseClass: String? = null
     var privateReadReceiptCommitResponseClass: String? = null
@@ -725,8 +728,11 @@ internal class HookSymbolsBuilder {
                 message = PrivateReadReceiptMessageSymbolsGroup(
                     privateReadReceiptMessageManagerClass,
                     privateReadReceiptMessageManagerGetInstanceMethod,
+                    privateReadReceiptMessageManagerGetSocketClientMethod,
                     privateReadReceiptMessageSendMethod,
                     privateReadReceiptMessageBaseClass,
+                    privateReadReceiptSocketClientClass,
+                    privateReadReceiptSocketDuplicateCheckMethod,
                 ),
                 request = PrivateReadReceiptRequestSymbolsGroup(
                     privateReadReceiptRequestClass,

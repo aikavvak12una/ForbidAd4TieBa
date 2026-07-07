@@ -824,14 +824,18 @@ internal object HookSymbolStatusFormatter {
             "${symbols.privateReadReceiptModelClass}.${symbols.privateReadReceiptModelReadDispatchMethod} / " +
                 "${symbols.privateReadReceiptMessageManagerClass}.${symbols.privateReadReceiptMessageSendMethod}" +
                 "(${symbols.privateReadReceiptMessageBaseClass}) -> " +
+                "${symbols.privateReadReceiptSocketClientClass}.${symbols.privateReadReceiptSocketDuplicateCheckMethod} / " +
                 "${symbols.privateReadReceiptRequestClass}[${symbols.privateReadReceiptRequestMsgIdField},${symbols.privateReadReceiptRequestToUidField}]",
             listOf(
                 "privateReadReceiptModelClass" to has(symbols.privateReadReceiptModelClass),
                 "privateReadReceiptModelReadDispatchMethod" to has(symbols.privateReadReceiptModelReadDispatchMethod),
                 "privateReadReceiptMessageManagerClass" to has(symbols.privateReadReceiptMessageManagerClass),
                 "privateReadReceiptMessageManagerGetInstanceMethod" to has(symbols.privateReadReceiptMessageManagerGetInstanceMethod),
+                "privateReadReceiptMessageManagerGetSocketClientMethod" to has(symbols.privateReadReceiptMessageManagerGetSocketClientMethod),
                 "privateReadReceiptMessageSendMethod" to has(symbols.privateReadReceiptMessageSendMethod),
                 "privateReadReceiptMessageBaseClass" to has(symbols.privateReadReceiptMessageBaseClass),
+                "privateReadReceiptSocketClientClass" to has(symbols.privateReadReceiptSocketClientClass),
+                "privateReadReceiptSocketDuplicateCheckMethod" to has(symbols.privateReadReceiptSocketDuplicateCheckMethod),
                 "privateReadReceiptRequestClass" to has(symbols.privateReadReceiptRequestClass),
                 "privateReadReceiptModelBaseClass" to has(symbols.privateReadReceiptModelBaseClass),
                 "privateReadReceiptCommitResponseClass" to has(symbols.privateReadReceiptCommitResponseClass),
