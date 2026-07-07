@@ -178,10 +178,16 @@ data class HookSymbols(
         get() = hookPoints.privateMessage.readReceipt.message.privateReadReceiptMessageManagerClass
     val privateReadReceiptMessageManagerGetInstanceMethod: String?
         get() = hookPoints.privateMessage.readReceipt.message.privateReadReceiptMessageManagerGetInstanceMethod
+    val privateReadReceiptMessageManagerGetSocketClientMethod: String?
+        get() = hookPoints.privateMessage.readReceipt.message.privateReadReceiptMessageManagerGetSocketClientMethod
     val privateReadReceiptMessageSendMethod: String?
         get() = hookPoints.privateMessage.readReceipt.message.privateReadReceiptMessageSendMethod
     val privateReadReceiptMessageBaseClass: String?
         get() = hookPoints.privateMessage.readReceipt.message.privateReadReceiptMessageBaseClass
+    val privateReadReceiptSocketClientClass: String?
+        get() = hookPoints.privateMessage.readReceipt.message.privateReadReceiptSocketClientClass
+    val privateReadReceiptSocketDuplicateCheckMethod: String?
+        get() = hookPoints.privateMessage.readReceipt.message.privateReadReceiptSocketDuplicateCheckMethod
     val privateReadReceiptRequestClass: String?
         get() = hookPoints.privateMessage.readReceipt.request.privateReadReceiptRequestClass
     val privateReadReceiptModelBaseClass: String?
@@ -875,8 +881,11 @@ data class HookSymbols(
             put("privateReadReceiptModelReadDispatchMethod", privateReadReceiptModelReadDispatchMethod)
             put("privateReadReceiptMessageManagerClass", privateReadReceiptMessageManagerClass)
             put("privateReadReceiptMessageManagerGetInstanceMethod", privateReadReceiptMessageManagerGetInstanceMethod)
+            put("privateReadReceiptMessageManagerGetSocketClientMethod", privateReadReceiptMessageManagerGetSocketClientMethod)
             put("privateReadReceiptMessageSendMethod", privateReadReceiptMessageSendMethod)
             put("privateReadReceiptMessageBaseClass", privateReadReceiptMessageBaseClass)
+            put("privateReadReceiptSocketClientClass", privateReadReceiptSocketClientClass)
+            put("privateReadReceiptSocketDuplicateCheckMethod", privateReadReceiptSocketDuplicateCheckMethod)
             put("privateReadReceiptRequestClass", privateReadReceiptRequestClass)
             put("privateReadReceiptModelBaseClass", privateReadReceiptModelBaseClass)
             put("privateReadReceiptCommitResponseClass", privateReadReceiptCommitResponseClass)
@@ -1256,7 +1265,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 21
+        const val CACHE_SCHEMA_VERSION = 22
         const val DEXKIT_RULE_VERSION = 15
 
         fun unsupported(
@@ -1399,8 +1408,11 @@ data class HookSymbols(
                     privateReadReceiptModelReadDispatchMethod = obj.optStringOrNull("privateReadReceiptModelReadDispatchMethod")
                     privateReadReceiptMessageManagerClass = obj.optStringOrNull("privateReadReceiptMessageManagerClass")
                     privateReadReceiptMessageManagerGetInstanceMethod = obj.optStringOrNull("privateReadReceiptMessageManagerGetInstanceMethod")
+                    privateReadReceiptMessageManagerGetSocketClientMethod = obj.optStringOrNull("privateReadReceiptMessageManagerGetSocketClientMethod")
                     privateReadReceiptMessageSendMethod = obj.optStringOrNull("privateReadReceiptMessageSendMethod")
                     privateReadReceiptMessageBaseClass = obj.optStringOrNull("privateReadReceiptMessageBaseClass")
+                    privateReadReceiptSocketClientClass = obj.optStringOrNull("privateReadReceiptSocketClientClass")
+                    privateReadReceiptSocketDuplicateCheckMethod = obj.optStringOrNull("privateReadReceiptSocketDuplicateCheckMethod")
                     privateReadReceiptRequestClass = obj.optStringOrNull("privateReadReceiptRequestClass")
                     privateReadReceiptModelBaseClass = obj.optStringOrNull("privateReadReceiptModelBaseClass")
                     privateReadReceiptCommitResponseClass = obj.optStringOrNull("privateReadReceiptCommitResponseClass")

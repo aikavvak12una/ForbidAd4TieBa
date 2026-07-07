@@ -160,7 +160,7 @@ internal object HookFeatureStatusDeriver {
             else -> HookFeatureStatus(state = HookFeatureState.PARTIAL, missingOptional = autoSignInOptional)
         }
 
-        val privateReadReceiptCritical = ArrayList<String>(19)
+        val privateReadReceiptCritical = ArrayList<String>(27)
         if (symbols.privateReadReceiptModelClass.isNullOrBlank()) {
             privateReadReceiptCritical.add("privateReadReceiptModelClass")
         }
@@ -173,11 +173,20 @@ internal object HookFeatureStatusDeriver {
         if (symbols.privateReadReceiptMessageManagerGetInstanceMethod.isNullOrBlank()) {
             privateReadReceiptCritical.add("privateReadReceiptMessageManagerGetInstanceMethod")
         }
+        if (symbols.privateReadReceiptMessageManagerGetSocketClientMethod.isNullOrBlank()) {
+            privateReadReceiptCritical.add("privateReadReceiptMessageManagerGetSocketClientMethod")
+        }
         if (symbols.privateReadReceiptMessageSendMethod.isNullOrBlank()) {
             privateReadReceiptCritical.add("privateReadReceiptMessageSendMethod")
         }
         if (symbols.privateReadReceiptMessageBaseClass.isNullOrBlank()) {
             privateReadReceiptCritical.add("privateReadReceiptMessageBaseClass")
+        }
+        if (symbols.privateReadReceiptSocketClientClass.isNullOrBlank()) {
+            privateReadReceiptCritical.add("privateReadReceiptSocketClientClass")
+        }
+        if (symbols.privateReadReceiptSocketDuplicateCheckMethod.isNullOrBlank()) {
+            privateReadReceiptCritical.add("privateReadReceiptSocketDuplicateCheckMethod")
         }
         if (symbols.privateReadReceiptRequestClass.isNullOrBlank()) {
             privateReadReceiptCritical.add("privateReadReceiptRequestClass")

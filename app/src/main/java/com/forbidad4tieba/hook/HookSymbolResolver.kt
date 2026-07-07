@@ -639,6 +639,10 @@ internal object HookSymbolResolver {
                 "privateReadReceiptMessageManagerGetInstanceMethod",
                 resolvedSymbols.privateReadReceiptMessageManagerGetInstanceMethod,
             ) ?: return null
+            val messageManagerGetSocketClientMethodName = required(
+                "privateReadReceiptMessageManagerGetSocketClientMethod",
+                resolvedSymbols.privateReadReceiptMessageManagerGetSocketClientMethod,
+            ) ?: return null
             val messageSendMethodName = required(
                 "privateReadReceiptMessageSendMethod",
                 resolvedSymbols.privateReadReceiptMessageSendMethod,
@@ -646,6 +650,14 @@ internal object HookSymbolResolver {
             val messageBaseClassName = required(
                 "privateReadReceiptMessageBaseClass",
                 resolvedSymbols.privateReadReceiptMessageBaseClass,
+            ) ?: return null
+            val socketClientClassName = required(
+                "privateReadReceiptSocketClientClass",
+                resolvedSymbols.privateReadReceiptSocketClientClass,
+            ) ?: return null
+            val socketDuplicateCheckMethodName = required(
+                "privateReadReceiptSocketDuplicateCheckMethod",
+                resolvedSymbols.privateReadReceiptSocketDuplicateCheckMethod,
             ) ?: return null
             val requestClassName = required("privateReadReceiptRequestClass", resolvedSymbols.privateReadReceiptRequestClass)
                 ?: return null
@@ -721,6 +733,7 @@ internal object HookSymbolResolver {
             val modelClass = safeFindClass(modelClassName, cl) ?: return null
             val messageManagerClass = safeFindClass(messageManagerClassName, cl) ?: return null
             val messageBaseClass = safeFindClass(messageBaseClassName, cl) ?: return null
+            val socketClientClass = safeFindClass(socketClientClassName, cl) ?: return null
             val requestClass = safeFindClass(requestClassName, cl) ?: return null
             val modelBaseClass = safeFindClass(modelBaseClassName, cl) ?: return null
             val commitResponseClass = safeFindClass(commitResponseClassName, cl) ?: return null
@@ -748,6 +761,19 @@ internal object HookSymbolResolver {
                     Modifier.isStatic(method.modifiers) &&
                     method.parameterTypes.isEmpty() &&
                     method.returnType == messageManagerClass
+            } ?: return null
+            val messageManagerGetSocketClientMethod = messageManagerClass.declaredMethods.singleOrNull { method ->
+                method.name == messageManagerGetSocketClientMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.isEmpty() &&
+                    method.returnType == socketClientClass
+            } ?: return null
+            val socketDuplicateCheckMethod = socketClientClass.declaredMethods.singleOrNull { method ->
+                method.name == socketDuplicateCheckMethodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Boolean::class.javaPrimitiveType &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0].isAssignableFrom(requestClass)
             } ?: return null
             val requestConstructor = requestClass.declaredConstructors.singleOrNull { ctor ->
                 ctor.parameterTypes.size == 2 &&
@@ -818,7 +844,9 @@ internal object HookSymbolResolver {
                 processAckMethod,
                 responseErrorMethod,
                 messageManagerGetInstanceMethod,
+                messageManagerGetSocketClientMethod,
                 messageManagerSendMethod,
+                socketDuplicateCheckMethod,
                 pageDataChatListMethod,
                 chatMessageMsgIdMethod,
                 chatMessageUserIdMethod,
@@ -835,7 +863,9 @@ internal object HookSymbolResolver {
                 processAckMethod = processAckMethod,
                 responseErrorMethod = responseErrorMethod,
                 messageManagerGetInstanceMethod = messageManagerGetInstanceMethod,
+                messageManagerGetSocketClientMethod = messageManagerGetSocketClientMethod,
                 messageManagerSendMethod = messageManagerSendMethod,
+                socketDuplicateCheckMethod = socketDuplicateCheckMethod,
                 requestConstructor = requestConstructor,
                 requestMessageClass = requestClass,
                 requestMsgIdField = requestMsgIdField,
@@ -4882,8 +4912,11 @@ internal object HookSymbolResolver {
         var privateReadReceiptModelReadDispatchMethod: String? = null
         var privateReadReceiptMessageManagerClass: String? = null
         var privateReadReceiptMessageManagerGetInstanceMethod: String? = null
+        var privateReadReceiptMessageManagerGetSocketClientMethod: String? = null
         var privateReadReceiptMessageSendMethod: String? = null
         var privateReadReceiptMessageBaseClass: String? = null
+        var privateReadReceiptSocketClientClass: String? = null
+        var privateReadReceiptSocketDuplicateCheckMethod: String? = null
         var privateReadReceiptRequestClass: String? = null
         var privateReadReceiptModelBaseClass: String? = null
         var privateReadReceiptCommitResponseClass: String? = null
@@ -5370,8 +5403,12 @@ internal object HookSymbolResolver {
         privateReadReceiptModelReadDispatchMethod = privateReadReceiptScan.modelReadDispatchMethod
         privateReadReceiptMessageManagerClass = privateReadReceiptScan.messageManagerClass
         privateReadReceiptMessageManagerGetInstanceMethod = privateReadReceiptScan.messageManagerGetInstanceMethod
+        privateReadReceiptMessageManagerGetSocketClientMethod =
+            privateReadReceiptScan.messageManagerGetSocketClientMethod
         privateReadReceiptMessageSendMethod = privateReadReceiptScan.messageSendMethod
         privateReadReceiptMessageBaseClass = privateReadReceiptScan.messageBaseClass
+        privateReadReceiptSocketClientClass = privateReadReceiptScan.socketClientClass
+        privateReadReceiptSocketDuplicateCheckMethod = privateReadReceiptScan.socketDuplicateCheckMethod
         privateReadReceiptRequestClass = privateReadReceiptScan.requestClass
         privateReadReceiptModelBaseClass = privateReadReceiptScan.modelBaseClass
         privateReadReceiptCommitResponseClass = privateReadReceiptScan.commitResponseClass
@@ -5886,8 +5923,12 @@ internal object HookSymbolResolver {
             this.privateReadReceiptModelReadDispatchMethod = privateReadReceiptModelReadDispatchMethod
             this.privateReadReceiptMessageManagerClass = privateReadReceiptMessageManagerClass
             this.privateReadReceiptMessageManagerGetInstanceMethod = privateReadReceiptMessageManagerGetInstanceMethod
+            this.privateReadReceiptMessageManagerGetSocketClientMethod =
+                privateReadReceiptMessageManagerGetSocketClientMethod
             this.privateReadReceiptMessageSendMethod = privateReadReceiptMessageSendMethod
             this.privateReadReceiptMessageBaseClass = privateReadReceiptMessageBaseClass
+            this.privateReadReceiptSocketClientClass = privateReadReceiptSocketClientClass
+            this.privateReadReceiptSocketDuplicateCheckMethod = privateReadReceiptSocketDuplicateCheckMethod
             this.privateReadReceiptRequestClass = privateReadReceiptRequestClass
             this.privateReadReceiptModelBaseClass = privateReadReceiptModelBaseClass
             this.privateReadReceiptCommitResponseClass = privateReadReceiptCommitResponseClass
