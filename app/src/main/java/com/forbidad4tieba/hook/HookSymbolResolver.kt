@@ -46,9 +46,9 @@ internal object HookSymbolResolver {
     private const val KEY_CACHE_MODULE_VERSION = HookSymbolCacheKeys.MODULE_VERSION
     private const val KEY_SYMBOL_VERIFIED_FP = HookSymbolCacheKeys.VERIFIED_FP
     // Update these target version bounds when adapting a new Tieba release.
-    private const val TARGET_TIEBA_VERSION_NAME = "22.8.1.0"
+    private const val TARGET_TIEBA_VERSION_NAME = "22.8.1.1"
     private const val MIN_TIEBA_VERSION_CODE = 369098752L
-    private const val MAX_TIEBA_VERSION_CODE = 369623296L
+    private const val MAX_TIEBA_VERSION_CODE = 369623301L
     private const val VERSION_TYPE_META_NAME = "versionType"
     private const val OFFICIAL_VERSION_TYPE = "3"
 
@@ -603,6 +603,126 @@ internal object HookSymbolResolver {
         } catch (t: Throwable) {
             XposedCompat.log("[PlainUrlDirectBrowserHook] message symbol resolve FAILED: ${t.message}")
             XposedCompat.log(t)
+            null
+        }
+    }
+
+    fun resolvePlainUrlBrowserHelperSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): PlainUrlBrowserHelperSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[PlainUrlDirectBrowserHook] browser helper skipped: scan symbols unavailable")
+                return null
+            }
+            val browserHelperClassName =
+                resolvedSymbols.plainUrlBrowserHelperClass?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[PlainUrlDirectBrowserHook] browser helper skipped: missing class")
+                    return null
+                }
+            val startWebActivityMethodName =
+                resolvedSymbols.plainUrlBrowserHelperStartWebActivityMethod?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[PlainUrlDirectBrowserHook] browser helper skipped: missing startWebActivity")
+                    return null
+                }
+            val browserHelperClass = safeFindClass(browserHelperClassName, cl) ?: run {
+                XposedCompat.log("[PlainUrlDirectBrowserHook] browser helper skipped: class not found: $browserHelperClassName")
+                return null
+            }
+            val startWebActivityMethods = browserHelperClass.declaredMethods
+                .filter { method ->
+                    PlainUrlBrowserHelperSymbolScanner.isStartWebActivityMethod(
+                        method,
+                        startWebActivityMethodName,
+                    )
+                }
+                .distinctBy { method ->
+                    method.name + "#" + method.parameterTypes.joinToString(",") { it.name }
+                }
+            if (startWebActivityMethods.isEmpty()) {
+                XposedCompat.log(
+                    "[PlainUrlDirectBrowserHook] browser helper skipped: startWebActivity overloads mismatch",
+                )
+                return null
+            }
+            startWebActivityMethods.forEach { it.isAccessible = true }
+            PlainUrlBrowserHelperSymbols(
+                browserHelperClass = browserHelperClass,
+                startWebActivityMethods = startWebActivityMethods,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[PlainUrlDirectBrowserHook] browser helper symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
+    fun resolvePlainUrlWebContainerSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): PlainUrlWebContainerSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[PlainUrlDirectBrowserHook] web container skipped: scan symbols unavailable")
+                return null
+            }
+            val activityClassName =
+                resolvedSymbols.plainUrlWebContainerActivityClass?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[PlainUrlDirectBrowserHook] web container skipped: missing activity class")
+                    return null
+                }
+            val activityClass = safeFindClass(activityClassName, cl) ?: run {
+                XposedCompat.log("[PlainUrlDirectBrowserHook] web container skipped: class not found: $activityClassName")
+                return null
+            }
+            val initDataMethod = resolvedSymbols.plainUrlWebContainerInitDataMethod
+                ?.takeIf { it.isNotBlank() }
+                ?.let { methodName ->
+                    activityClass.declaredMethods.firstOrNull { method ->
+                        PlainUrlWebContainerSymbolScanner.isInitDataMethod(method, methodName)
+                    } ?: run {
+                        XposedCompat.log("[PlainUrlDirectBrowserHook] web container initData skipped: method mismatch")
+                        null
+                    }
+                }
+            val shouldOverrideUrlLoadingMethod = resolvePlainUrlWebContainerNavigationMethod(resolvedSymbols, cl)
+            if (initDataMethod == null && shouldOverrideUrlLoadingMethod == null) {
+                XposedCompat.log("[PlainUrlDirectBrowserHook] web container skipped: no valid methods")
+                return null
+            }
+            initDataMethod?.isAccessible = true
+            shouldOverrideUrlLoadingMethod?.isAccessible = true
+            PlainUrlWebContainerSymbols(
+                webContainerActivityClass = activityClass,
+                initDataMethod = initDataMethod,
+                shouldOverrideUrlLoadingMethod = shouldOverrideUrlLoadingMethod,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[PlainUrlDirectBrowserHook] web container symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
+    private fun resolvePlainUrlWebContainerNavigationMethod(
+        symbols: HookSymbols,
+        cl: ClassLoader,
+    ): Method? {
+        val webViewClientClassName = symbols.plainUrlWebContainerWebViewClientClass?.takeIf { it.isNotBlank() }
+            ?: return null
+        val methodName = symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod?.takeIf { it.isNotBlank() }
+            ?: return null
+        val webViewClientClass = safeFindClass(webViewClientClassName, cl) ?: run {
+            XposedCompat.log(
+                "[PlainUrlDirectBrowserHook] web container navigation skipped: class not found: $webViewClientClassName",
+            )
+            return null
+        }
+        return webViewClientClass.declaredMethods.firstOrNull { method ->
+            PlainUrlWebContainerSymbolScanner.isShouldOverrideUrlLoadingMethod(method, methodName)
+        } ?: run {
+            XposedCompat.log("[PlainUrlDirectBrowserHook] web container navigation skipped: method mismatch")
             null
         }
     }
@@ -4908,6 +5028,12 @@ internal object HookSymbolResolver {
         var plainUrlCustomResponsedMessageGetDataMethod: String? = null
         var plainUrlApplicationClass: String? = null
         var plainUrlApplicationGetInstMethod: String? = null
+        var plainUrlBrowserHelperClass: String? = null
+        var plainUrlBrowserHelperStartWebActivityMethod: String? = null
+        var plainUrlWebContainerActivityClass: String? = null
+        var plainUrlWebContainerInitDataMethod: String? = null
+        var plainUrlWebContainerWebViewClientClass: String? = null
+        var plainUrlWebContainerShouldOverrideUrlLoadingMethod: String? = null
         var privateReadReceiptModelClass: String? = null
         var privateReadReceiptModelReadDispatchMethod: String? = null
         var privateReadReceiptMessageManagerClass: String? = null
@@ -5390,6 +5516,31 @@ internal object HookSymbolResolver {
         plainUrlCustomResponsedMessageGetDataMethod = plainUrlMessageScan.getDataMethod
         plainUrlApplicationClass = plainUrlMessageScan.applicationClass
         plainUrlApplicationGetInstMethod = plainUrlMessageScan.getInstMethod
+
+        val plainUrlBrowserHelperScan = runScanStep(
+            "PlainUrlDirectBrowserHook.BrowserHelper",
+            logger,
+            scanErrors,
+            PlainUrlBrowserHelperScanSymbols(),
+        ) {
+            PlainUrlBrowserHelperSymbolScanner.scan(cl, logger)
+        }
+        plainUrlBrowserHelperClass = plainUrlBrowserHelperScan.browserHelperClass
+        plainUrlBrowserHelperStartWebActivityMethod = plainUrlBrowserHelperScan.startWebActivityMethod
+
+        val plainUrlWebContainerScan = runScanStep(
+            "PlainUrlDirectBrowserHook.WebContainer",
+            logger,
+            scanErrors,
+            PlainUrlWebContainerScanSymbols(),
+        ) {
+            PlainUrlWebContainerSymbolScanner.scan(cl, logger)
+        }
+        plainUrlWebContainerActivityClass = plainUrlWebContainerScan.webContainerActivityClass
+        plainUrlWebContainerInitDataMethod = plainUrlWebContainerScan.initDataMethod
+        plainUrlWebContainerWebViewClientClass = plainUrlWebContainerScan.webViewClientClass
+        plainUrlWebContainerShouldOverrideUrlLoadingMethod =
+            plainUrlWebContainerScan.shouldOverrideUrlLoadingMethod
 
         val privateReadReceiptScan = runScanStep(
             "PrivateReadReceiptBlockHook",
@@ -5919,6 +6070,13 @@ internal object HookSymbolResolver {
             this.plainUrlCustomResponsedMessageGetDataMethod = plainUrlCustomResponsedMessageGetDataMethod
             this.plainUrlApplicationClass = plainUrlApplicationClass
             this.plainUrlApplicationGetInstMethod = plainUrlApplicationGetInstMethod
+            this.plainUrlBrowserHelperClass = plainUrlBrowserHelperClass
+            this.plainUrlBrowserHelperStartWebActivityMethod = plainUrlBrowserHelperStartWebActivityMethod
+            this.plainUrlWebContainerActivityClass = plainUrlWebContainerActivityClass
+            this.plainUrlWebContainerInitDataMethod = plainUrlWebContainerInitDataMethod
+            this.plainUrlWebContainerWebViewClientClass = plainUrlWebContainerWebViewClientClass
+            this.plainUrlWebContainerShouldOverrideUrlLoadingMethod =
+                plainUrlWebContainerShouldOverrideUrlLoadingMethod
             this.privateReadReceiptModelClass = privateReadReceiptModelClass
             this.privateReadReceiptModelReadDispatchMethod = privateReadReceiptModelReadDispatchMethod
             this.privateReadReceiptMessageManagerClass = privateReadReceiptMessageManagerClass

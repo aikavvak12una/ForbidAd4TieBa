@@ -35,6 +35,17 @@ internal data class PlainUrlMessageDataSymbols(
     val textField: Field,
 )
 
+internal data class PlainUrlBrowserHelperSymbols(
+    val browserHelperClass: Class<*>,
+    val startWebActivityMethods: List<Method>,
+)
+
+internal data class PlainUrlWebContainerSymbols(
+    val webContainerActivityClass: Class<*>,
+    val initDataMethod: Method?,
+    val shouldOverrideUrlLoadingMethod: Method?,
+)
+
 internal data class PrivateReadReceiptSymbols(
     val modelClass: Class<*>,
     val modelReadDispatchMethod: Method,

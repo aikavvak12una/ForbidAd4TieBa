@@ -4,7 +4,7 @@ import com.forbidad4tieba.hook.symbol.model.HookSymbols
 
 internal object HookSymbolCacheKeys {
     const val SYMBOL_FP = "hook_symbol_fp_v23"
-    const val SYMBOL_JSON = "hook_symbol_json_v67"
+    const val SYMBOL_JSON = "hook_symbol_json_v71"
     const val MODULE_VERSION = "hook_symbol_cache_module_version"
     const val VERIFIED_FP = "hook_symbol_verified_fp_v1"
 }

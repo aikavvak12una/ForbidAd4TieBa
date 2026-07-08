@@ -72,6 +72,12 @@ internal class HookSymbolsBuilder {
     var plainUrlCustomResponsedMessageGetDataMethod: String? = null
     var plainUrlApplicationClass: String? = null
     var plainUrlApplicationGetInstMethod: String? = null
+    var plainUrlBrowserHelperClass: String? = null
+    var plainUrlBrowserHelperStartWebActivityMethod: String? = null
+    var plainUrlWebContainerActivityClass: String? = null
+    var plainUrlWebContainerInitDataMethod: String? = null
+    var plainUrlWebContainerWebViewClientClass: String? = null
+    var plainUrlWebContainerShouldOverrideUrlLoadingMethod: String? = null
     var privateReadReceiptModelClass: String? = null
     var privateReadReceiptModelReadDispatchMethod: String? = null
     var privateReadReceiptMessageManagerClass: String? = null
@@ -688,6 +694,16 @@ internal class HookSymbolsBuilder {
                         plainUrlApplicationClass,
                         plainUrlApplicationGetInstMethod,
                     ),
+                ),
+                browserHelper = PlainUrlBrowserHelperSymbolsGroup(
+                    plainUrlBrowserHelperClass,
+                    plainUrlBrowserHelperStartWebActivityMethod,
+                ),
+                webContainer = PlainUrlWebContainerSymbolsGroup(
+                    plainUrlWebContainerActivityClass,
+                    plainUrlWebContainerInitDataMethod,
+                    plainUrlWebContainerWebViewClientClass,
+                    plainUrlWebContainerShouldOverrideUrlLoadingMethod,
                 ),
             ),
             mountCard = MountCardLinkSymbolsGroup(
