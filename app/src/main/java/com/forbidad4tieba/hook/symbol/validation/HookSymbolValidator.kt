@@ -16,7 +16,9 @@ import com.forbidad4tieba.hook.symbol.scan.AiComponentSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.HomeTabItemSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbAdBidSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbEarlyAdInsertSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.PlainUrlBrowserHelperSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlClickableSpanSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.PlainUrlWebContainerSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import org.json.JSONObject
 import java.lang.reflect.Field
@@ -124,7 +126,7 @@ internal object HookSymbolValidator {
         symbols.enterForumInitInfoDataClass != null ||
             symbols.enterForumInitInfoGetUrlMethod != null
     if (hasEnterForumInitInfoSymbols && !isEnterForumInitInfoValid(symbols, cl)) return false
-    val hasPlainUrlClickableSpanSymbols =
+    val hasPlainUrlSymbols =
             symbols.plainUrlClickableSpanClass != null ||
             symbols.plainUrlClickableSpanOnClickMethod != null ||
             !symbols.plainUrlClickableSpanOnClickOwnerClasses.isNullOrEmpty() ||
@@ -138,8 +140,14 @@ internal object HookSymbolValidator {
             symbols.plainUrlCustomResponsedMessageClass != null ||
             symbols.plainUrlCustomResponsedMessageGetDataMethod != null ||
             symbols.plainUrlApplicationClass != null ||
-            symbols.plainUrlApplicationGetInstMethod != null
-    if (hasPlainUrlClickableSpanSymbols && !isPlainUrlClickableSpanValid(symbols, cl)) return false
+            symbols.plainUrlApplicationGetInstMethod != null ||
+            symbols.plainUrlBrowserHelperClass != null ||
+            symbols.plainUrlBrowserHelperStartWebActivityMethod != null ||
+            symbols.plainUrlWebContainerActivityClass != null ||
+            symbols.plainUrlWebContainerInitDataMethod != null ||
+            symbols.plainUrlWebContainerWebViewClientClass != null ||
+            symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod != null
+    if (hasPlainUrlSymbols && !isPlainUrlValid(symbols, cl)) return false
     val hasPrivateReadReceiptSymbols =
             symbols.privateReadReceiptModelClass != null ||
             symbols.privateReadReceiptModelReadDispatchMethod != null ||
@@ -1004,9 +1012,11 @@ private fun isEnterForumInitInfoValid(symbols: HookSymbols, cl: ClassLoader): Bo
     }
 }
 
-private fun isPlainUrlClickableSpanValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+private fun isPlainUrlValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
     return isPlainUrlClickableSpanDirectValid(symbols, cl) ||
-        isPlainUrlMessageDispatchValid(symbols, cl)
+        isPlainUrlMessageDispatchValid(symbols, cl) ||
+        isPlainUrlBrowserHelperValid(symbols, cl) ||
+        isPlainUrlWebContainerValid(symbols, cl)
 }
 
 private fun isPlainUrlClickableSpanDirectValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
@@ -1086,6 +1096,43 @@ private fun isPlainUrlMessageDispatchValid(symbols: HookSymbols, cl: ClassLoader
                 method.parameterTypes.isEmpty() &&
                 applicationClass.isAssignableFrom(method.returnType)
         } != null
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isPlainUrlBrowserHelperValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val className = symbols.plainUrlBrowserHelperClass ?: return false
+    val methodName = symbols.plainUrlBrowserHelperStartWebActivityMethod ?: return false
+    return try {
+        val browserHelperClass = safeFindClass(className, cl) ?: return false
+        browserHelperClass.declaredMethods.any { method ->
+            PlainUrlBrowserHelperSymbolScanner.isStartWebActivityMethod(method, methodName)
+        }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isPlainUrlWebContainerValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    return try {
+        val initDataValid = symbols.plainUrlWebContainerActivityClass
+            ?.let { className -> safeFindClass(className, cl) }
+            ?.let { activityClass ->
+                val methodName = symbols.plainUrlWebContainerInitDataMethod ?: return@let false
+                activityClass.declaredMethods.any { method ->
+                    PlainUrlWebContainerSymbolScanner.isInitDataMethod(method, methodName)
+                }
+            } == true
+        val navigationValid = symbols.plainUrlWebContainerWebViewClientClass
+            ?.let { className -> safeFindClass(className, cl) }
+            ?.let { webViewClientClass ->
+                val methodName = symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod ?: return@let false
+                webViewClientClass.declaredMethods.any { method ->
+                    PlainUrlWebContainerSymbolScanner.isShouldOverrideUrlLoadingMethod(method, methodName)
+                }
+            } == true
+        initDataValid || navigationValid
     } catch (_: Throwable) {
         false
     }

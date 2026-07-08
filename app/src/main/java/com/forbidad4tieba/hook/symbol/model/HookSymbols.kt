@@ -170,6 +170,18 @@ data class HookSymbols(
         get() = hookPoints.web.plainUrl.message.application.plainUrlApplicationClass
     val plainUrlApplicationGetInstMethod: String?
         get() = hookPoints.web.plainUrl.message.application.plainUrlApplicationGetInstMethod
+    val plainUrlBrowserHelperClass: String?
+        get() = hookPoints.web.plainUrl.browserHelper.plainUrlBrowserHelperClass
+    val plainUrlBrowserHelperStartWebActivityMethod: String?
+        get() = hookPoints.web.plainUrl.browserHelper.plainUrlBrowserHelperStartWebActivityMethod
+    val plainUrlWebContainerActivityClass: String?
+        get() = hookPoints.web.plainUrl.webContainer.plainUrlWebContainerActivityClass
+    val plainUrlWebContainerInitDataMethod: String?
+        get() = hookPoints.web.plainUrl.webContainer.plainUrlWebContainerInitDataMethod
+    val plainUrlWebContainerWebViewClientClass: String?
+        get() = hookPoints.web.plainUrl.webContainer.plainUrlWebContainerWebViewClientClass
+    val plainUrlWebContainerShouldOverrideUrlLoadingMethod: String?
+        get() = hookPoints.web.plainUrl.webContainer.plainUrlWebContainerShouldOverrideUrlLoadingMethod
     val privateReadReceiptModelClass: String?
         get() = hookPoints.privateMessage.readReceipt.model.privateReadReceiptModelClass
     val privateReadReceiptModelReadDispatchMethod: String?
@@ -877,6 +889,15 @@ data class HookSymbols(
             put("plainUrlCustomResponsedMessageGetDataMethod", plainUrlCustomResponsedMessageGetDataMethod)
             put("plainUrlApplicationClass", plainUrlApplicationClass)
             put("plainUrlApplicationGetInstMethod", plainUrlApplicationGetInstMethod)
+            put("plainUrlBrowserHelperClass", plainUrlBrowserHelperClass)
+            put("plainUrlBrowserHelperStartWebActivityMethod", plainUrlBrowserHelperStartWebActivityMethod)
+            put("plainUrlWebContainerActivityClass", plainUrlWebContainerActivityClass)
+            put("plainUrlWebContainerInitDataMethod", plainUrlWebContainerInitDataMethod)
+            put("plainUrlWebContainerWebViewClientClass", plainUrlWebContainerWebViewClientClass)
+            put(
+                "plainUrlWebContainerShouldOverrideUrlLoadingMethod",
+                plainUrlWebContainerShouldOverrideUrlLoadingMethod,
+            )
             put("privateReadReceiptModelClass", privateReadReceiptModelClass)
             put("privateReadReceiptModelReadDispatchMethod", privateReadReceiptModelReadDispatchMethod)
             put("privateReadReceiptMessageManagerClass", privateReadReceiptMessageManagerClass)
@@ -1265,7 +1286,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 22
+        const val CACHE_SCHEMA_VERSION = 25
         const val DEXKIT_RULE_VERSION = 15
 
         fun unsupported(
@@ -1404,6 +1425,15 @@ data class HookSymbols(
                     plainUrlCustomResponsedMessageGetDataMethod = obj.optStringOrNull("plainUrlCustomResponsedMessageGetDataMethod")
                     plainUrlApplicationClass = obj.optStringOrNull("plainUrlApplicationClass")
                     plainUrlApplicationGetInstMethod = obj.optStringOrNull("plainUrlApplicationGetInstMethod")
+                    plainUrlBrowserHelperClass = obj.optStringOrNull("plainUrlBrowserHelperClass")
+                    plainUrlBrowserHelperStartWebActivityMethod =
+                        obj.optStringOrNull("plainUrlBrowserHelperStartWebActivityMethod")
+                    plainUrlWebContainerActivityClass = obj.optStringOrNull("plainUrlWebContainerActivityClass")
+                    plainUrlWebContainerInitDataMethod = obj.optStringOrNull("plainUrlWebContainerInitDataMethod")
+                    plainUrlWebContainerWebViewClientClass =
+                        obj.optStringOrNull("plainUrlWebContainerWebViewClientClass")
+                    plainUrlWebContainerShouldOverrideUrlLoadingMethod =
+                        obj.optStringOrNull("plainUrlWebContainerShouldOverrideUrlLoadingMethod")
                     privateReadReceiptModelClass = obj.optStringOrNull("privateReadReceiptModelClass")
                     privateReadReceiptModelReadDispatchMethod = obj.optStringOrNull("privateReadReceiptModelReadDispatchMethod")
                     privateReadReceiptMessageManagerClass = obj.optStringOrNull("privateReadReceiptMessageManagerClass")

@@ -221,6 +221,18 @@ internal data class PlainUrlMessageDispatchScanSymbols(
     val getInstMethod: String? = null,
 )
 
+internal data class PlainUrlBrowserHelperScanSymbols(
+    val browserHelperClass: String? = null,
+    val startWebActivityMethod: String? = null,
+)
+
+internal data class PlainUrlWebContainerScanSymbols(
+    val webContainerActivityClass: String? = null,
+    val initDataMethod: String? = null,
+    val webViewClientClass: String? = null,
+    val shouldOverrideUrlLoadingMethod: String? = null,
+)
+
 internal data class PrivateReadReceiptScanSymbols(
     val modelClass: String? = null,
     val modelReadDispatchMethod: String? = null,

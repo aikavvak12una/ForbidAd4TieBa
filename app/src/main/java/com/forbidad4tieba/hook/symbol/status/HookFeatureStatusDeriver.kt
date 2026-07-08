@@ -413,23 +413,62 @@ internal object HookFeatureStatusDeriver {
         if (symbols.mountCardLinkInfoGetUrlMethod.isNullOrBlank()) {
             mountCardMissing.add("mountCardLinkInfoGetUrlMethod")
         }
+        val browserHelperMissing = ArrayList<String>(2)
+        if (symbols.plainUrlBrowserHelperClass.isNullOrBlank()) {
+            browserHelperMissing.add("plainUrlBrowserHelperClass")
+        }
+        if (symbols.plainUrlBrowserHelperStartWebActivityMethod.isNullOrBlank()) {
+            browserHelperMissing.add("plainUrlBrowserHelperStartWebActivityMethod")
+        }
+        val webContainerInitMissing = ArrayList<String>(2)
+        if (symbols.plainUrlWebContainerActivityClass.isNullOrBlank()) {
+            webContainerInitMissing.add("plainUrlWebContainerActivityClass")
+        }
+        if (symbols.plainUrlWebContainerInitDataMethod.isNullOrBlank()) {
+            webContainerInitMissing.add("plainUrlWebContainerInitDataMethod")
+        }
+        val webContainerNavigationMissing = ArrayList<String>(2)
+        if (symbols.plainUrlWebContainerWebViewClientClass.isNullOrBlank()) {
+            webContainerNavigationMissing.add("plainUrlWebContainerWebViewClientClass")
+        }
+        if (symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod.isNullOrBlank()) {
+            webContainerNavigationMissing.add("plainUrlWebContainerShouldOverrideUrlLoadingMethod")
+        }
         val plainUrlDirectReady = plainUrlDirectMissing.isEmpty()
         val plainUrlMessageReady = plainUrlMessageMissing.isEmpty()
         val generalPlainUrlReady = plainUrlMessageReady || plainUrlDirectReady
         val mountCardReady = mountCardMissing.isEmpty()
+        val browserHelperReady = browserHelperMissing.isEmpty()
+        val webContainerInitReady = webContainerInitMissing.isEmpty()
+        val webContainerNavigationReady = webContainerNavigationMissing.isEmpty()
+        val webContainerReady = webContainerInitReady || webContainerNavigationReady
+        val webContainerComplete = webContainerInitReady && webContainerNavigationReady
+        val webContainerMissing = buildList {
+            if (!webContainerInitReady) addAll(webContainerInitMissing)
+            if (!webContainerNavigationReady) addAll(webContainerNavigationMissing)
+        }.distinct()
         val plainUrlOptionalMissing = buildList {
             if (!plainUrlMessageReady) addAll(plainUrlMessageMissing)
             if (!mountCardReady) addAll(mountCardMissing)
+            if (!browserHelperReady) addAll(browserHelperMissing)
+            if (!webContainerComplete) addAll(webContainerMissing)
         }.distinct()
         out[HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER] = when {
-            plainUrlMessageReady && mountCardReady -> HookFeatureStatus(state = HookFeatureState.FULL)
-            generalPlainUrlReady || mountCardReady -> HookFeatureStatus(
+            browserHelperReady && webContainerComplete && plainUrlMessageReady && mountCardReady -> {
+                HookFeatureStatus(state = HookFeatureState.FULL)
+            }
+            browserHelperReady || webContainerReady || generalPlainUrlReady || mountCardReady -> HookFeatureStatus(
                 state = HookFeatureState.PARTIAL,
                 missingOptional = plainUrlOptionalMissing,
             )
             else -> HookFeatureStatus(
                 state = HookFeatureState.DISABLED,
-                missingCritical = (plainUrlMessageMissing + mountCardMissing).distinct(),
+                missingCritical = (
+                    browserHelperMissing +
+                        webContainerMissing +
+                        plainUrlMessageMissing +
+                        mountCardMissing
+                    ).distinct(),
                 missingOptional = plainUrlDirectMissing,
             )
         }

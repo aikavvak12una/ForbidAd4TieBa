@@ -10,9 +10,11 @@ import android.util.Patterns
 import android.view.View
 import android.widget.TextView
 import com.forbidad4tieba.hook.symbol.model.MountCardLinkLayoutSymbols
+import com.forbidad4tieba.hook.symbol.model.PlainUrlBrowserHelperSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlClickableSpanSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDataSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDispatchSymbols
+import com.forbidad4tieba.hook.symbol.model.PlainUrlWebContainerSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
@@ -25,16 +27,26 @@ import java.util.regex.Pattern
 object PlainUrlDirectBrowserHook {
     private const val ORDINARY_URL_TYPE = 2
     private const val TIEBA_WEB_HOST = "tieba.baidu.com"
+    private const val TIEBA_WEB_VIEW_SCHEMA = "com.baidu.tieba://tbwebview"
+    private const val WEB_VIEW_TAG_URL = "tag_url"
+    private const val INTENT_KEY_URI = "key_uri"
+    private const val MAX_NESTED_WEB_URL_DEPTH = 3
     private val installed = AtomicBoolean(false)
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
     private val webUrlPattern = Pattern.compile(
         "(http://|ftp://|https://|www){1,1}[^\\u4E00-\\u9FA5\\s\"'<>\\[\\]{}]*",
         Pattern.CASE_INSENSITIVE,
     )
+    private val urlParamPattern = Pattern.compile(
+        "(?:^|[?&/])url=([^&\\s]+)",
+        Pattern.CASE_INSENSITIVE,
+    )
 
     internal data class RuntimeTargets(
         val spanTargets: PlainUrlClickableSpanSymbols?,
         val messageTarget: PlainUrlMessageDispatchSymbols?,
+        val browserHelperTargets: PlainUrlBrowserHelperSymbols?,
+        val webContainerTargets: PlainUrlWebContainerSymbols?,
         val mountCardTargets: MountCardLinkLayoutSymbols?,
         val clickSpanMarkerField: Field?,
         val isClickMessageCmd: (Int) -> Boolean,
@@ -103,6 +115,53 @@ object PlainUrlDirectBrowserHook {
                     if (openSystemBrowser(context, normalizedUrl)) null else chain.proceed()
                 }
                 installedCount++
+            }
+            val browserHelperTargets = targets.browserHelperTargets
+            if (browserHelperTargets != null) {
+                for (startWebActivityMethod in browserHelperTargets.startWebActivityMethods) {
+                    if (!installedMethodKeys.add(methodKey(startWebActivityMethod))) continue
+                    mod.hook(startWebActivityMethod).intercept { chain ->
+                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
+                        val normalizedUrl = resolveBrowserHelperWebUrl(startWebActivityMethod, chain.args)
+                            ?: return@intercept chain.proceed()
+                        val context = resolveBrowserHelperContext(chain.args)
+                        if (openSystemBrowser(context, normalizedUrl)) null else chain.proceed()
+                    }
+                    installedCount++
+                }
+            }
+            val webContainerTargets = targets.webContainerTargets
+            if (webContainerTargets != null) {
+                val initDataMethod = webContainerTargets.initDataMethod
+                if (initDataMethod != null && installedMethodKeys.add(methodKey(initDataMethod))) {
+                    mod.hook(initDataMethod).intercept { chain ->
+                        val result = chain.proceed()
+                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept result
+                        val activity = chain.thisObject as? Activity ?: return@intercept result
+                        val normalizedUrl = resolveWebContainerWebUrl(activity.intent)
+                            ?: return@intercept result
+                        if (openSystemBrowser(activity, normalizedUrl)) {
+                            activity.finish()
+                        }
+                        result
+                    }
+                    installedCount++
+                }
+                val shouldOverrideUrlLoadingMethod = webContainerTargets.shouldOverrideUrlLoadingMethod
+                if (
+                    shouldOverrideUrlLoadingMethod != null &&
+                    installedMethodKeys.add(methodKey(shouldOverrideUrlLoadingMethod))
+                ) {
+                    mod.hook(shouldOverrideUrlLoadingMethod).intercept { chain ->
+                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
+                        val view = chain.args.getOrNull(0) as? View
+                        val rawUrl = chain.args.getOrNull(1) as? String
+                        val normalizedUrl = normalizeWebUrl(rawUrl)
+                            ?: return@intercept chain.proceed()
+                        if (openSystemBrowser(view, normalizedUrl)) true else chain.proceed()
+                    }
+                    installedCount++
+                }
             }
             val mountCardTargets = targets.mountCardTargets
             if (mountCardTargets != null && installedMethodKeys.add(methodKey(mountCardTargets.onClickMethod))) {
@@ -184,9 +243,64 @@ object PlainUrlDirectBrowserHook {
         return normalizeWebUrl(rawUrl)
     }
 
+    private fun resolveBrowserHelperWebUrl(method: Method, args: List<*>): String? {
+        val urlIndex = browserHelperUrlArgIndex(method) ?: return null
+        val candidate = when (val arg = args.getOrNull(urlIndex)) {
+            is Uri -> arg.toString()
+            is String -> arg
+            else -> null
+        }
+        return normalizeWebUrl(candidate)
+    }
+
+    private fun browserHelperUrlArgIndex(method: Method): Int? {
+        val parameterTypes = method.parameterTypes
+        val uriIndex = parameterTypes.indexOfFirst { it == Uri::class.java }
+        if (uriIndex >= 0) return uriIndex
+
+        val stringIndexes = parameterTypes.mapIndexedNotNull { index, type ->
+            index.takeIf { type == String::class.java }
+        }
+        if (stringIndexes.size <= 1) return stringIndexes.firstOrNull()
+
+        val contextIndex = parameterTypes.indexOfFirst { Context::class.java.isAssignableFrom(it) }
+        val hasBooleanAfterContext =
+            contextIndex >= 0 &&
+                parameterTypes.getOrNull(contextIndex + 1) == Boolean::class.javaPrimitiveType
+        val firstStringAfterBoolean = contextIndex >= 0 && stringIndexes.first() == contextIndex + 2
+        return if (hasBooleanAfterContext && firstStringAfterBoolean) {
+            stringIndexes.first()
+        } else {
+            stringIndexes.last()
+        }
+    }
+
+    private fun resolveBrowserHelperContext(args: List<*>): Context? {
+        return args.firstOrNull { it is Context } as? Context
+    }
+
+    private fun resolveWebContainerWebUrl(intent: Intent?): String? {
+        if (intent == null) return null
+        normalizeWebUrl(runCatching { intent.getStringExtra(WEB_VIEW_TAG_URL) }.getOrNull())?.let { return it }
+        val rawUri = runCatching { intent.getParcelableExtra(INTENT_KEY_URI) as? Uri }.getOrNull()?.toString()
+        return normalizeWebUrl(rawUri)
+    }
+
     private fun normalizeWebUrl(rawUrl: String?): String? {
+        return normalizeWebUrl(rawUrl, depth = 0)
+    }
+
+    private fun normalizeWebUrl(rawUrl: String?, depth: Int): String? {
         val trimmed = rawUrl?.let(::trimTrailingUrlPunctuation)?.takeIf { it.isNotEmpty() } ?: return null
         val candidates = decodedCandidates(trimmed, preferDecoded = !containsExplicitWebUrl(trimmed))
+        if (depth < MAX_NESTED_WEB_URL_DEPTH) {
+            for (candidate in candidates) {
+                if (!shouldInspectNestedWebUrl(candidate)) continue
+                for (nestedUrl in extractNestedWebUrlValues(candidate)) {
+                    normalizeWebUrl(nestedUrl, depth + 1)?.let { return it }
+                }
+            }
+        }
         if (candidates.any(::containsTiebaWebHost)) return null
         val matched = candidates.firstNotNullOfOrNull(::matchExplicitWebUrl)
             ?: candidates.firstNotNullOfOrNull(::matchSdkWebUrl)
@@ -204,6 +318,23 @@ object PlainUrlDirectBrowserHook {
 
     private fun containsTiebaWebHost(url: String): Boolean {
         return url.lowercase(Locale.ROOT).contains(TIEBA_WEB_HOST)
+    }
+
+    private fun shouldInspectNestedWebUrl(value: String): Boolean {
+        val lower = value.lowercase(Locale.ROOT)
+        return lower.startsWith(TIEBA_WEB_VIEW_SCHEMA) || lower.contains(TIEBA_WEB_HOST)
+    }
+
+    private fun extractNestedWebUrlValues(value: String): List<String> {
+        val matcher = urlParamPattern.matcher(value)
+        val values = ArrayList<String>()
+        while (matcher.find()) {
+            matcher.group(1)
+                ?.let(::trimTrailingUrlPunctuation)
+                ?.takeIf { it.isNotEmpty() }
+                ?.let(values::add)
+        }
+        return values
     }
 
     private fun decodedCandidates(value: String, preferDecoded: Boolean): List<String> {

@@ -607,6 +607,59 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "PlainUrlDirectBrowserHook.BrowserHelper",
+            "${symbols.plainUrlBrowserHelperClass}.${symbols.plainUrlBrowserHelperStartWebActivityMethod}(Context,String/Uri...)",
+            listOf(
+                "plainUrlBrowserHelperClass" to has(symbols.plainUrlBrowserHelperClass),
+                "plainUrlBrowserHelperStartWebActivityMethod" to
+                    has(symbols.plainUrlBrowserHelperStartWebActivityMethod),
+            ),
+        )
+        run {
+            val initChecks = listOf(
+                "plainUrlWebContainerActivityClass" to has(symbols.plainUrlWebContainerActivityClass),
+                "plainUrlWebContainerInitDataMethod" to has(symbols.plainUrlWebContainerInitDataMethod),
+            )
+            val navigationChecks = listOf(
+                "plainUrlWebContainerWebViewClientClass" to
+                    has(symbols.plainUrlWebContainerWebViewClientClass),
+                "plainUrlWebContainerShouldOverrideUrlLoadingMethod" to
+                    has(symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod),
+            )
+            val initReady = initChecks.all { it.second }
+            val navigationReady = navigationChecks.all { it.second }
+            val missing = buildList {
+                if (!initReady) addAll(initChecks.filter { !it.second }.map { it.first })
+                if (!navigationReady) addAll(navigationChecks.filter { !it.second }.map { it.first })
+            }.distinct()
+            val state = when {
+                initReady && navigationReady -> "FOUND"
+                initReady || navigationReady -> "PARTIAL"
+                else -> "MISSING"
+            }
+            val target = buildList {
+                if (has(symbols.plainUrlWebContainerActivityClass) ||
+                    has(symbols.plainUrlWebContainerInitDataMethod)
+                ) {
+                    add(
+                        "${symbols.plainUrlWebContainerActivityClass ?: "-"}." +
+                            "${symbols.plainUrlWebContainerInitDataMethod ?: "-"}()",
+                    )
+                }
+                if (has(symbols.plainUrlWebContainerWebViewClientClass) ||
+                    has(symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod)
+                ) {
+                    add(
+                        "${symbols.plainUrlWebContainerWebViewClientClass ?: "-"}." +
+                            "${symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod ?: "-"}" +
+                            "(WebView,String)",
+                    )
+                }
+            }.joinToString(" / ").ifBlank { "-" }
+            val missingText = missing.joinToString(",").ifBlank { "-" }
+            out.add("HookPoint[PlainUrlDirectBrowserHook.WebContainer] state=$state missing=$missingText target=$target")
+        }
+        add(
             "PlainUrlDirectBrowserHook.MountCard",
             "${symbols.mountCardLinkLayoutClass}.${symbols.mountCardLinkLayoutOnClickMethod}(View)[${symbols.mountCardLinkLayoutDataField}->${symbols.mountCardLinkInfoDataClass}.${symbols.mountCardLinkInfoGetUrlMethod}]",
             listOf(

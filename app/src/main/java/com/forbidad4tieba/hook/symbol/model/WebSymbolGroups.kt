@@ -21,6 +21,8 @@ data class EnterForumWebSymbolsGroup(
 data class PlainUrlSymbolsGroup(
     val clickableSpan: PlainUrlClickableSpanSymbolsGroup = PlainUrlClickableSpanSymbolsGroup(),
     val message: PlainUrlMessageSymbolsGroup = PlainUrlMessageSymbolsGroup(),
+    val browserHelper: PlainUrlBrowserHelperSymbolsGroup = PlainUrlBrowserHelperSymbolsGroup(),
+    val webContainer: PlainUrlWebContainerSymbolsGroup = PlainUrlWebContainerSymbolsGroup(),
 )
 
 data class PlainUrlClickableSpanSymbolsGroup(
@@ -53,6 +55,18 @@ data class PlainUrlMessageResponseSymbolsGroup(
 data class PlainUrlApplicationSymbolsGroup(
     val plainUrlApplicationClass: String? = null,
     val plainUrlApplicationGetInstMethod: String? = null,
+)
+
+data class PlainUrlBrowserHelperSymbolsGroup(
+    val plainUrlBrowserHelperClass: String? = null,
+    val plainUrlBrowserHelperStartWebActivityMethod: String? = null,
+)
+
+data class PlainUrlWebContainerSymbolsGroup(
+    val plainUrlWebContainerActivityClass: String? = null,
+    val plainUrlWebContainerInitDataMethod: String? = null,
+    val plainUrlWebContainerWebViewClientClass: String? = null,
+    val plainUrlWebContainerShouldOverrideUrlLoadingMethod: String? = null,
 )
 
 data class MountCardLinkSymbolsGroup(

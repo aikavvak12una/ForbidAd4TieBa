@@ -356,6 +356,8 @@ internal object HookInstallPlanner {
                 val targets = PlainUrlDirectBrowserHook.RuntimeTargets(
                     spanTargets = HookSymbolResolver.resolvePlainUrlClickableSpanSymbols(cl, symbols),
                     messageTarget = HookSymbolResolver.resolvePlainUrlMessageDispatchSymbols(cl, symbols),
+                    browserHelperTargets = HookSymbolResolver.resolvePlainUrlBrowserHelperSymbols(cl, symbols),
+                    webContainerTargets = HookSymbolResolver.resolvePlainUrlWebContainerSymbols(cl, symbols),
                     mountCardTargets = HookSymbolResolver.resolveMountCardLinkLayoutSymbols(cl, symbols),
                     clickSpanMarkerField = HookSymbolResolver.resolvePlainUrlClickSpanMarkerField(cl),
                     isClickMessageCmd = HookSymbolResolver::isPlainUrlClickMessageCmd,
