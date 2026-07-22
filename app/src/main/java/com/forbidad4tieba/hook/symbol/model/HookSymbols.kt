@@ -1286,7 +1286,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 25
+        const val CACHE_SCHEMA_VERSION = 26
         const val DEXKIT_RULE_VERSION = 15
 
         fun unsupported(
