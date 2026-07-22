@@ -354,7 +354,6 @@ internal class HookSymbolsBuilder {
     var aiPbPageBrowserAiEmojiCreationBindMethod: String? = null
     var aiImageViewerJumpButtonOwnerClass: String? = null
     var aiImageViewerJumpButtonInitMethod: String? = null
-    var featureStatusMap: Map<String, HookFeatureStatus> = emptyMap()
     var scanSupportState: String = ScanSupportState.UNKNOWN
     var scanTargetVersionCode: Long? = null
     var scanTargetVersionName: String? = null
@@ -939,7 +938,6 @@ internal class HookSymbolsBuilder {
 
     private fun buildScanMeta(): ScanMeta {
         return ScanMeta(
-            featureStatusMap = featureStatusMap,
             availability = ScanAvailabilityMeta(
                 scanSupportState,
                 scanTargetVersionCode,

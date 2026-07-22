@@ -1493,18 +1493,47 @@ private fun isAutoSignInHybridTaskConstructor(constructor: java.lang.reflect.Con
 
 private fun isForumBottomSheetValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
     val className = symbols.forumBottomSheetViewClass ?: return false
-    val methodName = symbols.forumBottomSheetInitScrollMethod ?: return false
+    val initScrollMethodName = symbols.forumBottomSheetInitScrollMethod ?: return false
     return try {
         val targetClass = safeFindClass(className, cl) ?: return false
-        targetClass.declaredMethods.any { method ->
+        if (!android.view.View::class.java.isAssignableFrom(targetClass)) return false
+        val initScrollValid = targetClass.declaredMethods.count { method ->
             !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
-                method.name == methodName &&
+                method.name == initScrollMethodName &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 3 &&
                 method.parameterTypes[0] == Int::class.javaPrimitiveType &&
                 method.parameterTypes[1] == Boolean::class.javaPrimitiveType &&
                 method.parameterTypes[2].name == "kotlin.jvm.functions.Function0"
-        }
+        } == 1
+        val smoothInitGetterValid = targetClass.declaredMethods.count { method ->
+            !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
+                method.name == StableTiebaHookPoints.FORUM_BOTTOM_SHEET_SMOOTH_INIT_GETTER &&
+                method.returnType == Int::class.javaPrimitiveType &&
+                method.parameterTypes.isEmpty()
+        } == 1
+        val setupValid = targetClass.declaredMethods.count { method ->
+            !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
+                method.name == StableTiebaHookPoints.FORUM_BOTTOM_SHEET_SETUP_METHOD &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.contentEquals(
+                    arrayOf(
+                        Int::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType,
+                        Boolean::class.javaPrimitiveType,
+                    ),
+                )
+        } == 1
+        val maxScrollGetterValid = collectInstanceMethods(targetClass).count { method ->
+            method.name == StableTiebaHookPoints.FORUM_BOTTOM_SHEET_MAX_SCROLL_GETTER &&
+                method.returnType == Int::class.javaPrimitiveType &&
+                method.parameterTypes.isEmpty()
+        } == 1
+        initScrollValid &&
+            smoothInitGetterValid &&
+            setupValid &&
+            maxScrollGetterValid
     } catch (_: Throwable) {
         false
     }

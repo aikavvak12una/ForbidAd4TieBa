@@ -7,7 +7,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 internal object BlockCountStats {
@@ -19,32 +18,15 @@ internal object BlockCountStats {
     private val pendingAdCount = AtomicLong(0L)
     private val pendingCustomPostCount = AtomicLong(0L)
     private val flushScheduled = AtomicBoolean(false)
-    private val activeBackgroundTasks = AtomicInteger(0)
     private val fileLock = Any()
-    private val executorLock = Any()
     private var persistenceFailureCount = 0
     private var persistenceDisabled = false
-    private var executor: ScheduledExecutorService? = null
 
-    fun hotReloadBusyReason(): String? {
-        if (pendingAdCount.get() > 0L || pendingCustomPostCount.get() > 0L) {
-            return "block count stats pending"
-        }
-        if (flushScheduled.get()) return "block count stats flush scheduled"
-        if (activeBackgroundTasks.get() > 0) return "block count stats task active"
-        return null
-    }
-
-    fun prepareForHotReload(): Boolean {
-        val service = synchronized(executorLock) {
-            executor.also { executor = null }
-        } ?: return true
-        service.shutdownNow()
-        return try {
-            service.awaitTermination(300L, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            false
+    private val executor: ScheduledExecutorService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "tbhook-block-count-stats").apply {
+                isDaemon = true
+            }
         }
     }
 
@@ -72,42 +54,14 @@ internal object BlockCountStats {
 
     private fun scheduleFlush() {
         if (!flushScheduled.compareAndSet(false, true)) return
-        scheduleBackground(FLUSH_DELAY_MS) {
+        executor.schedule({
             try {
                 flushPending()
             } finally {
                 flushScheduled.set(false)
                 if (hasPending() && !isPersistenceDisabled()) scheduleFlush()
             }
-        }
-    }
-
-    private fun scheduleBackground(delayMs: Long, block: () -> Unit) {
-        activeBackgroundTasks.incrementAndGet()
-        try {
-            executor().schedule({
-                try {
-                    block()
-                } finally {
-                    activeBackgroundTasks.decrementAndGet()
-                }
-            }, delayMs, TimeUnit.MILLISECONDS)
-        } catch (t: Throwable) {
-            activeBackgroundTasks.decrementAndGet()
-            throw t
-        }
-    }
-
-    private fun executor(): ScheduledExecutorService {
-        return synchronized(executorLock) {
-            val current = executor
-            if (current != null && !current.isShutdown) return current
-            Executors.newSingleThreadScheduledExecutor { runnable ->
-                Thread(runnable, "tbhook-block-count-stats").apply {
-                    isDaemon = true
-                }
-            }.also { executor = it }
-        }
+        }, FLUSH_DELAY_MS, TimeUnit.MILLISECONDS)
     }
 
     private fun flushPending() {

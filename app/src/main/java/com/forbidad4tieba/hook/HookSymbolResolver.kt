@@ -235,7 +235,6 @@ internal object HookSymbolResolver {
         StableTiebaHookPoints.AGREE_VIEW_CLASS,
         StableTiebaHookPoints.AGREE_DATA_CLASS,
         StableTiebaHookPoints.PB_NEW_INPUT_CONTAINER_CLASS,
-        StableTiebaHookPoints.FORUM_BOTTOM_SHEET_VIEW_CLASS,
         AI_SPRITE_MEME_PAN_CONTROLLER_CLASS,
         AI_PB_NEW_INPUT_CONTAINER_CLASS,
     )
@@ -358,7 +357,7 @@ internal object HookSymbolResolver {
     }
 
     fun featureStatusMap(symbols: HookSymbols?): Map<String, HookFeatureStatus> {
-        return HookFeatureStatusDeriver.deriveWithOverrides(symbols)
+        return HookFeatureStatusDeriver.derive(symbols ?: HookSymbols.unsupported())
     }
 
     fun isScanVersionCheckFailed(symbols: HookSymbols?): Boolean {
@@ -374,18 +373,14 @@ internal object HookSymbolResolver {
     }
 
     fun formatUnavailableHookPointStatusLines(symbols: HookSymbols?): List<String> {
-        return formatHookPointStatusLines(symbols).filter(::isUnavailableHookPointStatusLine)
+        return collectHookPointStatuses(symbols)
+            .filter(HookPointStatus::isUnavailable)
+            .map(HookPointStatus::formatLine)
     }
 
     fun formatScanIssueLines(symbols: HookSymbols?): List<String> {
         if (symbols == null) return listOf("HookPoint[SymbolCache] state=MISSING missing=symbols target=-")
         return formatUnavailableHookPointStatusLines(symbols).ifEmpty { symbols.scanErrors }
-    }
-
-    private fun isUnavailableHookPointStatusLine(line: String): Boolean {
-        return line.contains(" state=MISSING ") ||
-            line.contains(" state=PARTIAL ") ||
-            line.contains(" state=ERROR ")
     }
 
     fun formatScanVersionWarning(symbols: HookSymbols?): String? {
@@ -405,7 +400,11 @@ internal object HookSymbolResolver {
     }
 
     fun formatHookPointStatusLines(symbols: HookSymbols?): List<String> {
-        return HookSymbolStatusFormatter.formatHookPointStatusLines(
+        return collectHookPointStatuses(symbols).map(HookPointStatus::formatLine)
+    }
+
+    private fun collectHookPointStatuses(symbols: HookSymbols?): List<HookPointStatus> {
+        return HookSymbolStatusFormatter.collectHookPointStatuses(
             symbols = symbols,
             aiPbAiEmojiCreationViewClass = AI_PB_AI_EMOJI_CREATION_VIEW_CLASS,
             aiPbAiEmojiCreationPageBrowserViewClass =
@@ -1428,27 +1427,87 @@ internal object HookSymbolResolver {
                 XposedCompat.log("[ForumNativeTopShiftBlockHook] skipped: missing forumBottomSheetViewClass")
                 return null
             }
-            val methodName = resolvedSymbols.forumBottomSheetInitScrollMethod?.takeIf { it.isNotBlank() } ?: run {
-                XposedCompat.log("[ForumNativeTopShiftBlockHook] skipped: missing forumBottomSheetInitScrollMethod")
-                return null
-            }
+            val initScrollMethodName =
+                resolvedSymbols.forumBottomSheetInitScrollMethod?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log(
+                        "[ForumNativeTopShiftBlockHook] skipped: " +
+                            "missing forumBottomSheetInitScrollMethod",
+                    )
+                    return null
+                }
             val targetClass = safeFindClass(className, cl) ?: run {
                 XposedCompat.log("[ForumNativeTopShiftBlockHook] skipped: class not found: $className")
                 return null
             }
-            val method = collectInstanceMethods(targetClass).singleOrNull { candidate ->
-                candidate.name == methodName &&
+            val initScrollMethod = targetClass.declaredMethods.singleOrNull { candidate ->
+                candidate.name == initScrollMethodName &&
                     candidate.returnType == Void.TYPE &&
                     candidate.parameterTypes.size == 3 &&
                     candidate.parameterTypes[0] == Int::class.javaPrimitiveType &&
                     candidate.parameterTypes[1] == Boolean::class.javaPrimitiveType &&
                     candidate.parameterTypes[2].name == "kotlin.jvm.functions.Function0"
             } ?: run {
-                XposedCompat.log("[ForumNativeTopShiftBlockHook] skipped: method mismatch: $className.$methodName")
+                XposedCompat.log(
+                    "[ForumNativeTopShiftBlockHook] skipped: " +
+                        "method mismatch: $className.$initScrollMethodName(Int, Boolean, Function0)",
+                )
                 return null
             }
-            method.isAccessible = true
-            ForumNativeTopShiftSymbols(initScrollMethod = method)
+            val smoothInitGetterMethod = targetClass.declaredMethods.singleOrNull { candidate ->
+                candidate.name == StableTiebaHookPoints.FORUM_BOTTOM_SHEET_SMOOTH_INIT_GETTER &&
+                    candidate.returnType == Int::class.javaPrimitiveType &&
+                    candidate.parameterTypes.isEmpty()
+            } ?: run {
+                XposedCompat.log(
+                    "[ForumNativeTopShiftBlockHook] skipped: " +
+                        "method mismatch: $className." +
+                        "${StableTiebaHookPoints.FORUM_BOTTOM_SHEET_SMOOTH_INIT_GETTER}()",
+                )
+                return null
+            }
+            val setupMethod = targetClass.declaredMethods.singleOrNull { candidate ->
+                candidate.name == StableTiebaHookPoints.FORUM_BOTTOM_SHEET_SETUP_METHOD &&
+                    candidate.returnType == Void.TYPE &&
+                    candidate.parameterTypes.contentEquals(
+                        arrayOf(
+                            Int::class.javaPrimitiveType,
+                            Int::class.javaPrimitiveType,
+                            Int::class.javaPrimitiveType,
+                            Boolean::class.javaPrimitiveType,
+                        ),
+                    )
+            } ?: run {
+                XposedCompat.log(
+                    "[ForumNativeTopShiftBlockHook] skipped: " +
+                        "method mismatch: $className." +
+                        "${StableTiebaHookPoints.FORUM_BOTTOM_SHEET_SETUP_METHOD}" +
+                        "(Int, Int, Int, Boolean)",
+                )
+                return null
+            }
+            val maxScrollGetterMethod =
+                collectInstanceMethods(targetClass).singleOrNull { candidate ->
+                    candidate.name == StableTiebaHookPoints.FORUM_BOTTOM_SHEET_MAX_SCROLL_GETTER &&
+                        candidate.returnType == Int::class.javaPrimitiveType &&
+                        candidate.parameterTypes.isEmpty()
+                } ?: run {
+                    XposedCompat.log(
+                        "[ForumNativeTopShiftBlockHook] skipped: " +
+                            "method mismatch: $className." +
+                            "${StableTiebaHookPoints.FORUM_BOTTOM_SHEET_MAX_SCROLL_GETTER}()",
+                    )
+                    return null
+                }
+            initScrollMethod.isAccessible = true
+            smoothInitGetterMethod.isAccessible = true
+            setupMethod.isAccessible = true
+            maxScrollGetterMethod.isAccessible = true
+            ForumNativeTopShiftSymbols(
+                initScrollMethod = initScrollMethod,
+                smoothInitGetterMethod = smoothInitGetterMethod,
+                setupMethod = setupMethod,
+                maxScrollGetterMethod = maxScrollGetterMethod,
+            )
         } catch (t: Throwable) {
             XposedCompat.log("[ForumNativeTopShiftBlockHook] symbol resolve FAILED: ${t.message}")
             XposedCompat.log(t)
@@ -4716,7 +4775,7 @@ internal object HookSymbolResolver {
                 createdAt = System.currentTimeMillis(),
                 scanErrors = scanErrors,
             )
-            unsupported.withFeatureStatusMap(HookFeatureStatusDeriver.derive(unsupported))
+            unsupported
         }
         log(logger, "scan done: source=${scanned.source}")
         log(
@@ -4939,7 +4998,7 @@ internal object HookSymbolResolver {
         )
         if (candidatesWithWhitelist.isEmpty()) {
             val unsupported = HookSymbols.unsupported(createdAt = System.currentTimeMillis())
-            return unsupported.withFeatureStatusMap(HookFeatureStatusDeriver.derive(unsupported))
+            return unsupported
         }
 
         val settingsScan = runScanStep(
@@ -6298,7 +6357,7 @@ internal object HookSymbolResolver {
             source = if (homeTabScan.tabClass != null) "scan" else "partial"
             createdAt = System.currentTimeMillis()
         }
-        return scanned.withFeatureStatusMap(HookFeatureStatusDeriver.derive(scanned))
+        return scanned
     }
 
     internal fun collectInstanceFields(clazz: Class<*>): List<Field> =
@@ -6331,41 +6390,31 @@ internal object HookSymbolResolver {
         logger: ScanLogger?,
     ): HookSymbols {
         val versionInfo = readTargetAppVersionInfo(context, logger)
-            ?: return withDerivedFeatureStatus(
-                symbols.withScanSupport(ScanSupportState.UNKNOWN),
-            )
+            ?: return symbols.withScanSupport(ScanSupportState.UNKNOWN)
 
         if (
             versionInfo.versionCode > MAX_TIEBA_VERSION_CODE ||
             versionInfo.versionCode < MIN_TIEBA_VERSION_CODE
         ) {
-            return withDerivedFeatureStatus(
-                symbols.withScanSupport(
-                    state = ScanSupportState.UNSUPPORTED_VERSION,
-                    targetVersionCode = versionInfo.versionCode,
-                    targetVersionName = versionInfo.versionName,
-                    targetVersionType = null,
-                ),
+            return symbols.withScanSupport(
+                state = ScanSupportState.UNSUPPORTED_VERSION,
+                targetVersionCode = versionInfo.versionCode,
+                targetVersionName = versionInfo.versionName,
+                targetVersionType = null,
             )
         }
 
         val versionType = readTargetVersionType(context, logger)
-        return withDerivedFeatureStatus(
-            symbols.withScanSupport(
-                state = if (isOfficialTiebaVersionType(versionType)) {
-                    ScanSupportState.SUPPORTED
-                } else {
-                    ScanSupportState.NON_OFFICIAL
-                },
-                targetVersionCode = versionInfo.versionCode,
-                targetVersionName = versionInfo.versionName,
-                targetVersionType = versionType,
-            ),
+        return symbols.withScanSupport(
+            state = if (isOfficialTiebaVersionType(versionType)) {
+                ScanSupportState.SUPPORTED
+            } else {
+                ScanSupportState.NON_OFFICIAL
+            },
+            targetVersionCode = versionInfo.versionCode,
+            targetVersionName = versionInfo.versionName,
+            targetVersionType = versionType,
         )
-    }
-
-    private fun withDerivedFeatureStatus(symbols: HookSymbols): HookSymbols {
-        return symbols.withFeatureStatusMap(HookFeatureStatusDeriver.derive(symbols))
     }
 
     private fun readTargetAppVersionInfo(context: Context, logger: ScanLogger?): TargetAppVersionInfo? {

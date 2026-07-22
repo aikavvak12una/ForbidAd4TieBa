@@ -31,7 +31,11 @@ object StableTiebaHookPoints {
     const val FEED_CARD_ORIGIN_MOUNT_VIEW_CLASS =
         "com.baidu.tieba.feed.component.mount.CardOriginMountView"
     const val FORUM_ACTIVITY_CLASS = "com.baidu.tieba.forum.ForumActivity"
-    const val FORUM_BOTTOM_SHEET_VIEW_CLASS = "com.baidu.tieba.forum.widget.TbBottomSheetView"
+    const val FORUM_BOTTOM_SHEET_VIEW_CLASS =
+        "com.baidu.tieba.forum.widget.TbBottomSheetView"
+    const val FORUM_BOTTOM_SHEET_SETUP_METHOD = "setup"
+    const val FORUM_BOTTOM_SHEET_SMOOTH_INIT_GETTER = "getSmoothInit"
+    const val FORUM_BOTTOM_SHEET_MAX_SCROLL_GETTER = "getMaxScroll"
     const val TYPE_ADAPTER_CLASS = "com.baidu.adp.widget.ListView.TypeAdapter"
     const val TYPE_ADAPTER_VIEW_HOLDER_CLASS = "$TYPE_ADAPTER_CLASS\$ViewHolder"
     const val BD_LIST_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdListView"

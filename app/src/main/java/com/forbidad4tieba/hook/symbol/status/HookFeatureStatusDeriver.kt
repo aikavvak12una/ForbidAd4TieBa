@@ -8,15 +8,6 @@ internal object HookFeatureStatusDeriver {
 
     val featureKeys: List<String> = HookFeatureKey.orderedKeys
 
-    fun deriveWithOverrides(symbols: HookSymbols?): Map<String, HookFeatureStatus> {
-        val source = symbols ?: HookSymbols.unsupported()
-        if (source.featureStatusMap.isEmpty()) return derive(source)
-        val merged = LinkedHashMap<String, HookFeatureStatus>(derive(source)).apply {
-            putAll(source.featureStatusMap)
-        }
-        return withHookPointAvailability(source, merged)
-    }
-
     fun derive(symbols: HookSymbols): Map<String, HookFeatureStatus> {
         val out = LinkedHashMap<String, HookFeatureStatus>(featureKeys.size)
         val feedTemplateKeyMissing = symbols.feedTemplateKeyMethod.isNullOrBlank()
@@ -89,16 +80,16 @@ internal object HookFeatureStatusDeriver {
                 missingCritical = pbBottomBannerMissing,
             )
         }
-        val freeCopyOptional = ArrayList<String>(3)
-        if (symbols.freeCopyPopupMenuClass.isNullOrBlank()) freeCopyOptional.add("freeCopyPopupMenuClass")
+        val freeCopyCritical = ArrayList<String>(3)
+        if (symbols.freeCopyPopupMenuClass.isNullOrBlank()) freeCopyCritical.add("freeCopyPopupMenuClass")
         if (symbols.freeCopyPopupContentViewMethod.isNullOrBlank()) {
-            freeCopyOptional.add("freeCopyPopupContentViewMethod")
+            freeCopyCritical.add("freeCopyPopupContentViewMethod")
         }
-        if (symbols.freeCopyPopupTextField.isNullOrBlank()) freeCopyOptional.add("freeCopyPopupTextField")
-        out[HookFeatureKey.FREE_COPY] = if (freeCopyOptional.isEmpty()) {
+        if (symbols.freeCopyPopupTextField.isNullOrBlank()) freeCopyCritical.add("freeCopyPopupTextField")
+        out[HookFeatureKey.FREE_COPY] = if (freeCopyCritical.isEmpty()) {
             HookFeatureStatus(state = HookFeatureState.FULL)
         } else {
-            HookFeatureStatus(state = HookFeatureState.PARTIAL, missingOptional = freeCopyOptional)
+            HookFeatureStatus(state = HookFeatureState.DISABLED, missingCritical = freeCopyCritical)
         }
 
         val autoSignInCritical = ArrayList<String>(10)
@@ -1144,7 +1135,7 @@ internal object HookFeatureStatusDeriver {
         statusMap: LinkedHashMap<String, HookFeatureStatus>,
     ): LinkedHashMap<String, HookFeatureStatus> {
         val missingHookPointsByFeature = LinkedHashMap<String, MutableList<String>>()
-        HookSymbolStatusFormatter.formatHookPointStatusLines(
+        HookSymbolStatusFormatter.collectHookPointStatuses(
             symbols = symbols,
             aiPbAiEmojiCreationViewClass = AI_PB_AI_EMOJI_CREATION_VIEW_CLASS,
             aiPbAiEmojiCreationPageBrowserViewClass =
@@ -1152,11 +1143,9 @@ internal object HookFeatureStatusDeriver {
                     ?: AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS,
             msgTabViewModelClass = StableTiebaHookPoints.MSG_CENTER_CONTAINER_VIEW_MODEL_CLASS,
             msgTabContainerViewClass = MSG_TAB_CONTAINER_VIEW_CLASS,
-        ).forEach { line ->
-            val match = HOOK_POINT_STATUS_PATTERN.matchEntire(line) ?: return@forEach
-            val hookPoint = match.groupValues[1]
-            val state = match.groupValues[2]
-            if (state == "FOUND") return@forEach
+        ).forEach { status ->
+            if (!status.isUnavailable()) return@forEach
+            val hookPoint = status.name
             val affectedFeatures = featureKeysForHookPoint(hookPoint)
             if (affectedFeatures.isEmpty()) return@forEach
             affectedFeatures.forEach { featureKey ->
@@ -1254,8 +1243,6 @@ internal object HookFeatureStatusDeriver {
     }
 
     private fun features(vararg featureKeys: String): List<String> = featureKeys.asList()
-
-    private val HOOK_POINT_STATUS_PATTERN = Regex("""^HookPoint\[([^]]+)] state=([^ ]+) missing=([^ ]+) target=.*$""")
 
     private const val AI_PB_AI_EMOJI_CREATION_VIEW_CLASS =
         "com.baidu.tieba.pb.view.PbAiEmojiCreationView"

@@ -59,7 +59,24 @@ data class ImageViewerShareSymbolsGroup(
     val request: ImageViewerShareRequestSymbolsGroup = ImageViewerShareRequestSymbolsGroup(),
     val item: ImageViewerShareItemSymbolsGroup = ImageViewerShareItemSymbolsGroup(),
     val itemView: ImageViewerShareItemViewSymbolsGroup = ImageViewerShareItemViewSymbolsGroup(),
-)
+) {
+    fun isNativeShareReady(iconResId: Int?): Boolean {
+        return hasRequired(
+            config.imageViewerShareConfigClass,
+            config.imageViewerShareIsDialogField,
+            config.imageViewerShareItemField,
+            config.imageViewerShareAddOutsideMethod,
+            request.imageViewerShareGetRequestDataMethod,
+            request.imageViewerShareSetRequestDataMethod,
+            request.imageViewerShareGetContextMethod,
+            item.imageViewerShareItemClass,
+            item.imageViewerShareItemImageUriField,
+            itemView.imageViewerShareItemViewClass,
+            itemView.imageViewerShareItemNameByResMethod,
+            itemView.imageViewerShareItemNameByTextMethod,
+        ) && iconResId != null && iconResId != 0
+    }
+}
 
 data class ImageViewerShareConfigSymbolsGroup(
     val imageViewerShareConfigClass: String? = null,
@@ -117,4 +134,13 @@ data class AiEmojiCreationSymbolsGroup(
 data class AiImageViewerJumpButtonSymbolsGroup(
     val aiImageViewerJumpButtonOwnerClass: String? = null,
     val aiImageViewerJumpButtonInitMethod: String? = null,
-)
+) {
+    fun isReady(): Boolean = hasRequired(
+        aiImageViewerJumpButtonOwnerClass,
+        aiImageViewerJumpButtonInitMethod,
+    )
+}
+
+private fun hasRequired(vararg values: String?): Boolean {
+    return values.all { !it.isNullOrBlank() }
+}

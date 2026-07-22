@@ -8,7 +8,6 @@ data class ResourceSymbols(
 )
 
 data class ScanMeta(
-    val featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
     val availability: ScanAvailabilityMeta = ScanAvailabilityMeta(),
     val scanErrors: List<String> = emptyList(),
     val source: String = "unsupported",

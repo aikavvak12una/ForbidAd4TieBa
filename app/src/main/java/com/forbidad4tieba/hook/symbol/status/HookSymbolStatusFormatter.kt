@@ -25,11 +25,33 @@ internal object HookSymbolStatusFormatter {
         msgTabViewModelClass: String,
         msgTabContainerViewClass: String,
     ): List<String> {
+        return collectHookPointStatuses(
+            symbols = symbols,
+            aiPbAiEmojiCreationViewClass = aiPbAiEmojiCreationViewClass,
+            aiPbAiEmojiCreationPageBrowserViewClass = aiPbAiEmojiCreationPageBrowserViewClass,
+            msgTabViewModelClass = msgTabViewModelClass,
+            msgTabContainerViewClass = msgTabContainerViewClass,
+        ).map(HookPointStatus::formatLine)
+    }
+
+    fun collectHookPointStatuses(
+        symbols: HookSymbols?,
+        aiPbAiEmojiCreationViewClass: String,
+        aiPbAiEmojiCreationPageBrowserViewClass: String,
+        msgTabViewModelClass: String,
+        msgTabContainerViewClass: String,
+    ): List<HookPointStatus> {
         if (symbols == null) {
-            return listOf("HookPoint[SymbolCache] state=MISSING missing=symbols target=-")
+            return listOf(
+                HookPointStatus(
+                    name = "SymbolCache",
+                    state = HookPointState.MISSING,
+                    missing = listOf("symbols"),
+                ),
+            )
         }
 
-        val out = ArrayList<String>(48)
+        val out = ArrayList<HookPointStatus>(96)
 
         fun has(value: String?): Boolean = !value.isNullOrBlank()
         fun has(value: Int?): Boolean = value != null && value != 0
@@ -38,22 +60,17 @@ internal object HookSymbolStatusFormatter {
             return values.orEmpty().filter { it.isNotBlank() }.joinToString(",").ifBlank { "-" }
         }
         fun add(name: String, target: String, checks: List<Pair<String, Boolean>>) {
-            val missing = checks.asSequence()
-                .filter { !it.second }
-                .map { it.first }
-                .toList()
-            val state = if (missing.isEmpty()) "FOUND" else "MISSING"
-            val missingText = if (missing.isEmpty()) "-" else missing.joinToString(",")
-            out.add("HookPoint[$name] state=$state missing=$missingText target=$target")
+            out.add(buildHookPointStatus(name, target, checks))
         }
         fun addOptional(name: String, target: String, checks: List<Pair<String, Boolean>>) {
-            val missing = checks.asSequence()
-                .filter { !it.second }
-                .map { it.first }
-                .toList()
-            val state = if (missing.isEmpty()) "FOUND" else "PARTIAL"
-            val missingText = if (missing.isEmpty()) "-" else missing.joinToString(",")
-            out.add("HookPoint[$name] state=$state missing=$missingText target=$target")
+            out.add(
+                buildHookPointStatus(
+                    name = name,
+                    target = target,
+                    checks = checks,
+                    missingState = HookPointState.OPTIONAL,
+                ),
+            )
         }
 
         add(
@@ -266,7 +283,7 @@ internal object HookSymbolStatusFormatter {
                 ),
             ),
         )
-        out.addAll(formatHomeNativeGlassHookPointStatusLines(symbols))
+        out.addAll(collectHomeNativeGlassHookPointStatuses(symbols))
         add(
             "StrategyAdHook.Splash",
             "${symbols.splashAdHelperClass}.${symbols.splashAdHelperMethod}",
@@ -332,21 +349,27 @@ internal object HookSymbolStatusFormatter {
             val hasConstructors = (symbols.pbBottomEnterBarConstructorCount ?: 0) > 0
             val hasRefreshMethods = hasList(symbols.pbBottomEnterBarRefreshMethodSpecs)
             val state = when {
-                !hasViewClass || !hasConstructors -> "MISSING"
-                !hasRefreshMethods -> "PARTIAL"
-                else -> "FOUND"
+                !hasViewClass || !hasConstructors -> HookPointState.MISSING
+                !hasRefreshMethods -> HookPointState.PARTIAL
+                else -> HookPointState.FOUND
             }
             val missing = buildList {
                 if (!hasViewClass) add("pbBottomEnterBarViewClass")
                 if (!hasConstructors) add("pbBottomEnterBarConstructorCount")
                 if (!hasRefreshMethods) add("pbBottomEnterBarRefreshMethodSpecs")
-            }.joinToString(",").ifBlank { "-" }
+            }
             out.add(
-                "HookPoint[PbBottomEnterBarHook.BottomEnterBarView] state=$state missing=$missing target=" +
-                    "${symbols.pbBottomEnterBarViewClass ?: StableTiebaHookPoints.PB_BOTTOM_ENTER_BAR_VIEW_CLASS}" +
-                    " constructors=${symbols.pbBottomEnterBarConstructorCount ?: "-"} refresh={" +
-                    listTarget(symbols.pbBottomEnterBarRefreshMethodSpecs) +
-                    "}",
+                HookPointStatus(
+                    name = "PbBottomEnterBarHook.BottomEnterBarView",
+                    state = state,
+                    missing = missing,
+                    target = (
+                        "${symbols.pbBottomEnterBarViewClass ?: StableTiebaHookPoints.PB_BOTTOM_ENTER_BAR_VIEW_CLASS}" +
+                            " constructors=${symbols.pbBottomEnterBarConstructorCount ?: "-"} refresh={" +
+                            listTarget(symbols.pbBottomEnterBarRefreshMethodSpecs) +
+                            "}"
+                        ),
+                ),
             )
         }
         run {
@@ -359,9 +382,9 @@ internal object HookSymbolStatusFormatter {
             val hasConstructors = (symbols.pbEnterFrsAnimationTipConstructorCount ?: 0) > 0
             val hasCallers = callerClasses.containsAll(requiredCallers)
             val state = when {
-                !hasViewClass || !hasConstructors -> "MISSING"
-                !hasCallers -> "PARTIAL"
-                else -> "FOUND"
+                !hasViewClass || !hasConstructors -> HookPointState.MISSING
+                !hasCallers -> HookPointState.PARTIAL
+                else -> HookPointState.FOUND
             }
             val missing = buildList {
                 if (!hasViewClass) add("pbEnterFrsAnimationTipViewClass")
@@ -369,33 +392,45 @@ internal object HookSymbolStatusFormatter {
                 requiredCallers
                     .filterNot { callerClasses.contains(it) }
                     .forEach { add(it.substringAfterLast('.')) }
-            }.joinToString(",").ifBlank { "-" }
+            }
             out.add(
-                "HookPoint[PbBottomEnterBarHook.AnimationTip] state=$state missing=$missing target=" +
-                    "${symbols.pbEnterFrsAnimationTipViewClass ?: StableTiebaHookPoints.TB_ANIMATION_TIP_VIEW_CLASS}" +
-                    " constructors=${symbols.pbEnterFrsAnimationTipConstructorCount ?: "-"} callers={" +
-                    listTarget(symbols.pbEnterFrsAnimationTipCallerClasses) +
-                    "}",
+                HookPointStatus(
+                    name = "PbBottomEnterBarHook.AnimationTip",
+                    state = state,
+                    missing = missing,
+                    target = (
+                        "${symbols.pbEnterFrsAnimationTipViewClass ?: StableTiebaHookPoints.TB_ANIMATION_TIP_VIEW_CLASS}" +
+                            " constructors=${symbols.pbEnterFrsAnimationTipConstructorCount ?: "-"} callers={" +
+                            listTarget(symbols.pbEnterFrsAnimationTipCallerClasses) +
+                            "}"
+                        ),
+                ),
             )
         }
         run {
             val hasTotalView = has(symbols.pbHotTopicGuideTotalViewMethod)
             val hasRefreshMethods = hasList(symbols.pbHotTopicGuideRefreshMethodSpecs)
             val state = when {
-                !hasTotalView -> "MISSING"
-                !hasRefreshMethods -> "PARTIAL"
-                else -> "FOUND"
+                !hasTotalView -> HookPointState.MISSING
+                !hasRefreshMethods -> HookPointState.PARTIAL
+                else -> HookPointState.FOUND
             }
             val missing = buildList {
                 if (!hasTotalView) add("pbHotTopicGuideTotalViewMethod")
                 if (!hasRefreshMethods) add("pbHotTopicGuideRefreshMethodSpecs")
-            }.joinToString(",").ifBlank { "-" }
+            }
             out.add(
-                "HookPoint[PbBottomEnterBarHook.HotTopicGuide] state=$state missing=$missing target=" +
-                    "${StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS}." +
-                    "${symbols.pbHotTopicGuideTotalViewMethod} refresh={" +
-                    listTarget(symbols.pbHotTopicGuideRefreshMethodSpecs) +
-                    "}",
+                HookPointStatus(
+                    name = "PbBottomEnterBarHook.HotTopicGuide",
+                    state = state,
+                    missing = missing,
+                    target = (
+                        "${StableTiebaHookPoints.PB_HOT_TOPIC_GUIDE_VIEW_CLASS}." +
+                            "${symbols.pbHotTopicGuideTotalViewMethod} refresh={" +
+                            listTarget(symbols.pbHotTopicGuideRefreshMethodSpecs) +
+                            "}"
+                        ),
+                ),
             )
         }
         add(
@@ -442,11 +477,15 @@ internal object HookSymbolStatusFormatter {
         )
         run {
             val readiness = ForumPageAdSymbolReadiness.evaluate(symbols)
-            val state = if (readiness.any) "FOUND" else "MISSING"
-            val missing = if (readiness.any) "-" else "forumPageAdPath"
+            val state = if (readiness.any) HookPointState.FOUND else HookPointState.MISSING
+            val missing = if (readiness.any) emptyList() else listOf("forumPageAdPath")
             out.add(
-                "HookPoint[ForumPageAdBlockHook] state=$state missing=$missing target=" +
-                    readiness.readyLabels.joinToString(",").ifBlank { "-" },
+                HookPointStatus(
+                    name = "ForumPageAdBlockHook",
+                    state = state,
+                    missing = missing,
+                    target = readiness.readyLabels.joinToString(",").ifBlank { "-" },
+                ),
             )
         }
         addOptional(
@@ -633,9 +672,9 @@ internal object HookSymbolStatusFormatter {
                 if (!navigationReady) addAll(navigationChecks.filter { !it.second }.map { it.first })
             }.distinct()
             val state = when {
-                initReady && navigationReady -> "FOUND"
-                initReady || navigationReady -> "PARTIAL"
-                else -> "MISSING"
+                initReady && navigationReady -> HookPointState.FOUND
+                initReady || navigationReady -> HookPointState.PARTIAL
+                else -> HookPointState.MISSING
             }
             val target = buildList {
                 if (has(symbols.plainUrlWebContainerActivityClass) ||
@@ -656,8 +695,14 @@ internal object HookSymbolStatusFormatter {
                     )
                 }
             }.joinToString(" / ").ifBlank { "-" }
-            val missingText = missing.joinToString(",").ifBlank { "-" }
-            out.add("HookPoint[PlainUrlDirectBrowserHook.WebContainer] state=$state missing=$missingText target=$target")
+            out.add(
+                HookPointStatus(
+                    name = "PlainUrlDirectBrowserHook.WebContainer",
+                    state = state,
+                    missing = missing,
+                    target = target,
+                ),
+            )
         }
         add(
             "PlainUrlDirectBrowserHook.MountCard",
@@ -704,10 +749,15 @@ internal object HookSymbolStatusFormatter {
         )
         add(
             "ForumNativeTopShiftBlockHook",
-            "${symbols.forumBottomSheetViewClass}.${symbols.forumBottomSheetInitScrollMethod}",
+            "${symbols.forumBottomSheetViewClass}." +
+                "${symbols.forumBottomSheetInitScrollMethod}(Int,Boolean,Function0) / " +
+                "${StableTiebaHookPoints.FORUM_BOTTOM_SHEET_SMOOTH_INIT_GETTER}()[stable] / " +
+                "${StableTiebaHookPoints.FORUM_BOTTOM_SHEET_SETUP_METHOD}(Int,Int,Int,Boolean)[stable] / " +
+                "${StableTiebaHookPoints.FORUM_BOTTOM_SHEET_MAX_SCROLL_GETTER}()[stable]",
             listOf(
                 "forumBottomSheetViewClass" to has(symbols.forumBottomSheetViewClass),
-                "forumBottomSheetInitScrollMethod" to has(symbols.forumBottomSheetInitScrollMethod),
+                "forumBottomSheetInitScrollMethod" to
+                    has(symbols.forumBottomSheetInitScrollMethod),
             ),
         )
         add(
@@ -761,15 +811,19 @@ internal object HookSymbolStatusFormatter {
                 else -> listOf("pbCommentBottomMechanism")
             }
             val state = when {
-                listFound || recyclerFound -> "FOUND"
-                anyBottomSymbol -> "PARTIAL"
-                else -> "MISSING"
+                listFound || recyclerFound -> HookPointState.FOUND
+                anyBottomSymbol -> HookPointState.PARTIAL
+                else -> HookPointState.MISSING
             }
-            val missingText = if (missing.isEmpty()) "-" else missing.joinToString(",")
             out.add(
-                "HookPoint[PbCommentAutoLoadHook] state=$state missing=$missingText target=" +
-                    "${symbols.pbCommentBottomListScrollClass}.${symbols.pbCommentBottomListScrollMethod} / " +
-                    "${symbols.pbCommentBottomRecyclerScrollClass}.${symbols.pbCommentBottomRecyclerScrollMethod}",
+                HookPointStatus(
+                    name = "PbCommentAutoLoadHook",
+                    state = state,
+                    missing = missing,
+                    target =
+                        "${symbols.pbCommentBottomListScrollClass}.${symbols.pbCommentBottomListScrollMethod} / " +
+                            "${symbols.pbCommentBottomRecyclerScrollClass}.${symbols.pbCommentBottomRecyclerScrollMethod}",
+                ),
             )
         }
         add(
@@ -1088,7 +1142,14 @@ internal object HookSymbolStatusFormatter {
         )
         symbols.scanErrors.forEach { error ->
             val (name, detail) = splitScanError(error)
-            out.add("HookPoint[$name] state=ERROR missing=exception target=$detail")
+            out.add(
+                HookPointStatus(
+                    name = name,
+                    state = HookPointState.ERROR,
+                    missing = listOf("exception"),
+                    target = detail,
+                ),
+            )
         }
 
         return out

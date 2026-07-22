@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
 import com.forbidad4tieba.hook.BuildConfig
-import com.forbidad4tieba.hook.feature.FeatureDescriptors
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
@@ -509,24 +508,6 @@ object ConfigManager {
     }
 
     fun getAppContext(): Context? = appContext
-
-    fun prepareForHotReload() {
-        synchronized(this) {
-            prefsListener?.let { listener ->
-                runCatching {
-                    prefs?.unregisterOnSharedPreferenceChangeListener(listener)
-                }.onFailure { t ->
-                    XposedCompat.logW("[ConfigManager] local prefs listener unregister failed: ${t.message}")
-                }
-            }
-            prefsListener = null
-            prefs = null
-            appContext = null
-            settingsSnapshot = SettingsSnapshot()
-            settingsSnapshotVersion++
-            homeNativeGlassDarkModeActive = false
-        }
-    }
 
     fun resetRuntimeAfterUserDataClear(context: Context) {
         synchronized(this) {
@@ -1117,8 +1098,12 @@ object ConfigManager {
     }
 
     fun scanFeatureKeyForPrefKeyOrNull(prefKey: String): String? {
-        FeatureDescriptors.forPrefKey(prefKey)?.let { return it.featureKey }
         return when (prefKey) {
+            KEY_ENABLE_AUTO_LOAD_MORE -> HookFeatureKey.AUTO_LOAD_MORE
+            KEY_DISABLE_AUTO_REFRESH -> HookFeatureKey.DISABLE_AUTO_REFRESH
+            KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE -> HookFeatureKey.DEFAULT_ORIGINAL_IMAGE
+            KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER -> HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER
+            KEY_ENABLE_PB_LIKE_AUTO_REPLY -> HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY
             KEY_BLOCK_AD_FEED -> HookFeatureKey.BLOCK_AD_FEED
             KEY_BLOCK_AD_POST_PAGE -> HookFeatureKey.BLOCK_AD_POST_PAGE
             KEY_BLOCK_AD_FORUM_PAGE -> HookFeatureKey.BLOCK_AD_FORUM_PAGE

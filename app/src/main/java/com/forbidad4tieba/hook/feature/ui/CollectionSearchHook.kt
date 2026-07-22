@@ -36,10 +36,7 @@ import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.WeakHashMap
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONObject
 
 /**
@@ -62,6 +59,10 @@ object CollectionSearchHook {
         var fetchToken: Int = 0,
         var fullDataReady: Boolean = false,
         var diskRestoreTried: Boolean = false,
+        var diskRestoreToken: Int = 0,
+        var diskRestoreInFlight: Boolean = false,
+        var fetchAfterDiskRestore: Boolean = false,
+        var notifyCacheMissAfterDiskRestore: Boolean = false,
         var fullLoadRequested: Boolean = false,
         var syncFooterVisible: Boolean = false,
     ) {
@@ -78,6 +79,11 @@ object CollectionSearchHook {
         val updatedAtMs: Long,
         val items: ArrayList<Any>,
         val fullReady: Boolean,
+    )
+
+    private data class DiskRestoreResult(
+        val items: List<Any>,
+        val trustedFull: Boolean,
     )
 
     private data class LoadAllResult(
@@ -144,11 +150,12 @@ object CollectionSearchHook {
     private val sHookedAdapterClasses =
         Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap<Class<*>, Boolean>()))
     private val sEditModeMethodCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Method>())
-    private val sExecutorLock = Any()
-    private val sActiveDiskTasks = AtomicInteger(0)
-    private val sActiveNetTasks = AtomicInteger(0)
-    private var sDiskIoExecutor: ExecutorService? = null
-    private var sNetExecutor: ExecutorService? = null
+    private val sDiskIoExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "tbhook-collect-cache-io").apply { isDaemon = true }
+    }
+    private val sNetExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "tbhook-collect-search-net").apply { isDaemon = true }
+    }
 
     private inline fun dbg(message: () -> String) {
         if (ConfigManager.shouldOutputDetailedLogs()) {
@@ -170,32 +177,6 @@ object CollectionSearchHook {
     @Volatile
     private var sRuntimeTargets: CollectionSearchSymbols? = null
 
-    fun hotReloadBusyReason(): String? {
-        if (sActiveDiskTasks.get() > 0) return "collection search disk task active"
-        if (sActiveNetTasks.get() > 0) return "collection search network task active"
-        return null
-    }
-
-    fun prepareForHotReload(): Boolean {
-        val executors = synchronized(sExecutorLock) {
-            val current = listOfNotNull(sDiskIoExecutor, sNetExecutor)
-            sDiskIoExecutor = null
-            sNetExecutor = null
-            current
-        }
-        var terminated = true
-        for (executor in executors) {
-            executor.shutdownNow()
-            terminated = try {
-                executor.awaitTermination(300L, TimeUnit.MILLISECONDS) && terminated
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                false
-            }
-        }
-        return terminated
-    }
-
     internal fun hook(symbols: CollectionSearchSymbols) {
         val mod = XposedCompat.module ?: return
         sRuntimeTargets = symbols
@@ -210,55 +191,7 @@ object CollectionSearchHook {
         }
     }
 
-    private fun executeDisk(block: () -> Unit) {
-        executeBackground(diskExecutor(), sActiveDiskTasks, block)
-    }
-
-    private fun executeNet(block: () -> Unit) {
-        executeBackground(netExecutor(), sActiveNetTasks, block)
-    }
-
-    private fun executeBackground(
-        executor: ExecutorService,
-        activeTasks: AtomicInteger,
-        block: () -> Unit,
-    ) {
-        activeTasks.incrementAndGet()
-        try {
-            executor.execute {
-                try {
-                    block()
-                } finally {
-                    activeTasks.decrementAndGet()
-                }
-            }
-        } catch (t: Throwable) {
-            activeTasks.decrementAndGet()
-            throw t
-        }
-    }
-
-    private fun diskExecutor(): ExecutorService {
-        return synchronized(sExecutorLock) {
-            val current = sDiskIoExecutor
-            if (current != null && !current.isShutdown) return current
-            Executors.newSingleThreadExecutor { runnable ->
-                Thread(runnable, "tbhook-collect-cache-io").apply { isDaemon = true }
-            }.also { sDiskIoExecutor = it }
-        }
-    }
-
-    private fun netExecutor(): ExecutorService {
-        return synchronized(sExecutorLock) {
-            val current = sNetExecutor
-            if (current != null && !current.isShutdown) return current
-            Executors.newSingleThreadExecutor { runnable ->
-                Thread(runnable, "tbhook-collect-search-net").apply { isDaemon = true }
-            }.also { sNetExecutor = it }
-        }
-    }
-
-    private fun installActivityHooks(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, activityClass: Class<*>) {
+    private fun installActivityHooks(mod: io.github.libxposed.api.XposedModule, activityClass: Class<*>) {
         XposedCompat.findMethodOrNull(activityClass, "onCreate", Bundle::class.java)?.let { method ->
             mod.hook(method).intercept { chain ->
                 val result = chain.proceed()
@@ -287,7 +220,7 @@ object CollectionSearchHook {
         }
     }
 
-    private fun installFragmentHooks(mod: com.forbidad4tieba.hook.core.Api102ModuleFacade, fragmentClass: Class<*>) {
+    private fun installFragmentHooks(mod: io.github.libxposed.api.XposedModule, fragmentClass: Class<*>) {
         XposedCompat.findMethodOrNull(
             fragmentClass,
             "onCreateView",
@@ -315,10 +248,14 @@ object CollectionSearchHook {
                         "requested=${state.fullLoadRequested} active=${state.active} query='${state.query}'"
                 }
                 if (!state.fullDataReady && state.shouldRestoreFullDataOnResume()) {
-                    val hitMemory = restoreFullDataFromCache(fragment, state)
-                    if (!hitMemory && !state.diskRestoreTried) {
-                        state.diskRestoreTried = true
-                        restoreFullDataFromDisk(fragment, state)
+                    val restoredFull = restoreFullDataFromCache(fragment, state)
+                    if (!restoredFull) {
+                        restoreFullDataFromDiskAsync(
+                            fragment = fragment,
+                            state = state,
+                            fetchOnMiss = state.active || state.query.isNotBlank(),
+                            userVisible = false,
+                        )
                     }
                 }
                 result
@@ -438,7 +375,10 @@ object CollectionSearchHook {
     }
 
     private fun clearFragmentState(fragment: Any) {
-        sFragmentStates[fragment]?.fetchToken = (sFragmentStates[fragment]?.fetchToken ?: 0) + 1
+        sFragmentStates[fragment]?.let { state ->
+            state.fetchToken += 1
+            invalidateDiskRestore(state)
+        }
         sFragmentStates.remove(fragment)
         synchronized(sPresenterOwners) {
             val iterator = sPresenterOwners.entries.iterator()
@@ -464,43 +404,13 @@ object CollectionSearchHook {
         applyFilter(fragment, state.query, fromUser = false)
     }
 
-    private fun hasFullCache(fragment: Any): Boolean {
-        getFullDataCache(fragment)?.let { cache ->
-            val trusted = isMemoryCacheTrustedFull(fragment, cache)
-            dbg {
-                "hasFullCache memory fullReady=${cache.fullReady} size=${cache.items.size} " +
-                    "trusted=$trusted"
-            }
-            if (trusted) return true
-        }
-        val context = resolveAppContext(fragment) ?: return false
-        val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return false
-        val snapshot = CollectionSearchCacheStore.read(context, accountKey) ?: return false
-        val trusted = isTrustedFullSnapshot(snapshot)
-        dbg {
-            "hasFullCache disk fullReady=${snapshot.fullReady} pages=${snapshot.rawPages.size} " +
-                "trusted=$trusted"
-        }
-        return trusted
-    }
-
-    private fun isMemoryCacheTrustedFull(fragment: Any, cache: FullDataCache): Boolean {
-        if (!cache.fullReady) return false
-        if (cache.items.size > PAGE_SIZE) return true
-        val context = resolveAppContext(fragment) ?: return false
-        val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return false
-        val snapshot = CollectionSearchCacheStore.read(context, accountKey) ?: return false
-        if (!isTrustedFullSnapshot(snapshot)) return false
-        return if (cache.items.isEmpty()) {
-            estimateSnapshotUniqueCount(snapshot.rawPages) == 0
-        } else {
-            true
-        }
+    private fun isMemoryCacheTrustedFull(cache: FullDataCache): Boolean {
+        return cache.fullReady
     }
 
     private fun getTrustedFullCacheItems(fragment: Any): List<Any>? {
         val cache = getFullDataCache(fragment) ?: return null
-        if (!isMemoryCacheTrustedFull(fragment, cache)) return null
+        if (!isMemoryCacheTrustedFull(cache)) return null
         return cache.items
     }
 
@@ -564,7 +474,7 @@ object CollectionSearchHook {
         if (!force && state.fetchingAll) return
         state.syncingFirstPage = true
         dbg { "syncFirstPageEveryEntry start force=$force fetchingAll=${state.fetchingAll}" }
-        executeNet {
+        sNetExecutor.execute {
             val result = fetchFirstPage(fragment)
             val host = findHostActivity(fragment)
             host?.runOnUiThread {
@@ -623,6 +533,7 @@ object CollectionSearchHook {
 
     private fun mergeFirstPageIntoCache(fragment: Any, firstPage: List<Any>) {
         val state = ensureFragmentState(fragment)
+        invalidateDiskRestore(state)
         if (!state.fullDataReady) {
             replaceModelDataset(fragment, firstPage)
             val fullReadyNow = firstPage.isEmpty()
@@ -693,20 +604,21 @@ object CollectionSearchHook {
     private fun startFetchAllCollections(fragment: Any, userVisible: Boolean = true) {
         val state = ensureFragmentState(fragment)
         if (state.fetchingAll) return
+        invalidateDiskRestore(state)
         state.fetchingAll = true
         val token = state.fetchToken + 1
         state.fetchToken = token
         dbg { "startFetchAllCollections token=$token userVisible=$userVisible" }
 
-        executeNet {
+        sNetExecutor.execute {
             val allResult = loadAllCollections(fragment, token)
             persistFullSnapshot(fragment, allResult)
             val host = findHostActivity(fragment)
             if (host == null) {
-                val current = sFragmentStates[fragment] ?: return@executeNet
-                if (current.fetchToken != token) return@executeNet
+                val current = sFragmentStates[fragment] ?: return@execute
+                if (current.fetchToken != token) return@execute
                 current.fetchingAll = false
-                return@executeNet
+                return@execute
             }
             host.runOnUiThread {
                 val current = sFragmentStates[fragment] ?: return@runOnUiThread
@@ -844,7 +756,7 @@ object CollectionSearchHook {
 
     private fun restoreFullDataFromCache(fragment: Any, state: FilterState): Boolean {
         val cached = getFullDataCache(fragment) ?: return false
-        val trustedFull = isMemoryCacheTrustedFull(fragment, cached)
+        val trustedFull = isMemoryCacheTrustedFull(cached)
         dbg {
             "restoreFullDataFromCache size=${cached.items.size} fullReady=${cached.fullReady} " +
                 "trusted=$trustedFull"
@@ -854,23 +766,61 @@ object CollectionSearchHook {
         if (state.fullDataReady) {
             suppressLoadingFooter(fragment)
         }
+        return trustedFull
+    }
+
+    private fun restoreFullDataFromDiskAsync(
+        fragment: Any,
+        state: FilterState,
+        fetchOnMiss: Boolean,
+        userVisible: Boolean,
+    ): Boolean {
+        if (state.diskRestoreInFlight) {
+            if (fetchOnMiss) {
+                state.fetchAfterDiskRestore = true
+                state.notifyCacheMissAfterDiskRestore =
+                    state.notifyCacheMissAfterDiskRestore || userVisible
+            }
+            return true
+        }
+        if (state.diskRestoreTried) return false
+
+        val host = findHostActivity(fragment) ?: return false
+        val context = host.applicationContext ?: host
+        val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return false
+        val model = resolveModel(fragment) ?: return false
+        val parseMethod = resolveModelParseMethod(model.javaClass) ?: return false
+        state.diskRestoreTried = true
+        val token = state.diskRestoreToken + 1
+        state.diskRestoreToken = token
+        state.diskRestoreInFlight = true
+        state.fetchAfterDiskRestore = fetchOnMiss
+        state.notifyCacheMissAfterDiskRestore = userVisible
+
+        sDiskIoExecutor.execute {
+            val restored = readFullDataFromDisk(context, accountKey, model, parseMethod)
+            host.runOnUiThread {
+                completeDiskRestore(fragment, state, token, accountKey, restored)
+            }
+        }
         return true
     }
 
-    private fun restoreFullDataFromDisk(fragment: Any, state: FilterState): Boolean {
-        val context = resolveAppContext(fragment) ?: return false
-        val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return false
-        val snapshot = CollectionSearchCacheStore.read(context, accountKey) ?: return false
+    private fun readFullDataFromDisk(
+        context: Context,
+        accountKey: String,
+        model: Any,
+        parseMethod: Method,
+    ): DiskRestoreResult? {
+        val snapshot = CollectionSearchCacheStore.read(context, accountKey) ?: return null
         if (!snapshot.fullReady || snapshot.rawPages.isEmpty()) {
             dbg {
                 "restoreFullDataFromDisk skip fullReady=${snapshot.fullReady} " +
                     "pages=${snapshot.rawPages.size}"
             }
-            return false
+            return null
         }
 
-        val model = resolveModel(fragment) ?: return false
-        val parseMethod = resolveModelParseMethod(model.javaClass) ?: return false
         val dedupe = LinkedHashMap<String, Any>(1024)
         snapshot.rawPages.forEach { raw ->
             val page = parseCollectionPage(model, parseMethod, raw)
@@ -880,18 +830,80 @@ object CollectionSearchHook {
         }
         val trustedFull = isTrustedFullSnapshot(snapshot)
         val restored = dedupe.values.toList()
-        if (restored.isEmpty() && !trustedFull) return false
+        if (restored.isEmpty() && !trustedFull) return null
         dbg {
             "restoreFullDataFromDisk restored=${restored.size} pages=${snapshot.rawPages.size} " +
                 "trustedFull=$trustedFull"
         }
-        replaceModelDataset(fragment, restored)
-        putFullDataCache(fragment, restored, fullReady = trustedFull)
-        state.fullDataReady = trustedFull
-        if (trustedFull) {
-            suppressLoadingFooter(fragment)
+        return DiskRestoreResult(restored, trustedFull)
+    }
+
+    private fun completeDiskRestore(
+        fragment: Any,
+        state: FilterState,
+        token: Int,
+        accountKey: String,
+        restored: DiskRestoreResult?,
+    ) {
+        val current = sFragmentStates[fragment] ?: return
+        if (current !== state || current.diskRestoreToken != token) return
+
+        current.diskRestoreInFlight = false
+        if (resolveCurrentAccount(fragment.javaClass.classLoader) != accountKey) {
+            current.diskRestoreTried = false
+            current.fetchAfterDiskRestore = false
+            current.notifyCacheMissAfterDiskRestore = false
+            return
         }
-        return true
+        val fetchOnMiss = current.fetchAfterDiskRestore
+        val userVisible = current.notifyCacheMissAfterDiskRestore
+        current.fetchAfterDiskRestore = false
+        current.notifyCacheMissAfterDiskRestore = false
+
+        if (restored != null) {
+            replaceModelDataset(fragment, restored.items)
+            putFullDataCache(accountKey, restored.items, fullReady = restored.trustedFull)
+            current.fullDataReady = restored.trustedFull
+            if (restored.trustedFull) {
+                suppressLoadingFooter(fragment)
+            } else {
+                startFetchAfterDiskRestoreMiss(fragment, current, fetchOnMiss, userVisible)
+            }
+            if (current.active) {
+                applyFilter(fragment, current.query, fromUser = false)
+            }
+            return
+        }
+
+        startFetchAfterDiskRestoreMiss(fragment, current, fetchOnMiss, userVisible)
+    }
+
+    private fun startFetchAfterDiskRestoreMiss(
+        fragment: Any,
+        state: FilterState,
+        fetchOnMiss: Boolean,
+        userVisible: Boolean,
+    ) {
+        if (
+            !fetchOnMiss ||
+            state.fullDataReady ||
+            state.fetchingAll ||
+            state.fullLoadRequested
+        ) {
+            return
+        }
+        state.fullLoadRequested = true
+        startFetchAllCollections(fragment, userVisible = userVisible)
+        if (userVisible) {
+            showToast(findHostActivity(fragment), UiText.CollectionSearch.TOAST_NO_CACHE)
+        }
+    }
+
+    private fun invalidateDiskRestore(state: FilterState) {
+        state.diskRestoreToken += 1
+        state.diskRestoreInFlight = false
+        state.fetchAfterDiskRestore = false
+        state.notifyCacheMissAfterDiskRestore = false
     }
 
     private fun getFullDataCache(fragment: Any): FullDataCache? {
@@ -911,8 +923,12 @@ object CollectionSearchHook {
     }
 
     private fun putFullDataCache(fragment: Any, items: List<Any>, fullReady: Boolean = true) {
-        if (items.isEmpty() && !fullReady) return
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
+        putFullDataCache(accountKey, items, fullReady)
+    }
+
+    private fun putFullDataCache(accountKey: String, items: List<Any>, fullReady: Boolean) {
+        if (items.isEmpty() && !fullReady) return
         synchronized(sFullDataCacheByAccount) {
             sFullDataCacheByAccount[accountKey] = FullDataCache(
                 updatedAtMs = System.currentTimeMillis(),
@@ -943,7 +959,7 @@ object CollectionSearchHook {
         }
         val context = resolveAppContext(fragment) ?: return
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
-        executeDisk {
+        sDiskIoExecutor.execute {
             dbg { "persistFullSnapshot write pages=${data.rawPages.size} account=$accountKey" }
             CollectionSearchCacheStore.write(
                 context = context,
@@ -959,7 +975,7 @@ object CollectionSearchHook {
         if (rawPage.isNullOrBlank()) return
         val context = resolveAppContext(fragment) ?: return
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
-        executeDisk {
+        sDiskIoExecutor.execute {
             dbg { "persistFirstPageSnapshot write rawLen=${rawPage.length} account=$accountKey" }
             CollectionSearchCacheStore.updateFirstPage(
                 context = context,
@@ -1429,17 +1445,28 @@ object CollectionSearchHook {
                 "fullReady=${state.fullDataReady} fetchingAll=${state.fetchingAll} requested=${state.fullLoadRequested}"
         }
         if (!state.fullDataReady) {
-            val hitMemory = restoreFullDataFromCache(fragment, state)
-            if (!hitMemory && !state.diskRestoreTried) {
-                state.diskRestoreTried = true
-                restoreFullDataFromDisk(fragment, state)
+            val restoredFull = restoreFullDataFromCache(fragment, state)
+            val waitingForDisk = if (restoredFull) {
+                false
+            } else {
+                restoreFullDataFromDiskAsync(
+                    fragment = fragment,
+                    state = state,
+                    fetchOnMiss = true,
+                    userVisible = fromUser,
+                )
             }
-        }
-        if (!state.fullDataReady && !state.fetchingAll && !state.fullLoadRequested && !hasFullCache(fragment)) {
-            state.fullLoadRequested = true
-            startFetchAllCollections(fragment, userVisible = fromUser)
-            if (fromUser) {
-                showToast(findHostActivity(fragment), UiText.CollectionSearch.TOAST_NO_CACHE)
+            if (
+                !state.fullDataReady &&
+                !waitingForDisk &&
+                !state.fetchingAll &&
+                !state.fullLoadRequested
+            ) {
+                state.fullLoadRequested = true
+                startFetchAllCollections(fragment, userVisible = fromUser)
+                if (fromUser) {
+                    showToast(findHostActivity(fragment), UiText.CollectionSearch.TOAST_NO_CACHE)
+                }
             }
         }
 

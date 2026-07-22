@@ -243,38 +243,6 @@ internal class EnterForumWebControllerRule(
     }
 }
 
-internal class ForumBottomSheetInitScrollRule(
-    private val bottomSheetClassName: String,
-) : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
-
-    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
-        if (cls.name != bottomSheetClassName) return null
-        val methods = scanRuleMethods("ForumBottomSheetInitScrollRule", cls, logger) ?: return null
-        val targetMethod = methods
-            .filter { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 3 &&
-                    method.parameterTypes[0] == Int::class.javaPrimitiveType &&
-                    method.parameterTypes[1] == Boolean::class.javaPrimitiveType &&
-                    method.parameterTypes[2].name == "kotlin.jvm.functions.Function0"
-            }
-            .minWithOrNull(
-                compareBy<java.lang.reflect.Method>(
-                    { if (it.name == "c0") 0 else 1 },
-                    { it.name.length },
-                    { it.name },
-                ),
-            ) ?: return null
-
-        var score = 100
-        if (targetMethod.name == "c0") score += 20
-        score -= methods.size / 4
-        return ScanMatch(cls.name, targetMethod.name, "", score)
-    }
-}
-
 internal class AutoLoadMoreConfigRule(
     private val parserClassName: String,
     private val preferredMethodName: String = "a",

@@ -1,13 +1,9 @@
 package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.config.SettingsSnapshot
-import com.forbidad4tieba.hook.feature.FeatureDescriptors
-import com.forbidad4tieba.hook.symbol.model.ForumPageAdSymbolReadiness
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
-import com.forbidad4tieba.hook.symbol.model.HookFeatureSymbols
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
-import com.forbidad4tieba.hook.symbol.model.toFeatureSymbols
 import com.forbidad4tieba.hook.symbol.status.HookFeatureStatusDeriver
 
 internal class HookInstallContext(
@@ -18,35 +14,31 @@ internal class HookInstallContext(
     val isImageViewerRemote: Boolean = HookProcess.isImageViewerRemote(processName)
     val isImageViewerProcess: Boolean = HookProcess.isImageViewerProcess(processName)
 
-    private val featureSymbols: HookFeatureSymbols = symbols.toFeatureSymbols()
-    private val statusMap: Map<String, HookFeatureStatus> = HookFeatureStatusDeriver.deriveWithOverrides(symbols)
+    private val statusMap: Map<String, HookFeatureStatus> = HookFeatureStatusDeriver.derive(symbols)
 
     private fun available(featureKey: String): Boolean {
         return statusMap[featureKey]?.isSupported() == true
     }
 
     fun canInstallFreeCopy(): Boolean {
-        return isMain &&
-            available(HookFeatureKey.FREE_COPY) &&
-            featureSymbols.freeCopy.isComplete()
+        return isMain && available(HookFeatureKey.FREE_COPY)
     }
 
     fun canInstallImageViewerNativeShare(): Boolean {
-        return isImageViewerProcess && featureSymbols.share.isNativeShareComplete()
+        return isImageViewerProcess &&
+            symbols.image.viewerShare.isNativeShareReady(symbols.imageViewerShareIconResId)
     }
 
     fun canInstallDefaultOriginalImage(settings: SettingsSnapshot): Boolean {
         return isImageViewerProcess &&
             settings.isDefaultOriginalImageEnabled &&
-            available(FeatureDescriptors.DEFAULT_ORIGINAL_IMAGE.featureKey) &&
-            featureSymbols.originalImage.isComplete()
+            available(HookFeatureKey.DEFAULT_ORIGINAL_IMAGE)
     }
 
     fun canInstallImageViewerAiJumpButton(settings: SettingsSnapshot): Boolean {
         return isImageViewerRemote &&
             settings.isAiComponentsDisabled &&
-            available(HookFeatureKey.DISABLE_AI_COMPONENTS) &&
-            featureSymbols.performance.isImageViewerJumpButtonComplete()
+            symbols.ai.imageViewerJumpButton.isReady()
     }
 
     private fun canInstallAdBlockSubFeature(enabled: Boolean, featureKey: String): Boolean {
@@ -57,7 +49,7 @@ internal class HookInstallContext(
         return canInstallAdBlockSubFeature(
             settings.isFeedAdBlockEnabled,
             HookFeatureKey.BLOCK_AD_FEED,
-        ) && hasFeedAdPath()
+        )
     }
 
     fun canInstallPostAdBlock(settings: SettingsSnapshot): Boolean {
@@ -72,8 +64,7 @@ internal class HookInstallContext(
             canInstallAdBlockSubFeature(
                 settings.isForumPageAdBlockEnabled,
                 HookFeatureKey.BLOCK_AD_FORUM_PAGE,
-            ) &&
-            hasForumPageAdBlockPath()
+            )
     }
 
     fun canInstallStrategyAdBlock(settings: SettingsSnapshot): Boolean {
@@ -116,14 +107,6 @@ internal class HookInstallContext(
             settings.isHomeTopBarAdBlockEnabled,
             HookFeatureKey.BLOCK_AD_HOME_TOP_BAR,
         )
-    }
-
-    private fun hasForumPageAdBlockPath(): Boolean {
-        return ForumPageAdSymbolReadiness.evaluate(symbols).any
-    }
-
-    private fun hasFeedAdPath(): Boolean {
-        return !symbols.feedTemplateKeyMethod.isNullOrBlank()
     }
 
     private fun hasPostAdDataPath(): Boolean {
@@ -181,8 +164,7 @@ internal class HookInstallContext(
 
     fun canInstallHomeTopTabs(settings: SettingsSnapshot): Boolean {
         return settings.isHomeTopTabsCustomEnabled &&
-            available(HookFeatureKey.SIMPLIFY_HOME_TOP_TABS) &&
-            featureSymbols.homeTab.isComplete()
+            available(HookFeatureKey.SIMPLIFY_HOME_TOP_TABS)
     }
 
     fun canInstallFollowedTabWeb(settings: SettingsSnapshot): Boolean {
@@ -191,8 +173,7 @@ internal class HookInstallContext(
 
     fun canInstallBottomTabs(settings: SettingsSnapshot): Boolean {
         return settings.isBottomTabsCustomEnabled &&
-            available(HookFeatureKey.SIMPLIFY_BOTTOM_TABS) &&
-            featureSymbols.mainTab.isComplete()
+            available(HookFeatureKey.SIMPLIFY_BOTTOM_TABS)
     }
 
     fun canInstallEnterForumWeb(settings: SettingsSnapshot): Boolean {
@@ -201,47 +182,31 @@ internal class HookInstallContext(
 
     fun canInstallSystemBrowser(settings: SettingsSnapshot): Boolean {
         return settings.isOpenWebLinkInSystemBrowserEnabled &&
-            available(FeatureDescriptors.OPEN_WEB_LINK_IN_SYSTEM_BROWSER.featureKey)
+            available(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
     }
 
     fun canInstallMineTabWebBlock(settings: SettingsSnapshot): Boolean {
         return canInstallAdBlockSubFeature(
             settings.isMineTabWebAdBlockEnabled,
             HookFeatureKey.BLOCK_AD_MINE_TAB_WEB,
-        ) && hasMineTabWebBlockPath()
+        )
     }
 
     fun canInstallHomeSideBarWebBlock(settings: SettingsSnapshot): Boolean {
         return canInstallAdBlockSubFeature(
             settings.isHomeSideBarWebAdBlockEnabled,
             HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB,
-        ) && hasHomeSideBarWebBlockPath()
-    }
-
-    private fun hasMineTabWebBlockPath(): Boolean {
-        return !symbols.mineTabWebViewClass.isNullOrBlank() &&
-            !symbols.mineTabWebLoadUrlMethod.isNullOrBlank() &&
-            !symbols.mineTabWebGetUrlMethod.isNullOrBlank() &&
-            !symbols.mineTabWebGetInnerWebViewMethod.isNullOrBlank()
-    }
-
-    private fun hasHomeSideBarWebBlockPath(): Boolean {
-        return !symbols.homeSideBarWebViewClass.isNullOrBlank() &&
-            !symbols.homeSideBarTbWebViewClass.isNullOrBlank() &&
-            !symbols.homeSideBarWebGetWebViewMethod.isNullOrBlank() &&
-            !symbols.homeSideBarWebGetUrlMethod.isNullOrBlank() &&
-            !symbols.homeSideBarWebGetInnerWebViewMethod.isNullOrBlank() &&
-            !symbols.homeSideBarWebLoadUrlMethods.isNullOrEmpty()
+        )
     }
 
     fun canInstallForumNativeTopShift(): Boolean = available(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
 
     fun canInstallAutoRefresh(settings: SettingsSnapshot): Boolean {
-        return settings.isAutoRefreshDisabled && available(FeatureDescriptors.DISABLE_AUTO_REFRESH.featureKey)
+        return settings.isAutoRefreshDisabled && available(HookFeatureKey.DISABLE_AUTO_REFRESH)
     }
 
     fun canInstallAutoLoadMore(settings: SettingsSnapshot): Boolean {
-        return settings.isAutoLoadMoreEnabled && available(FeatureDescriptors.AUTO_LOAD_MORE.featureKey)
+        return settings.isAutoLoadMoreEnabled && available(HookFeatureKey.AUTO_LOAD_MORE)
     }
 
     fun canInstallPbScrollCoalesce(settings: SettingsSnapshot): Boolean {
@@ -253,14 +218,13 @@ internal class HookInstallContext(
     fun canInstallPbLikeAutoReply(settings: SettingsSnapshot): Boolean {
         return settings.isPbLikeAutoReplyEnabled &&
             settings.pbLikeAutoReplyText.isNotBlank() &&
-            available(FeatureDescriptors.ENABLE_PB_LIKE_AUTO_REPLY.featureKey)
+            available(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
     }
 
     fun canInstallMainAiComponents(settings: SettingsSnapshot): Boolean {
         return isMain &&
             settings.isAiComponentsDisabled &&
-            available(HookFeatureKey.DISABLE_AI_COMPONENTS) &&
-            featureSymbols.performance.isComplete()
+            available(HookFeatureKey.DISABLE_AI_COMPONENTS)
     }
 
     fun canInstallDefaultNotifyTab(settings: SettingsSnapshot): Boolean {

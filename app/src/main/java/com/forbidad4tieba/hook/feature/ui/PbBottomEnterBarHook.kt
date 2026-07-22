@@ -6,7 +6,7 @@ import android.view.ViewTreeObserver
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ViewExt
-import com.forbidad4tieba.hook.core.Api102ModuleFacade
+import io.github.libxposed.api.XposedModule
 import com.forbidad4tieba.hook.symbol.model.PbBottomEnterBarHotTopicGuideSymbols
 import com.forbidad4tieba.hook.symbol.model.PbBottomEnterBarStableSymbols
 import java.lang.reflect.Method
@@ -39,7 +39,7 @@ object PbBottomEnterBarHook {
     }
 
     private fun installBottomEnterBarHook(
-        mod: Api102ModuleFacade,
+        mod: XposedModule,
         targets: PbBottomEnterBarStableSymbols,
     ): Int {
         try {
@@ -80,7 +80,7 @@ object PbBottomEnterBarHook {
     }
 
     private fun installHotTopicGuideHook(
-        mod: Api102ModuleFacade,
+        mod: XposedModule,
         targets: PbBottomEnterBarHotTopicGuideSymbols,
     ): Int {
         try {
@@ -119,7 +119,7 @@ object PbBottomEnterBarHook {
     }
 
     private fun installPbEnterFrsAnimationTipHook(
-        mod: Api102ModuleFacade,
+        mod: XposedModule,
         targets: PbBottomEnterBarStableSymbols,
     ): Int {
         try {

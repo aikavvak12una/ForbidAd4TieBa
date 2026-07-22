@@ -24,17 +24,13 @@ import java.util.concurrent.ConcurrentHashMap
 object XposedCompat {
 
     @Volatile
-    var module: Api102ModuleFacade? = null
+    var module: XposedModule? = null
         private set
 
     private val installInfoOnce = ConcurrentHashMap.newKeySet<String>()
 
     fun attachModule(xposedModule: XposedModule) {
-        module = Api102ModuleFacade(xposedModule)
-    }
-
-    fun api102HookId(featureId: String, executable: Executable): String {
-        return Api102HookRegistry.hookId(featureId, executable)
+        module = xposedModule
     }
 
     fun interceptHook(
@@ -46,11 +42,7 @@ object XposedCompat {
             log("[XposedCompat] hook skipped, module unavailable: feature=$featureId")
             return null
         }
-        val id = api102HookId(featureId, executable)
-        val handle = mod.hook(executable)
-            .setId(id)
-            .intercept(hooker)
-        return handle
+        return mod.hook(executable).intercept(hooker)
     }
 
     // Logging.

@@ -5,7 +5,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.Api102ModuleFacade
+import io.github.libxposed.api.XposedModule
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
@@ -78,7 +78,7 @@ object HomeTabRedDotBlockHook {
     }
 
     private fun hookRedDotMethod(
-        mod: Api102ModuleFacade,
+        mod: XposedModule,
         cl: ClassLoader,
         className: String,
     ): String? {
@@ -112,7 +112,7 @@ object HomeTabRedDotBlockHook {
     }
 
     private fun hookMsgTabSideNavigation(
-        mod: Api102ModuleFacade,
+        mod: XposedModule,
         cl: ClassLoader,
     ): List<String> {
         val adapterClass = XposedCompat.findClassOrNull(
@@ -173,7 +173,7 @@ object HomeTabRedDotBlockHook {
     }
 
     private fun hookMessageRedDotView(
-        mod: Api102ModuleFacade,
+        mod: XposedModule,
         cl: ClassLoader,
     ): List<String> {
         val clazz = XposedCompat.findClassOrNull(
@@ -233,7 +233,7 @@ object HomeTabRedDotBlockHook {
     }
 
     private fun hookSmallRedDotBackgroundResource(
-        mod: Api102ModuleFacade,
+        mod: XposedModule,
         cl: ClassLoader,
         smallRedDotResourceIds: Set<Int>,
     ): List<String> {

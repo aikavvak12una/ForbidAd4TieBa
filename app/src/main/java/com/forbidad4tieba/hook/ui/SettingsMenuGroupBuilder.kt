@@ -1,8 +1,6 @@
 package com.forbidad4tieba.hook.ui
 
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.feature.FeatureDescriptor
-import com.forbidad4tieba.hook.feature.FeatureDescriptors
 
 internal data class SettingsMenuGroupActions(
     val onAdBlock: (List<SwitchItem>) -> Unit,
@@ -186,16 +184,40 @@ internal object SettingsMenuGroupBuilder {
         actions: SettingsMenuGroupActions,
     ): List<SwitchItem> {
         val items = mutableListOf(
-            FeatureDescriptors.AUTO_LOAD_MORE.toSwitchItem(),
-            FeatureDescriptors.DISABLE_AUTO_REFRESH.toSwitchItem(),
-            FeatureDescriptors.DEFAULT_ORIGINAL_IMAGE.toSwitchItem(),
-            FeatureDescriptors.OPEN_WEB_LINK_IN_SYSTEM_BROWSER.toSwitchItem(),
+            SwitchItem(
+                label = UiText.Settings.AUTO_LOAD_MORE_LABEL,
+                description = UiText.Settings.AUTO_LOAD_MORE_DESC,
+                prefKey = ConfigManager.KEY_ENABLE_AUTO_LOAD_MORE,
+                supported = true,
+            ),
+            SwitchItem(
+                label = UiText.Settings.DISABLE_AUTO_REFRESH_LABEL,
+                description = UiText.Settings.DISABLE_AUTO_REFRESH_DESC,
+                prefKey = ConfigManager.KEY_DISABLE_AUTO_REFRESH,
+                supported = true,
+            ),
+            SwitchItem(
+                label = UiText.Settings.DEFAULT_ORIGINAL_IMAGE_LABEL,
+                description = UiText.Settings.DEFAULT_ORIGINAL_IMAGE_DESC,
+                prefKey = ConfigManager.KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE,
+                supported = true,
+            ),
+            SwitchItem(
+                label = UiText.Settings.OPEN_WEB_LINK_IN_SYSTEM_BROWSER_LABEL,
+                description = UiText.Settings.OPEN_WEB_LINK_IN_SYSTEM_BROWSER_DESC,
+                prefKey = ConfigManager.KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
+                supported = true,
+            ),
         )
         if (restrictedFeaturesUnlocked) {
             items.add(
                 1,
-                FeatureDescriptors.ENABLE_PB_LIKE_AUTO_REPLY.toSwitchItem(
-                    UiText.Settings.ACTION_ICON_SETTINGS,
+                SwitchItem(
+                    label = UiText.Settings.PB_LIKE_AUTO_REPLY_LABEL,
+                    description = UiText.Settings.PB_LIKE_AUTO_REPLY_DESC,
+                    prefKey = ConfigManager.KEY_ENABLE_PB_LIKE_AUTO_REPLY,
+                    supported = true,
+                    actionIcon = UiText.Settings.ACTION_ICON_SETTINGS,
                     onActionClick = actions.onPbLikeAutoReply,
                 )
             )
@@ -324,18 +346,4 @@ internal object SettingsMenuGroupBuilder {
         ),
     )
 
-    private fun FeatureDescriptor.toSwitchItem(
-        actionIcon: String? = null,
-        onActionClick: (() -> Unit)? = null,
-    ): SwitchItem {
-        return SwitchItem(
-            label = label,
-            description = description,
-            prefKey = prefKey,
-            supported = true,
-            defaultValue = defaultValue,
-            actionIcon = actionIcon,
-            onActionClick = onActionClick,
-        )
-    }
 }

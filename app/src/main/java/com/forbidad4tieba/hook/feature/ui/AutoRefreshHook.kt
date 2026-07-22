@@ -25,14 +25,12 @@ object AutoRefreshHook {
     private val blockExpiresAtMs = AtomicLong(Long.MAX_VALUE)
     private val startedActivityCount = AtomicInteger(0)
     private val hasSeenForeground = AtomicBoolean(false)
-    @Volatile private var foregroundCallbackApp: Application? = null
-    @Volatile private var foregroundCallback: Application.ActivityLifecycleCallbacks? = null
 
     internal fun registerForegroundCallbacks(app: Application) {
         if (!ConfigManager.isAutoRefreshDisabled) return
         if (!foregroundCallbacksRegistered.compareAndSet(false, true)) return
 
-        val callback = object : Application.ActivityLifecycleCallbacks {
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
 
             override fun onActivityStarted(activity: Activity) {
@@ -53,29 +51,8 @@ object AutoRefreshHook {
 
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
-        }
-        foregroundCallbackApp = app
-        foregroundCallback = callback
-        app.registerActivityLifecycleCallbacks(callback)
+        })
         XposedCompat.log("[AutoRefreshHook] foreground callbacks registered")
-    }
-
-    internal fun prepareForHotReload() {
-        val app = foregroundCallbackApp
-        val callback = foregroundCallback
-        if (app != null && callback != null) {
-            runCatching {
-                app.unregisterActivityLifecycleCallbacks(callback)
-            }.onFailure { t ->
-                XposedCompat.logW("[AutoRefreshHook] foreground callback unregister failed: ${t.message}")
-            }
-        }
-        foregroundCallbackApp = null
-        foregroundCallback = null
-        foregroundCallbacksRegistered.set(false)
-        startedActivityCount.set(0)
-        hasSeenForeground.set(false)
-        disarmNextAutoRefresh()
     }
 
     internal fun hook(targets: AutoRefreshSymbols) {
@@ -97,7 +74,7 @@ object AutoRefreshHook {
     }
 
     private fun installDirectHook(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         method: Method,
     ): Boolean {
         val methodKey = ReflectionUtils.methodSignature(method)
