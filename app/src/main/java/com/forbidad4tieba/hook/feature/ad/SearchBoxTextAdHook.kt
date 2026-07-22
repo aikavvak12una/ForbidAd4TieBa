@@ -58,7 +58,7 @@ object SearchBoxTextAdHook {
     }
 
     private fun installHomeSearchBoxMarker(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         targets: SearchBoxTextAdSymbols,
     ) {
         mod.hook(targets.ownerInitMethod).intercept { chain ->

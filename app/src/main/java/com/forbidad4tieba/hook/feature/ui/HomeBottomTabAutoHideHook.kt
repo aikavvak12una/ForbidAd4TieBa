@@ -87,7 +87,7 @@ object HomeBottomTabAutoHideHook {
     }
 
     private fun installRecyclerViewScrollObserver(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         cl: ClassLoader,
     ): Int {
         val clazz = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
@@ -123,7 +123,7 @@ object HomeBottomTabAutoHideHook {
     }
 
     private fun installWebViewScrollObserver(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         cl: ClassLoader,
     ): Int {
         var installed = 0
@@ -166,7 +166,7 @@ object HomeBottomTabAutoHideHook {
     }
 
     private fun installTabSelectionObservers(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         tabHostClass: Class<*>,
     ): Int {
         var installed = 0

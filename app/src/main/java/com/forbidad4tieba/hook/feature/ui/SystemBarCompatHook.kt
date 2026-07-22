@@ -15,6 +15,7 @@ import android.view.WindowManager
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Collections
 import java.util.WeakHashMap
@@ -27,11 +28,24 @@ object SystemBarCompatHook {
     private val registered = AtomicBoolean(false)
     private val firstErrorLogged = AtomicBoolean(false)
     private val windowActivities = Collections.synchronizedMap(WeakHashMap<Window, Activity>())
-    private val navigationBarColorHookedClasses = ConcurrentHashMap.newKeySet<String>()
+    private val navigationBarColorHookAttemptedClasses = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val navigationBarColorProcessedMethods = ConcurrentHashMap.newKeySet<String>()
     private val bottomTabInsetStates = Collections.synchronizedMap(WeakHashMap<View, BottomTabInsetState>())
     private val requestedNavigationBarColors = Collections.synchronizedMap(WeakHashMap<Window, Int>())
-    @Volatile private var registeredApp: Application? = null
-    @Volatile private var registeredCallback: Application.ActivityLifecycleCallbacks? = null
+    private val noArgViewMethodCache =
+        ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, NoArgViewMethodLookup>>()
+    private val supportedActivityClassCache = ConcurrentHashMap<Class<*>, Boolean>()
+    private val mainTabActivityClassCache = ConcurrentHashMap<Class<*>, Boolean>()
+
+    @Volatile
+    private var navigationBarHeightResourceId = 0
+
+    @Volatile
+    private var navigationBarInteractionModeResourceId = 0
+
+    private data class NoArgViewMethodLookup(
+        val method: Method?,
+    )
 
     private data class BottomTabInsetState(
         val left: Int,
@@ -47,8 +61,9 @@ object SystemBarCompatHook {
 
     fun register(app: Application) {
         if (!registered.compareAndSet(false, true)) return
+        resolveFrameworkResourceIds(app)
         installWindowHooks()
-        val callback = object : Application.ActivityLifecycleCallbacks {
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
                 rememberActivityWindow(activity)
                 applyIfNeeded(activity)
@@ -67,31 +82,8 @@ object SystemBarCompatHook {
             override fun onActivityDestroyed(activity: Activity) {
                 forgetActivityWindow(activity)
             }
-        }
-        registeredApp = app
-        registeredCallback = callback
-        app.registerActivityLifecycleCallbacks(callback)
+        })
         XposedCompat.log("$TAG registered")
-    }
-
-    fun prepareForHotReload() {
-        val app = registeredApp
-        val callback = registeredCallback
-        if (app != null && callback != null) {
-            runCatching {
-                app.unregisterActivityLifecycleCallbacks(callback)
-            }.onFailure { t ->
-                XposedCompat.logW("$TAG unregister failed: ${t.message}")
-            }
-        }
-        registeredApp = null
-        registeredCallback = null
-        registered.set(false)
-        firstErrorLogged.set(false)
-        windowActivities.clear()
-        navigationBarColorHookedClasses.clear()
-        bottomTabInsetStates.clear()
-        requestedNavigationBarColors.clear()
     }
 
     fun applyIfNeeded(activity: Activity?) {
@@ -139,16 +131,14 @@ object SystemBarCompatHook {
     }
 
     private fun installNavigationBarColorHook(windowClass: Class<*>) {
+        if (!navigationBarColorHookAttemptedClasses.add(windowClass)) return
         val mod = XposedCompat.module ?: return
         val method = findMethodInHierarchy(windowClass, "setNavigationBarColor", java.lang.Integer.TYPE)
             ?: return
         val key = "${method.declaringClass.name}#setNavigationBarColor"
-        if (!navigationBarColorHookedClasses.add(key)) return
+        if (!navigationBarColorProcessedMethods.add(key)) return
         runCatching {
-            if (Modifier.isAbstract(method.modifiers)) {
-                navigationBarColorHookedClasses.remove(key)
-                return
-            }
+            if (Modifier.isAbstract(method.modifiers)) return
             method.isAccessible = true
             mod.hook(method).intercept { chain ->
                 val window = chain.thisObject as? Window ?: return@intercept chain.proceed()
@@ -172,7 +162,6 @@ object SystemBarCompatHook {
             }
             XposedCompat.logD { "$TAG navigation color hook installed: $key" }
         }.onFailure { t ->
-            navigationBarColorHookedClasses.remove(key)
             logFirstError("navigation color hook failed: $key, ${t.message}")
         }
     }
@@ -224,6 +213,22 @@ object SystemBarCompatHook {
     private fun logFirstError(message: String) {
         if (firstErrorLogged.compareAndSet(false, true)) {
             XposedCompat.logD { "$TAG $message" }
+        }
+    }
+
+    private fun resolveFrameworkResourceIds(app: Application) {
+        val resources = app.resources
+        navigationBarHeightResourceId = try {
+            resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        } catch (t: Throwable) {
+            logFirstError("navigation bar height resource lookup failed: ${t.message}")
+            0
+        }
+        navigationBarInteractionModeResourceId = try {
+            resources.getIdentifier("config_navBarInteractionMode", "integer", "android")
+        } catch (t: Throwable) {
+            logFirstError("navigation mode resource lookup failed: ${t.message}")
+            0
         }
     }
 
@@ -447,7 +452,7 @@ object SystemBarCompatHook {
         }
         if (insetBottom > 0) return insetBottom
         val res = activity.resources ?: return 0
-        val id = res.getIdentifier("navigation_bar_height", "dimen", "android")
+        val id = navigationBarHeightResourceId
         if (id <= 0) return 0
         return runCatching { res.getDimensionPixelSize(id) }.getOrDefault(0)
     }
@@ -463,51 +468,62 @@ object SystemBarCompatHook {
     }
 
     private fun invokeNoArgView(target: View, methodName: String): View? {
+        val method = resolveNoArgViewMethod(target.javaClass, methodName) ?: return null
         return try {
-            var current: Class<*>? = target.javaClass
-            while (current != null && current != Any::class.java) {
-                try {
-                    val method = current.getDeclaredMethod(methodName)
-                    method.isAccessible = true
-                    return method.invoke(target) as? View
-                } catch (_: NoSuchMethodException) {
-                    current = current.superclass
-                }
-            }
-            null
-        } catch (_: Throwable) {
+            method.invoke(target) as? View
+        } catch (t: Throwable) {
+            logFirstError("view method invocation failed: ${method.declaringClass.name}#$methodName, ${t.message}")
             null
         }
     }
 
+    private fun resolveNoArgViewMethod(clazz: Class<*>, methodName: String): Method? {
+        val classCache = noArgViewMethodCache.computeIfAbsent(clazz) { ConcurrentHashMap() }
+        return classCache.computeIfAbsent(methodName) {
+            val method = try {
+                findMethodInHierarchy(clazz, methodName)?.apply { isAccessible = true }
+            } catch (t: Throwable) {
+                logFirstError("view method lookup failed: ${clazz.name}#$methodName, ${t.message}")
+                null
+            }
+            NoArgViewMethodLookup(method)
+        }.method
+    }
+
     private fun isGestureNavigation(activity: Activity): Boolean {
         val res = activity.resources ?: return false
-        val id = res.getIdentifier("config_navBarInteractionMode", "integer", "android")
+        val id = navigationBarInteractionModeResourceId
         if (id <= 0) return false
         return runCatching { res.getInteger(id) == NAV_MODE_GESTURAL }.getOrDefault(false)
     }
 
     private fun isSupportedActivity(activity: Activity): Boolean {
-        var current: Class<*>? = activity.javaClass
-        while (current != null && current != Any::class.java) {
-            when (current.name) {
-                StableTiebaHookPoints.MAIN_TAB_ACTIVITY_CLASS,
-                StableTiebaHookPoints.PB_ACTIVITY_CLASS,
-                StableTiebaHookPoints.PB_ABS_ACTIVITY_CLASS,
-                StableTiebaHookPoints.NEW_SUB_PB_ACTIVITY_CLASS,
-                StableTiebaHookPoints.FOLD_COMMENT_ACTIVITY_CLASS -> return true
+        return supportedActivityClassCache.computeIfAbsent(activity.javaClass) { activityClass ->
+            var current: Class<*>? = activityClass
+            while (current != null && current != Any::class.java) {
+                when (current.name) {
+                    StableTiebaHookPoints.MAIN_TAB_ACTIVITY_CLASS,
+                    StableTiebaHookPoints.PB_ACTIVITY_CLASS,
+                    StableTiebaHookPoints.PB_ABS_ACTIVITY_CLASS,
+                    StableTiebaHookPoints.NEW_SUB_PB_ACTIVITY_CLASS,
+                    StableTiebaHookPoints.FOLD_COMMENT_ACTIVITY_CLASS -> return@computeIfAbsent true
+                }
+                current = current.superclass
             }
-            current = current.superclass
+            false
         }
-        return false
     }
 
     private fun isMainTabActivity(activity: Activity): Boolean {
-        var current: Class<*>? = activity.javaClass
-        while (current != null && current != Any::class.java) {
-            if (current.name == StableTiebaHookPoints.MAIN_TAB_ACTIVITY_CLASS) return true
-            current = current.superclass
+        return mainTabActivityClassCache.computeIfAbsent(activity.javaClass) { activityClass ->
+            var current: Class<*>? = activityClass
+            while (current != null && current != Any::class.java) {
+                if (current.name == StableTiebaHookPoints.MAIN_TAB_ACTIVITY_CLASS) {
+                    return@computeIfAbsent true
+                }
+                current = current.superclass
+            }
+            false
         }
-        return false
     }
 }

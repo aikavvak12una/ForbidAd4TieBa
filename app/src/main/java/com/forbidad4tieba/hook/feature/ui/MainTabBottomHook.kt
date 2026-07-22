@@ -44,7 +44,7 @@ object MainTabBottomHook {
     }
 
     private fun hookAddFragment(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         symbols: MainTabBottomSymbols,
     ) {
         mod.hook(symbols.addMethod).intercept { chain ->
@@ -66,7 +66,7 @@ object MainTabBottomHook {
     }
 
     private fun hookGetList(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         symbols: MainTabBottomSymbols,
     ) {
         mod.hook(symbols.getListMethod).intercept { chain ->

@@ -2,7 +2,6 @@ package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.Api102HookRegistry
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.FeedAdHook
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogHook
@@ -81,19 +80,10 @@ internal object HookInstaller {
             XposedCompat.logD("[HookInstallPlan] ${plan.phase}: empty for process=${plan.processName}")
             return
         }
-        val registeredBefore = Api102HookRegistry.registeredCount()
         for (entry in plan.entries) {
             try {
                 XposedCompat.logD("[HookInstallPlan] Installing ${entry.id} (${plan.phase})...")
-                Api102HookRegistry.withInstallScope(
-                    Api102HookRegistry.InstallScope(
-                        processName = plan.processName,
-                        phase = plan.phase,
-                        entryId = entry.id,
-                    ),
-                ) {
-                    entry.install(cl)
-                }
+                entry.install(cl)
             } catch (t: Throwable) {
                 XposedCompat.log(
                     "[HookInstallPlan] ${entry.id} install FAILED (${plan.phase}): ${t.message}",
@@ -101,10 +91,8 @@ internal object HookInstaller {
                 XposedCompat.log(t)
             }
         }
-        val registeredAfter = Api102HookRegistry.registeredCount()
         XposedCompat.logD(
             "[HookInstallPlan] ${plan.phase}: entries=${plan.entries.size}, " +
-                "registeredDelta=${registeredAfter - registeredBefore}, totalRegistered=$registeredAfter, " +
                 "process=${plan.processName}"
         )
     }

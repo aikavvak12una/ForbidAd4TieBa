@@ -109,6 +109,9 @@ internal data class EnterForumWebSymbols(
 
 internal data class ForumNativeTopShiftSymbols(
     val initScrollMethod: Method,
+    val smoothInitGetterMethod: Method,
+    val setupMethod: Method,
+    val maxScrollGetterMethod: Method,
 )
 
 internal data class HomeTopBarRightSlotSymbols(

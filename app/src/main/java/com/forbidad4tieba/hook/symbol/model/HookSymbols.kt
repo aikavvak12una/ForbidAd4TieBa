@@ -741,8 +741,6 @@ data class HookSymbols(
         get() = hookPoints.media.ai.imageViewerJumpButton.aiImageViewerJumpButtonOwnerClass
     val aiImageViewerJumpButtonInitMethod: String?
         get() = hookPoints.media.ai.imageViewerJumpButton.aiImageViewerJumpButtonInitMethod
-    val featureStatusMap: Map<String, HookFeatureStatus>
-        get() = meta.featureStatusMap
     val scanSupportState: String
         get() = meta.availability.scanSupportState
     val scanTargetVersionCode: Long?
@@ -762,20 +760,6 @@ data class HookSymbols(
     val dexKitRuleVersion: Int
         get() = meta.dexKitRuleVersion
 
-    fun withFeatureStatusMap(featureStatusMap: Map<String, HookFeatureStatus>): HookSymbols {
-        return withMeta(
-            ScanMeta(
-                featureStatusMap = featureStatusMap,
-                availability = meta.availability,
-                scanErrors = meta.scanErrors,
-                source = meta.source,
-                createdAt = meta.createdAt,
-                cacheSchemaVersion = meta.cacheSchemaVersion,
-                dexKitRuleVersion = meta.dexKitRuleVersion,
-            ),
-        )
-    }
-
     fun withScanSupport(
         state: String,
         targetVersionCode: Long? = scanTargetVersionCode,
@@ -784,7 +768,6 @@ data class HookSymbols(
     ): HookSymbols {
         return withMeta(
             ScanMeta(
-                featureStatusMap = meta.featureStatusMap,
                 availability = ScanAvailabilityMeta(
                     scanSupportState = state,
                     scanTargetVersionCode = targetVersionCode,
@@ -1251,23 +1234,6 @@ data class HookSymbols(
             put("aiImageViewerJumpButtonOwnerClass", aiImageViewerJumpButtonOwnerClass)
             put("aiImageViewerJumpButtonInitMethod", aiImageViewerJumpButtonInitMethod)
 
-            val statusObj = JSONObject()
-            for ((featureKey, featureStatus) in featureStatusMap) {
-                statusObj.put(
-                    featureKey,
-                    JSONObject().apply {
-                        put("state", featureStatus.state)
-                        val critical = org.json.JSONArray()
-                        featureStatus.missingCritical.forEach { critical.put(it) }
-                        put("missingCritical", critical)
-                        val optional = org.json.JSONArray()
-                        featureStatus.missingOptional.forEach { optional.put(it) }
-                        put("missingOptional", optional)
-                    },
-                )
-            }
-            put("featureStatusMap", statusObj)
-
             put("scanSupportState", scanSupportState)
             put("scanTargetVersionCode", scanTargetVersionCode)
             put("scanTargetVersionName", scanTargetVersionName)
@@ -1286,16 +1252,14 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 26
+        const val CACHE_SCHEMA_VERSION = 28
         const val DEXKIT_RULE_VERSION = 15
 
         fun unsupported(
-            featureStatusMap: Map<String, HookFeatureStatus> = emptyMap(),
             scanErrors: List<String> = emptyList(),
             createdAt: Long = 0L,
         ): HookSymbols {
             return buildHookSymbols {
-                this.featureStatusMap = featureStatusMap
                 this.scanErrors = scanErrors
                 source = "unsupported"
                 this.createdAt = createdAt
@@ -1324,24 +1288,6 @@ data class HookSymbols(
                     }
                     list
                 } else null
-
-                val featureStatusMap = mutableMapOf<String, HookFeatureStatus>()
-                val statusObj = obj.optJSONObject("featureStatusMap")
-                if (statusObj != null) {
-                    val names = statusObj.keys()
-                    while (names.hasNext()) {
-                        val featureKey = names.next()
-                        val statusValue = statusObj.optJSONObject(featureKey) ?: continue
-                        val state = statusValue.optString("state", HookFeatureState.DISABLED)
-                        val missingCritical = statusValue.optStringArray("missingCritical")
-                        val missingOptional = statusValue.optStringArray("missingOptional")
-                        featureStatusMap[featureKey] = HookFeatureStatus(
-                            state = state,
-                            missingCritical = missingCritical,
-                            missingOptional = missingOptional,
-                        )
-                    }
-                }
 
                 buildHookSymbols {
                     homeTabClass = obj.optStringOrNull("homeTabClass")
@@ -1799,7 +1745,6 @@ data class HookSymbols(
                     aiImageViewerJumpButtonOwnerClass = obj.optStringOrNull("aiImageViewerJumpButtonOwnerClass")
                     aiImageViewerJumpButtonInitMethod = obj.optStringOrNull("aiImageViewerJumpButtonInitMethod")
 
-                    this.featureStatusMap = featureStatusMap
                     scanSupportState = obj.optString("scanSupportState", ScanSupportState.UNKNOWN)
                     scanTargetVersionCode = obj.optLongOrNull("scanTargetVersionCode")
                     scanTargetVersionName = obj.optStringOrNull("scanTargetVersionName")

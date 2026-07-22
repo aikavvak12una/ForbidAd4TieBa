@@ -143,6 +143,30 @@ class ConfigManagerTest {
     }
 
     @Test
+    fun formerlyDescribedPreferencesUseCanonicalFeatureKeys() {
+        assertEquals(
+            HookFeatureKey.AUTO_LOAD_MORE,
+            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_AUTO_LOAD_MORE),
+        )
+        assertEquals(
+            HookFeatureKey.DISABLE_AUTO_REFRESH,
+            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_DISABLE_AUTO_REFRESH),
+        )
+        assertEquals(
+            HookFeatureKey.DEFAULT_ORIGINAL_IMAGE,
+            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE),
+        )
+        assertEquals(
+            HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
+            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER),
+        )
+        assertEquals(
+            HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY,
+            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_PB_LIKE_AUTO_REPLY),
+        )
+    }
+
+    @Test
     fun customPostFilterChildSettingsDoNotBecomeRuntimeActiveWhenParentIsOff() {
         withScanAvailability(
             mapOf(

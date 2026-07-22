@@ -48,7 +48,7 @@ object PbCommentAutoLoadHook {
     }
 
     private fun installBdListViewHook(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         targets: PbCommentBottomListSymbols,
     ): Int {
         return try {
@@ -86,7 +86,7 @@ object PbCommentAutoLoadHook {
     }
 
     private fun installBdRecyclerViewHook(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         targets: PbCommentBottomRecyclerSymbols,
     ): Int {
         return try {

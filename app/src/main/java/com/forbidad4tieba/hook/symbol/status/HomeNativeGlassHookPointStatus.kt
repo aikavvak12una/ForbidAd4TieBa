@@ -3,8 +3,8 @@ package com.forbidad4tieba.hook.symbol.status
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 
-internal fun formatHomeNativeGlassHookPointStatusLines(symbols: HookSymbols): List<String> {
-    val out = ArrayList<String>(9)
+internal fun collectHomeNativeGlassHookPointStatuses(symbols: HookSymbols): List<HookPointStatus> {
+    val out = ArrayList<HookPointStatus>(10)
 
     fun has(value: String?): Boolean = !value.isNullOrBlank()
     fun has(value: Int?): Boolean = value != null && value != 0
@@ -38,13 +38,7 @@ internal fun formatHomeNativeGlassHookPointStatusLines(symbols: HookSymbols): Li
         }
     }
     fun add(name: String, target: String, checks: List<Pair<String, Boolean>>) {
-        val missing = checks.asSequence()
-            .filter { !it.second }
-            .map { it.first }
-            .toList()
-        val state = if (missing.isEmpty()) "FOUND" else "MISSING"
-        val missingText = if (missing.isEmpty()) "-" else missing.joinToString(",")
-        out.add("HookPoint[$name] state=$state missing=$missingText target=$target")
+        out.add(buildHookPointStatus(name, target, checks))
     }
 
     add(

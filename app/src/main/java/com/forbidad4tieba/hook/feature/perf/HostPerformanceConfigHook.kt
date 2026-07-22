@@ -79,7 +79,7 @@ object HostPerformanceConfigHook {
     }
 
     private fun hookSharedPrefHelper(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         cl: ClassLoader,
     ): Int {
         val clazz = XposedCompat.findClassOrNull(SHARED_PREF_HELPER_CLASS, cl) ?: return 0
@@ -132,7 +132,7 @@ object HostPerformanceConfigHook {
     }
 
     private fun hookMultiSharedPrefHelper(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         cl: ClassLoader,
     ): Int {
         val clazz = XposedCompat.findClassOrNull(MULTI_SHARED_PREF_HELPER_CLASS, cl) ?: return 0
@@ -180,7 +180,7 @@ object HostPerformanceConfigHook {
     }
 
     private fun hookScheduleStrategy(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         cl: ClassLoader,
     ): Int {
         val clazz = XposedCompat.findClassOrNull(SCHEDULE_STRATEGY_CLASS, cl) ?: return 0
@@ -197,7 +197,7 @@ object HostPerformanceConfigHook {
     }
 
     private fun hookFlutterPreinitTask(
-        mod: com.forbidad4tieba.hook.core.Api102ModuleFacade,
+        mod: io.github.libxposed.api.XposedModule,
         cl: ClassLoader,
     ): Int {
         val clazz = XposedCompat.findClassOrNull(INIT_FLUTTER_NPS_PLUGIN_TASK_CLASS, cl) ?: return 0
