@@ -90,6 +90,7 @@ internal object HookSymbolValidator {
     if (hasPbAdBidSymbols && !isPbAdBidValid(symbols, cl)) return false
     val hasTypeAdapterDataFilterSymbols =
         symbols.typeAdapterSetDataMethod != null ||
+            symbols.recyclerViewTypeAdapterSetDataMethod != null ||
             symbols.typeAdapterDataItemClass != null ||
             symbols.typeAdapterDataGetTypeMethod != null
     if (hasTypeAdapterDataFilterSymbols && !isTypeAdapterDataFilterValid(symbols, cl)) return false
@@ -934,22 +935,45 @@ private fun isPbAdBidValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
 }
 
 private fun isTypeAdapterDataFilterValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-    val setDataMethodName = symbols.typeAdapterSetDataMethod ?: return false
+    val typeAdapterSetDataMethodName = symbols.typeAdapterSetDataMethod
+    val recyclerViewTypeAdapterSetDataMethodName = symbols.recyclerViewTypeAdapterSetDataMethod
+    if (typeAdapterSetDataMethodName == null && recyclerViewTypeAdapterSetDataMethodName == null) {
+        return false
+    }
     val dataItemClassName = symbols.typeAdapterDataItemClass ?: return false
     val dataGetTypeMethodName = symbols.typeAdapterDataGetTypeMethod ?: return false
     return try {
-        val typeAdapterClass = safeFindClass(StableTiebaHookPoints.TYPE_ADAPTER_CLASS, cl) ?: return false
         val dataItemClass = safeFindClass(dataItemClassName, cl) ?: return false
         val bdUniqueIdClass = safeFindClass(BD_UNIQUE_ID_CLASS, cl) ?: return false
 
-        val hasSetDataMethod = typeAdapterClass.declaredMethods.any { method ->
-            method.name == setDataMethodName &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                isListType(method.parameterTypes[0])
+        fun hasSetDataMethod(className: String, methodName: String): Boolean {
+            val adapterClass = safeFindClass(className, cl) ?: return false
+            return adapterClass.declaredMethods.any { method ->
+                method.name == methodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1 &&
+                    isListType(method.parameterTypes[0])
+            }
         }
-        if (!hasSetDataMethod) return false
+        if (
+            typeAdapterSetDataMethodName != null &&
+            !hasSetDataMethod(
+                StableTiebaHookPoints.TYPE_ADAPTER_CLASS,
+                typeAdapterSetDataMethodName,
+            )
+        ) {
+            return false
+        }
+        if (
+            recyclerViewTypeAdapterSetDataMethodName != null &&
+            !hasSetDataMethod(
+                StableTiebaHookPoints.RECYCLER_VIEW_TYPE_ADAPTER_CLASS,
+                recyclerViewTypeAdapterSetDataMethodName,
+            )
+        ) {
+            return false
+        }
 
         dataItemClass.methods.any { method ->
             method.name == dataGetTypeMethodName &&

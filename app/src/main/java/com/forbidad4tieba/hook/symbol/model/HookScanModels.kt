@@ -32,7 +32,8 @@ internal data class PbFallingScanSymbols(
 )
 
 internal data class TypeAdapterDataFilterScanSymbols(
-    val setDataMethod: String? = null,
+    val typeAdapterSetDataMethod: String? = null,
+    val recyclerViewTypeAdapterSetDataMethod: String? = null,
     val dataItemClass: String? = null,
     val dataGetTypeMethod: String? = null,
 )

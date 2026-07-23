@@ -130,6 +130,8 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.ad.bid.pbAdBidPageBrowserRequestDataMethod
     val typeAdapterSetDataMethod: String?
         get() = hookPoints.primary.ad.typeAdapter.typeAdapterSetDataMethod
+    val recyclerViewTypeAdapterSetDataMethod: String?
+        get() = hookPoints.primary.ad.typeAdapter.recyclerViewTypeAdapterSetDataMethod
     val typeAdapterDataItemClass: String?
         get() = hookPoints.primary.ad.typeAdapter.typeAdapterDataItemClass
     val typeAdapterDataGetTypeMethod: String?
@@ -852,6 +854,7 @@ data class HookSymbols(
             put("pbAdBidPageBrowserRequestModelClass", pbAdBidPageBrowserRequestModelClass)
             put("pbAdBidPageBrowserRequestDataMethod", pbAdBidPageBrowserRequestDataMethod)
             put("typeAdapterSetDataMethod", typeAdapterSetDataMethod)
+            put("recyclerViewTypeAdapterSetDataMethod", recyclerViewTypeAdapterSetDataMethod)
             put("typeAdapterDataItemClass", typeAdapterDataItemClass)
             put("typeAdapterDataGetTypeMethod", typeAdapterDataGetTypeMethod)
             put("enterForumWebControllerClass", enterForumWebControllerClass)
@@ -1252,7 +1255,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 28
+        const val CACHE_SCHEMA_VERSION = 29
         const val DEXKIT_RULE_VERSION = 15
 
         fun unsupported(
@@ -1350,6 +1353,8 @@ data class HookSymbols(
                     pbAdBidPageBrowserRequestModelClass = obj.optStringOrNull("pbAdBidPageBrowserRequestModelClass")
                     pbAdBidPageBrowserRequestDataMethod = obj.optStringOrNull("pbAdBidPageBrowserRequestDataMethod")
                     typeAdapterSetDataMethod = obj.optStringOrNull("typeAdapterSetDataMethod")
+                    recyclerViewTypeAdapterSetDataMethod =
+                        obj.optStringOrNull("recyclerViewTypeAdapterSetDataMethod")
                     typeAdapterDataItemClass = obj.optStringOrNull("typeAdapterDataItemClass")
                     typeAdapterDataGetTypeMethod = obj.optStringOrNull("typeAdapterDataGetTypeMethod")
                     enterForumWebControllerClass = obj.optStringOrNull("enterForumWebControllerClass")

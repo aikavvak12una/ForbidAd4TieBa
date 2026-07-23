@@ -180,7 +180,7 @@ internal object HookSymbolDiagnostics {
             ${fmt("FeedHeadParams", symbols.feedHeadParamsField)}
             ${fmt("RecommendCardNestedData", "${symbols.feedRecommendCardNestedDataMethod}[${symbols.feedRecommendCardNestedDataListField}]")}
             ${fmt("PbAdBid", pbAdBidValue)}
-            ${fmt("PostAdDataFilter", "${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}.${symbols.typeAdapterSetDataMethod} item=${symbols.typeAdapterDataItemClass}.${symbols.typeAdapterDataGetTypeMethod}")}
+            ${fmt("PostAdDataFilter", "type=${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}.${symbols.typeAdapterSetDataMethod} recycler=${StableTiebaHookPoints.RECYCLER_VIEW_TYPE_ADAPTER_CLASS}.${symbols.recyclerViewTypeAdapterSetDataMethod} item=${symbols.typeAdapterDataItemClass}.${symbols.typeAdapterDataGetTypeMethod}")}
             ${fmt("AiComponents", aiComponentValue)}
 
             Source        : ${symbols.source}

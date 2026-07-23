@@ -34,6 +34,7 @@ data class ZgaSymbolsGroup(
 
 data class TypeAdapterSymbolsGroup(
     val typeAdapterSetDataMethod: String? = null,
+    val recyclerViewTypeAdapterSetDataMethod: String? = null,
     val typeAdapterDataItemClass: String? = null,
     val typeAdapterDataGetTypeMethod: String? = null,
 )

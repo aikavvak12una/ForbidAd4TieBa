@@ -15,33 +15,82 @@ internal object PostAdDataFilterSymbolScanner {
     private const val BD_UNIQUE_ID_CLASS = "com.baidu.adp.BdUniqueId"
 
     fun scan(cl: ClassLoader, logger: ScanLogger?): TypeAdapterDataFilterScanSymbols {
-        val typeAdapterClass = safeFindClass(StableTiebaHookPoints.TYPE_ADAPTER_CLASS, cl) ?: run {
-            log(logger, "typeAdapterDataFilter: class not found: ${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}")
-            return TypeAdapterDataFilterScanSymbols()
+        val typeAdapterClass = safeFindClass(StableTiebaHookPoints.TYPE_ADAPTER_CLASS, cl)
+        if (typeAdapterClass == null) {
+            log(logger, "postAdDataFilter: class not found: ${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}")
+        }
+        val recyclerViewTypeAdapterClass =
+            safeFindClass(StableTiebaHookPoints.RECYCLER_VIEW_TYPE_ADAPTER_CLASS, cl)
+        if (recyclerViewTypeAdapterClass == null) {
+            log(
+                logger,
+                "postAdDataFilter: class not found: " +
+                    StableTiebaHookPoints.RECYCLER_VIEW_TYPE_ADAPTER_CLASS,
+            )
         }
         val bdUniqueIdClass = safeFindClass(BD_UNIQUE_ID_CLASS, cl) ?: run {
-            log(logger, "typeAdapterDataFilter: class not found: $BD_UNIQUE_ID_CLASS")
+            log(logger, "postAdDataFilter: class not found: $BD_UNIQUE_ID_CLASS")
             return TypeAdapterDataFilterScanSymbols()
         }
+        return scanResolvedClasses(
+            typeAdapterClass = typeAdapterClass,
+            recyclerViewTypeAdapterClass = recyclerViewTypeAdapterClass,
+            bdUniqueIdClass = bdUniqueIdClass,
+            logger = logger,
+        )
+    }
 
-        val setDataMethod = resolveTypeAdapterSetDataMethod(typeAdapterClass, logger)
-        val dataItemClass = resolveTypeAdapterDataItemClass(typeAdapterClass, setDataMethod, logger)
+    internal fun scanResolvedClasses(
+        typeAdapterClass: Class<*>?,
+        recyclerViewTypeAdapterClass: Class<*>?,
+        bdUniqueIdClass: Class<*>,
+        logger: ScanLogger?,
+    ): TypeAdapterDataFilterScanSymbols {
+        val typeAdapterSetDataMethod = typeAdapterClass?.let { adapterClass ->
+            resolveSetDataMethod("TypeAdapter", adapterClass, logger)
+        }
+        val recyclerViewTypeAdapterSetDataMethod = recyclerViewTypeAdapterClass?.let { adapterClass ->
+            resolveSetDataMethod("RecyclerViewTypeAdapter", adapterClass, logger)
+        }
+        val typeAdapterDataItemClass = typeAdapterClass?.let { adapterClass ->
+            resolveDataItemClass(
+                label = "TypeAdapter",
+                adapterClass = adapterClass,
+                setDataMethod = typeAdapterSetDataMethod,
+                logger = logger,
+            )
+        }
+        val recyclerViewDataItemClass = recyclerViewTypeAdapterClass?.let { adapterClass ->
+            resolveDataItemClass(
+                label = "RecyclerViewTypeAdapter",
+                adapterClass = adapterClass,
+                setDataMethod = recyclerViewTypeAdapterSetDataMethod,
+                logger = logger,
+            )
+        }
+        val dataItemClass = resolveSharedDataItemClass(
+            typeAdapterDataItemClass,
+            recyclerViewDataItemClass,
+            logger,
+        )
         val getTypeMethod = dataItemClass?.let {
-            resolveTypeAdapterDataGetTypeMethod(it, bdUniqueIdClass, logger)
+            resolveDataGetTypeMethod(it, bdUniqueIdClass, logger)
         }
 
         return TypeAdapterDataFilterScanSymbols(
-            setDataMethod = setDataMethod?.name,
+            typeAdapterSetDataMethod = typeAdapterSetDataMethod?.name,
+            recyclerViewTypeAdapterSetDataMethod = recyclerViewTypeAdapterSetDataMethod?.name,
             dataItemClass = dataItemClass?.name,
             dataGetTypeMethod = getTypeMethod?.name,
         )
     }
 
-    private fun resolveTypeAdapterSetDataMethod(
-        typeAdapterClass: Class<*>,
+    private fun resolveSetDataMethod(
+        label: String,
+        adapterClass: Class<*>,
         logger: ScanLogger?,
     ): Method? {
-        val candidates = declaredMethods("TypeAdapter", typeAdapterClass, logger)?.filter { method ->
+        val candidates = declaredMethods(label, adapterClass, logger)?.filter { method ->
             !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.size == 1 &&
@@ -54,15 +103,16 @@ internal object PostAdDataFilterSymbolScanner {
         if (resolved == null) {
             log(
                 logger,
-                "typeAdapterDataFilter: setData method mismatch candidates=" +
+                "postAdDataFilter: $label setData method mismatch candidates=" +
                     candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
             )
         }
         return resolved
     }
 
-    private fun resolveTypeAdapterDataItemClass(
-        typeAdapterClass: Class<*>,
+    private fun resolveDataItemClass(
+        label: String,
+        adapterClass: Class<*>,
         setDataMethod: Method?,
         logger: ScanLogger?,
     ): Class<*>? {
@@ -72,7 +122,7 @@ internal object PostAdDataFilterSymbolScanner {
             ?.let(::extractListGenericClass)
             ?.let { return it }
 
-        val listFieldItemClasses = (instanceFields("TypeAdapter", typeAdapterClass, logger) ?: return null)
+        val listFieldItemClasses = (instanceFields(label, adapterClass, logger) ?: return null)
             .asSequence()
             .filter { field -> isListType(field.type) }
             .mapNotNull { field -> extractListGenericClass(field.genericType) }
@@ -80,7 +130,7 @@ internal object PostAdDataFilterSymbolScanner {
             .toList()
         if (listFieldItemClasses.size == 1) return listFieldItemClasses.first()
 
-        val interfaceItemClasses = typeAdapterClass.genericInterfaces
+        val interfaceItemClasses = adapterClass.genericInterfaces
             .asSequence()
             .mapNotNull(::extractSingleGenericClass)
             .distinctBy { it.name }
@@ -89,14 +139,30 @@ internal object PostAdDataFilterSymbolScanner {
 
         log(
             logger,
-            "typeAdapterDataFilter: data item class mismatch " +
+            "postAdDataFilter: $label data item class mismatch " +
                 "fields=${listFieldItemClasses.joinToString(",") { it.name }.ifBlank { "-" }} " +
                 "interfaces=${interfaceItemClasses.joinToString(",") { it.name }.ifBlank { "-" }}",
         )
         return null
     }
 
-    private fun resolveTypeAdapterDataGetTypeMethod(
+    private fun resolveSharedDataItemClass(
+        typeAdapterDataItemClass: Class<*>?,
+        recyclerViewDataItemClass: Class<*>?,
+        logger: ScanLogger?,
+    ): Class<*>? {
+        val candidates = listOfNotNull(typeAdapterDataItemClass, recyclerViewDataItemClass)
+            .distinctBy { it.name }
+        if (candidates.size == 1) return candidates.single()
+        log(
+            logger,
+            "postAdDataFilter: shared data item class mismatch candidates=" +
+                candidates.joinToString(",") { it.name }.ifBlank { "-" },
+        )
+        return null
+    }
+
+    private fun resolveDataGetTypeMethod(
         dataItemClass: Class<*>,
         bdUniqueIdClass: Class<*>,
         logger: ScanLogger?,
@@ -109,7 +175,7 @@ internal object PostAdDataFilterSymbolScanner {
         if (resolved == null) {
             log(
                 logger,
-                "typeAdapterDataFilter: getType method mismatch class=${dataItemClass.name} candidates=" +
+                "postAdDataFilter: getType method mismatch class=${dataItemClass.name} candidates=" +
                     candidates.joinToString(",") { describeMethodShape(it) }.ifBlank { "-" },
             )
         }
