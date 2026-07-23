@@ -25,6 +25,7 @@ internal data class DetailedLogEntry(
 internal data class DetailedLogSnapshot(
     val sessionStartMillis: Long,
     val processName: String,
+    val runtimeEnvironment: String,
     val entries: List<DetailedLogEntry>,
     val droppedEntryCount: Long,
 )
@@ -39,6 +40,7 @@ internal class DetailedLogSessionStore(
     private var active = false
     private var sessionStartMillis = 0L
     private var processName = ""
+    private var runtimeEnvironment = ""
     private var totalCharacters = 0
     private var droppedEntryCount = 0L
 
@@ -49,12 +51,16 @@ internal class DetailedLogSessionStore(
     }
 
     @Synchronized
-    fun start(processName: String) {
+    fun start(
+        processName: String,
+        runtimeEnvironment: String,
+    ) {
         entries.clear()
         totalCharacters = 0
         droppedEntryCount = 0
         sessionStartMillis = clock()
         this.processName = processName
+        this.runtimeEnvironment = runtimeEnvironment
         active = true
     }
 
@@ -93,6 +99,7 @@ internal class DetailedLogSessionStore(
         return DetailedLogSnapshot(
             sessionStartMillis = sessionStartMillis,
             processName = processName,
+            runtimeEnvironment = runtimeEnvironment,
             entries = entries.toList(),
             droppedEntryCount = droppedEntryCount,
         )
@@ -135,7 +142,7 @@ internal class DetailedLogSessionStore(
 }
 
 internal object DetailedLogSession {
-    private const val MAX_ENTRIES = 5_000
+    private const val MAX_ENTRIES = 10_000
     private const val MAX_TOTAL_CHARACTERS = 2_000_000
     private const val MAX_ENTRY_CHARACTERS = 16_384
 
@@ -145,8 +152,11 @@ internal object DetailedLogSession {
         maxEntryCharacters = MAX_ENTRY_CHARACTERS,
     )
 
-    fun start(processName: String) {
-        store.start(processName)
+    fun start(
+        processName: String,
+        runtimeEnvironment: String,
+    ) {
+        store.start(processName, runtimeEnvironment)
     }
 
     fun recordModule(level: String, tag: String, message: String) {
@@ -184,6 +194,8 @@ internal object DetailedLogFileFormatter {
             appendLine("session_start=${formatTimestamp(snapshot.sessionStartMillis, zoneId)}")
             appendLine("save_time=${formatTimestamp(savedAtMillis, zoneId)}")
             appendLine("process=${snapshot.processName}")
+            appendLine("runtimeEnvironment=")
+            appendLine(snapshot.runtimeEnvironment)
             appendLine("entry_count=${snapshot.entries.size}")
             appendLine("dropped_count=${snapshot.droppedEntryCount}")
             appendLine("---")
