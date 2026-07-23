@@ -157,7 +157,21 @@ class MainHook : XposedModule() {
             val isMainProcess = HookProcess.isMain(processName)
             val startupSettings = ConfigManager.snapshot()
             if (isMainProcess && startupSettings.isDetailedLoggingEnabled) {
-                DetailedLogSession.start(processName)
+                val runtimeEnvironmentResult = runCatching {
+                    AboutInfoManager.runtimeEnvironmentJsonForSettings(app)
+                }
+                DetailedLogSession.start(
+                    processName = processName,
+                    runtimeEnvironment = runtimeEnvironmentResult.getOrElse { error ->
+                        "unavailable (${error.javaClass.name}: ${error.message.orEmpty()})"
+                    },
+                )
+                runtimeEnvironmentResult.exceptionOrNull()?.let { error ->
+                    XposedCompat.logW(
+                        "[MainHook] runtimeEnvironment collection FAILED: " +
+                            "${error.javaClass.name}: ${error.message.orEmpty()}",
+                    )
+                }
             }
             XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
             if (isMainProcess) {

@@ -28,16 +28,17 @@ class DetailedLogSessionTest {
     fun startCreatesFreshColdStartSession() {
         var now = 100L
         val store = store(clock = { now })
-        store.start("first")
+        store.start("first", """{"runtime":"first"}""")
         now = 101L
         store.append(DetailedLogSource.MODULE, "INFO", "TbHook", "first entry")
 
         now = 200L
-        store.start("second")
+        store.start("second", """{"runtime":"second"}""")
         val snapshot = requireNotNull(store.snapshot())
 
         assertEquals(200L, snapshot.sessionStartMillis)
         assertEquals("second", snapshot.processName)
+        assertEquals("""{"runtime":"second"}""", snapshot.runtimeEnvironment)
         assertTrue(snapshot.entries.isEmpty())
         assertEquals(0L, snapshot.droppedEntryCount)
     }
@@ -51,7 +52,7 @@ class DetailedLogSessionTest {
             maxEntryCharacters = 50,
             clock = { ++now },
         )
-        countBounded.start("main")
+        countBounded.start("main", "{}")
         countBounded.append(DetailedLogSource.MODULE, "I", "T", "one")
         countBounded.append(DetailedLogSource.MODULE, "I", "T", "two")
         countBounded.append(DetailedLogSource.MODULE, "I", "T", "three")
@@ -65,7 +66,7 @@ class DetailedLogSessionTest {
             maxTotalCharacters = 12,
             maxEntryCharacters = 8,
         )
-        characterBounded.start("main")
+        characterBounded.start("main", "{}")
         characterBounded.append(DetailedLogSource.TIEBA, "I", "T", "123456789")
         characterBounded.append(DetailedLogSource.TIEBA, "I", "T", "abcdefghi")
 
@@ -78,7 +79,7 @@ class DetailedLogSessionTest {
     @Test
     fun snapshotDoesNotChangeWhenNewEntriesArrive() {
         val store = store()
-        store.start("main")
+        store.start("main", "{}")
         store.append(DetailedLogSource.MODULE, "INFO", "TbHook", "first")
         val firstSnapshot = requireNotNull(store.snapshot())
 
@@ -96,6 +97,12 @@ class DetailedLogSessionTest {
         val snapshot = DetailedLogSnapshot(
             sessionStartMillis = sessionStart,
             processName = "com.baidu.tieba",
+            runtimeEnvironment = """
+                {
+                  "tiebaVersionName": "22.8.5.0",
+                  "runtimeKind": "LSPosed"
+                }
+            """.trimIndent(),
             entries = listOf(
                 DetailedLogEntry(
                     timestampMillis = sessionStart + 1,
@@ -123,10 +130,34 @@ class DetailedLogSessionTest {
         assertTrue(output.contains("session_start=2026-07-23 04:00:00.000 Z"))
         assertTrue(output.contains("save_time=2026-07-23 04:05:06.000 Z"))
         assertTrue(output.contains("process=com.baidu.tieba"))
+        assertTrue(
+            output.contains(
+                """
+                    runtimeEnvironment=
+                    {
+                      "tiebaVersionName": "22.8.5.0",
+                      "runtimeKind": "LSPosed"
+                    }
+                """.trimIndent(),
+            ),
+        )
         assertTrue(output.contains("entry_count=2"))
         assertTrue(output.contains("dropped_count=3"))
         assertTrue(output.contains("[MODULE][DEBUG][TbHook] module line"))
         assertTrue(output.contains("[TIEBA][INFO][HostTag] host line"))
+    }
+
+    @Test
+    fun detailedLogSessionRetainsAtMostTenThousandEntries() {
+        DetailedLogSession.start("main", "{}")
+        repeat(10_001) { index ->
+            DetailedLogSession.recordModule("INFO", "TbHook", "entry-$index")
+        }
+
+        val snapshot = requireNotNull(DetailedLogSession.snapshot())
+        assertEquals(10_000, snapshot.entries.size)
+        assertEquals("entry-1", snapshot.entries.first().message)
+        assertEquals(1L, snapshot.droppedEntryCount)
     }
 
     private fun store(
