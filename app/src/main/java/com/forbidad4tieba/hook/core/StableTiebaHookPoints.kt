@@ -132,6 +132,8 @@ object StableTiebaHookPoints {
     const val COLLECTION_THREAD_FRAGMENT_CLASS = "com.baidu.tieba.myCollection.ThreadFragment"
     const val PB_HISTORY_ACTIVITY_CLASS = "com.baidu.tieba.myCollection.history.PbHistoryActivity"
     const val TBADK_CORE_APPLICATION_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
+    const val TB_LOG_MANAGER_CLASS = "com.baidu.tieba.log.TbLogManager"
+    const val TB_LOG_MANAGER_LEVEL_CLASS = "$TB_LOG_MANAGER_CLASS\$Level"
     const val NAVIGATION_BAR_CLASS = "com.baidu.tbadk.core.view.NavigationBar"
     const val NAV_CONTROL_ALIGN_CLASS = "$NAVIGATION_BAR_CLASS\$ControlAlign"
 
@@ -187,6 +189,9 @@ object StableTiebaHookPoints {
     const val METHOD_POST_NET_DATA = "postNetData"
     const val METHOD_SET_NEED_TBS = "setNeedTbs"
     const val METHOD_SET_NEED_SIG = "setNeedSig"
+    const val METHOD_LOG = "log"
+    const val METHOD_LOG_INFO = "logI"
+    const val METHOD_LOG_ERROR = "logE"
     const val FIELD_SERVER_ADDRESS = "SERVER_ADDRESS"
     const val FIELD_MARK_GET_STORE = "MARK_GETSTORE"
 

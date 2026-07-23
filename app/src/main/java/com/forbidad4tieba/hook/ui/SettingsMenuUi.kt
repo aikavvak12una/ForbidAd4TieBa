@@ -902,6 +902,7 @@ internal fun createSwitchRow(
     enabled: Boolean = true,
     defaultValue: Boolean = false,
     actionIcon: String? = null,
+    actionContentDescription: String? = null,
     onActionClick: (() -> Unit)? = null,
     linkedPrefKeys: List<String> = emptyList(),
 ): View {
@@ -957,6 +958,10 @@ internal fun createSwitchRow(
             textSize = 18f
             setTextColor(if (enabled) tokens.accent else tokens.textMuted)
             gravity = Gravity.CENTER
+            contentDescription = actionContentDescription
+            isEnabled = enabled
+            isClickable = enabled
+            isFocusable = enabled
             setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
             setOnClickListener {
                 if (enabled) {

@@ -205,7 +205,9 @@ object ConfigManager {
     @Volatile private var homeNativeGlassDarkModeActive: Boolean = false
     @Volatile private var homeTopTabCatalogJsonCache: String? = null
 
-    private val scanIndependentFeatureKeys = emptySet<String>()
+    private val scanIndependentFeatureKeys = setOf(
+        HookFeatureKey.DETAILED_LOGGING,
+    )
 
     @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
     @Volatile private var environmentWarningDialogActive: Boolean = false

@@ -50,6 +50,9 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
 import com.forbidad4tieba.hook.feature.ad.BlockCountStats
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
+import com.forbidad4tieba.hook.feature.diagnostic.DetailedLogExporter
+import com.forbidad4tieba.hook.feature.diagnostic.DetailedLogExportResult
+import com.forbidad4tieba.hook.feature.diagnostic.DetailedLogExportStartResult
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassImageCache
@@ -341,6 +344,7 @@ object SettingsMenuHook {
                     },
                     onAutoSignIn = { AutoSignInManager.tryAutoSignIn(context, force = true) },
                     onReplyVisibilityProbe = { showReplyVisibilityProbeDialog(context, prefs) },
+                    onDetailedLogSave = { saveDetailedLog(context) },
                     onHomeTopTab = { showHomeTopTabDialog(context, prefs) },
                     onHomeNativeGlass = { showHomeNativeGlassDialog(context, prefs) },
                     onBottomTab = { showBottomTabDialog(context, prefs) },
@@ -382,17 +386,18 @@ object SettingsMenuHook {
                     val finalDesc = descriptionWithScanSupport(item.description, support)
 
                     val rowView = createSwitchRow(
-                        context,
-                        prefs,
-                        finalLabel,
-                        finalDesc,
-                        item.prefKey,
-                        padding,
-                        support.supported,
-                        if (support.supported) item.defaultValue else false,
-                        item.actionIcon,
-                        item.onActionClick,
-                        item.linkedPrefKeys,
+                        context = context,
+                        prefs = prefs,
+                        label = finalLabel,
+                        description = finalDesc,
+                        prefKey = item.prefKey,
+                        padding = padding,
+                        enabled = support.supported,
+                        defaultValue = if (support.supported) item.defaultValue else false,
+                        actionIcon = item.actionIcon,
+                        actionContentDescription = item.actionContentDescription,
+                        onActionClick = item.onActionClick,
+                        linkedPrefKeys = item.linkedPrefKeys,
                     )
                     root.addView(rowView)
                 }
@@ -1236,6 +1241,43 @@ object SettingsMenuHook {
         dialog.show()
     }
 
+    private fun saveDetailedLog(context: Context) {
+        val startResult = DetailedLogExporter.start(context) { result ->
+            when (result) {
+                is DetailedLogExportResult.Success -> {
+                    Toast.makeText(
+                        context,
+                        UiText.Settings.detailedLogSaved(result.fileName),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+                is DetailedLogExportResult.Failure -> {
+                    XposedCompat.logW("[SettingsMenuHook] detailed log export failed: ${result.reason}")
+                    Toast.makeText(
+                        context,
+                        UiText.Settings.DETAILED_LOG_SAVE_FAILED,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+        val message = when (startResult) {
+            DetailedLogExportStartResult.Started -> UiText.Settings.DETAILED_LOG_SAVE_STARTED
+            DetailedLogExportStartResult.AlreadySaving -> {
+                UiText.Settings.DETAILED_LOG_SAVE_ALREADY_RUNNING
+            }
+            DetailedLogExportStartResult.NoSession -> UiText.Settings.DETAILED_LOG_SAVE_NO_SESSION
+            DetailedLogExportStartResult.Empty -> UiText.Settings.DETAILED_LOG_SAVE_EMPTY
+            is DetailedLogExportStartResult.Failure -> {
+                XposedCompat.logW(
+                    "[SettingsMenuHook] detailed log export start failed: ${startResult.reason}",
+                )
+                UiText.Settings.DETAILED_LOG_SAVE_FAILED
+            }
+        }
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+
     private fun clearModuleDataAndRestart(activity: Activity) {
         Toast.makeText(activity, UiText.Settings.CLEAR_MODULE_DATA_STARTED, Toast.LENGTH_SHORT).show()
         thread(name = "tbhook-clear-module-data", isDaemon = true) {
@@ -1322,6 +1364,7 @@ object SettingsMenuHook {
                         false
                     },
                     actionIcon = item.actionIcon,
+                    actionContentDescription = item.actionContentDescription,
                     onActionClick = item.onActionClick,
                 )
                 val switchView = findSwitchView(row)
@@ -1409,6 +1452,7 @@ object SettingsMenuHook {
                         enabled = support.supported,
                         defaultValue = if (support.supported) resolvePerformanceItemChecked(prefs, item) else false,
                         actionIcon = item.actionIcon,
+                        actionContentDescription = item.actionContentDescription,
                         onActionClick = item.onActionClick,
                     )
                     val switchView = findSwitchView(row)
@@ -1496,6 +1540,7 @@ object SettingsMenuHook {
                     enabled = true,
                     defaultValue = prefs.getBoolean(item.prefKey, item.defaultValue),
                     actionIcon = item.actionIcon,
+                    actionContentDescription = item.actionContentDescription,
                     onActionClick = actionClick,
                 )
                 val switchView = findSwitchView(row)

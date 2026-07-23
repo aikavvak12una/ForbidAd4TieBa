@@ -11,6 +11,7 @@ internal data class SettingsMenuGroupActions(
     val onPerformanceOptimization: (List<SettingGroup>) -> Unit,
     val onAutoSignIn: () -> Unit,
     val onReplyVisibilityProbe: () -> Unit,
+    val onDetailedLogSave: () -> Unit,
     val onHomeTopTab: () -> Unit,
     val onHomeNativeGlass: () -> Unit,
     val onBottomTab: () -> Unit,
@@ -267,11 +268,13 @@ internal object SettingsMenuGroupBuilder {
             )
             items.add(
                 SwitchItem(
-                    UiText.Settings.DETAILED_LOGGING_LABEL,
-                    UiText.Settings.DETAILED_LOGGING_DESC,
-                    ConfigManager.KEY_ENABLE_DETAILED_LOGGING,
-                    true,
-                    false,
+                    label = UiText.Settings.DETAILED_LOGGING_LABEL,
+                    description = UiText.Settings.DETAILED_LOGGING_DESC,
+                    prefKey = ConfigManager.KEY_ENABLE_DETAILED_LOGGING,
+                    supported = true,
+                    actionIcon = UiText.Settings.ACTION_ICON_SAVE,
+                    actionContentDescription = UiText.Settings.DETAILED_LOG_SAVE_ACTION_DESC,
+                    onActionClick = actions.onDetailedLogSave,
                 )
             )
         }

@@ -7,6 +7,7 @@ import android.os.Looper
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.core.Constants
+import com.forbidad4tieba.hook.core.DetailedLogSession
 import com.forbidad4tieba.hook.core.TitanRuntimeState
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
@@ -153,11 +154,14 @@ class MainHook : XposedModule() {
         if (firstApplicationReady) {
             sAppContext = app
             ConfigManager.init(app)
-            XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
             val isMainProcess = HookProcess.isMain(processName)
+            val startupSettings = ConfigManager.snapshot()
+            if (isMainProcess && startupSettings.isDetailedLoggingEnabled) {
+                DetailedLogSession.start(processName)
+            }
+            XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
             if (isMainProcess) {
                 ModuleForegroundActivityTracker.register(app)
-                val startupSettings = ConfigManager.snapshot()
                 if (startupSettings.isAutoRefreshDisabled) {
                     AutoRefreshHook.registerForegroundCallbacks(app)
                 }

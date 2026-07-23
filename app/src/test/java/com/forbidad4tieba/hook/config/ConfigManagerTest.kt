@@ -67,6 +67,19 @@ class ConfigManagerTest {
     }
 
     @Test
+    fun detailedLoggingStableHostPathIsAvailableBeforeSymbolScan() {
+        assertEquals(
+            HookFeatureKey.DETAILED_LOGGING,
+            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_DETAILED_LOGGING),
+        )
+        assertEquals(
+            ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_DETAILED_LOGGING),
+        )
+        assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_DETAILED_LOGGING))
+    }
+
+    @Test
     fun autoSignInRemainsUnknownUntilScanStateIsApplied() {
         assertEquals(
             ConfigManager.KEY_ENABLE_AUTO_SIGN_IN,
