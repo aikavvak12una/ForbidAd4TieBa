@@ -22,6 +22,9 @@ import java.util.concurrent.ConcurrentHashMap
  * - reflection helpers for fields, methods, and classes
  */
 object XposedCompat {
+    private const val MODULE_LOG_TAG = "TbHook"
+    private const val HOST_LOG_TAG = "TiebaHost"
+    private const val MAX_LOGCAT_MESSAGE_CHARACTERS = 3_800
 
     @Volatile
     var module: XposedModule? = null
@@ -50,33 +53,39 @@ object XposedCompat {
     fun log(msg: String) {
         if (isSuccessfulHookInstallLog(msg)) {
             if (!installInfoOnce.add(msg)) return
-            val priority = if (ConfigManager.shouldOutputDetailedLogs()) {
+            val detailedLogging = ConfigManager.shouldOutputDetailedLogs()
+            val priority = if (detailedLogging) {
                 android.util.Log.DEBUG
             } else {
                 android.util.Log.INFO
             }
-            android.util.Log.println(priority, "TbHook", msg)
-            module?.log(priority, "TbHook", msg)
+            if (detailedLogging) recordModuleLog(priority, msg)
+            android.util.Log.println(priority, MODULE_LOG_TAG, msg)
+            module?.log(priority, MODULE_LOG_TAG, msg)
             return
         }
         if (isStaticDispatchLog(msg)) {
             if (!ConfigManager.shouldOutputDetailedLogs()) return
             if (!installInfoOnce.add(msg)) return
-            android.util.Log.d("TbHook", msg)
-            module?.log(android.util.Log.DEBUG, "TbHook", msg)
+            recordModuleLog(android.util.Log.DEBUG, msg)
+            android.util.Log.d(MODULE_LOG_TAG, msg)
+            module?.log(android.util.Log.DEBUG, MODULE_LOG_TAG, msg)
             return
         }
         if (!ConfigManager.shouldOutputDetailedLogs()) {
             if (!isReleaseKeyInfo(msg)) return
+        } else {
+            recordModuleLog(android.util.Log.INFO, msg)
         }
-        android.util.Log.i("TbHook", msg)
-        module?.log(android.util.Log.INFO, "TbHook", msg)
+        android.util.Log.i(MODULE_LOG_TAG, msg)
+        module?.log(android.util.Log.INFO, MODULE_LOG_TAG, msg)
     }
 
     fun logD(msg: String) {
         if (!ConfigManager.shouldOutputDetailedLogs()) return
-        android.util.Log.d("TbHook", msg)
-        module?.log(android.util.Log.DEBUG, "TbHook", msg)
+        recordModuleLog(android.util.Log.DEBUG, msg)
+        android.util.Log.d(MODULE_LOG_TAG, msg)
+        module?.log(android.util.Log.DEBUG, MODULE_LOG_TAG, msg)
     }
 
     inline fun logD(msg: () -> String) {
@@ -85,20 +94,63 @@ object XposedCompat {
     }
 
     fun logW(msg: String) {
-        android.util.Log.w("TbHook", msg)
-        module?.log(android.util.Log.WARN, "TbHook", msg)
+        if (ConfigManager.shouldOutputDetailedLogs()) {
+            recordModuleLog(android.util.Log.WARN, msg)
+        }
+        android.util.Log.w(MODULE_LOG_TAG, msg)
+        module?.log(android.util.Log.WARN, MODULE_LOG_TAG, msg)
     }
 
     fun log(t: Throwable) {
         if (!ConfigManager.shouldOutputDetailedLogs()) {
             val summary = "${t.javaClass.name}: ${t.message.orEmpty()}"
-            android.util.Log.e("TbHook", summary)
-            module?.log(android.util.Log.ERROR, "TbHook", summary)
+            android.util.Log.e(MODULE_LOG_TAG, summary)
+            module?.log(android.util.Log.ERROR, MODULE_LOG_TAG, summary)
             return
         }
-        android.util.Log.e("TbHook", "Error", t)
-        module?.log(android.util.Log.ERROR, "TbHook", android.util.Log.getStackTraceString(t))
+        val stackTrace = android.util.Log.getStackTraceString(t)
+        recordModuleLog(android.util.Log.ERROR, stackTrace)
+        android.util.Log.e(MODULE_LOG_TAG, "Error", t)
+        module?.log(android.util.Log.ERROR, MODULE_LOG_TAG, stackTrace)
     }
+
+    fun emitTiebaHostLog(
+        priority: Int,
+        tag: String,
+        message: String,
+    ) {
+        if (!ConfigManager.shouldOutputDetailedLogs()) return
+        val line = "[$tag] $message"
+        val boundedLine = if (line.length > MAX_LOGCAT_MESSAGE_CHARACTERS) {
+            line.take(MAX_LOGCAT_MESSAGE_CHARACTERS - LOG_TRUNCATED_SUFFIX.length) +
+                LOG_TRUNCATED_SUFFIX
+        } else {
+            line
+        }
+        android.util.Log.println(priority, HOST_LOG_TAG, boundedLine)
+        module?.log(priority, HOST_LOG_TAG, boundedLine)
+    }
+
+    private fun recordModuleLog(priority: Int, message: String) {
+        DetailedLogSession.recordModule(
+            level = priorityName(priority),
+            tag = MODULE_LOG_TAG,
+            message = message,
+        )
+    }
+
+    private fun priorityName(priority: Int): String {
+        return when (priority) {
+            android.util.Log.VERBOSE -> "VERBOSE"
+            android.util.Log.DEBUG -> "DEBUG"
+            android.util.Log.WARN -> "WARN"
+            android.util.Log.ERROR -> "ERROR"
+            android.util.Log.ASSERT -> "ASSERT"
+            else -> "INFO"
+        }
+    }
+
+    private const val LOG_TRUNCATED_SUFFIX = "...[truncated]"
 
     private fun isSuccessfulHookInstallLog(msg: String): Boolean {
         if (msg.contains("FAILED", ignoreCase = true) || msg.contains("no hooks installed", ignoreCase = true)) {

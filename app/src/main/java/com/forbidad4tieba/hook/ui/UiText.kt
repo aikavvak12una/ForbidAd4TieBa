@@ -254,12 +254,19 @@ object UiText {
         const val PB_SCROLL_COALESCE_LABEL = "合并帖子页滚动回调"
         const val PB_SCROLL_COALESCE_DESC = "在评论列表滚动回调中合并过密的刷新请求，降低帖子页滑动时的主线程压力"
         const val DETAILED_LOGGING_LABEL = "输出详细日志"
-        const val DETAILED_LOGGING_DESC = "输出详细日志，需重启生效"
+        const val DETAILED_LOGGING_DESC = "额外记录贴吧自身日志；仅记录开启后冷启动产生的日志，需重启生效"
+        const val DETAILED_LOG_SAVE_ACTION_DESC = "保存本次冷启动日志"
+        const val DETAILED_LOG_SAVE_STARTED = "正在保存本次冷启动日志"
+        const val DETAILED_LOG_SAVE_ALREADY_RUNNING = "日志正在保存，请稍候"
+        const val DETAILED_LOG_SAVE_NO_SESSION = "暂无日志；请开启详细日志后冷启动贴吧"
+        const val DETAILED_LOG_SAVE_EMPTY = "本次冷启动尚未记录到日志"
+        const val DETAILED_LOG_SAVE_FAILED = "日志保存失败"
         const val FORCE_FEED_UI_OPT_LABEL = "稳定首页新版布局"
         const val FORCE_FEED_UI_OPT_DESC = "强制启用首页新版布局，并运行期跳过部分统计上报入口\n*关闭可能导致其他UI净化功能布局异常"
 
         const val ACTION_ICON_SETTINGS = "\u2630"
         const val ACTION_ICON_PLAY = "\u25b6"
+        const val ACTION_ICON_SAVE = "\u21e9"
 
         const val UNSUPPORTED_SUFFIX = " (当前版本不支持)"
         const val SCAN_UNKNOWN_SUFFIX = " (需要扫描或不支持)"
@@ -282,6 +289,8 @@ object UiText {
         const val BRAND_TAG = "ForbidAd4TieBa"
         const val SAVE = "保存"
         const val SAVE_AND_RESTART = "保存并重启"
+
+        fun detailedLogSaved(fileName: String): String = "日志已保存到系统下载文件夹：$fileName"
 
         const val SETTINGS_SAVED = "设置已保存，重启贴吧生效。"
         const val SETTINGS_SAVED_RESTARTING = "设置已保存，正在重启贴吧"

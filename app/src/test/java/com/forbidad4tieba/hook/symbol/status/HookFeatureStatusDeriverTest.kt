@@ -11,6 +11,18 @@ import org.junit.Test
 
 class HookFeatureStatusDeriverTest {
     @Test
+    fun detailedLoggingRemainsAvailableThroughStableHostLogger() {
+        val status = HookFeatureStatusDeriver.derive(buildHookSymbols {})
+            .getValue(HookFeatureKey.DETAILED_LOGGING)
+
+        assertEquals(HookFeatureState.PARTIAL, status.state)
+        assertTrue(status.missingCritical.isEmpty())
+        assertTrue(status.missingOptional.contains("ReplyServerResponseLogHook"))
+        assertTrue(status.missingOptional.contains("AgreeServerResponseLogHook"))
+        assertTrue(status.missingOptional.contains("FeedInfoLogHook.Bind"))
+    }
+
+    @Test
     fun hookPointStatusKeepsCompatibleLogFormatAndAvailabilitySemantics() {
         val optional = HookPointStatus(
             name = "OptionalPoint",

@@ -13,6 +13,7 @@ import com.forbidad4tieba.hook.feature.ad.PostAdHook
 import com.forbidad4tieba.hook.feature.ad.SearchBoxTextAdHook
 import com.forbidad4tieba.hook.feature.ad.StrategyAdHook
 import com.forbidad4tieba.hook.feature.diagnostic.AgreeServerResponseLogHook
+import com.forbidad4tieba.hook.feature.diagnostic.TiebaHostLogHook
 import com.forbidad4tieba.hook.feature.diagnostic.ReplyServerResponseLogHook
 import com.forbidad4tieba.hook.feature.diagnostic.ReplyVisibilityProbeHook
 import com.forbidad4tieba.hook.feature.im.PrivateReadReceiptBlockHook
@@ -137,6 +138,11 @@ internal object HookInstallPlanner {
             }
         }
         if (context.isMain) {
+            if (settings.isDetailedLoggingEnabled) {
+                entries += HookInstallEntry("TiebaHostLogHook") { cl ->
+                    TiebaHostLogHook.hook(cl)
+                }
+            }
             val enableSwitchManager =
                 settings.isStrategyAdBlockEnabled ||
                     settings.isAdSdkComponentsDisabled ||

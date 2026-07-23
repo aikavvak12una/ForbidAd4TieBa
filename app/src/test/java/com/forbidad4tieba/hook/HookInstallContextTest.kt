@@ -10,6 +10,31 @@ import org.junit.Test
 
 class HookInstallContextTest {
     @Test
+    fun tiebaHostLoggingInstallsOnlyForEnabledMainProcess() {
+        val symbols = buildHookSymbols {}
+        val enabled = SettingsSnapshot(isDetailedLoggingEnabled = true)
+        val disabled = SettingsSnapshot(isDetailedLoggingEnabled = false)
+
+        assertTrue(
+            HookInstallPlanner.postAttachPlan(Constants.TARGET_PACKAGE, symbols, enabled)
+                .entries
+                .any { it.id == "TiebaHostLogHook" },
+        )
+        assertFalse(
+            HookInstallPlanner.postAttachPlan(Constants.TARGET_PACKAGE, symbols, disabled)
+                .entries
+                .any { it.id == "TiebaHostLogHook" },
+        )
+        assertFalse(
+            HookInstallPlanner.postAttachPlan(
+                Constants.TARGET_PACKAGE + ":remote",
+                symbols,
+                enabled,
+            ).entries.any { it.id == "TiebaHostLogHook" },
+        )
+    }
+
+    @Test
     fun requiredEvidenceAllowsInstallWhenOnlyOptionalSymbolsAreMissing() {
         val symbols = buildHookSymbols {
             homeTabClass = "com.tieba.HomeTabs"

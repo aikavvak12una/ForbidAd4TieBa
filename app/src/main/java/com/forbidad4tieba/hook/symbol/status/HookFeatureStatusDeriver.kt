@@ -709,13 +709,8 @@ internal object HookFeatureStatusDeriver {
         }
         out[HookFeatureKey.DETAILED_LOGGING] = when {
             detailedLoggingMissing.isEmpty() -> HookFeatureStatus(state = HookFeatureState.FULL)
-            replyServerLogReady || agreeServerLogReady || feedInfoLogReady -> HookFeatureStatus(
-                state = HookFeatureState.PARTIAL,
-                missingOptional = detailedLoggingMissing,
-            )
             else -> HookFeatureStatus(
-                state = HookFeatureState.DISABLED,
-                missingCritical = listOf("detailedLoggingHookPoints"),
+                state = HookFeatureState.PARTIAL,
                 missingOptional = detailedLoggingMissing,
             )
         }
