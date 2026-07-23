@@ -195,7 +195,7 @@ internal data class PbAdRequestBlockSymbols(
 )
 
 internal data class PostAdDataFilterSymbols(
-    val setDataMethod: Method,
+    val setDataMethods: List<Method>,
     val itemClass: Class<*>,
     val getTypeMethod: Method,
     val blockedTypes: Set<Any>,

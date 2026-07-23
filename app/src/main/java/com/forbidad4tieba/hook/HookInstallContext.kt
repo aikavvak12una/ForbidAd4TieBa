@@ -110,7 +110,10 @@ internal class HookInstallContext(
     }
 
     private fun hasPostAdDataPath(): Boolean {
-        return !symbols.typeAdapterSetDataMethod.isNullOrBlank() &&
+        val hasAdapterSetDataMethod =
+            !symbols.typeAdapterSetDataMethod.isNullOrBlank() ||
+                !symbols.recyclerViewTypeAdapterSetDataMethod.isNullOrBlank()
+        return hasAdapterSetDataMethod &&
             !symbols.typeAdapterDataItemClass.isNullOrBlank() &&
             !symbols.typeAdapterDataGetTypeMethod.isNullOrBlank()
     }

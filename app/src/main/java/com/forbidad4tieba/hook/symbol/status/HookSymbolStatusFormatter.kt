@@ -467,10 +467,35 @@ internal object HookSymbolStatusFormatter {
         )
         add(
             "PostAdHook.DataFilter",
-            "${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}.${symbols.typeAdapterSetDataMethod}(List) " +
+            "type=${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}.${symbols.typeAdapterSetDataMethod}(List) " +
+                "recycler=${StableTiebaHookPoints.RECYCLER_VIEW_TYPE_ADAPTER_CLASS}." +
+                "${symbols.recyclerViewTypeAdapterSetDataMethod}(List) " +
                 "item=${symbols.typeAdapterDataItemClass}.${symbols.typeAdapterDataGetTypeMethod}()",
             listOf(
+                "adapterSetDataMethod" to (
+                    has(symbols.typeAdapterSetDataMethod) ||
+                        has(symbols.recyclerViewTypeAdapterSetDataMethod)
+                    ),
+                "typeAdapterDataItemClass" to has(symbols.typeAdapterDataItemClass),
+                "typeAdapterDataGetTypeMethod" to has(symbols.typeAdapterDataGetTypeMethod),
+            ),
+        )
+        add(
+            "PostAdHook.DataFilter.TypeAdapter",
+            "${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}.${symbols.typeAdapterSetDataMethod}(List)",
+            listOf(
                 "typeAdapterSetDataMethod" to has(symbols.typeAdapterSetDataMethod),
+                "typeAdapterDataItemClass" to has(symbols.typeAdapterDataItemClass),
+                "typeAdapterDataGetTypeMethod" to has(symbols.typeAdapterDataGetTypeMethod),
+            ),
+        )
+        add(
+            "PostAdHook.DataFilter.RecyclerViewTypeAdapter",
+            "${StableTiebaHookPoints.RECYCLER_VIEW_TYPE_ADAPTER_CLASS}." +
+                "${symbols.recyclerViewTypeAdapterSetDataMethod}(List)",
+            listOf(
+                "recyclerViewTypeAdapterSetDataMethod" to
+                    has(symbols.recyclerViewTypeAdapterSetDataMethod),
                 "typeAdapterDataItemClass" to has(symbols.typeAdapterDataItemClass),
                 "typeAdapterDataGetTypeMethod" to has(symbols.typeAdapterDataGetTypeMethod),
             ),

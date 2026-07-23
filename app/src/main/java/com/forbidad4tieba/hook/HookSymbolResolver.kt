@@ -2563,10 +2563,6 @@ internal object HookSymbolResolver {
                 XposedCompat.log("[PostAdHook] skipped: scan symbols unavailable")
                 return null
             }
-            val setDataMethodName = resolvedSymbols.typeAdapterSetDataMethod?.takeIf { it.isNotBlank() } ?: run {
-                XposedCompat.log("[PostAdHook] skipped: missing typeAdapterSetDataMethod")
-                return null
-            }
             val itemClassName = resolvedSymbols.typeAdapterDataItemClass?.takeIf { it.isNotBlank() } ?: run {
                 XposedCompat.log("[PostAdHook] skipped: missing typeAdapterDataItemClass")
                 return null
@@ -2576,18 +2572,20 @@ internal object HookSymbolResolver {
                 return null
             }
 
-            val adapterClass = safeFindClass(StableTiebaHookPoints.TYPE_ADAPTER_CLASS, cl) ?: run {
-                XposedCompat.log("[PostAdHook] class NOT FOUND: ${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}")
-                return null
-            }
-            val setDataMethod = try {
-                adapterClass.getDeclaredMethod(setDataMethodName, List::class.java).takeIf { method ->
-                    !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE
-                }
-            } catch (_: NoSuchMethodException) {
-                null
-            } ?: run {
-                XposedCompat.log("[PostAdHook] method NOT FOUND: TypeAdapter.$setDataMethodName(List)")
+            val setDataMethods = listOfNotNull(
+                resolvePostAdSetDataMethod(
+                    cl = cl,
+                    adapterClassName = StableTiebaHookPoints.TYPE_ADAPTER_CLASS,
+                    methodName = resolvedSymbols.typeAdapterSetDataMethod,
+                ),
+                resolvePostAdSetDataMethod(
+                    cl = cl,
+                    adapterClassName = StableTiebaHookPoints.RECYCLER_VIEW_TYPE_ADAPTER_CLASS,
+                    methodName = resolvedSymbols.recyclerViewTypeAdapterSetDataMethod,
+                ),
+            ).distinct()
+            if (setDataMethods.isEmpty()) {
+                XposedCompat.log("[PostAdHook] skipped: no adapter setData methods resolved")
                 return null
             }
 
@@ -2613,10 +2611,10 @@ internal object HookSymbolResolver {
                 return null
             }
 
-            setDataMethod.isAccessible = true
+            setDataMethods.forEach { it.isAccessible = true }
             getTypeMethod.isAccessible = true
             PostAdDataFilterSymbols(
-                setDataMethod = setDataMethod,
+                setDataMethods = setDataMethods,
                 itemClass = itemClass,
                 getTypeMethod = getTypeMethod,
                 blockedTypes = blockedTypes,
@@ -2625,6 +2623,28 @@ internal object HookSymbolResolver {
         } catch (t: Throwable) {
             XposedCompat.log("[PostAdHook] symbol resolve FAILED: ${t.message}")
             XposedCompat.log(t)
+            null
+        }
+    }
+
+    private fun resolvePostAdSetDataMethod(
+        cl: ClassLoader,
+        adapterClassName: String,
+        methodName: String?,
+    ): Method? {
+        val resolvedMethodName = methodName?.takeIf { it.isNotBlank() } ?: return null
+        val adapterClass = safeFindClass(adapterClassName, cl) ?: run {
+            XposedCompat.log("[PostAdHook] class NOT FOUND: $adapterClassName")
+            return null
+        }
+        return try {
+            adapterClass.getDeclaredMethod(resolvedMethodName, List::class.java).takeIf { method ->
+                !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE
+            }?.apply { isAccessible = true }
+        } catch (_: NoSuchMethodException) {
+            null
+        } ?: run {
+            XposedCompat.log("[PostAdHook] method NOT FOUND: $adapterClassName.$resolvedMethodName(List)")
             null
         }
     }
@@ -5066,6 +5086,7 @@ internal object HookSymbolResolver {
         var pbAdBidPageBrowserRequestModelClass: String? = null
         var pbAdBidPageBrowserRequestDataMethod: String? = null
         var typeAdapterSetDataMethod: String? = null
+        var recyclerViewTypeAdapterSetDataMethod: String? = null
         var typeAdapterDataItemClass: String? = null
         var typeAdapterDataGetTypeMethod: String? = null
         var forumPageAdScan = ForumPageAdScanSymbols()
@@ -5465,7 +5486,9 @@ internal object HookSymbolResolver {
         ) {
             PostAdDataFilterSymbolScanner.scan(cl, logger)
         }
-        typeAdapterSetDataMethod = typeAdapterDataFilterScan.setDataMethod
+        typeAdapterSetDataMethod = typeAdapterDataFilterScan.typeAdapterSetDataMethod
+        recyclerViewTypeAdapterSetDataMethod =
+            typeAdapterDataFilterScan.recyclerViewTypeAdapterSetDataMethod
         typeAdapterDataItemClass = typeAdapterDataFilterScan.dataItemClass
         typeAdapterDataGetTypeMethod = typeAdapterDataFilterScan.dataGetTypeMethod
 
@@ -6086,6 +6109,7 @@ internal object HookSymbolResolver {
             this.pbAdBidPageBrowserRequestModelClass = pbAdBidPageBrowserRequestModelClass
             this.pbAdBidPageBrowserRequestDataMethod = pbAdBidPageBrowserRequestDataMethod
             this.typeAdapterSetDataMethod = typeAdapterSetDataMethod
+            this.recyclerViewTypeAdapterSetDataMethod = recyclerViewTypeAdapterSetDataMethod
             this.typeAdapterDataItemClass = typeAdapterDataItemClass
             this.typeAdapterDataGetTypeMethod = typeAdapterDataGetTypeMethod
             this.forumResponseDataClass = forumPageAdScan.responseDataClass

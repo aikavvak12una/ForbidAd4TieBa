@@ -179,6 +179,14 @@ class HookInstallContextTest {
                 typeAdapterDataGetTypeMethod = "getType"
             },
         )
+        val recyclerDataPath = HookInstallContext(
+            Constants.TARGET_PACKAGE,
+            buildHookSymbols {
+                recyclerViewTypeAdapterSetDataMethod = "setData"
+                typeAdapterDataItemClass = "com.tieba.PostItem"
+                typeAdapterDataGetTypeMethod = "getType"
+            },
+        )
         val earlyPath = HookInstallContext(
             Constants.TARGET_PACKAGE,
             buildHookSymbols {
@@ -197,6 +205,10 @@ class HookInstallContextTest {
         assertTrue(dataPath.canInstallPostAdBlock(settings))
         assertFalse(dataPath.canInstallPbEarlyAdBlock(settings))
         assertFalse(dataPath.canInstallPbFallingAdBlock(settings))
+
+        assertTrue(recyclerDataPath.canInstallPostAdBlock(settings))
+        assertFalse(recyclerDataPath.canInstallPbEarlyAdBlock(settings))
+        assertFalse(recyclerDataPath.canInstallPbFallingAdBlock(settings))
 
         assertFalse(earlyPath.canInstallPostAdBlock(settings))
         assertTrue(earlyPath.canInstallPbEarlyAdBlock(settings))

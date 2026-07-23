@@ -52,6 +52,7 @@ internal class HookSymbolsBuilder {
     var pbAdBidPageBrowserRequestModelClass: String? = null
     var pbAdBidPageBrowserRequestDataMethod: String? = null
     var typeAdapterSetDataMethod: String? = null
+    var recyclerViewTypeAdapterSetDataMethod: String? = null
     var typeAdapterDataItemClass: String? = null
     var typeAdapterDataGetTypeMethod: String? = null
     var enterForumWebControllerClass: String? = null
@@ -466,9 +467,10 @@ internal class HookSymbolsBuilder {
             closeAd = CloseAdSymbolsGroup(closeAdDataClass, closeAdDataMethodG1, closeAdDataMethodJ1),
             zga = ZgaSymbolsGroup(zgaClass, zgaMethods),
             typeAdapter = TypeAdapterSymbolsGroup(
-                typeAdapterSetDataMethod,
-                typeAdapterDataItemClass,
-                typeAdapterDataGetTypeMethod,
+                typeAdapterSetDataMethod = typeAdapterSetDataMethod,
+                recyclerViewTypeAdapterSetDataMethod = recyclerViewTypeAdapterSetDataMethod,
+                typeAdapterDataItemClass = typeAdapterDataItemClass,
+                typeAdapterDataGetTypeMethod = typeAdapterDataGetTypeMethod,
             ),
             feedCard = FeedCardSymbolsGroup(
                 feedCardBindMethod,

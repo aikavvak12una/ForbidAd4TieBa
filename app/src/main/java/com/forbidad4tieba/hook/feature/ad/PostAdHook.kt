@@ -30,7 +30,6 @@ object PostAdHook {
         if (!tryMarkHooked()) return
 
         try {
-            val setDataMethod = targets.setDataMethod
             val runtimeFilter = RuntimeFilter(
                 itemClass = targets.itemClass,
                 getTypeMethod = targets.getTypeMethod,
@@ -38,22 +37,45 @@ object PostAdHook {
                 blockedItemClasses = targets.blockedItemClasses,
             )
 
-            mod.hook(setDataMethod).intercept { chain ->
-                if (!ConfigManager.isPostAdBlockEnabled) {
-                    return@intercept chain.proceed()
-                }
-                val list = chain.args.firstOrNull() as? List<*> ?: return@intercept chain.proceed()
-                val filtered = filterItems(list, runtimeFilter)
-                if (filtered === list) {
-                    chain.proceed()
-                } else {
-                    XposedCompat.logD {
-                        "[PostAdHook] > TypeAdapter.${setDataMethod.name} filtered: ${list.size} -> ${filtered.size}"
+            val installedMethods = ArrayList<Method>(targets.setDataMethods.size)
+            for (setDataMethod in targets.setDataMethods) {
+                try {
+                    mod.hook(setDataMethod).intercept { chain ->
+                        if (!ConfigManager.isPostAdBlockEnabled) {
+                            return@intercept chain.proceed()
+                        }
+                        val list = chain.args.firstOrNull() as? List<*> ?: return@intercept chain.proceed()
+                        val filtered = filterItems(list, runtimeFilter)
+                        if (filtered === list) {
+                            chain.proceed()
+                        } else {
+                            XposedCompat.logD {
+                                "[PostAdHook] > ${setDataMethod.declaringClass.simpleName}." +
+                                    "${setDataMethod.name} filtered: ${list.size} -> ${filtered.size}"
+                            }
+                            chain.proceed(arrayOf<Any?>(filtered))
+                        }
                     }
-                    chain.proceed(arrayOf<Any?>(filtered))
+                    installedMethods.add(setDataMethod)
+                } catch (t: Throwable) {
+                    XposedCompat.log(
+                        "[PostAdHook] install FAILED: " +
+                            "${setDataMethod.declaringClass.name}.${setDataMethod.name}: ${t.message}",
+                    )
+                    XposedCompat.log(t)
                 }
             }
-            XposedCompat.log("[PostAdHook] TypeAdapter data filter hook INSTALLED")
+            if (installedMethods.isEmpty()) {
+                resetHooked()
+                XposedCompat.log("[PostAdHook] install FAILED: no adapter data filter hooks installed")
+                return
+            }
+            XposedCompat.log(
+                "[PostAdHook] adapter data filter hooks INSTALLED: " +
+                    installedMethods.joinToString(",") {
+                        "${it.declaringClass.simpleName}.${it.name}"
+                    },
+            )
         } catch (t: Throwable) {
             resetHooked()
             XposedCompat.log("[PostAdHook] install FAILED: ${t.message}")

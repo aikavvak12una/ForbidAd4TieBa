@@ -936,13 +936,27 @@ internal object HookFeatureStatusDeriver {
         if (symbols.feedTemplateLoadMoreMethod.isNullOrBlank()) feedAdOptional.add("feedTemplateLoadMoreMethod")
         out[HookFeatureKey.BLOCK_AD_FEED] = statusFromMissing(feedAdCritical, feedAdOptional)
 
-        val postDataCritical = ArrayList<String>(3)
-        if (symbols.typeAdapterSetDataMethod.isNullOrBlank()) postDataCritical.add("typeAdapterSetDataMethod")
+        val postDataCritical = ArrayList<String>(4)
+        val postDataOptional = ArrayList<String>(2)
+        val hasTypeAdapterSetDataMethod = !symbols.typeAdapterSetDataMethod.isNullOrBlank()
+        val hasRecyclerViewTypeAdapterSetDataMethod =
+            !symbols.recyclerViewTypeAdapterSetDataMethod.isNullOrBlank()
+        if (!hasTypeAdapterSetDataMethod && !hasRecyclerViewTypeAdapterSetDataMethod) {
+            postDataCritical.add("typeAdapterSetDataMethod")
+            postDataCritical.add("recyclerViewTypeAdapterSetDataMethod")
+        } else {
+            if (!hasTypeAdapterSetDataMethod) {
+                postDataOptional.add("typeAdapterSetDataMethod")
+            }
+            if (!hasRecyclerViewTypeAdapterSetDataMethod) {
+                postDataOptional.add("recyclerViewTypeAdapterSetDataMethod")
+            }
+        }
         if (symbols.typeAdapterDataItemClass.isNullOrBlank()) postDataCritical.add("typeAdapterDataItemClass")
         if (symbols.typeAdapterDataGetTypeMethod.isNullOrBlank()) {
             postDataCritical.add("typeAdapterDataGetTypeMethod")
         }
-        val postDataStatus = statusFromMissing(postDataCritical)
+        val postDataStatus = statusFromMissing(postDataCritical, postDataOptional)
 
         val pbEarlyCritical = ArrayList<String>(2)
         if (symbols.pbEarlyAdInsertClass.isNullOrBlank()) pbEarlyCritical.add("pbEarlyAdInsertClass")
@@ -1211,7 +1225,7 @@ internal object HookFeatureStatusDeriver {
             name == "PbFallingAdHook" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name == "PbEarlyAdBlockHook" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name.startsWith("PbAdRequestBlockHook.") -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
-            name == "PostAdHook.DataFilter" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
+            name.startsWith("PostAdHook.DataFilter") -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name.startsWith("ForumPageAdBlockHook") -> features(HookFeatureKey.BLOCK_AD_FORUM_PAGE)
             name.startsWith("EnterForumWebHook") -> features(HookFeatureKey.FILTER_ENTER_FORUM_WEB)
             name.startsWith("PlainUrlDirectBrowserHook.") -> features(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)

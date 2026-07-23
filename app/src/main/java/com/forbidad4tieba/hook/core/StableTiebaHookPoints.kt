@@ -37,6 +37,8 @@ object StableTiebaHookPoints {
     const val FORUM_BOTTOM_SHEET_SMOOTH_INIT_GETTER = "getSmoothInit"
     const val FORUM_BOTTOM_SHEET_MAX_SCROLL_GETTER = "getMaxScroll"
     const val TYPE_ADAPTER_CLASS = "com.baidu.adp.widget.ListView.TypeAdapter"
+    const val RECYCLER_VIEW_TYPE_ADAPTER_CLASS =
+        "com.baidu.adp.widget.ListView.RecyclerViewTypeAdapter"
     const val TYPE_ADAPTER_VIEW_HOLDER_CLASS = "$TYPE_ADAPTER_CLASS\$ViewHolder"
     const val BD_LIST_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdListView"
     const val BD_RECYCLER_VIEW_CLASS = "com.baidu.adp.widget.ListView.BdRecyclerView"

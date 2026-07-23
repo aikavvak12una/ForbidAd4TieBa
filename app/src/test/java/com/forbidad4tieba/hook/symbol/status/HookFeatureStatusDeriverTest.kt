@@ -83,6 +83,63 @@ class HookFeatureStatusDeriverTest {
     }
 
     @Test
+    fun postAdDataFilterReportsBothAdapterPaths() {
+        val symbols = buildHookSymbols {
+            typeAdapterSetDataMethod = "replaceItems"
+            recyclerViewTypeAdapterSetDataMethod = "setData"
+            typeAdapterDataItemClass = "com.tieba.PostItem"
+            typeAdapterDataGetTypeMethod = "getType"
+        }
+        val statuses = HookSymbolStatusFormatter.collectHookPointStatuses(
+            symbols = symbols,
+            aiPbAiEmojiCreationViewClass = "unused",
+            aiPbAiEmojiCreationPageBrowserViewClass = "unused",
+            msgTabViewModelClass = "unused",
+            msgTabContainerViewClass = "unused",
+        )
+
+        assertEquals(
+            HookPointState.FOUND,
+            statuses.single { it.name == "PostAdHook.DataFilter" }.state,
+        )
+        assertEquals(
+            HookPointState.FOUND,
+            statuses.single { it.name == "PostAdHook.DataFilter.TypeAdapter" }.state,
+        )
+        assertEquals(
+            HookPointState.FOUND,
+            statuses.single {
+                it.name == "PostAdHook.DataFilter.RecyclerViewTypeAdapter"
+            }.state,
+        )
+    }
+
+    @Test
+    fun postAdFeatureIsPartialWhenRecyclerAdapterPathIsMissing() {
+        val symbols = buildHookSymbols {
+            typeAdapterSetDataMethod = "replaceItems"
+            typeAdapterDataItemClass = "com.tieba.PostItem"
+            typeAdapterDataGetTypeMethod = "getType"
+        }
+
+        val featureStatus = HookFeatureStatusDeriver.derive(symbols)
+            .getValue(HookFeatureKey.BLOCK_AD_POST_PAGE)
+        val recyclerStatus = HookSymbolStatusFormatter.collectHookPointStatuses(
+            symbols = symbols,
+            aiPbAiEmojiCreationViewClass = "unused",
+            aiPbAiEmojiCreationPageBrowserViewClass = "unused",
+            msgTabViewModelClass = "unused",
+            msgTabContainerViewClass = "unused",
+        ).single { it.name == "PostAdHook.DataFilter.RecyclerViewTypeAdapter" }
+
+        assertEquals(HookFeatureState.PARTIAL, featureStatus.state)
+        assertTrue(
+            featureStatus.missingOptional.contains("recyclerViewTypeAdapterSetDataMethod"),
+        )
+        assertEquals(HookPointState.MISSING, recyclerStatus.state)
+    }
+
+    @Test
     fun deriveDisablesAutoRefreshWhenTriggerMethodIsMissing() {
         val status = HookFeatureStatusDeriver.derive(buildHookSymbols {})
             .getValue(HookFeatureKey.DISABLE_AUTO_REFRESH)
