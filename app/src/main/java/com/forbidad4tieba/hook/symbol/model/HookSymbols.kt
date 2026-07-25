@@ -1262,7 +1262,7 @@ data class HookSymbols(
 
     companion object {
         const val CACHE_SCHEMA_VERSION = 30
-        const val DEXKIT_RULE_VERSION = 16
+        const val DEXKIT_RULE_VERSION = 17
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
