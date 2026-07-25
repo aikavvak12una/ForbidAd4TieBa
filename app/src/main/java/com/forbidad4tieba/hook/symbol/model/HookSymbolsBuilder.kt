@@ -46,6 +46,8 @@ internal class HookSymbolsBuilder {
     var pbHotTopicGuideRefreshMethodSpecs: List<String>? = null
     var pbEarlyAdInsertClass: String? = null
     var pbEarlyAdInsertMethodSpecs: List<String>? = null
+    var pbFirstFloorRecommendInsertClass: String? = null
+    var pbFirstFloorRecommendInsertMethod: String? = null
     var pbAdBidCommonRequestModelClass: String? = null
     var pbAdBidCommonRequestStartMethods: List<String>? = null
     var pbAdBidCommonRequestNotifyMethod: String? = null
@@ -540,6 +542,10 @@ internal class HookSymbolsBuilder {
         return PbSymbols(
             ad = PbAdSymbolsGroup(
                 earlyInsert = PbEarlyAdInsertSymbolsGroup(pbEarlyAdInsertClass, pbEarlyAdInsertMethodSpecs),
+                firstFloorRecommendInsert = PbFirstFloorRecommendInsertSymbolsGroup(
+                    pbFirstFloorRecommendInsertClass,
+                    pbFirstFloorRecommendInsertMethod,
+                ),
                 bid = PbAdBidSymbolsGroup(
                     pbAdBidCommonRequestModelClass,
                     pbAdBidCommonRequestStartMethods,

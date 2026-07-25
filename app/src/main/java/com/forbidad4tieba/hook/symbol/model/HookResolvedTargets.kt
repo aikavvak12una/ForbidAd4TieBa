@@ -178,6 +178,10 @@ internal data class PbEarlyAdBlockSymbols(
     val methods: List<PbEarlyAdBlockMethodSymbols>,
 )
 
+internal data class PbFirstFloorRecommendInsertSymbols(
+    val method: Method,
+)
+
 internal data class PbAdRequestFieldPatchSymbols(
     val field: Field,
     val value: Any?,

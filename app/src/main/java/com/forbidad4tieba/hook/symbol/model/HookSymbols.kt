@@ -118,6 +118,10 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.ad.earlyInsert.pbEarlyAdInsertClass
     val pbEarlyAdInsertMethodSpecs: List<String>?
         get() = hookPoints.primary.pb.ad.earlyInsert.pbEarlyAdInsertMethodSpecs
+    val pbFirstFloorRecommendInsertClass: String?
+        get() = hookPoints.primary.pb.ad.firstFloorRecommendInsert.pbFirstFloorRecommendInsertClass
+    val pbFirstFloorRecommendInsertMethod: String?
+        get() = hookPoints.primary.pb.ad.firstFloorRecommendInsert.pbFirstFloorRecommendInsertMethod
     val pbAdBidCommonRequestModelClass: String?
         get() = hookPoints.primary.pb.ad.bid.pbAdBidCommonRequestModelClass
     val pbAdBidCommonRequestStartMethods: List<String>?
@@ -848,6 +852,8 @@ data class HookSymbols(
             putStringArray("pbHotTopicGuideRefreshMethodSpecs", pbHotTopicGuideRefreshMethodSpecs)
             put("pbEarlyAdInsertClass", pbEarlyAdInsertClass)
             putStringArray("pbEarlyAdInsertMethodSpecs", pbEarlyAdInsertMethodSpecs)
+            put("pbFirstFloorRecommendInsertClass", pbFirstFloorRecommendInsertClass)
+            put("pbFirstFloorRecommendInsertMethod", pbFirstFloorRecommendInsertMethod)
             put("pbAdBidCommonRequestModelClass", pbAdBidCommonRequestModelClass)
             putStringArray("pbAdBidCommonRequestStartMethods", pbAdBidCommonRequestStartMethods)
             put("pbAdBidCommonRequestNotifyMethod", pbAdBidCommonRequestNotifyMethod)
@@ -1255,8 +1261,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 29
-        const val DEXKIT_RULE_VERSION = 15
+        const val CACHE_SCHEMA_VERSION = 30
+        const val DEXKIT_RULE_VERSION = 16
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1346,6 +1352,10 @@ data class HookSymbols(
                     pbEarlyAdInsertClass = obj.optStringOrNull("pbEarlyAdInsertClass")
                     pbEarlyAdInsertMethodSpecs = obj.optStringArray("pbEarlyAdInsertMethodSpecs")
                         .takeIf { it.isNotEmpty() }
+                    pbFirstFloorRecommendInsertClass =
+                        obj.optStringOrNull("pbFirstFloorRecommendInsertClass")
+                    pbFirstFloorRecommendInsertMethod =
+                        obj.optStringOrNull("pbFirstFloorRecommendInsertMethod")
                     pbAdBidCommonRequestModelClass = obj.optStringOrNull("pbAdBidCommonRequestModelClass")
                     pbAdBidCommonRequestStartMethods = obj.optStringArray("pbAdBidCommonRequestStartMethods")
                         .takeIf { it.isNotEmpty() }

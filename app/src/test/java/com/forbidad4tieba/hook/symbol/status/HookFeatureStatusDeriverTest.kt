@@ -140,6 +140,23 @@ class HookFeatureStatusDeriverTest {
     }
 
     @Test
+    fun firstFloorRecommendInsertReportsIndependentHookPoint() {
+        val symbols = buildHookSymbols {
+            pbFirstFloorRecommendInsertClass = "com.tieba.LegacyHeader"
+            pbFirstFloorRecommendInsertMethod = "insertRecommend"
+        }
+        val status = HookSymbolStatusFormatter.collectHookPointStatuses(
+            symbols = symbols,
+            aiPbAiEmojiCreationViewClass = "unused",
+            aiPbAiEmojiCreationPageBrowserViewClass = "unused",
+            msgTabViewModelClass = "unused",
+            msgTabContainerViewClass = "unused",
+        ).single { it.name == "PbFirstFloorRecommendBlockHook" }
+
+        assertEquals(HookPointState.FOUND, status.state)
+    }
+
+    @Test
     fun deriveDisablesAutoRefreshWhenTriggerMethodIsMissing() {
         val status = HookFeatureStatusDeriver.derive(buildHookSymbols {})
             .getValue(HookFeatureKey.DISABLE_AUTO_REFRESH)

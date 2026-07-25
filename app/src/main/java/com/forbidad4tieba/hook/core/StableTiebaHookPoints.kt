@@ -47,6 +47,9 @@ object StableTiebaHookPoints {
         "com.baidu.tieba.pb.widget.adapter.PbFirstFloorRecommendAdapter"
     const val PB_FIRST_FLOOR_RECOMMEND_DATA_CLASS =
         "com.baidu.tieba.pb.data.PbFirstFloorRecommendData"
+    const val PB_LEGACY_HEADER_BUSINESS_KT_CLASS =
+        "com.baidu.tieba.pb.legacy.header.LegacyHeaderBusinessKt"
+    const val PB_POST_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.PostData"
 
     // PB page and comment UI classes. These are version-risk anchors; hook-specific methods still
     // need structural verification or HookSymbolResolver status when they are not stable by name.

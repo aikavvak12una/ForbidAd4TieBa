@@ -155,6 +155,7 @@ internal object HookSymbolDiagnostics {
             ${fmt("PbEnterFrsAnimationTip", "${symbols.pbEnterFrsAnimationTipViewClass} constructors=${symbols.pbEnterFrsAnimationTipConstructorCount} callers={${symbols.pbEnterFrsAnimationTipCallerClasses?.joinToString(";")}}")}
             ${fmt("PbBottomEnterBarHotTopicGuide", "${symbols.pbHotTopicGuideTotalViewMethod} refresh={${symbols.pbHotTopicGuideRefreshMethodSpecs?.joinToString(";")}}")}
             ${fmt("PbEarlyAdInsert", "${symbols.pbEarlyAdInsertClass}.{${symbols.pbEarlyAdInsertMethodSpecs?.joinToString(";")}}")}
+            ${fmt("PbFirstFloorRecommendInsert", "${symbols.pbFirstFloorRecommendInsertClass}.${symbols.pbFirstFloorRecommendInsertMethod}")}
             ${fmt("EnterForumWeb", "source=${symbols.enterForumInitInfoDataClass}.${symbols.enterForumInitInfoGetUrlMethod} webLoad=${symbols.enterForumWebControllerClass}.${symbols.enterForumWebLoadMethod}")}
             ${fmt("PlainUrlClickableSpan", plainUrlValue)}
             ${fmt("MountCardLink", "${symbols.mountCardLinkLayoutClass}.${symbols.mountCardLinkLayoutOnClickMethod}[${symbols.mountCardLinkLayoutDataField}->${symbols.mountCardLinkInfoDataClass}.${symbols.mountCardLinkInfoGetUrlMethod}]")}

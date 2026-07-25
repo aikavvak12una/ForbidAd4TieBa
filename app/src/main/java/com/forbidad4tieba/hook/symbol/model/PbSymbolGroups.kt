@@ -12,12 +12,19 @@ data class PbSymbols(
 
 data class PbAdSymbolsGroup(
     val earlyInsert: PbEarlyAdInsertSymbolsGroup = PbEarlyAdInsertSymbolsGroup(),
+    val firstFloorRecommendInsert: PbFirstFloorRecommendInsertSymbolsGroup =
+        PbFirstFloorRecommendInsertSymbolsGroup(),
     val bid: PbAdBidSymbolsGroup = PbAdBidSymbolsGroup(),
 )
 
 data class PbEarlyAdInsertSymbolsGroup(
     val pbEarlyAdInsertClass: String? = null,
     val pbEarlyAdInsertMethodSpecs: List<String>? = null,
+)
+
+data class PbFirstFloorRecommendInsertSymbolsGroup(
+    val pbFirstFloorRecommendInsertClass: String? = null,
+    val pbFirstFloorRecommendInsertMethod: String? = null,
 )
 
 data class PbAdBidSymbolsGroup(

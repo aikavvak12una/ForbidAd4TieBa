@@ -9,6 +9,7 @@ import com.forbidad4tieba.hook.feature.ad.ForumPageAdBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbAdRequestBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbEarlyAdBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbFallingAdHook
+import com.forbidad4tieba.hook.feature.ad.PbFirstFloorRecommendBlockHook
 import com.forbidad4tieba.hook.feature.ad.PostAdHook
 import com.forbidad4tieba.hook.feature.ad.SearchBoxTextAdHook
 import com.forbidad4tieba.hook.feature.ad.StrategyAdHook
@@ -230,6 +231,8 @@ internal object HookInstallPlanner {
         val forumPageAdBlockHook = context.canInstallForumPageAdBlock(settings)
         val strategyAdBlockHook = context.canInstallStrategyAdBlock(settings)
         val pbEarlyAdBlockHook = context.canInstallPbEarlyAdBlock(settings)
+        val pbFirstFloorRecommendBlockHook =
+            context.canInstallPbFirstFloorRecommendBlock(settings)
         val pbAdRequestBlockHook = context.canInstallPbAdRequestBlock(settings)
         val pbFallingAdBlockHook = context.canInstallPbFallingAdBlock(settings)
         val searchBoxTextAdBlockHook = context.canInstallSearchBoxTextAdBlock(settings)
@@ -294,6 +297,14 @@ internal object HookInstallPlanner {
                 HookSymbolResolver.resolvePbEarlyAdBlockSymbols(cl, symbols)?.let { targets ->
                     PbEarlyAdBlockHook.hook(targets)
                 }
+            }
+        }
+        if (pbFirstFloorRecommendBlockHook) {
+            entries += HookInstallEntry("PbFirstFloorRecommendBlockHook") { cl ->
+                HookSymbolResolver.resolvePbFirstFloorRecommendInsertSymbols(cl, symbols)
+                    ?.let { targets ->
+                        PbFirstFloorRecommendBlockHook.hook(targets)
+                    }
             }
         }
         if (pbAdRequestBlockHook) {

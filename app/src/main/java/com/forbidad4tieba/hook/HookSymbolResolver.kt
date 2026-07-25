@@ -2627,6 +2627,70 @@ internal object HookSymbolResolver {
         }
     }
 
+    fun resolvePbFirstFloorRecommendInsertSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): PbFirstFloorRecommendInsertSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log(
+                    "[PbFirstFloorRecommendBlockHook] skipped: scan symbols unavailable",
+                )
+                return null
+            }
+            val className = resolvedSymbols.pbFirstFloorRecommendInsertClass
+                ?.takeIf { it.isNotBlank() }
+                ?: run {
+                    XposedCompat.log(
+                        "[PbFirstFloorRecommendBlockHook] skipped: missing insert class",
+                    )
+                    return null
+                }
+            val methodName = resolvedSymbols.pbFirstFloorRecommendInsertMethod
+                ?.takeIf { it.isNotBlank() }
+                ?: run {
+                    XposedCompat.log(
+                        "[PbFirstFloorRecommendBlockHook] skipped: missing insert method",
+                    )
+                    return null
+                }
+            val targetClass = safeFindClass(className, cl) ?: run {
+                XposedCompat.log(
+                    "[PbFirstFloorRecommendBlockHook] class NOT FOUND: $className",
+                )
+                return null
+            }
+            val postDataClass = safeFindClass(StableTiebaHookPoints.PB_POST_DATA_CLASS, cl) ?: run {
+                XposedCompat.log(
+                    "[PbFirstFloorRecommendBlockHook] class NOT FOUND: " +
+                        StableTiebaHookPoints.PB_POST_DATA_CLASS,
+                )
+                return null
+            }
+            val method = targetClass.declaredMethods.singleOrNull { candidate ->
+                candidate.name == methodName &&
+                    PbFirstFloorRecommendInsertSymbolScanner.isInsertMethod(
+                        candidate,
+                        postDataClass,
+                    )
+            } ?: run {
+                XposedCompat.log(
+                    "[PbFirstFloorRecommendBlockHook] method NOT FOUND: " +
+                        "$className.$methodName",
+                )
+                return null
+            }
+            method.isAccessible = true
+            PbFirstFloorRecommendInsertSymbols(method)
+        } catch (t: Throwable) {
+            XposedCompat.log(
+                "[PbFirstFloorRecommendBlockHook] symbol resolve FAILED: ${t.message}",
+            )
+            XposedCompat.log(t)
+            null
+        }
+    }
+
     private fun resolvePostAdSetDataMethod(
         cl: ClassLoader,
         adapterClassName: String,
@@ -5080,6 +5144,8 @@ internal object HookSymbolResolver {
         var pbHotTopicGuideRefreshMethodSpecs: List<String>? = null
         var pbEarlyAdInsertClass: String? = null
         var pbEarlyAdInsertMethodSpecs: List<String>? = null
+        var pbFirstFloorRecommendInsertClass: String? = null
+        var pbFirstFloorRecommendInsertMethod: String? = null
         var pbAdBidCommonRequestModelClass: String? = null
         var pbAdBidCommonRequestStartMethods: List<String>? = null
         var pbAdBidCommonRequestNotifyMethod: String? = null
@@ -5463,6 +5529,17 @@ internal object HookSymbolResolver {
             pbEarlyAdInsertClass = pbEarlyAdInsertScan.className
             pbEarlyAdInsertMethodSpecs = pbEarlyAdInsertScan.methodSpecs
         }
+
+        val pbFirstFloorRecommendInsertScan = runScanStep(
+            "PbFirstFloorRecommendBlockHook",
+            logger,
+            scanErrors,
+            PbFirstFloorRecommendInsertScanSymbols(),
+        ) {
+            PbFirstFloorRecommendInsertSymbolScanner.scan(context, cl, logger)
+        }
+        pbFirstFloorRecommendInsertClass = pbFirstFloorRecommendInsertScan.className
+        pbFirstFloorRecommendInsertMethod = pbFirstFloorRecommendInsertScan.methodName
 
         val pbAdBidScan = runScanStep(
             "PbAdRequestBlockHook.AdBid",
@@ -6103,6 +6180,8 @@ internal object HookSymbolResolver {
             this.pbHotTopicGuideRefreshMethodSpecs = pbHotTopicGuideRefreshMethodSpecs
             this.pbEarlyAdInsertClass = pbEarlyAdInsertClass
             this.pbEarlyAdInsertMethodSpecs = pbEarlyAdInsertMethodSpecs
+            this.pbFirstFloorRecommendInsertClass = pbFirstFloorRecommendInsertClass
+            this.pbFirstFloorRecommendInsertMethod = pbFirstFloorRecommendInsertMethod
             this.pbAdBidCommonRequestModelClass = pbAdBidCommonRequestModelClass
             this.pbAdBidCommonRequestStartMethods = pbAdBidCommonRequestStartMethods
             this.pbAdBidCommonRequestNotifyMethod = pbAdBidCommonRequestNotifyMethod

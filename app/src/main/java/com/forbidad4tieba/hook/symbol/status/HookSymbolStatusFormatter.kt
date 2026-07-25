@@ -442,6 +442,17 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "PbFirstFloorRecommendBlockHook",
+            "${symbols.pbFirstFloorRecommendInsertClass}." +
+                symbols.pbFirstFloorRecommendInsertMethod,
+            listOf(
+                "pbFirstFloorRecommendInsertClass" to
+                    has(symbols.pbFirstFloorRecommendInsertClass),
+                "pbFirstFloorRecommendInsertMethod" to
+                    has(symbols.pbFirstFloorRecommendInsertMethod),
+            ),
+        )
+        add(
             "PbAdRequestBlockHook.AdBid.Common",
             "common=${symbols.pbAdBidCommonRequestModelClass}.{${listTarget(symbols.pbAdBidCommonRequestStartMethods)}}#${symbols.pbAdBidCommonRequestNotifyMethod}",
             listOf(
