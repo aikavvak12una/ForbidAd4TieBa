@@ -16,6 +16,11 @@ internal data class PbEarlyAdInsertScanSymbols(
     val methodSpecs: List<String>,
 )
 
+internal data class PbFirstFloorRecommendInsertScanSymbols(
+    val className: String? = null,
+    val methodName: String? = null,
+)
+
 internal data class PbAdBidScanSymbols(
     val commonRequestModelClass: String? = null,
     val commonRequestStartMethods: List<String> = emptyList(),

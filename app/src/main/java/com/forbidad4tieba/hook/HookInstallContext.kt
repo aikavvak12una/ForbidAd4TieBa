@@ -81,6 +81,13 @@ internal class HookInstallContext(
         ) && hasPbEarlyAdBlockPath()
     }
 
+    fun canInstallPbFirstFloorRecommendBlock(settings: SettingsSnapshot): Boolean {
+        return canInstallAdBlockSubFeature(
+            settings.isPostPageAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_POST_PAGE,
+        ) && hasPbFirstFloorRecommendBlockPath()
+    }
+
     fun canInstallPbAdRequestBlock(settings: SettingsSnapshot): Boolean {
         return canInstallAdBlockSubFeature(
             settings.isPostPageAdBlockEnabled,
@@ -121,6 +128,11 @@ internal class HookInstallContext(
     private fun hasPbEarlyAdBlockPath(): Boolean {
         return !symbols.pbEarlyAdInsertClass.isNullOrBlank() &&
             !symbols.pbEarlyAdInsertMethodSpecs.isNullOrEmpty()
+    }
+
+    private fun hasPbFirstFloorRecommendBlockPath(): Boolean {
+        return !symbols.pbFirstFloorRecommendInsertClass.isNullOrBlank() &&
+            !symbols.pbFirstFloorRecommendInsertMethod.isNullOrBlank()
     }
 
     private fun hasPbFallingAdBlockPath(): Boolean {

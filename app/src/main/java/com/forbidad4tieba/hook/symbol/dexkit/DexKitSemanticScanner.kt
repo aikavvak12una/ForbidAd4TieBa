@@ -14,6 +14,7 @@ import org.luckypray.dexkit.result.FieldData
 import org.luckypray.dexkit.result.MethodData
 import org.luckypray.dexkit.result.UsingFieldData
 import java.io.File
+import java.lang.reflect.Modifier
 
 internal object DexKitSemanticScanner {
     private const val TAG = "DexKitSemantic"
@@ -35,6 +36,8 @@ internal object DexKitSemanticScanner {
         "com.baidu.tbadk.core.atomData.ShareDialogConfig"
     private const val SHARE_DIALOG_ADD_OUTSIDE_METHOD = "addOutsideTextView"
     private const val TIEBA_DRAWABLE_CLASS = "com.baidu.tieba.R\$drawable"
+    private const val JAVA_LIST_CLASS = "java.util.List"
+    private const val LIST_UTILS_CLASS = "com.baidu.tbadk.core.util.ListUtils"
 
     fun scanShareIcon(
         sourcePaths: List<String>,
@@ -103,6 +106,62 @@ internal object DexKitSemanticScanner {
             if (method.methodName.length <= 3) score += 8
             if (score < 120) return@mapNotNull null
             DexAutoRefreshMatch(method.methodName, score, evidence.joinToString(","))
+        }
+    }
+
+    fun scanPbFirstFloorRecommendInsert(
+        sourcePaths: List<String>,
+        ownerClassName: String,
+        postDataClassName: String,
+        recommendDataClassName: String,
+        logger: ScanLogger? = null,
+    ): Set<String> = withBridge(
+        sourcePaths,
+        logger,
+        "PbFirstFloorRecommendBlockHook.Dex",
+        emptySet<String>(),
+    ) { bridge ->
+        val shapeCandidates = exactMethods(bridge, ownerClassName, logger).filter { method ->
+            val params = method.paramTypeNames
+            Modifier.isStatic(method.modifiers) &&
+                method.returnTypeName == "boolean" &&
+                params.size == 5 &&
+                params[1] == postDataClassName &&
+                params[2] == JAVA_LIST_CLASS &&
+                params[3] == "int" &&
+                params[4] == postDataClassName
+        }
+        val matches = shapeCandidates.filter { method ->
+            val invokes = method.invokes
+            invokes.any { invoked ->
+                invoked.isConstructor && invoked.declaredClassName == recommendDataClassName
+            } &&
+                invokes.any { invoked ->
+                    invoked.declaredClassName == LIST_UTILS_CLASS &&
+                        invoked.methodName == "add"
+                }
+        }
+        if (matches.size != 1) {
+            val details = shapeCandidates.joinToString(",") { method ->
+                val invokes = method.invokes
+                val constructsRecommend = invokes.any { invoked ->
+                    invoked.isConstructor && invoked.declaredClassName == recommendDataClassName
+                }
+                val insertsIntoList = invokes.any { invoked ->
+                    invoked.declaredClassName == LIST_UTILS_CLASS &&
+                        invoked.methodName == "add"
+                }
+                "${method.methodName}[constructsRecommend=$constructsRecommend," +
+                    "listAdd=$insertsIntoList]"
+            }.ifBlank { "-" }
+            HookSymbolScanDiagnostics.log(
+                logger,
+                "pbFirstFloorRecommendInsertDex: expected=1 actual=${matches.size} " +
+                    "shapeCandidates=$details",
+            )
+            emptySet()
+        } else {
+            setOf(matches.single().methodName)
         }
     }
 

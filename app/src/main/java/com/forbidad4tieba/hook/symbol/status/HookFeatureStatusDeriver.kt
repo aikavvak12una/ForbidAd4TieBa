@@ -972,6 +972,17 @@ internal object HookFeatureStatusDeriver {
         }
         val pbEarlyStatus = statusFromMissing(pbEarlyCritical, pbEarlyOptional)
 
+        val pbFirstFloorRecommendStatus = statusFromMissing(
+            listOfNotNull(
+                "pbFirstFloorRecommendInsertClass".takeIf {
+                    symbols.pbFirstFloorRecommendInsertClass.isNullOrBlank()
+                },
+                "pbFirstFloorRecommendInsertMethod".takeIf {
+                    symbols.pbFirstFloorRecommendInsertMethod.isNullOrBlank()
+                },
+            ),
+        )
+
         val pbFallingCritical = ArrayList<String>(2)
         val pbFallingOptional = ArrayList<String>(3)
         if (symbols.pbFallingViewClass.isNullOrBlank()) pbFallingCritical.add("pbFallingViewClass")
@@ -1020,7 +1031,13 @@ internal object HookFeatureStatusDeriver {
             missingOptional = pbAdRequestOptional,
         )
         out[HookFeatureKey.BLOCK_AD_POST_PAGE] = combineSubFeatureStatuses(
-            listOf(postDataStatus, pbEarlyStatus, pbFallingStatus, pbRequestStatus),
+            listOf(
+                postDataStatus,
+                pbEarlyStatus,
+                pbFirstFloorRecommendStatus,
+                pbFallingStatus,
+                pbRequestStatus,
+            ),
         )
 
         out[HookFeatureKey.BLOCK_AD_FORUM_PAGE] = if (ForumPageAdSymbolReadiness.evaluate(symbols).any) {
@@ -1224,6 +1241,9 @@ internal object HookFeatureStatusDeriver {
                 name.startsWith("PbBottomEnterBarHook.") -> features(HookFeatureKey.HIDE_PB_BOTTOM_BANNER)
             name == "PbFallingAdHook" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name == "PbEarlyAdBlockHook" -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
+            name == "PbFirstFloorRecommendBlockHook" -> features(
+                HookFeatureKey.BLOCK_AD_POST_PAGE,
+            )
             name.startsWith("PbAdRequestBlockHook.") -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name.startsWith("PostAdHook.DataFilter") -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name.startsWith("ForumPageAdBlockHook") -> features(HookFeatureKey.BLOCK_AD_FORUM_PAGE)

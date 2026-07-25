@@ -194,6 +194,13 @@ class HookInstallContextTest {
                 pbEarlyAdInsertMethodSpecs = listOf("first", "second")
             },
         )
+        val firstFloorRecommendPath = HookInstallContext(
+            Constants.TARGET_PACKAGE,
+            buildHookSymbols {
+                pbFirstFloorRecommendInsertClass = "com.tieba.LegacyHeader"
+                pbFirstFloorRecommendInsertMethod = "insertRecommend"
+            },
+        )
         val fallingPath = HookInstallContext(
             Constants.TARGET_PACKAGE,
             buildHookSymbols {
@@ -204,18 +211,29 @@ class HookInstallContextTest {
 
         assertTrue(dataPath.canInstallPostAdBlock(settings))
         assertFalse(dataPath.canInstallPbEarlyAdBlock(settings))
+        assertFalse(dataPath.canInstallPbFirstFloorRecommendBlock(settings))
         assertFalse(dataPath.canInstallPbFallingAdBlock(settings))
 
         assertTrue(recyclerDataPath.canInstallPostAdBlock(settings))
         assertFalse(recyclerDataPath.canInstallPbEarlyAdBlock(settings))
+        assertFalse(recyclerDataPath.canInstallPbFirstFloorRecommendBlock(settings))
         assertFalse(recyclerDataPath.canInstallPbFallingAdBlock(settings))
 
         assertFalse(earlyPath.canInstallPostAdBlock(settings))
         assertTrue(earlyPath.canInstallPbEarlyAdBlock(settings))
+        assertFalse(earlyPath.canInstallPbFirstFloorRecommendBlock(settings))
         assertFalse(earlyPath.canInstallPbFallingAdBlock(settings))
+
+        assertFalse(firstFloorRecommendPath.canInstallPostAdBlock(settings))
+        assertFalse(firstFloorRecommendPath.canInstallPbEarlyAdBlock(settings))
+        assertTrue(
+            firstFloorRecommendPath.canInstallPbFirstFloorRecommendBlock(settings),
+        )
+        assertFalse(firstFloorRecommendPath.canInstallPbFallingAdBlock(settings))
 
         assertFalse(fallingPath.canInstallPostAdBlock(settings))
         assertFalse(fallingPath.canInstallPbEarlyAdBlock(settings))
+        assertFalse(fallingPath.canInstallPbFirstFloorRecommendBlock(settings))
         assertTrue(fallingPath.canInstallPbFallingAdBlock(settings))
     }
 

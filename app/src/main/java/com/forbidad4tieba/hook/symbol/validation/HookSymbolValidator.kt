@@ -16,6 +16,7 @@ import com.forbidad4tieba.hook.symbol.scan.AiComponentSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.HomeTabItemSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbAdBidSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbEarlyAdInsertSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.PbFirstFloorRecommendInsertSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlBrowserHelperSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlClickableSpanSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlWebContainerSymbolScanner
@@ -81,6 +82,15 @@ internal object HookSymbolValidator {
         symbols.pbEarlyAdInsertClass != null ||
             symbols.pbEarlyAdInsertMethodSpecs != null
     if (hasPbEarlyAdInsertSymbols && !isPbEarlyAdInsertValid(symbols, cl)) return false
+    val hasPbFirstFloorRecommendInsertSymbols =
+        symbols.pbFirstFloorRecommendInsertClass != null ||
+            symbols.pbFirstFloorRecommendInsertMethod != null
+    if (
+        hasPbFirstFloorRecommendInsertSymbols &&
+        !isPbFirstFloorRecommendInsertValid(symbols, cl)
+    ) {
+        return false
+    }
     val hasPbAdBidSymbols =
         symbols.pbAdBidCommonRequestModelClass != null ||
             symbols.pbAdBidCommonRequestStartMethods != null ||
@@ -980,6 +990,25 @@ private fun isTypeAdapterDataFilterValid(symbols: HookSymbols, cl: ClassLoader):
                 method.parameterTypes.isEmpty() &&
                 bdUniqueIdClass.isAssignableFrom(method.returnType)
         }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isPbFirstFloorRecommendInsertValid(
+    symbols: HookSymbols,
+    cl: ClassLoader,
+): Boolean {
+    val className = symbols.pbFirstFloorRecommendInsertClass ?: return false
+    val methodName = symbols.pbFirstFloorRecommendInsertMethod ?: return false
+    return try {
+        val targetClass = safeFindClass(className, cl) ?: return false
+        val postDataClass = safeFindClass(StableTiebaHookPoints.PB_POST_DATA_CLASS, cl)
+            ?: return false
+        targetClass.declaredMethods.count { method ->
+            method.name == methodName &&
+                PbFirstFloorRecommendInsertSymbolScanner.isInsertMethod(method, postDataClass)
+        } == 1
     } catch (_: Throwable) {
         false
     }
