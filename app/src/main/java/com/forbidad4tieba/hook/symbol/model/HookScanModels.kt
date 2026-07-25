@@ -457,6 +457,13 @@ internal data class DexAutoRefreshMatch(
     val evidence: String,
 )
 
+internal data class DexOriginalImageMethodsMatch(
+    val primaryReadyMethod: String?,
+    val triggerMethod: String,
+    val directStartMethod: String?,
+    val evidence: String,
+)
+
 internal data class DexAiComponentInitMatch(
     val ownerMethodName: String,
     val score: Int,

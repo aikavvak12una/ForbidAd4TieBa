@@ -38,6 +38,7 @@ internal object DexKitSemanticScanner {
     private const val TIEBA_DRAWABLE_CLASS = "com.baidu.tieba.R\$drawable"
     private const val JAVA_LIST_CLASS = "java.util.List"
     private const val LIST_UTILS_CLASS = "com.baidu.tbadk.core.util.ListUtils"
+    private const val ORIGINAL_IMAGE_DOWNLOAD_TIP_PREF_KEY = "original_img_down_tip"
 
     fun scanShareIcon(
         sourcePaths: List<String>,
@@ -108,6 +109,76 @@ internal object DexKitSemanticScanner {
             DexAutoRefreshMatch(method.methodName, score, evidence.joinToString(","))
         }
     }
+
+    fun scanOriginalImageMethods(
+        sourcePaths: List<String>,
+        ownerClassName: String,
+        logger: ScanLogger? = null,
+    ): DexOriginalImageMethodsMatch? =
+        withBridge(sourcePaths, logger, "DefaultOriginalImageHook.MethodsDex") { bridge ->
+            val methods = exactMethods(bridge, ownerClassName, logger)
+            val triggerCandidates = methods.filter { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnTypeName == "void" &&
+                    method.paramCount == 0 &&
+                    method.hasString(ORIGINAL_IMAGE_DOWNLOAD_TIP_PREF_KEY)
+            }
+            if (triggerCandidates.size != 1) {
+                HookSymbolScanDiagnostics.log(
+                    logger,
+                    "origImageMethodsDex: trigger expected=1 actual=${triggerCandidates.size} " +
+                        "candidates=${triggerCandidates.joinToString(",") { it.methodName }.ifBlank { "-" }}",
+                )
+                return@withBridge null
+            }
+            val triggerMethod = triggerCandidates.single()
+
+            val directStartCandidates = triggerMethod.invokes
+                .asSequence()
+                .filter { method ->
+                    method.declaredClassName == ownerClassName &&
+                        !Modifier.isStatic(method.modifiers) &&
+                        method.returnTypeName == "void" &&
+                        method.paramTypeNames == listOf("java.lang.String")
+                }
+                .distinctBy { it.methodSign }
+                .toList()
+            val directStartMethod = directStartCandidates.singleOrNull()
+            if (directStartCandidates.size != 1) {
+                HookSymbolScanDiagnostics.log(
+                    logger,
+                    "origImageMethodsDex: directStart expected=1 actual=${directStartCandidates.size} " +
+                        "candidates=${directStartCandidates.joinToString(",") { it.methodName }.ifBlank { "-" }}",
+                )
+            }
+
+            val primaryReadyCandidates = methods.filter { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnTypeName == "void" &&
+                    method.paramCount == 0 &&
+                    method.invokes.any { invoked ->
+                        invoked.declaredClassName == ownerClassName &&
+                            !Modifier.isStatic(invoked.modifiers) &&
+                            invoked.returnTypeName == "boolean" &&
+                            invoked.paramTypeNames == listOf("boolean")
+                    }
+            }
+            val primaryReadyMethod = primaryReadyCandidates.singleOrNull()
+            if (primaryReadyCandidates.size != 1) {
+                HookSymbolScanDiagnostics.log(
+                    logger,
+                    "origImageMethodsDex: primaryReady expected=1 actual=${primaryReadyCandidates.size} " +
+                        "candidates=${primaryReadyCandidates.joinToString(",") { it.methodName }.ifBlank { "-" }}",
+                )
+            }
+
+            DexOriginalImageMethodsMatch(
+                primaryReadyMethod = primaryReadyMethod?.methodName,
+                triggerMethod = triggerMethod.methodName,
+                directStartMethod = directStartMethod?.methodName,
+                evidence = "downloadTipPrefKey,sameClassInvokeGraph",
+            )
+        }
 
     fun scanPbFirstFloorRecommendInsert(
         sourcePaths: List<String>,

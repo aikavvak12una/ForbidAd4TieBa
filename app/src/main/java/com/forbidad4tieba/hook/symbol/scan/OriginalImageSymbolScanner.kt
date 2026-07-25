@@ -1,9 +1,10 @@
 package com.forbidad4tieba.hook.symbol.scan
 
-import com.forbidad4tieba.hook.symbol.model.*
-
-import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import android.content.Context
 import android.view.ViewGroup
+import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
+import com.forbidad4tieba.hook.symbol.model.*
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -15,7 +16,7 @@ internal object OriginalImageSymbolScanner {
     private const val SHARED_PREF_HELPER_CLASS = "com.baidu.tbadk.core.sharedPref.SharedPrefHelper"
     private const val TB_MD5_CLASS = "com.baidu.tbadk.core.util.TbMd5"
 
-    fun scan(cl: ClassLoader, logger: ScanLogger?): OriginalImageScanSymbols {
+    fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): OriginalImageScanSymbols {
     val adapterClass = safeFindClass(IMAGE_PAGER_ADAPTER_CLASS, cl)
     val urlDragClass = safeFindClass(URL_DRAG_IMAGE_VIEW_CLASS, cl)
     val dataClass = safeFindClass(IMAGE_URL_DATA_CLASS, cl)
@@ -40,17 +41,20 @@ internal object OriginalImageSymbolScanner {
             method.parameterTypes[2] == Any::class.java
     }?.name
 
-    val originalMethods = urlDragClass
-        ?.let {
-            scanSubStep("DefaultOriginalImageHook.MethodsRule", logger, null as ScanMatch?) {
-                OriginalImageMethodsRule().match(it, cl)
-            }
+    val originalMethods = urlDragClass?.let { clazz ->
+        val sourcePaths = appSourcePaths(context)
+        if (sourcePaths.isEmpty()) {
+            log(logger, "origImageMethodsDex: apk source path unavailable")
+            null
+        } else {
+            val dexMatch = DexKitSemanticScanner.scanOriginalImageMethods(
+                sourcePaths = sourcePaths,
+                ownerClassName = clazz.name,
+                logger = logger,
+            )
+            validateDexMethodMatch(clazz, dexMatch, logger)
         }
-        ?.methodName
-        ?.split(",")
-        ?.map { it.trim().ifEmpty { null } }
-        .orEmpty()
-    fun originalMethodPart(index: Int): String? = originalMethods.getOrNull(index)
+    }
 
     val setAssistUrlMethod = if (urlDragClass != null && dataClass != null) {
         val candidates = urlDragMethods.orEmpty().filter { method ->
@@ -130,9 +134,9 @@ internal object OriginalImageSymbolScanner {
         sharedPrefPutBooleanMethod = sharedPrefPutBooleanMethod,
         md5Class = md5Class?.name,
         md5Method = md5Method,
-        primaryReadyMethod = originalMethodPart(0),
-        triggerMethod = originalMethodPart(1),
-        directStartMethod = originalMethodPart(2),
+        primaryReadyMethod = originalMethods?.primaryReadyMethod,
+        triggerMethod = originalMethods?.triggerMethod,
+        directStartMethod = originalMethods?.directStartMethod,
     )
     log(
         logger,
@@ -143,6 +147,70 @@ internal object OriginalImageSymbolScanner {
     return result
 }
 
+    internal fun validateDexMethodMatch(
+        urlDragClass: Class<*>,
+        match: DexOriginalImageMethodsMatch?,
+        logger: ScanLogger?,
+    ): DexOriginalImageMethodsMatch? {
+        if (match == null) return null
+        val methods = declaredMethods("UrlDragImageView.ValidateDex", urlDragClass, logger) ?: return null
+        val triggerMethod = methods.singleOrNull { method ->
+            method.name == match.triggerMethod &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.isEmpty() &&
+                !Modifier.isStatic(method.modifiers)
+        }
+        if (triggerMethod == null) {
+            log(logger, "origImageMethodsDex: trigger reflection mismatch: ${match.triggerMethod}")
+            return null
+        }
+
+        val primaryReadyMethod = match.primaryReadyMethod?.let { methodName ->
+            methods.singleOrNull { method ->
+                method.name == methodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.isEmpty() &&
+                    !Modifier.isStatic(method.modifiers)
+            }?.name.also { resolved ->
+                if (resolved == null) {
+                    log(logger, "origImageMethodsDex: primaryReady reflection mismatch: $methodName")
+                }
+            }
+        }
+        val directStartMethod = match.directStartMethod?.let { methodName ->
+            methods.singleOrNull { method ->
+                method.name == methodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.contentEquals(arrayOf(String::class.java)) &&
+                    !Modifier.isStatic(method.modifiers)
+            }?.name.also { resolved ->
+                if (resolved == null) {
+                    log(logger, "origImageMethodsDex: directStart reflection mismatch: $methodName")
+                }
+            }
+        }
+        val validated = match.copy(
+            primaryReadyMethod = primaryReadyMethod,
+            triggerMethod = triggerMethod.name,
+            directStartMethod = directStartMethod,
+        )
+        log(
+            logger,
+            "origImageMethodsDex matched: ${urlDragClass.name}." +
+                "{${validated.primaryReadyMethod},${validated.triggerMethod},${validated.directStartMethod}} " +
+                "evidence=${validated.evidence}",
+        )
+        return validated
+    }
+
+    private fun appSourcePaths(context: Context): List<String> {
+        return buildList {
+            context.applicationInfo?.sourceDir?.takeIf { it.isNotBlank() }?.let(::add)
+            context.applicationInfo?.splitSourceDirs?.forEach { path ->
+                if (!path.isNullOrBlank()) add(path)
+            }
+        }.distinct()
+    }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
         ScanReflection.safeFindClass(name, cl)

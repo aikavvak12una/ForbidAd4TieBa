@@ -959,49 +959,6 @@ internal class HomeSearchBoxOwnerRule(
     }
 }
 
-internal class OriginalImageMethodsRule : ScanRule() {
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
-
-    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
-        if (cls.name != "com.baidu.tbadk.coreExtra.view.UrlDragImageView") return null
-
-        val methods = scanRuleMethods("OriginalImageMethodsRule", cls, logger) ?: return null
-        val voidNoArgMethods = methods.filter { method ->
-            method.returnType == Void.TYPE &&
-                method.parameterTypes.isEmpty() &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.name.length <= 3
-        }
-        val primaryReadyMethod =
-            voidNoArgMethods.singleOrNull { it.name == "F" }?.name
-
-        val triggerMethod =
-            voidNoArgMethods.singleOrNull { it.name == "I" }?.name
-                ?: return null
-
-        val voidStringMethods = methods.filter { method ->
-            method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                method.parameterTypes[0] == String::class.java &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.name.length <= 3
-        }
-        val directStartMethod =
-            voidStringMethods.singleOrNull { it.name == "e0" }?.name
-
-        var score = 100
-        if (primaryReadyMethod == "F") score += 10
-        if (triggerMethod == "I") score += 20
-        if (directStartMethod == "e0") score += 10
-        return ScanMatch(
-            cls.name,
-            "${primaryReadyMethod.orEmpty()},$triggerMethod,${directStartMethod.orEmpty()}",
-            "",
-            score,
-        )
-    }
-}
-
 internal class FreeCopyPopupRule : ScanRule() {
     override val minScore: Int = 100
     override val minScoreGap: Int = 8
