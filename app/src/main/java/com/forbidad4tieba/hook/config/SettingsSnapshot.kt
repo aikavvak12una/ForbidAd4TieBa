@@ -35,6 +35,7 @@ data class SettingsSnapshot(
     val homeNativeGlassDarkStyle: ConfigManager.HomeNativeGlassStyleConfig =
         ConfigManager.HomeNativeGlassStyleConfig(),
     val isAutoRefreshDisabled: Boolean = false,
+    val isPbGestureFontScaleDisabled: Boolean = false,
     val isAutoLoadMoreEnabled: Boolean = false,
     val isPbLikeAutoReplyEnabled: Boolean = false,
     val pbLikeAutoReplyText: String = "",
