@@ -20,10 +20,6 @@ internal class HookInstallContext(
         return statusMap[featureKey]?.isSupported() == true
     }
 
-    fun canInstallFreeCopy(): Boolean {
-        return isMain && available(HookFeatureKey.FREE_COPY_COMMENT_INJECTION)
-    }
-
     fun canInstallFreeCopyCommentInjection(settings: SettingsSnapshot): Boolean {
         return isMain &&
             settings.isFreeCopyEnabled &&

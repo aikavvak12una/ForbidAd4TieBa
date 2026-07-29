@@ -37,6 +37,7 @@ object UpgradePopWindowBlockHook {
             return
         }
 
+        var anyHookInstalled = false
         try {
             val updateDialogClass = cl.loadClass(UPDATE_DIALOG_CLASS)
             val aboutActivityClass = cl.loadClass(ABOUT_ACTIVITY_CLASS)
@@ -97,6 +98,7 @@ object UpgradePopWindowBlockHook {
                 }
                 chain.proceed()
             }
+            anyHookInstalled = true
 
             mod.hook(onCreateMethod).intercept { chain ->
                 val result = chain.proceed()
@@ -125,7 +127,9 @@ object UpgradePopWindowBlockHook {
             manualExemptionHealthy.set(false)
             XposedCompat.log("[UpgradePopWindowBlockHook] class NOT FOUND: ${e.message}")
         } catch (t: Throwable) {
-            installed.set(false)
+            if (!anyHookInstalled) {
+                installed.set(false)
+            }
             manualExemptionHealthy.set(false)
             XposedCompat.log("[UpgradePopWindowBlockHook] FAILED: ${t.message}")
             XposedCompat.log(t)
