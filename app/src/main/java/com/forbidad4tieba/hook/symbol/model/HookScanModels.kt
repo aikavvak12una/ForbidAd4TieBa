@@ -301,6 +301,13 @@ internal data class FreeCopyLongPressScanSymbols(
     val postFloorMethodSpec: String? = null,
 )
 
+internal data class FreeCopyTitleLongPressScanSymbols(
+    val bindMethodSpecs: List<String> = emptyList(),
+    val containerField: String? = null,
+    val textField: String? = null,
+    val postDataMethodSpec: String? = null,
+)
+
 internal data class DexFreeCopyMethodMatch(
     val ownerClassName: String,
     val methodName: String,
@@ -308,6 +315,16 @@ internal data class DexFreeCopyMethodMatch(
     val parameterTypeNames: List<String>,
     val evidence: String,
     val postDataIntNoArgMethodSpecs: List<String> = emptyList(),
+)
+
+internal data class DexFreeCopyTitleMatch(
+    val ownerClassName: String,
+    val bindMethodSpecs: List<String>,
+    val textFieldName: String,
+    val pageDataClassName: String,
+    val postDataMethodSpec: String,
+    val postDataIntNoArgMethodSpecs: List<String>,
+    val evidence: String,
 )
 
 internal data class ForumBottomSheetScanSymbols(

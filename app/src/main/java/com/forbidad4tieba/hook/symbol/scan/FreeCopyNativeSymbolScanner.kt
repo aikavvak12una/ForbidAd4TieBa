@@ -1,12 +1,15 @@
 package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
+import android.view.ViewGroup
+import android.widget.TextView
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import com.forbidad4tieba.hook.symbol.model.DexFreeCopyMethodMatch
 import com.forbidad4tieba.hook.symbol.model.FreeCopyLongPressScanSymbols
 import com.forbidad4tieba.hook.symbol.model.FreeCopyNativeScanSymbols
+import com.forbidad4tieba.hook.symbol.model.FreeCopyTitleLongPressScanSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -153,6 +156,121 @@ internal object FreeCopyNativeSymbolScanner {
         )
     }
 
+    fun scanTitleLongPress(
+        context: Context,
+        cl: ClassLoader,
+        postFloorMethodSpec: String?,
+        logger: ScanLogger?,
+    ): FreeCopyTitleLongPressScanSymbols {
+        val floorSpec = postFloorMethodSpec?.takeIf { it.isNotBlank() } ?: run {
+            log(logger, "freeCopyTitleLongPress: floor accessor unavailable")
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        val sourcePaths = appSourcePaths(context)
+        if (sourcePaths.isEmpty()) {
+            log(logger, "freeCopyTitleLongPress: apk source path unavailable")
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        val compatibleMatches = DexKitSemanticScanner
+            .scanFreeCopyPostTitleLongPress(sourcePaths, logger)
+            .filter { match -> floorSpec in match.postDataIntNoArgMethodSpecs }
+        val match = selectUniqueScanCandidate(
+            "FreeCopyHook.TitleLongPress.Dex",
+            compatibleMatches,
+            logger,
+        ) { candidate ->
+            candidate.ownerClassName + "[" + candidate.textFieldName + "]" +
+                "->" + candidate.pageDataClassName + "." + candidate.postDataMethodSpec
+        } ?: return FreeCopyTitleLongPressScanSymbols()
+
+        val ownerClass = ScanReflection.safeFindClass(match.ownerClassName, cl) ?: run {
+            log(logger, "freeCopyTitleLongPress: owner missing ${match.ownerClassName}")
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        val pageDataClass = ScanReflection.safeFindClass(match.pageDataClassName, cl) ?: run {
+            log(logger, "freeCopyTitleLongPress: page data missing ${match.pageDataClassName}")
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        val postDataClass = ScanReflection.safeFindClass(
+            StableTiebaHookPoints.PB_POST_DATA_CLASS,
+            cl,
+        ) ?: run {
+            log(logger, "freeCopyTitleLongPress: PostData class missing")
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        val ownerMethods = scanSubStep(
+            "FreeCopyHook.TitleLongPress.OwnerMethods",
+            logger,
+            emptyList(),
+        ) {
+            ownerClass.declaredMethods.toList()
+        }
+        val validBindMethods = ownerMethods.filter { method ->
+            !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.contentEquals(arrayOf(pageDataClass))
+        }
+        val validBindMethodSpecs = validBindMethods.map(::encodeMethodSpec).toSet()
+        if (
+            validBindMethods.isEmpty() ||
+            !validBindMethodSpecs.containsAll(match.bindMethodSpecs)
+        ) {
+            log(logger, "freeCopyTitleLongPress: bind method signature mismatch")
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        val titleContainerFields = scanSubStep(
+            "FreeCopyHook.TitleLongPress.ContainerField",
+            logger,
+            emptyList(),
+        ) {
+            ownerClass.declaredFields.filter { field ->
+                !Modifier.isStatic(field.modifiers) &&
+                    ViewGroup::class.java.isAssignableFrom(field.type)
+            }
+        }
+        if (titleContainerFields.size != 1) {
+            log(
+                logger,
+                "freeCopyTitleLongPress: container fields=" +
+                    titleContainerFields.map { field -> field.name },
+            )
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        val titleContainerField = titleContainerFields.single()
+        val titleTextField = scanSubStep(
+            "FreeCopyHook.TitleLongPress.TextField",
+            logger,
+            null,
+        ) {
+            ownerClass.getDeclaredField(match.textFieldName)
+        }?.takeIf { field ->
+            TextView::class.java.isAssignableFrom(field.type)
+        } ?: run {
+            log(logger, "freeCopyTitleLongPress: title TextView field mismatch")
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        val postDataMethod = resolveMethodBySpec(pageDataClass, match.postDataMethodSpec)
+            ?.takeIf { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == postDataClass &&
+                    method.parameterTypes.isEmpty()
+            } ?: run {
+            log(logger, "freeCopyTitleLongPress: first-floor PostData method mismatch")
+            return FreeCopyTitleLongPressScanSymbols()
+        }
+        log(
+            logger,
+            "freeCopyTitleLongPress: ${match.evidence}, methods=${validBindMethods.size}, " +
+                "container=${titleContainerField.type.name}",
+        )
+        return FreeCopyTitleLongPressScanSymbols(
+            bindMethodSpecs = validBindMethods.map(::encodeClassMethodSpec),
+            containerField = titleContainerField.name,
+            textField = titleTextField.name,
+            postDataMethodSpec = encodeMethodSpec(postDataMethod),
+        )
+    }
+
     private fun selectParser(
         methods: List<Method>,
         parameterTypeNames: List<String>,
@@ -214,6 +332,19 @@ internal object FreeCopyNativeSymbolScanner {
             }
         }.distinct()
         return selectUniqueScanCandidate(tag, candidates, logger, ::describeMethod)
+    }
+
+    private fun resolveMethodBySpec(ownerClass: Class<*>, spec: String): Method? {
+        val parts = spec.split('|', limit = 3)
+        if (parts.size != 3) return null
+        val methodName = parts[0]
+        val returnTypeName = parts[1]
+        val parameterTypeNames = parts[2].split(',').filter { it.isNotBlank() }
+        return ownerClass.declaredMethods.singleOrNull { method ->
+            method.name == methodName &&
+                method.returnType.name == returnTypeName &&
+                method.parameterTypes.map { it.name } == parameterTypeNames
+        }
     }
 
     private fun encodeMethodSpec(method: Method): String {

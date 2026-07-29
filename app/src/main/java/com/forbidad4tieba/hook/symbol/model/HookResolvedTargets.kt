@@ -22,6 +22,10 @@ internal data class FreeCopyNativeSymbols(
     val postFloorMethod: Method?,
     val richTextViewClass: Class<*>?,
     val longPressMethods: List<Method>,
+    val titleBindMethods: List<Method>,
+    val titleContainerField: Field?,
+    val titleTextField: Field?,
+    val titlePostDataMethod: Method?,
     val clipboardWriteMethods: List<Method>,
 )
 

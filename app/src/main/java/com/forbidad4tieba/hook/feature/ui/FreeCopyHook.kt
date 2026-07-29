@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.os.Looper
 import android.util.SparseArray
 import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -86,20 +87,27 @@ object FreeCopyHook {
         } else {
             false
         }
-        val longPressInstalled = if (
+        val longPressReady =
             copyInstalled &&
             ConfigManager.isFreeCopyPostLongPressEnabled &&
-            symbols.richTextViewClass != null &&
             symbols.postFloorMethod != null
+        val bodyLongPressInstalled = if (
+            longPressReady && symbols.richTextViewClass != null
         ) {
             hookPostBodyLongPress(symbols)
+        } else {
+            0
+        }
+        val titleLongPressInstalled = if (longPressReady) {
+            hookPostTitleLongPress(symbols)
         } else {
             0
         }
         XposedCompat.log(
             "[FreeCopyHook] native install: clipboard=$clipboardInstalled, " +
                 "metadata=$metadataInstalled, floor=${symbols.postFloorMethod != null}, " +
-                "copy=$copyInstalled, longPress=$longPressInstalled",
+                "copy=$copyInstalled, " +
+                "longPress={body=$bodyLongPressInstalled,title=$titleLongPressInstalled}",
         )
     }
 
@@ -319,6 +327,12 @@ object FreeCopyHook {
                     }
                     val view = chain.args.firstOrNull() as? View
                         ?: return@intercept chain.proceed()
+                    if (
+                        (view !is ViewGroup && hasNonNullReferencePayload(method, chain.args)) ||
+                        isRichTextChildView(view, richTextViewClass)
+                    ) {
+                        return@intercept chain.proceed()
+                    }
                     val lookup = findPostBodyData(view, richTextViewClass, symbols)
                     val postData = lookup.postData ?: run {
                         val reason = when {
@@ -338,23 +352,9 @@ object FreeCopyHook {
                         return@intercept chain.proceed()
                     }
 
-                    val invocation = LongPressInvocation()
-                    longPressInvocation.set(invocation)
-                    try {
-                        symbols.copyMethod.invoke(postData)
-                    } catch (t: Throwable) {
-                        logRuntimeFailure("long press copy", t)
-                    } finally {
-                        longPressInvocation.remove()
-                    }
-                    if (invocation.handled) {
+                    if (invokeLongPressCopy(postData, symbols, "body", view)) {
                         true
                     } else {
-                        logRuntimeDiagnostic(
-                            key = "longPress:not_handled",
-                            reason = "long_press_not_handled",
-                            details = "view=${view.javaClass.name}",
-                        )
                         chain.proceed()
                     }
                 }
@@ -367,6 +367,137 @@ object FreeCopyHook {
             }
         }
         return installed
+    }
+
+    private fun hasNonNullReferencePayload(method: Method, arguments: List<Any?>): Boolean {
+        return method.parameterTypes.indices.drop(1).any { index ->
+            !method.parameterTypes[index].isPrimitive && arguments.getOrNull(index) != null
+        }
+    }
+
+    private fun isRichTextChildView(view: View, richTextViewClass: Class<*>): Boolean {
+        if (richTextViewClass.isInstance(view)) return false
+        var parent = view.parent
+        var depth = 0
+        while (depth < MAX_RICH_TEXT_PARENT_DEPTH) {
+            val parentView = parent as? View ?: return false
+            if (richTextViewClass.isInstance(parentView)) return true
+            parent = parentView.parent
+            depth++
+        }
+        return false
+    }
+
+    private fun hookPostTitleLongPress(symbols: FreeCopyNativeSymbols): Int {
+        val mod = XposedCompat.module ?: return 0
+        val titleContainerField = symbols.titleContainerField ?: return 0
+        val titleTextField = symbols.titleTextField ?: return 0
+        val titlePostDataMethod = symbols.titlePostDataMethod ?: return 0
+        if (symbols.titleBindMethods.isEmpty()) return 0
+        var installed = 0
+        for (method in symbols.titleBindMethods) {
+            try {
+                mod.hook(method).intercept { chain ->
+                    val result = chain.proceed()
+                    if (
+                        !ConfigManager.isFreeCopyEnabled ||
+                        !ConfigManager.isFreeCopyPostLongPressEnabled
+                    ) {
+                        return@intercept result
+                    }
+                    val controller = chain.thisObject ?: return@intercept result
+                    val titleContainer = try {
+                        titleContainerField.get(controller) as? ViewGroup
+                    } catch (t: Throwable) {
+                        logRuntimeFailure("title container", t)
+                        null
+                    } ?: return@intercept result
+                    val titleView = try {
+                        titleTextField.get(controller) as? TextView
+                    } catch (t: Throwable) {
+                        logRuntimeFailure("title TextView", t)
+                        null
+                    } ?: return@intercept result
+                    val pageData = chain.args.firstOrNull()
+                        ?.takeIf { titlePostDataMethod.declaringClass.isInstance(it) }
+                        ?: return@intercept result
+                    val postData = try {
+                        titlePostDataMethod.invoke(pageData)
+                    } catch (t: Throwable) {
+                        logRuntimeFailure("title PostData", t)
+                        null
+                    }?.takeIf(symbols.postDataClass::isInstance) ?: run {
+                        logRuntimeDiagnostic(
+                            key = "titleLongPress:postData_missing",
+                            reason = "postData_missing",
+                            details = "view=${titleView.javaClass.name}",
+                        )
+                        return@intercept result
+                    }
+                    if (titleView.parent !== titleContainer) {
+                        logRuntimeDiagnostic(
+                            key = "titleLongPress:container_mismatch",
+                            reason = "container_mismatch",
+                            details = "container=${titleContainer.javaClass.name}," +
+                                "parent=${(titleView.parent as? View)?.javaClass?.name}",
+                        )
+                        return@intercept result
+                    }
+                    titleContainer.setOnLongClickListener { view ->
+                        if (
+                            !ConfigManager.isFreeCopyEnabled ||
+                            !ConfigManager.isFreeCopyPostLongPressEnabled
+                        ) {
+                            false
+                        } else {
+                            invokeLongPressCopy(postData, symbols, "title", view)
+                        }
+                    }
+                    result
+                }
+                installed++
+            } catch (t: Throwable) {
+                XposedCompat.logW(
+                    "[FreeCopyHook] title long press hook failed: " +
+                        "${method.declaringClass.name}.${method.name}: ${t.message}",
+                )
+            }
+        }
+        return installed
+    }
+
+    private fun invokeLongPressCopy(
+        postData: Any,
+        symbols: FreeCopyNativeSymbols,
+        source: String,
+        view: View,
+    ): Boolean {
+        val metadata = resolvePostMetadata(postData, symbols)
+        if (metadata == null || metadata.floor != 1) {
+            logRuntimeDiagnostic(
+                key = "${source}LongPress:first_floor_missing",
+                reason = if (metadata == null) "floor_missing" else "not_first_floor",
+                details = "view=${view.javaClass.name},floor=${metadata?.floor}",
+            )
+            return false
+        }
+        val invocation = LongPressInvocation()
+        longPressInvocation.set(invocation)
+        try {
+            symbols.copyMethod.invoke(postData)
+        } catch (t: Throwable) {
+            logRuntimeFailure("$source long press copy", t)
+        } finally {
+            longPressInvocation.remove()
+        }
+        if (!invocation.handled) {
+            logRuntimeDiagnostic(
+                key = "${source}LongPress:not_handled",
+                reason = "long_press_not_handled",
+                details = "view=${view.javaClass.name}",
+            )
+        }
+        return invocation.handled
     }
 
     private fun findPostBodyData(

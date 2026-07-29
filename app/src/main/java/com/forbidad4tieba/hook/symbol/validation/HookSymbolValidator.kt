@@ -383,7 +383,11 @@ internal object HookSymbolValidator {
             symbols.freeCopySubPostParseMethodSpec != null ||
             symbols.freeCopyPostFloorMethodSpec != null ||
             symbols.freeCopyRichTextViewClass != null ||
-            !symbols.freeCopyPostLongPressMethodSpecs.isNullOrEmpty()
+            !symbols.freeCopyPostLongPressMethodSpecs.isNullOrEmpty() ||
+            !symbols.freeCopyTitleBindMethodSpecs.isNullOrEmpty() ||
+            symbols.freeCopyTitleContainerField != null ||
+            symbols.freeCopyTitleTextField != null ||
+            symbols.freeCopyTitlePostDataMethodSpec != null
     if (hasFreeCopyNativeSymbols && !isFreeCopyNativeValid(symbols, cl)) return false
     val hasCompleteImageViewerShareSymbols =
         symbols.imageViewerShareConfigClass != null &&
@@ -493,7 +497,7 @@ private fun isFreeCopyNativeValid(symbols: HookSymbols, cl: ClassLoader): Boolea
             }
         }
 
-        symbols.freeCopyPostLongPressMethodSpecs.orEmpty().all { fullSpec ->
+        if (!symbols.freeCopyPostLongPressMethodSpecs.orEmpty().all { fullSpec ->
             val separator = fullSpec.indexOf('#')
             if (separator <= 0 || separator >= fullSpec.lastIndex) return false
             val owner = safeFindClass(fullSpec.substring(0, separator), cl) ?: return false
@@ -504,7 +508,59 @@ private fun isFreeCopyNativeValid(symbols: HookSymbols, cl: ClassLoader): Boolea
                 method.parameterTypes.firstOrNull()?.let { parameterType ->
                     View::class.java.isAssignableFrom(parameterType)
                 } == true
+        }) {
+            return false
         }
+
+        val titleBindSpecs = symbols.freeCopyTitleBindMethodSpecs.orEmpty()
+        val titleContainerFieldName = symbols.freeCopyTitleContainerField
+        val titleTextFieldName = symbols.freeCopyTitleTextField
+        val titlePostDataMethodSpec = symbols.freeCopyTitlePostDataMethodSpec
+        val hasAnyTitleSymbol = titleBindSpecs.isNotEmpty() ||
+            titleContainerFieldName != null ||
+            titleTextFieldName != null ||
+            titlePostDataMethodSpec != null
+        if (!hasAnyTitleSymbol) return true
+        if (
+            titleBindSpecs.isEmpty() ||
+            titleContainerFieldName.isNullOrBlank() ||
+            titleTextFieldName.isNullOrBlank() ||
+            titlePostDataMethodSpec.isNullOrBlank() ||
+            postDataClass == null
+        ) {
+            return false
+        }
+        val titleBindMethods = titleBindSpecs.map { fullSpec ->
+            val separator = fullSpec.indexOf('#')
+            if (separator <= 0 || separator >= fullSpec.lastIndex) return false
+            val owner = safeFindClass(fullSpec.substring(0, separator), cl) ?: return false
+            resolveFullMethodSpec(owner, fullSpec.substring(separator + 1), cl)
+                ?: return false
+        }
+        val titleOwner = titleBindMethods.first().declaringClass
+        val pageDataClass = titleBindMethods.first().parameterTypes.singleOrNull()
+            ?: return false
+        if (titleBindMethods.any { method ->
+                Modifier.isStatic(method.modifiers) ||
+                    method.returnType != Void.TYPE ||
+                    method.declaringClass != titleOwner ||
+                    method.parameterTypes.singleOrNull() != pageDataClass
+            }
+        ) {
+            return false
+        }
+        val titleContainerField = titleOwner.getDeclaredField(titleContainerFieldName)
+        if (!ViewGroup::class.java.isAssignableFrom(titleContainerField.type)) return false
+        val titleTextField = titleOwner.getDeclaredField(titleTextFieldName)
+        if (!TextView::class.java.isAssignableFrom(titleTextField.type)) return false
+        val titlePostDataMethod = resolveFullMethodSpec(
+            pageDataClass,
+            titlePostDataMethodSpec,
+            cl,
+        ) ?: return false
+        !Modifier.isStatic(titlePostDataMethod.modifiers) &&
+            titlePostDataMethod.returnType == postDataClass &&
+            titlePostDataMethod.parameterTypes.isEmpty()
     } catch (_: Throwable) {
         false
     }
