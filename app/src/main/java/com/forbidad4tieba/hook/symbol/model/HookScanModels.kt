@@ -313,7 +313,6 @@ internal data class DexFreeCopyMethodMatch(
     val methodName: String,
     val returnTypeName: String,
     val parameterTypeNames: List<String>,
-    val evidence: String,
     val postDataIntNoArgMethodSpecs: List<String> = emptyList(),
 )
 

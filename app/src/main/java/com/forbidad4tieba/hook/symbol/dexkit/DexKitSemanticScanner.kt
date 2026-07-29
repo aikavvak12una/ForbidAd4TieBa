@@ -70,9 +70,6 @@ internal object DexKitSemanticScanner {
                     methodName = method.methodName,
                     returnTypeName = method.returnTypeName,
                     parameterTypeNames = method.paramTypeNames,
-                    evidence = clipboardCalls.joinToString(",") {
-                        "${it.declaredClassName}.${it.methodName}"
-                    },
                 )
             }
         }
@@ -126,8 +123,6 @@ internal object DexKitSemanticScanner {
                     methodName = method.methodName,
                     returnTypeName = method.returnTypeName,
                     parameterTypeNames = params,
-                    evidence = "cardLongClick,viewTag,sparseArray,postData," +
-                        "postIntNoArg=${postDataIntNoArgMethodSpecs.size}",
                     postDataIntNoArgMethodSpecs = postDataIntNoArgMethodSpecs,
                 )
             }.distinctBy { match ->

@@ -67,10 +67,6 @@ object FreeCopyHook {
     private val clipboardCapture = ThreadLocal<ClipboardCapture?>()
     private val longPressInvocation = ThreadLocal<LongPressInvocation?>()
 
-    internal fun hook(popupSymbols: FreeCopyPopupSymbols) {
-        hookCommentInjection(popupSymbols)
-    }
-
     internal fun hookCommentInjection(popupSymbols: FreeCopyPopupSymbols) {
         if (!popupInstalled.compareAndSet(false, true)) return
         if (!hookPopupMenuText(popupSymbols)) {

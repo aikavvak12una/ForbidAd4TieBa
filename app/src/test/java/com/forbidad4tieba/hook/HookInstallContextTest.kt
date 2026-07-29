@@ -91,7 +91,7 @@ class HookInstallContextTest {
     }
 
     @Test
-    fun freeCopyRequiresEveryRuntimeTarget() {
+    fun freeCopyCommentInjectionRequiresEnabledSettingsAndEveryRuntimeTarget() {
         val incomplete = HookInstallContext(
             Constants.TARGET_PACKAGE,
             buildHookSymbols {
@@ -107,9 +107,70 @@ class HookInstallContextTest {
                 freeCopyPopupTextField = "text"
             },
         )
+        val enabled = SettingsSnapshot(
+            isFreeCopyEnabled = true,
+            isFreeCopyCommentInjectionEnabled = true,
+        )
 
-        assertFalse(incomplete.canInstallFreeCopy())
-        assertTrue(complete.canInstallFreeCopy())
+        assertFalse(incomplete.canInstallFreeCopyCommentInjection(enabled))
+        assertTrue(complete.canInstallFreeCopyCommentInjection(enabled))
+        assertFalse(
+            complete.canInstallFreeCopyCommentInjection(
+                enabled.copy(isFreeCopyEnabled = false),
+            ),
+        )
+        assertFalse(
+            complete.canInstallFreeCopyCommentInjection(
+                enabled.copy(isFreeCopyCommentInjectionEnabled = false),
+            ),
+        )
+        assertFalse(
+            HookInstallContext(Constants.TARGET_PACKAGE + ":remote", complete.symbols)
+                .canInstallFreeCopyCommentInjection(enabled),
+        )
+    }
+
+    @Test
+    fun freeCopyNativeRequiresEnabledSettingsAndAtLeastOneSupportedChild() {
+        val incomplete = HookInstallContext(
+            Constants.TARGET_PACKAGE,
+            buildHookSymbols {},
+        )
+        val complete = HookInstallContext(
+            Constants.TARGET_PACKAGE,
+            buildHookSymbols {
+                freeCopyPostDataClass = "com.tieba.PostData"
+                freeCopyPostCopyMethodSpec = "copy|void|"
+                freeCopyPostParseMethodSpec = "parse|void|tbclient.Post"
+            },
+        )
+        val enabled = SettingsSnapshot(
+            isFreeCopyEnabled = true,
+            isFreeCopyPostBodyEnabled = true,
+            isFreeCopyPostLongPressEnabled = false,
+            isFreeCopyCommentDialogEnabled = false,
+        )
+
+        assertFalse(incomplete.canInstallFreeCopyNative(enabled))
+        assertTrue(complete.canInstallFreeCopyNative(enabled))
+        assertFalse(complete.canInstallFreeCopyNative(enabled.copy(isFreeCopyEnabled = false)))
+        assertFalse(
+            complete.canInstallFreeCopyNative(
+                enabled.copy(isFreeCopyPostBodyEnabled = false),
+            ),
+        )
+        assertTrue(
+            complete.canInstallFreeCopyNative(
+                enabled.copy(
+                    isFreeCopyPostBodyEnabled = false,
+                    isFreeCopyCommentDialogEnabled = true,
+                ),
+            ),
+        )
+        assertFalse(
+            HookInstallContext(Constants.TARGET_PACKAGE + ":remote", complete.symbols)
+                .canInstallFreeCopyNative(enabled),
+        )
     }
 
     @Test
