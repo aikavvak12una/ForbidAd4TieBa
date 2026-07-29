@@ -460,6 +460,14 @@ data class HookSymbols(
         get() = hookPoints.collectionHistory.freeCopy.freeCopyRichTextViewClass
     val freeCopyPostLongPressMethodSpecs: List<String>?
         get() = hookPoints.collectionHistory.freeCopy.freeCopyPostLongPressMethodSpecs
+    val freeCopyTitleBindMethodSpecs: List<String>?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyTitleBindMethodSpecs
+    val freeCopyTitleContainerField: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyTitleContainerField
+    val freeCopyTitleTextField: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyTitleTextField
+    val freeCopyTitlePostDataMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyTitlePostDataMethodSpec
     val mainTabDataClass: String?
         get() = hookPoints.primary.home.mainTab.mainTabDataClass
     val mainTabAddMethod: String?
@@ -1051,6 +1059,14 @@ data class HookSymbols(
                 methodSpecs.forEach { array.put(it) }
                 put("freeCopyPostLongPressMethodSpecs", array)
             }
+            freeCopyTitleBindMethodSpecs?.takeIf { it.isNotEmpty() }?.let { methodSpecs ->
+                val array = org.json.JSONArray()
+                methodSpecs.forEach { array.put(it) }
+                put("freeCopyTitleBindMethodSpecs", array)
+            }
+            put("freeCopyTitleContainerField", freeCopyTitleContainerField)
+            put("freeCopyTitleTextField", freeCopyTitleTextField)
+            put("freeCopyTitlePostDataMethodSpec", freeCopyTitlePostDataMethodSpec)
 
             put("mainTabDataClass", mainTabDataClass)
             put("mainTabAddMethod", mainTabAddMethod)
@@ -1292,8 +1308,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 33
-        const val DEXKIT_RULE_VERSION = 20
+        const val CACHE_SCHEMA_VERSION = 35
+        const val DEXKIT_RULE_VERSION = 25
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1587,6 +1603,14 @@ data class HookSymbols(
                     freeCopyPostLongPressMethodSpecs =
                         obj.optStringArray("freeCopyPostLongPressMethodSpecs")
                             .takeIf { it.isNotEmpty() }
+                    freeCopyTitleBindMethodSpecs =
+                        obj.optStringArray("freeCopyTitleBindMethodSpecs")
+                            .takeIf { it.isNotEmpty() }
+                    freeCopyTitleContainerField =
+                        obj.optStringOrNull("freeCopyTitleContainerField")
+                    freeCopyTitleTextField = obj.optStringOrNull("freeCopyTitleTextField")
+                    freeCopyTitlePostDataMethodSpec =
+                        obj.optStringOrNull("freeCopyTitlePostDataMethodSpec")
 
                     mainTabDataClass = obj.optStringOrNull("mainTabDataClass")
                     mainTabAddMethod = obj.optStringOrNull("mainTabAddMethod")

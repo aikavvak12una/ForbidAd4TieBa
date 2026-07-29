@@ -41,6 +41,8 @@ internal object DexKitSemanticScanner {
     private const val ORIGINAL_IMAGE_DOWNLOAD_TIP_PREF_KEY = "original_img_down_tip"
     private const val FREE_COPY_LONG_PRESS_STAT_KEY = "card_long_click"
     private const val FREE_COPY_POST_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.PostData"
+    private const val FREE_COPY_THREAD_DATA_CLASS = "com.baidu.tbadk.core.data.ThreadData"
+    private const val TEXT_VIEW_CLASS = "android.widget.TextView"
 
     fun scanFreeCopyPostDataCopy(
         sourcePaths: List<String>,
@@ -131,6 +133,129 @@ internal object DexKitSemanticScanner {
             }.distinctBy { match ->
                 match.ownerClassName + "#" + match.methodName + "|" +
                     match.parameterTypeNames.joinToString(",")
+            }
+        }
+
+    fun scanFreeCopyPostTitleLongPress(
+        sourcePaths: List<String>,
+        logger: ScanLogger? = null,
+    ): List<DexFreeCopyTitleMatch> =
+        withBridge(sourcePaths, logger, "FreeCopyHook.TitleLongPressDex", emptyList()) { bridge ->
+            val anchors = try {
+                bridge.findMethod(
+                    FindMethod.create()
+                        .searchPackages("com.baidu.tieba")
+                        .matcher(
+                            MethodMatcher.create()
+                                .addInvoke(
+                                    MethodMatcher.create()
+                                        .declaredClass(FREE_COPY_THREAD_DATA_CLASS)
+                                        .name("getTitle")
+                                        .returnType("java.lang.String")
+                                        .paramTypes(),
+                                ),
+                        ),
+                ).toList()
+            } catch (t: Throwable) {
+                recordIssue(
+                    logger,
+                    "$TAG.FreeCopyTitleAnchor",
+                    HookSymbolScanDiagnostics.formatScanException(t),
+                )
+                emptyList()
+            }
+            anchors.flatMap { anchor ->
+                if (
+                    Modifier.isStatic(anchor.modifiers) ||
+                    anchor.returnTypeName != "void" ||
+                    anchor.paramCount != 1
+                ) {
+                    return@flatMap emptyList()
+                }
+                val invokes = anchor.invokes.toList()
+                val hasSetText = invokes.any { invoked ->
+                    invoked.declaredClassName == TEXT_VIEW_CLASS && invoked.methodName == "setText"
+                }
+                val hasSetMaxLines = invokes.any { invoked ->
+                    invoked.declaredClassName == TEXT_VIEW_CLASS && invoked.methodName == "setMaxLines"
+                }
+                val hasSetEllipsize = invokes.any { invoked ->
+                    invoked.declaredClassName == TEXT_VIEW_CLASS && invoked.methodName == "setEllipsize"
+                }
+                if (!hasSetText || !hasSetMaxLines || !hasSetEllipsize) {
+                    return@flatMap emptyList()
+                }
+
+                val ownerClassName = anchor.declaredClassName
+                val pageDataClassName = anchor.paramTypeNames.single()
+                val titleFields = anchor.usingFields
+                    .asSequence()
+                    .map { it.field }
+                    .filter { field ->
+                        field.declaredClassName == ownerClassName &&
+                            (field.typeName == TEXT_VIEW_CLASS || field.typeName.endsWith("TextView"))
+                    }
+                    .distinctBy { it.fieldName }
+                    .toList()
+                if (titleFields.size != 1) {
+                    HookSymbolScanDiagnostics.log(
+                        logger,
+                        "$TAG.FreeCopyTitleAnchor: ${ownerClassName}.${anchor.methodName} " +
+                            "textFields=${titleFields.map { it.fieldName }}",
+                    )
+                    return@flatMap emptyList()
+                }
+                val titleField = titleFields.single()
+                val bindMethods = exactMethods(bridge, ownerClassName, logger)
+                    .filter { method ->
+                        !Modifier.isStatic(method.modifiers) &&
+                            method.returnTypeName == "void" &&
+                            method.paramTypeNames == listOf(pageDataClassName)
+                    }
+                    .distinctBy { it.methodSign }
+                if (bindMethods.isEmpty()) {
+                    HookSymbolScanDiagnostics.log(
+                        logger,
+                        "$TAG.FreeCopyTitleAnchor: no bind method for $ownerClassName",
+                    )
+                    return@flatMap emptyList()
+                }
+
+                exactMethods(bridge, pageDataClassName, logger).mapNotNull { getter ->
+                    if (
+                        Modifier.isStatic(getter.modifiers) ||
+                        getter.returnTypeName != FREE_COPY_POST_DATA_CLASS ||
+                        getter.paramCount != 0
+                    ) {
+                        return@mapNotNull null
+                    }
+                    val postDataIntNoArgMethodSpecs = getter.invokes.asSequence()
+                        .filter { invoked ->
+                            invoked.declaredClassName == FREE_COPY_POST_DATA_CLASS &&
+                                !Modifier.isStatic(invoked.modifiers) &&
+                                invoked.returnTypeName == "int" &&
+                                invoked.paramCount == 0
+                        }
+                        .map(::encodeDexMethodSpec)
+                        .distinct()
+                        .sorted()
+                        .toList()
+                    if (postDataIntNoArgMethodSpecs.isEmpty()) return@mapNotNull null
+                    DexFreeCopyTitleMatch(
+                        ownerClassName = ownerClassName,
+                        bindMethodSpecs = bindMethods.map(::encodeDexMethodSpec).sorted(),
+                        textFieldName = titleField.fieldName,
+                        pageDataClassName = pageDataClassName,
+                        postDataMethodSpec = encodeDexMethodSpec(getter),
+                        postDataIntNoArgMethodSpecs = postDataIntNoArgMethodSpecs,
+                        evidence = "threadTitle,textViewBind,maxLines,ellipsize," +
+                            "controllerDataMethods=${bindMethods.size}," +
+                            "postIntNoArg=${postDataIntNoArgMethodSpecs.size}",
+                    )
+                }
+            }.distinctBy { match ->
+                match.ownerClassName + "#" + match.textFieldName + "#" +
+                    match.pageDataClassName + "#" + match.postDataMethodSpec
             }
         }
 
@@ -983,6 +1108,11 @@ internal object DexKitSemanticScanner {
             recordIssue(logger, tag, HookSymbolScanDiagnostics.formatScanException(t))
             emptyList()
         }
+    }
+
+    private fun encodeDexMethodSpec(method: MethodData): String {
+        return method.methodName + "|" + method.returnTypeName + "|" +
+            method.paramTypeNames.joinToString(",")
     }
 
     private fun exactClassOrNull(

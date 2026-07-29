@@ -126,6 +126,20 @@ internal object HookFeatureStatusDeriver {
             if (requireLongPress && symbols.freeCopyPostFloorMethodSpec.isNullOrBlank()) {
                 critical.add("freeCopyPostFloorMethodSpec")
             }
+            if (requireLongPress) {
+                if (symbols.freeCopyTitleBindMethodSpecs.isNullOrEmpty()) {
+                    optional.add("freeCopyTitleBindMethodSpecs")
+                }
+                if (symbols.freeCopyTitleContainerField.isNullOrBlank()) {
+                    optional.add("freeCopyTitleContainerField")
+                }
+                if (symbols.freeCopyTitleTextField.isNullOrBlank()) {
+                    optional.add("freeCopyTitleTextField")
+                }
+                if (symbols.freeCopyTitlePostDataMethodSpec.isNullOrBlank()) {
+                    optional.add("freeCopyTitlePostDataMethodSpec")
+                }
+            }
             return when {
                 critical.isNotEmpty() -> HookFeatureStatus(
                     state = HookFeatureState.DISABLED,

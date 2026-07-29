@@ -32,6 +32,8 @@ internal object FreeCopyDialog {
         title: String?,
         body: String,
     ): Boolean {
+        val normalizedTitle = title?.trim().orEmpty()
+        val normalizedBody = body.trim()
         val plainText = buildPlainText(title, body)
         if (plainText.isBlank() || activity.isFinishing || activity.isDestroyed) return false
         return try {
@@ -50,13 +52,62 @@ internal object FreeCopyDialog {
                 }
             }
 
-            root.addView(TextView(activity).apply {
-                text = UiText.FreeCopy.DIALOG_TITLE
-                textSize = 18f
-                typeface = Typeface.DEFAULT_BOLD
-                setTextColor(tokens.textPrimary)
-                includeFontPadding = false
-            })
+            root.addView(
+                LinearLayout(activity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(
+                        TextView(activity).apply {
+                            text = UiText.FreeCopy.DIALOG_TITLE
+                            textSize = 18f
+                            typeface = Typeface.DEFAULT_BOLD
+                            setTextColor(tokens.textPrimary)
+                            includeFontPadding = false
+                        },
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+                    )
+                    if (normalizedTitle.isNotEmpty()) {
+                        addView(
+                            headerActionButton(
+                                activity,
+                                UiText.FreeCopy.BUTTON_COPY_TITLE,
+                                tokens.accent,
+                            ) {
+                                if (
+                                    copyText(
+                                        activity,
+                                        normalizedTitle,
+                                        UiText.FreeCopy.TOAST_TITLE_COPIED,
+                                    )
+                                ) {
+                                    dialog.dismiss()
+                                }
+                            },
+                        )
+                        addView(
+                            headerActionButton(
+                                activity,
+                                UiText.FreeCopy.BUTTON_COPY_BODY,
+                                tokens.accent,
+                            ) {
+                                if (
+                                    copyText(
+                                        activity,
+                                        normalizedBody,
+                                        UiText.FreeCopy.TOAST_BODY_COPIED,
+                                    )
+                                ) {
+                                    dialog.dismiss()
+                                }
+                            },
+                        )
+                    }
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
 
             val displayText = buildDisplayText(title, body)
             root.addView(
@@ -190,14 +241,43 @@ internal object FreeCopyDialog {
         }
     }
 
+    private fun headerActionButton(
+        context: Context,
+        label: String,
+        color: Int,
+        action: () -> Unit,
+    ): TextView {
+        val density = context.resources.displayMetrics.density
+        return TextView(context).apply {
+            text = label
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(color)
+            includeFontPadding = false
+            setPadding(dp(density, 8), dp(density, 7), dp(density, 4), dp(density, 7))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { action() }
+        }
+    }
+
     private fun copyAll(context: Context, content: String): Boolean {
+        return copyText(context, content, UiText.FreeCopy.TOAST_COPIED)
+    }
+
+    private fun copyText(context: Context, content: String, successMessage: String): Boolean {
+        if (content.isBlank()) {
+            Toast.makeText(context, UiText.FreeCopy.TOAST_COPY_FAILED, Toast.LENGTH_SHORT).show()
+            return false
+        }
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         if (clipboard == null) {
             Toast.makeText(context, UiText.FreeCopy.TOAST_COPY_FAILED, Toast.LENGTH_SHORT).show()
             return false
         }
         clipboard.setPrimaryClip(ClipData.newPlainText(UiText.FreeCopy.CLIP_LABEL, content))
-        Toast.makeText(context, UiText.FreeCopy.TOAST_COPIED, Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, successMessage, Toast.LENGTH_SHORT).show()
         return true
     }
 

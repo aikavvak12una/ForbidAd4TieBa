@@ -444,9 +444,13 @@ object UiText {
 
     object FreeCopy {
         const val DIALOG_TITLE = "自由复制"
+        const val BUTTON_COPY_TITLE = "复制标题"
+        const val BUTTON_COPY_BODY = "复制正文"
         const val BUTTON_CANCEL = "取消"
         const val BUTTON_COPY_ALL = "复制全文"
         const val CLIP_LABEL = "贴吧内容"
+        const val TOAST_TITLE_COPIED = "已复制标题"
+        const val TOAST_BODY_COPIED = "已复制正文"
         const val TOAST_COPIED = "已复制全文"
         const val TOAST_COPY_FAILED = "复制失败"
     }

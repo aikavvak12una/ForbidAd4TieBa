@@ -217,6 +217,10 @@ internal class HookSymbolsBuilder {
     var freeCopyPostFloorMethodSpec: String? = null
     var freeCopyRichTextViewClass: String? = null
     var freeCopyPostLongPressMethodSpecs: List<String>? = null
+    var freeCopyTitleBindMethodSpecs: List<String>? = null
+    var freeCopyTitleContainerField: String? = null
+    var freeCopyTitleTextField: String? = null
+    var freeCopyTitlePostDataMethodSpec: String? = null
     var mainTabDataClass: String? = null
     var mainTabAddMethod: String? = null
     var mainTabGetListMethod: String? = null
@@ -863,6 +867,10 @@ internal class HookSymbolsBuilder {
                 freeCopyPostFloorMethodSpec = freeCopyPostFloorMethodSpec,
                 freeCopyRichTextViewClass = freeCopyRichTextViewClass,
                 freeCopyPostLongPressMethodSpecs = freeCopyPostLongPressMethodSpecs,
+                freeCopyTitleBindMethodSpecs = freeCopyTitleBindMethodSpecs,
+                freeCopyTitleContainerField = freeCopyTitleContainerField,
+                freeCopyTitleTextField = freeCopyTitleTextField,
+                freeCopyTitlePostDataMethodSpec = freeCopyTitlePostDataMethodSpec,
             ),
         )
     }

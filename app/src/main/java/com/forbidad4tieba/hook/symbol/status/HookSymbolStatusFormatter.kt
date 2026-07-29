@@ -1052,6 +1052,20 @@ internal object HookSymbolStatusFormatter {
                 "freeCopyPostFloorMethodSpec" to has(symbols.freeCopyPostFloorMethodSpec),
             ),
         )
+        addOptional(
+            "FreeCopyHook.TitleLongPress",
+            "${listTarget(symbols.freeCopyTitleBindMethodSpecs)} " +
+                "[${symbols.freeCopyTitleContainerField}:" +
+                "${symbols.freeCopyTitleTextField}->${symbols.freeCopyTitlePostDataMethodSpec}]",
+            listOf(
+                "freeCopyTitleBindMethodSpecs" to
+                    hasList(symbols.freeCopyTitleBindMethodSpecs),
+                "freeCopyTitleContainerField" to has(symbols.freeCopyTitleContainerField),
+                "freeCopyTitleTextField" to has(symbols.freeCopyTitleTextField),
+                "freeCopyTitlePostDataMethodSpec" to
+                    has(symbols.freeCopyTitlePostDataMethodSpec),
+            ),
+        )
         add(
             "CollectionSearchHook.Core",
             "${symbols.collectionPresenterField}.${symbols.collectionPresenterListSetterMethod}",
