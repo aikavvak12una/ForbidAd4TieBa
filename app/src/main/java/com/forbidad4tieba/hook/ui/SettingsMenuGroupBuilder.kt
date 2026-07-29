@@ -8,6 +8,7 @@ internal data class SettingsMenuGroupActions(
     val onCustomPostModelScore: () -> Unit,
     val onCustomPostFilterKeyword: () -> Unit,
     val onPbLikeAutoReply: () -> Unit,
+    val onFreeCopy: (List<SwitchItem>) -> Unit,
     val onPerformanceOptimization: (List<SettingGroup>) -> Unit,
     val onAutoSignIn: () -> Unit,
     val onReplyVisibilityProbe: () -> Unit,
@@ -184,12 +185,22 @@ internal object SettingsMenuGroupBuilder {
         restrictedFeaturesUnlocked: Boolean,
         actions: SettingsMenuGroupActions,
     ): List<SwitchItem> {
+        val freeCopyItems = freeCopyItems()
         val items = mutableListOf(
             SwitchItem(
                 label = UiText.Settings.AUTO_LOAD_MORE_LABEL,
                 description = UiText.Settings.AUTO_LOAD_MORE_DESC,
                 prefKey = ConfigManager.KEY_ENABLE_AUTO_LOAD_MORE,
                 supported = true,
+            ),
+            SwitchItem(
+                label = UiText.Settings.FREE_COPY_LABEL,
+                description = UiText.Settings.FREE_COPY_DESC,
+                prefKey = ConfigManager.KEY_ENABLE_FREE_COPY,
+                supported = true,
+                defaultValue = true,
+                actionIcon = UiText.Settings.ACTION_ICON_SETTINGS,
+                onActionClick = { actions.onFreeCopy(freeCopyItems) },
             ),
             SwitchItem(
                 label = UiText.Settings.DISABLE_AUTO_REFRESH_LABEL,
@@ -286,6 +297,37 @@ internal object SettingsMenuGroupBuilder {
         }
         return items
     }
+
+    private fun freeCopyItems(): List<SwitchItem> = listOf(
+        SwitchItem(
+            label = UiText.Settings.FREE_COPY_POST_BODY_LABEL,
+            description = UiText.Settings.FREE_COPY_POST_BODY_DESC,
+            prefKey = ConfigManager.KEY_FREE_COPY_POST_BODY,
+            supported = true,
+            defaultValue = true,
+        ),
+        SwitchItem(
+            label = UiText.Settings.FREE_COPY_POST_LONG_PRESS_LABEL,
+            description = UiText.Settings.FREE_COPY_POST_LONG_PRESS_DESC,
+            prefKey = ConfigManager.KEY_FREE_COPY_POST_LONG_PRESS,
+            supported = true,
+            defaultValue = false,
+        ),
+        SwitchItem(
+            label = UiText.Settings.FREE_COPY_COMMENT_INJECTION_LABEL,
+            description = UiText.Settings.FREE_COPY_COMMENT_INJECTION_DESC,
+            prefKey = ConfigManager.KEY_FREE_COPY_COMMENT_INJECTION,
+            supported = true,
+            defaultValue = true,
+        ),
+        SwitchItem(
+            label = UiText.Settings.FREE_COPY_COMMENT_DIALOG_LABEL,
+            description = UiText.Settings.FREE_COPY_COMMENT_DIALOG_DESC,
+            prefKey = ConfigManager.KEY_FREE_COPY_COMMENT_DIALOG,
+            supported = true,
+            defaultValue = true,
+        ),
+    )
 
     private fun performanceGroups(): List<SettingGroup> = listOf(
         SettingGroup(

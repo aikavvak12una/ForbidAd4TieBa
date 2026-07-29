@@ -202,27 +202,27 @@ class HookFeatureStatusDeriverTest {
     }
 
     @Test
-    fun deriveDisablesFreeCopyWhenAnyRequiredTargetIsMissing() {
+    fun deriveDisablesFreeCopyCommentInjectionWhenAnyRequiredTargetIsMissing() {
         val status = HookFeatureStatusDeriver.derive(
             buildHookSymbols {
                 freeCopyPopupMenuClass = "com.tieba.Popup"
                 freeCopyPopupContentViewMethod = "contentView"
             },
-        ).getValue(HookFeatureKey.FREE_COPY)
+        ).getValue(HookFeatureKey.FREE_COPY_COMMENT_INJECTION)
 
         assertEquals(HookFeatureState.DISABLED, status.state)
         assertEquals(listOf("freeCopyPopupTextField"), status.missingCritical)
     }
 
     @Test
-    fun deriveMarksFreeCopyFullWhenAllRequiredTargetsExist() {
+    fun deriveMarksFreeCopyCommentInjectionFullWhenAllRequiredTargetsExist() {
         val status = HookFeatureStatusDeriver.derive(
             buildHookSymbols {
                 freeCopyPopupMenuClass = "com.tieba.Popup"
                 freeCopyPopupContentViewMethod = "contentView"
                 freeCopyPopupTextField = "text"
             },
-        ).getValue(HookFeatureKey.FREE_COPY)
+        ).getValue(HookFeatureKey.FREE_COPY_COMMENT_INJECTION)
 
         assertEquals(HookFeatureState.FULL, status.state)
     }
