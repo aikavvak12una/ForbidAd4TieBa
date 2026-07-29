@@ -4643,6 +4643,48 @@ internal object HookSymbolResolver {
         }
     }
 
+    fun resolveInputMemeBarSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): InputMemeBarSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[InputMemeBarBlockHook] skipped: scan symbols unavailable")
+                return null
+            }
+            val controllerClassName =
+                resolvedSymbols.inputMemeBarControllerClass?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[InputMemeBarBlockHook] skipped: missing inputMemeBarControllerClass")
+                    return null
+                }
+            val enableMethodName =
+                resolvedSymbols.inputMemeBarEnableMethod?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[InputMemeBarBlockHook] skipped: missing inputMemeBarEnableMethod")
+                    return null
+                }
+            val controllerClass = safeFindClass(controllerClassName, cl) ?: run {
+                XposedCompat.log("[InputMemeBarBlockHook] skipped: class not found: $controllerClassName")
+                return null
+            }
+            val enableMethod = controllerClass.declaredMethods.singleOrNull { method ->
+                method.name == enableMethodName &&
+                    InputMemeBarSymbolScanner.isInputMemeBarEnableMethod(method)
+            } ?: run {
+                XposedCompat.log(
+                    "[InputMemeBarBlockHook] skipped: method mismatch: " +
+                        "$controllerClassName.$enableMethodName(Context,InputShowType,boolean)",
+                )
+                return null
+            }
+            enableMethod.isAccessible = true
+            InputMemeBarSymbols(enableMethod = enableMethod)
+        } catch (t: Throwable) {
+            XposedCompat.log("[InputMemeBarBlockHook] symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
     fun resolveAiImageViewerJumpButtonSymbols(
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
@@ -6064,6 +6106,14 @@ internal object HookSymbolResolver {
         ) {
             OriginalImageSymbolScanner.scan(context, cl, logger)
         }
+        val inputMemeBarScan = runScanStep(
+            "InputMemeBarBlockHook",
+            logger,
+            scanErrors,
+            InputMemeBarScanSymbols(),
+        ) {
+            InputMemeBarSymbolScanner.scan(cl, logger)
+        }
         val aiComponentScan = runScanStep(
             "AiComponentDisableHook",
             logger,
@@ -6398,6 +6448,8 @@ internal object HookSymbolResolver {
             origImagePrimaryReadyMethod = originalImageScan.primaryReadyMethod
             origImageTriggerMethod = originalImageScan.triggerMethod
             origImageDirectStartMethod = originalImageScan.directStartMethod
+            this.inputMemeBarControllerClass = inputMemeBarScan.controllerClass
+            this.inputMemeBarEnableMethod = inputMemeBarScan.enableMethod
             this.shareTrackBuilderClass = shareTrackBuilderClass
             this.shareTrackBuildUrlMethod = shareTrackBuildUrlMethod
             this.shareTrackAppendQueryMethod = shareTrackAppendQueryMethod

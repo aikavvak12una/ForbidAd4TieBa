@@ -901,6 +901,15 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "InputMemeBarBlockHook",
+            "${symbols.inputMemeBarControllerClass}.${symbols.inputMemeBarEnableMethod}" +
+                "(Context,InputShowType,boolean)",
+            listOf(
+                "inputMemeBarControllerClass" to has(symbols.inputMemeBarControllerClass),
+                "inputMemeBarEnableMethod" to has(symbols.inputMemeBarEnableMethod),
+            ),
+        )
+        add(
             "AiComponentDisableHook.SpriteMeme",
             "${symbols.aiSpriteMemePanControllerClass}.${symbols.aiSpriteMemeEnableMethod}",
             listOf(

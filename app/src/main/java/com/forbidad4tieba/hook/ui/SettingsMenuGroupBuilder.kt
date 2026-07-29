@@ -321,6 +321,7 @@ internal object SettingsMenuGroupBuilder {
         ),
         SwitchItem(UiText.Settings.AUTO_HIDE_HOME_TAB_LABEL, UiText.Settings.AUTO_HIDE_HOME_TAB_DESC, ConfigManager.KEY_AUTO_HIDE_HOME_TAB, true, false),
         SwitchItem(UiText.Settings.HIDE_HOME_TAB_RED_DOT_LABEL, UiText.Settings.HIDE_HOME_TAB_RED_DOT_DESC, ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT, true, false),
+        SwitchItem(UiText.Settings.HIDE_INPUT_MEME_BAR_LABEL, UiText.Settings.HIDE_INPUT_MEME_BAR_DESC, ConfigManager.KEY_HIDE_INPUT_MEME_BAR, true, false),
         SwitchItem(
             UiText.Settings.HOME_NATIVE_GLASS_LABEL,
             UiText.Settings.HOME_NATIVE_GLASS_DESC,

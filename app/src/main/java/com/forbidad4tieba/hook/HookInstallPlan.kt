@@ -46,6 +46,7 @@ import com.forbidad4tieba.hook.feature.ui.HomeTabRedDotBlockHook
 import com.forbidad4tieba.hook.feature.ui.HomeTopBarRightSlotHook
 import com.forbidad4tieba.hook.feature.ui.HomeTopTabAutoHideHook
 import com.forbidad4tieba.hook.feature.ui.ImageViewerSwipeEnterForumBlockHook
+import com.forbidad4tieba.hook.feature.ui.InputMemeBarBlockHook
 import com.forbidad4tieba.hook.feature.ui.MainTabBottomHook
 import com.forbidad4tieba.hook.feature.ui.MsgTabDefaultNotifyHook
 import com.forbidad4tieba.hook.feature.ui.PbBottomEnterBarHook
@@ -418,6 +419,13 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("PbLikeAutoReplyHook") { cl ->
                 HookSymbolResolver.resolvePbLikeAutoReplySymbols(cl, symbols)?.let { targets ->
                     PbLikeAutoReplyHook.hook(targets, settings.pbLikeAutoReplyText)
+                }
+            }
+        }
+        if (context.canInstallInputMemeBarBlock(settings)) {
+            entries += HookInstallEntry("InputMemeBarBlockHook") { cl ->
+                HookSymbolResolver.resolveInputMemeBarSymbols(cl, symbols)?.let { targets ->
+                    InputMemeBarBlockHook.hook(targets)
                 }
             }
         }
