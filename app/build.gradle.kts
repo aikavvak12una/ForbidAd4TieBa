@@ -49,7 +49,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = moduleVersionCode
-        versionName = "26072502"
+        versionName = "26072601"
         buildConfigField(
             "int",
             "MIN_SUPPORTED_USER_SETTINGS_VERSION_CODE",
@@ -101,6 +101,14 @@ android {
             )
         }
     }
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a")
+            isUniversalApk = false
+        }
+    }
 }
 
 dependencies {
@@ -108,4 +116,22 @@ dependencies {
     compileOnly(libs.xposed.api)
     testImplementation(libs.json)
     testImplementation(libs.junit)
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+
+            val versionName =
+                project.android.defaultConfig.versionName ?: "unknown"
+
+            val abi = output.filters
+                .find { it.filterType.name == "ABI" }
+                ?.identifier
+                ?: "all"
+
+            output.outputFileName =
+                "FA4TB_${versionName}_${abi}.apk"
+        }
+    }
 }
