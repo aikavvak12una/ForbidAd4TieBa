@@ -210,6 +210,13 @@ internal class HookSymbolsBuilder {
     var freeCopyPopupMenuClass: String? = null
     var freeCopyPopupContentViewMethod: String? = null
     var freeCopyPopupTextField: String? = null
+    var freeCopyPostDataClass: String? = null
+    var freeCopyPostCopyMethodSpec: String? = null
+    var freeCopyPostParseMethodSpec: String? = null
+    var freeCopySubPostParseMethodSpec: String? = null
+    var freeCopyPostFloorMethodSpec: String? = null
+    var freeCopyRichTextViewClass: String? = null
+    var freeCopyPostLongPressMethodSpecs: List<String>? = null
     var mainTabDataClass: String? = null
     var mainTabAddMethod: String? = null
     var mainTabGetListMethod: String? = null
@@ -846,9 +853,16 @@ internal class HookSymbolsBuilder {
                 ),
             ),
             freeCopy = FreeCopySymbolsGroup(
-                freeCopyPopupMenuClass,
-                freeCopyPopupContentViewMethod,
-                freeCopyPopupTextField,
+                freeCopyPopupMenuClass = freeCopyPopupMenuClass,
+                freeCopyPopupContentViewMethod = freeCopyPopupContentViewMethod,
+                freeCopyPopupTextField = freeCopyPopupTextField,
+                freeCopyPostDataClass = freeCopyPostDataClass,
+                freeCopyPostCopyMethodSpec = freeCopyPostCopyMethodSpec,
+                freeCopyPostParseMethodSpec = freeCopyPostParseMethodSpec,
+                freeCopySubPostParseMethodSpec = freeCopySubPostParseMethodSpec,
+                freeCopyPostFloorMethodSpec = freeCopyPostFloorMethodSpec,
+                freeCopyRichTextViewClass = freeCopyRichTextViewClass,
+                freeCopyPostLongPressMethodSpecs = freeCopyPostLongPressMethodSpecs,
             ),
         )
     }

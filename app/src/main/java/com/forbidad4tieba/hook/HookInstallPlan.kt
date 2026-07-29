@@ -132,10 +132,17 @@ internal object HookInstallPlanner {
 
         entries += HookInstallEntry("CrashReportBlockHook") { cl -> CrashReportBlockHook.hook(cl) }
 
-        if (context.canInstallFreeCopy()) {
-            entries += HookInstallEntry("FreeCopyHook") { cl ->
+        if (context.canInstallFreeCopyCommentInjection(settings)) {
+            entries += HookInstallEntry("FreeCopyHook.CommentInjection") { cl ->
                 HookSymbolResolver.resolveFreeCopyPopupSymbols(cl, symbols)?.let { targets ->
-                    FreeCopyHook.hook(targets)
+                    FreeCopyHook.hookCommentInjection(targets)
+                }
+            }
+        }
+        if (context.canInstallFreeCopyNative(settings)) {
+            entries += HookInstallEntry("FreeCopyHook.Native") { cl ->
+                HookSymbolResolver.resolveFreeCopyNativeSymbols(cl, symbols)?.let { targets ->
+                    FreeCopyHook.hookNative(targets)
                 }
             }
         }

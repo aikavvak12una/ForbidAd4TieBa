@@ -1018,6 +1018,41 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "FreeCopyHook.Native",
+            "${symbols.freeCopyPostDataClass}.${symbols.freeCopyPostCopyMethodSpec}",
+            listOf(
+                "freeCopyPostDataClass" to has(symbols.freeCopyPostDataClass),
+                "freeCopyPostCopyMethodSpec" to has(symbols.freeCopyPostCopyMethodSpec),
+                "freeCopyPostMetadataParser" to (
+                    has(symbols.freeCopyPostParseMethodSpec) ||
+                        has(symbols.freeCopySubPostParseMethodSpec)
+                    ),
+            ),
+        )
+        addOptional(
+            "FreeCopyHook.Native.PostParser",
+            symbols.freeCopyPostParseMethodSpec ?: "-",
+            listOf("freeCopyPostParseMethodSpec" to has(symbols.freeCopyPostParseMethodSpec)),
+        )
+        addOptional(
+            "FreeCopyHook.Native.SubPostParser",
+            symbols.freeCopySubPostParseMethodSpec ?: "-",
+            listOf(
+                "freeCopySubPostParseMethodSpec" to has(symbols.freeCopySubPostParseMethodSpec),
+            ),
+        )
+        add(
+            "FreeCopyHook.LongPress",
+            "${listTarget(symbols.freeCopyPostLongPressMethodSpecs)} " +
+                "floor=${symbols.freeCopyPostFloorMethodSpec}",
+            listOf(
+                "freeCopyRichTextViewClass" to has(symbols.freeCopyRichTextViewClass),
+                "freeCopyPostLongPressMethodSpecs" to
+                    hasList(symbols.freeCopyPostLongPressMethodSpecs),
+                "freeCopyPostFloorMethodSpec" to has(symbols.freeCopyPostFloorMethodSpec),
+            ),
+        )
+        add(
             "CollectionSearchHook.Core",
             "${symbols.collectionPresenterField}.${symbols.collectionPresenterListSetterMethod}",
             listOf(

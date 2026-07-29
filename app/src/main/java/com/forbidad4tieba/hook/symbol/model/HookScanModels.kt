@@ -288,6 +288,28 @@ internal data class FreeCopyPopupScanSymbols(
     val textField: String? = null,
 )
 
+internal data class FreeCopyNativeScanSymbols(
+    val postDataClass: String? = null,
+    val copyMethodSpec: String? = null,
+    val postParseMethodSpec: String? = null,
+    val subPostParseMethodSpec: String? = null,
+)
+
+internal data class FreeCopyLongPressScanSymbols(
+    val richTextViewClass: String? = null,
+    val methodSpecs: List<String> = emptyList(),
+    val postFloorMethodSpec: String? = null,
+)
+
+internal data class DexFreeCopyMethodMatch(
+    val ownerClassName: String,
+    val methodName: String,
+    val returnTypeName: String,
+    val parameterTypeNames: List<String>,
+    val evidence: String,
+    val postDataIntNoArgMethodSpecs: List<String> = emptyList(),
+)
+
 internal data class ForumBottomSheetScanSymbols(
     val viewClass: String? = null,
     val initScrollMethod: String? = null,

@@ -153,6 +153,11 @@ object ConfigManager {
     const val KEY_DISABLE_AUTO_REFRESH = "disable_auto_refresh"
     const val KEY_DISABLE_PB_GESTURE_FONT_SCALE = "disable_pb_gesture_font_scale"
     const val KEY_ENABLE_AUTO_LOAD_MORE = "enable_auto_load_more"
+    const val KEY_ENABLE_FREE_COPY = "enable_free_copy"
+    const val KEY_FREE_COPY_POST_BODY = "free_copy_post_body"
+    const val KEY_FREE_COPY_POST_LONG_PRESS = "free_copy_post_long_press"
+    const val KEY_FREE_COPY_COMMENT_INJECTION = "free_copy_comment_injection"
+    const val KEY_FREE_COPY_COMMENT_DIALOG = "free_copy_comment_dialog"
     const val KEY_ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
     const val KEY_PB_LIKE_AUTO_REPLY_TEXT = "pb_like_auto_reply_text"
     const val KEY_VERIFY_REPLY_AFTER_POST = "verify_reply_after_post"
@@ -360,6 +365,14 @@ object ConfigManager {
     val isAutoRefreshDisabled: Boolean get() = settingsSnapshot.isAutoRefreshDisabled
     val isPbGestureFontScaleDisabled: Boolean get() = settingsSnapshot.isPbGestureFontScaleDisabled
     val isAutoLoadMoreEnabled: Boolean get() = settingsSnapshot.isAutoLoadMoreEnabled
+    val isFreeCopyEnabled: Boolean get() = settingsSnapshot.isFreeCopyEnabled
+    val isFreeCopyPostBodyEnabled: Boolean get() = settingsSnapshot.isFreeCopyPostBodyEnabled
+    val isFreeCopyPostLongPressEnabled: Boolean
+        get() = settingsSnapshot.isFreeCopyPostLongPressEnabled
+    val isFreeCopyCommentInjectionEnabled: Boolean
+        get() = settingsSnapshot.isFreeCopyCommentInjectionEnabled
+    val isFreeCopyCommentDialogEnabled: Boolean
+        get() = settingsSnapshot.isFreeCopyCommentDialogEnabled
     val isPbLikeAutoReplyEnabled: Boolean get() = settingsSnapshot.isPbLikeAutoReplyEnabled
     val pbLikeAutoReplyText: String get() = settingsSnapshot.pbLikeAutoReplyText
     val isReplyVisibilityProbeEnabled: Boolean get() = settingsSnapshot.isReplyVisibilityProbeEnabled
@@ -718,6 +731,16 @@ object ConfigManager {
 
         val performanceOptimizationEnabled = restrictedBoolean(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)
         val customPostFilterEnabled = featureBoolean(KEY_ENABLE_CUSTOM_POST_FILTER)
+        val freeCopyEnabled = featureBoolean(KEY_ENABLE_FREE_COPY, defaultValue = true)
+        fun freeCopyChildBoolean(key: String, defaultValue: Boolean): Boolean {
+            return freeCopyEnabled &&
+                isScanFeatureAvailable(key) &&
+                p.getBoolean(key, defaultValue)
+        }
+        val freeCopyPostModes = normalizeFreeCopyPostModes(
+            postButtonEnabled = freeCopyChildBoolean(KEY_FREE_COPY_POST_BODY, true),
+            longPressEnabled = freeCopyChildBoolean(KEY_FREE_COPY_POST_LONG_PRESS, false),
+        )
         fun customPostFilterChildBoolean(key: String): Boolean {
             return customPostFilterEnabled &&
                 isScanFeatureAvailable(key) &&
@@ -817,6 +840,17 @@ object ConfigManager {
             isAutoRefreshDisabled = featureBoolean(KEY_DISABLE_AUTO_REFRESH),
             isPbGestureFontScaleDisabled = featureBoolean(KEY_DISABLE_PB_GESTURE_FONT_SCALE),
             isAutoLoadMoreEnabled = featureBoolean(KEY_ENABLE_AUTO_LOAD_MORE),
+            isFreeCopyEnabled = freeCopyEnabled,
+            isFreeCopyPostBodyEnabled = freeCopyPostModes.postButtonEnabled,
+            isFreeCopyPostLongPressEnabled = freeCopyPostModes.longPressEnabled,
+            isFreeCopyCommentInjectionEnabled = freeCopyChildBoolean(
+                KEY_FREE_COPY_COMMENT_INJECTION,
+                true,
+            ),
+            isFreeCopyCommentDialogEnabled = freeCopyChildBoolean(
+                KEY_FREE_COPY_COMMENT_DIALOG,
+                true,
+            ),
             isPbLikeAutoReplyEnabled = restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY),
             pbLikeAutoReplyText = if (restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY)) {
                 p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty()
@@ -1110,6 +1144,11 @@ object ConfigManager {
             KEY_ENABLE_AUTO_LOAD_MORE -> HookFeatureKey.AUTO_LOAD_MORE
             KEY_DISABLE_AUTO_REFRESH -> HookFeatureKey.DISABLE_AUTO_REFRESH
             KEY_DISABLE_PB_GESTURE_FONT_SCALE -> HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE
+            KEY_ENABLE_FREE_COPY -> HookFeatureKey.FREE_COPY
+            KEY_FREE_COPY_POST_BODY -> HookFeatureKey.FREE_COPY_POST_BODY
+            KEY_FREE_COPY_POST_LONG_PRESS -> HookFeatureKey.FREE_COPY_POST_LONG_PRESS
+            KEY_FREE_COPY_COMMENT_INJECTION -> HookFeatureKey.FREE_COPY_COMMENT_INJECTION
+            KEY_FREE_COPY_COMMENT_DIALOG -> HookFeatureKey.FREE_COPY_COMMENT_DIALOG
             KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE -> HookFeatureKey.DEFAULT_ORIGINAL_IMAGE
             KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER -> HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER
             KEY_ENABLE_PB_LIKE_AUTO_REPLY -> HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY
@@ -1161,6 +1200,22 @@ object ConfigManager {
             ScanFeatureAvailabilityState.UNKNOWN,
             ScanFeatureAvailabilityState.DISABLED,
             -> false
+        }
+    }
+
+    data class FreeCopyPostModes(
+        val postButtonEnabled: Boolean,
+        val longPressEnabled: Boolean,
+    )
+
+    fun normalizeFreeCopyPostModes(
+        postButtonEnabled: Boolean,
+        longPressEnabled: Boolean,
+    ): FreeCopyPostModes {
+        return if (longPressEnabled) {
+            FreeCopyPostModes(postButtonEnabled = false, longPressEnabled = true)
+        } else {
+            FreeCopyPostModes(postButtonEnabled = postButtonEnabled, longPressEnabled = false)
         }
     }
 

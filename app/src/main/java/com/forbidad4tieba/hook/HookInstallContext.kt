@@ -21,7 +21,30 @@ internal class HookInstallContext(
     }
 
     fun canInstallFreeCopy(): Boolean {
-        return isMain && available(HookFeatureKey.FREE_COPY)
+        return isMain && available(HookFeatureKey.FREE_COPY_COMMENT_INJECTION)
+    }
+
+    fun canInstallFreeCopyCommentInjection(settings: SettingsSnapshot): Boolean {
+        return isMain &&
+            settings.isFreeCopyEnabled &&
+            settings.isFreeCopyCommentInjectionEnabled &&
+            available(HookFeatureKey.FREE_COPY_COMMENT_INJECTION)
+    }
+
+    fun canInstallFreeCopyNative(settings: SettingsSnapshot): Boolean {
+        if (!isMain || !settings.isFreeCopyEnabled) return false
+        return (
+            settings.isFreeCopyPostBodyEnabled &&
+                available(HookFeatureKey.FREE_COPY_POST_BODY)
+            ) ||
+            (
+                settings.isFreeCopyPostLongPressEnabled &&
+                    available(HookFeatureKey.FREE_COPY_POST_LONG_PRESS)
+                ) ||
+            (
+                settings.isFreeCopyCommentDialogEnabled &&
+                    available(HookFeatureKey.FREE_COPY_COMMENT_DIALOG)
+                )
     }
 
     fun canInstallImageViewerNativeShare(): Boolean {

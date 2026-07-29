@@ -39,6 +39,100 @@ internal object DexKitSemanticScanner {
     private const val JAVA_LIST_CLASS = "java.util.List"
     private const val LIST_UTILS_CLASS = "com.baidu.tbadk.core.util.ListUtils"
     private const val ORIGINAL_IMAGE_DOWNLOAD_TIP_PREF_KEY = "original_img_down_tip"
+    private const val FREE_COPY_LONG_PRESS_STAT_KEY = "card_long_click"
+    private const val FREE_COPY_POST_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.PostData"
+
+    fun scanFreeCopyPostDataCopy(
+        sourcePaths: List<String>,
+        ownerClassName: String,
+        logger: ScanLogger? = null,
+    ): List<DexFreeCopyMethodMatch> =
+        withBridge(sourcePaths, logger, "FreeCopyHook.NativeCopyDex", emptyList()) { bridge ->
+            exactMethods(bridge, ownerClassName, logger).mapNotNull { method ->
+                if (
+                    Modifier.isStatic(method.modifiers) ||
+                    method.returnTypeName != "void" ||
+                    method.paramCount != 0
+                ) {
+                    return@mapNotNull null
+                }
+                val clipboardCalls = method.invokes.filter { invoked ->
+                    invoked.declaredClassName in setOf(
+                        "android.text.ClipboardManager",
+                        "android.content.ClipboardManager",
+                    ) && invoked.methodName in setOf("setText", "setPrimaryClip")
+                }
+                if (clipboardCalls.isEmpty()) return@mapNotNull null
+                DexFreeCopyMethodMatch(
+                    ownerClassName = method.declaredClassName,
+                    methodName = method.methodName,
+                    returnTypeName = method.returnTypeName,
+                    parameterTypeNames = method.paramTypeNames,
+                    evidence = clipboardCalls.joinToString(",") {
+                        "${it.declaredClassName}.${it.methodName}"
+                    },
+                )
+            }
+        }
+
+    fun scanFreeCopyPostLongPress(
+        sourcePaths: List<String>,
+        logger: ScanLogger? = null,
+    ): List<DexFreeCopyMethodMatch> =
+        withBridge(sourcePaths, logger, "FreeCopyHook.LongPressDex", emptyList()) { bridge ->
+            findMethodsByString(
+                bridge = bridge,
+                value = FREE_COPY_LONG_PRESS_STAT_KEY,
+                logger = logger,
+                tag = "$TAG.FreeCopyLongPress",
+            ).mapNotNull { method ->
+                val params = method.paramTypeNames
+                if (
+                    Modifier.isStatic(method.modifiers) ||
+                    method.returnTypeName != "boolean" ||
+                    params.size !in 2..4 ||
+                    params.firstOrNull() != "android.view.View"
+                ) {
+                    return@mapNotNull null
+                }
+                val invokes = method.invokes.toList()
+                val readsViewTag = invokes.any {
+                    it.declaredClassName == "android.view.View" && it.methodName == "getTag"
+                }
+                val readsSparseArray = invokes.any {
+                    it.declaredClassName == "android.util.SparseArray" && it.methodName == "get"
+                }
+                val usesPostData = invokes.any { it.declaredClassName == FREE_COPY_POST_DATA_CLASS } ||
+                    method.usingFields.any { it.field.typeName == FREE_COPY_POST_DATA_CLASS }
+                if (!readsViewTag || !readsSparseArray || !usesPostData) return@mapNotNull null
+                val postDataIntNoArgMethodSpecs = invokes.asSequence()
+                    .filter { invoked ->
+                        invoked.declaredClassName == FREE_COPY_POST_DATA_CLASS &&
+                            !Modifier.isStatic(invoked.modifiers) &&
+                            invoked.returnTypeName == "int" &&
+                            invoked.paramCount == 0
+                    }
+                    .map { invoked ->
+                        invoked.methodName + "|" + invoked.returnTypeName + "|" +
+                            invoked.paramTypeNames.joinToString(",")
+                    }
+                    .distinct()
+                    .sorted()
+                    .toList()
+                DexFreeCopyMethodMatch(
+                    ownerClassName = method.declaredClassName,
+                    methodName = method.methodName,
+                    returnTypeName = method.returnTypeName,
+                    parameterTypeNames = params,
+                    evidence = "cardLongClick,viewTag,sparseArray,postData," +
+                        "postIntNoArg=${postDataIntNoArgMethodSpecs.size}",
+                    postDataIntNoArgMethodSpecs = postDataIntNoArgMethodSpecs,
+                )
+            }.distinctBy { match ->
+                match.ownerClassName + "#" + match.methodName + "|" +
+                    match.parameterTypeNames.joinToString(",")
+            }
+        }
 
     fun scanShareIcon(
         sourcePaths: List<String>,
