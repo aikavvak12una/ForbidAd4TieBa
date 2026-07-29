@@ -1,30 +1,31 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import android.app.Activity
-import android.app.Dialog
+import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.StyleSpan
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
-import android.view.Window
-import android.view.WindowManager
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
-import kotlin.math.min
+import com.forbidad4tieba.hook.ui.applySettingsMessageStyle
+import com.forbidad4tieba.hook.ui.applySettingsRowTitleStyle
+import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.createDialogScrollContainer
+import com.forbidad4tieba.hook.ui.createSettingsDialogTitleView
+import com.forbidad4tieba.hook.ui.dialogThemeFor
+import com.forbidad4tieba.hook.ui.settingsDialogContentTopPadding
+import com.forbidad4tieba.hook.ui.settingsDialogPadding
+import com.forbidad4tieba.hook.ui.settingsRowVerticalPadding
 
 internal object FreeCopyDialog {
     fun show(
@@ -34,44 +35,59 @@ internal object FreeCopyDialog {
     ): Boolean {
         val normalizedTitle = title?.trim().orEmpty()
         val normalizedBody = body.trim()
-        val plainText = buildPlainText(title, body)
+        val plainText = combineText(normalizedTitle, normalizedBody)
         if (plainText.isBlank() || activity.isFinishing || activity.isDestroyed) return false
+
         return try {
             val tokens = UiStyle.tokens(activity)
             val density = activity.resources.displayMetrics.density
-            val dialog = Dialog(activity)
-            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+            val padding = settingsDialogPadding(density)
+            lateinit var dialog: AlertDialog
 
             val root = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
-                elevation = 12f * density
-                setPadding(dp(density, 20), dp(density, 18), dp(density, 20), dp(density, 10))
-                background = GradientDrawable().apply {
-                    setColor(tokens.surface)
-                    cornerRadius = 22f * density
-                }
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                )
+
+                addView(
+                    TextView(activity).apply {
+                        text = buildDisplayText(normalizedTitle, normalizedBody)
+                        applySettingsMessageStyle(tokens, density)
+                        setTextIsSelectable(true)
+                        highlightColor = tokens.accentTrackOn
+                        setPadding(0, settingsRowVerticalPadding(density), 0, padding)
+                    },
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
             }
 
-            root.addView(
+            val titleView = createSettingsDialogTitleView(
+                activity,
+                UiText.FreeCopy.DIALOG_TITLE,
+            ) as LinearLayout
+            val titleText = titleView.findViewById<TextView>(android.R.id.title)
+            titleView.removeView(titleText)
+            titleView.addView(
                 LinearLayout(activity).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     addView(
-                        TextView(activity).apply {
-                            text = UiText.FreeCopy.DIALOG_TITLE
-                            textSize = 18f
-                            typeface = Typeface.DEFAULT_BOLD
-                            setTextColor(tokens.textPrimary)
-                            includeFontPadding = false
-                        },
+                        titleText,
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
                     )
                     if (normalizedTitle.isNotEmpty()) {
                         addView(
-                            headerActionButton(
-                                activity,
-                                UiText.FreeCopy.BUTTON_COPY_TITLE,
-                                tokens.accent,
+                            titleActionText(
+                                context = activity,
+                                label = UiText.FreeCopy.BUTTON_COPY_TITLE,
+                                tokens = tokens,
+                                density = density,
                             ) {
                                 if (
                                     copyText(
@@ -84,111 +100,45 @@ internal object FreeCopyDialog {
                                 }
                             },
                         )
-                        addView(
-                            headerActionButton(
-                                activity,
-                                UiText.FreeCopy.BUTTON_COPY_BODY,
-                                tokens.accent,
-                            ) {
-                                if (
-                                    copyText(
-                                        activity,
-                                        normalizedBody,
-                                        UiText.FreeCopy.TOAST_BODY_COPIED,
-                                    )
+                        if (normalizedBody.isNotEmpty()) {
+                            addView(
+                                titleActionText(
+                                    context = activity,
+                                    label = UiText.FreeCopy.BUTTON_COPY_BODY,
+                                    tokens = tokens,
+                                    density = density,
                                 ) {
-                                    dialog.dismiss()
-                                }
-                            },
-                        )
+                                    if (
+                                        copyText(
+                                            activity,
+                                            normalizedBody,
+                                            UiText.FreeCopy.TOAST_BODY_COPIED,
+                                        )
+                                    ) {
+                                        dialog.dismiss()
+                                    }
+                                },
+                            )
+                        }
                     }
                 },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ),
+                0,
             )
-
-            val displayText = buildDisplayText(title, body)
-            root.addView(
-                BoundedScrollView(activity, contentMaxHeight(activity, density)).apply {
-                    overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-                    isFillViewport = false
-                    addView(
-                        TextView(activity).apply {
-                            text = displayText
-                            textSize = 16f
-                            setTextColor(tokens.textPrimary)
-                            setTextIsSelectable(true)
-                            highlightColor = tokens.accentTrackOn
-                            includeFontPadding = false
-                            setLineSpacing(3f * density, 1f)
-                            setPadding(
-                                dp(density, 14),
-                                dp(density, 13),
-                                dp(density, 14),
-                                dp(density, 13),
-                            )
-                            background = GradientDrawable().apply {
-                                setColor(tokens.surfaceAlt)
-                                cornerRadius = 12f * density
-                            }
-                        },
-                        ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ),
-                    )
-                },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    topMargin = dp(density, 14)
-                    bottomMargin = dp(density, 8)
-                },
-            )
-
-            root.addView(View(activity).apply {
-                setBackgroundColor(tokens.divider)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1))
-
-            root.addView(
-                LinearLayout(activity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(
-                        actionButton(
-                            activity,
-                            UiText.FreeCopy.BUTTON_CANCEL,
-                            tokens.textSecondary,
-                        ) { dialog.dismiss() },
-                        LinearLayout.LayoutParams(0, dp(density, 48), 1f),
-                    )
-                    addView(View(activity).apply {
-                        setBackgroundColor(tokens.divider)
-                    }, LinearLayout.LayoutParams(1, dp(density, 24)))
-                    addView(
-                        actionButton(
-                            activity,
-                            UiText.FreeCopy.BUTTON_COPY_ALL,
-                            tokens.accent,
-                        ) {
-                            if (copyAll(activity, plainText)) dialog.dismiss()
-                        },
-                        LinearLayout.LayoutParams(0, dp(density, 48), 1f),
-                    )
-                },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(density, 48),
-                ),
-            )
-
-            dialog.setContentView(root)
-            dialog.setCanceledOnTouchOutside(true)
+            dialog = AlertDialog.Builder(activity, dialogThemeFor(activity))
+                .setCustomTitle(titleView)
+                .setView(createDialogScrollContainer(activity, root))
+                .setNegativeButton(UiText.FreeCopy.BUTTON_CANCEL, null)
+                .setPositiveButton(UiText.FreeCopy.BUTTON_COPY_ALL, null)
+                .create()
+            dialog.setOnShowListener {
+                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                    if (copyText(activity, plainText, UiText.FreeCopy.TOAST_COPIED)) {
+                        dialog.dismiss()
+                    }
+                }
+            }
             dialog.show()
-            styleWindow(dialog.window, tokens.surface)
             true
         } catch (t: Throwable) {
             XposedCompat.logW("[FreeCopyDialog] show failed: ${t.message}")
@@ -196,74 +146,46 @@ internal object FreeCopyDialog {
         }
     }
 
-    private fun buildPlainText(title: String?, body: String): String {
-        val normalizedTitle = title?.trim().orEmpty()
-        val normalizedBody = body.trim()
+    private fun combineText(title: String, body: String): String {
         return when {
-            normalizedTitle.isEmpty() -> normalizedBody
-            normalizedBody.isEmpty() -> normalizedTitle
-            else -> "$normalizedTitle\n\n$normalizedBody"
+            title.isEmpty() -> body
+            body.isEmpty() -> title
+            else -> "$title\n\n$body"
         }
     }
 
-    private fun buildDisplayText(title: String?, body: String): CharSequence {
-        val normalizedTitle = title?.trim().orEmpty()
-        val normalizedBody = body.trim()
-        if (normalizedTitle.isEmpty()) return normalizedBody
+    private fun buildDisplayText(title: String, body: String): CharSequence {
+        if (title.isEmpty()) return body
         return SpannableStringBuilder().apply {
             val start = length
-            append(normalizedTitle)
+            append(title)
             setSpan(
                 StyleSpan(Typeface.BOLD),
                 start,
                 length,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
             )
-            if (normalizedBody.isNotEmpty()) append("\n\n").append(normalizedBody)
+            if (body.isNotEmpty()) append("\n\n").append(body)
         }
     }
 
-    private fun actionButton(
+    private fun titleActionText(
         context: Context,
         label: String,
-        color: Int,
+        tokens: UiStyle.Tokens,
+        density: Float,
         action: () -> Unit,
     ): TextView {
         return TextView(context).apply {
             text = label
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
+            applySettingsRowTitleStyle(tokens, density)
+            setTextColor(tokens.accent)
             gravity = Gravity.CENTER
-            setTextColor(color)
+            setPadding((8f * density).toInt(), 0, 0, 0)
             isClickable = true
             isFocusable = true
             setOnClickListener { action() }
         }
-    }
-
-    private fun headerActionButton(
-        context: Context,
-        label: String,
-        color: Int,
-        action: () -> Unit,
-    ): TextView {
-        val density = context.resources.displayMetrics.density
-        return TextView(context).apply {
-            text = label
-            textSize = 13f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            setTextColor(color)
-            includeFontPadding = false
-            setPadding(dp(density, 8), dp(density, 7), dp(density, 4), dp(density, 7))
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { action() }
-        }
-    }
-
-    private fun copyAll(context: Context, content: String): Boolean {
-        return copyText(context, content, UiText.FreeCopy.TOAST_COPIED)
     }
 
     private fun copyText(context: Context, content: String, successMessage: String): Boolean {
@@ -279,48 +201,5 @@ internal object FreeCopyDialog {
         clipboard.setPrimaryClip(ClipData.newPlainText(UiText.FreeCopy.CLIP_LABEL, content))
         Toast.makeText(context, successMessage, Toast.LENGTH_SHORT).show()
         return true
-    }
-
-    private fun contentMaxHeight(context: Context, density: Float): Int {
-        return min(dp(density, 420), (context.resources.displayMetrics.heightPixels * 0.58f).toInt())
-    }
-
-    private fun styleWindow(window: Window?, navigationBarColor: Int) {
-        window ?: return
-        val density = window.context.resources.displayMetrics.density
-        val screenWidth = window.context.resources.displayMetrics.widthPixels
-        val horizontalMargin = dp(density, 24)
-        val targetWidth = min(
-            (screenWidth - horizontalMargin * 2).coerceAtLeast(1),
-            dp(density, 420),
-        )
-        window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        window.setDimAmount(0.28f)
-        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-        window.setGravity(Gravity.CENTER)
-        val attributes = window.attributes
-        attributes.gravity = Gravity.CENTER
-        attributes.x = 0
-        attributes.y = 0
-        attributes.width = targetWidth
-        attributes.height = WindowManager.LayoutParams.WRAP_CONTENT
-        window.attributes = attributes
-        window.setLayout(targetWidth, WindowManager.LayoutParams.WRAP_CONTENT)
-        window.navigationBarColor = navigationBarColor
-        window.decorView.setPadding(0, 0, 0, 0)
-    }
-
-    private fun dp(density: Float, value: Int): Int = (value * density).toInt()
-
-    private class BoundedScrollView(
-        context: Context,
-        private val maxHeight: Int,
-    ) : ScrollView(context) {
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            super.onMeasure(
-                widthMeasureSpec,
-                View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST),
-            )
-        }
     }
 }
