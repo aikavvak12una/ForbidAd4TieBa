@@ -365,6 +365,11 @@ internal data class AiComponentScanSymbols(
     val imageViewerJumpButtonInitMethod: String? = null,
 )
 
+internal data class InputMemeBarScanSymbols(
+    val controllerClass: String? = null,
+    val enableMethod: String? = null,
+)
+
 internal data class HomeNativeGlassResourceIds(
     val subPbNextPageMoreViewId: Int? = null,
     val pbReplyTitleDividerViewId: Int? = null,

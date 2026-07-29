@@ -169,6 +169,32 @@ class HookInstallContextTest {
     }
 
     @Test
+    fun inputMemeBarBlockRequiresEnabledMainProcessAndReadySymbols() {
+        val settings = SettingsSnapshot(isInputMemeBarHidden = true)
+        val readySymbols = buildHookSymbols {
+            inputMemeBarControllerClass = "com.tieba.SpriteMemePanController"
+            inputMemeBarEnableMethod = "enabled"
+        }
+
+        assertTrue(
+            HookInstallContext(Constants.TARGET_PACKAGE, readySymbols)
+                .canInstallInputMemeBarBlock(settings),
+        )
+        assertFalse(
+            HookInstallContext(Constants.TARGET_PACKAGE + ":remote", readySymbols)
+                .canInstallInputMemeBarBlock(settings),
+        )
+        assertFalse(
+            HookInstallContext(Constants.TARGET_PACKAGE, buildHookSymbols {})
+                .canInstallInputMemeBarBlock(settings),
+        )
+        assertFalse(
+            HookInstallContext(Constants.TARGET_PACKAGE, readySymbols)
+                .canInstallInputMemeBarBlock(SettingsSnapshot()),
+        )
+    }
+
+    @Test
     fun postAdAggregateInstallsOnlyEachReadyScannedSubpath() {
         val settings = SettingsSnapshot(isPostPageAdBlockEnabled = true)
         val dataPath = HookInstallContext(

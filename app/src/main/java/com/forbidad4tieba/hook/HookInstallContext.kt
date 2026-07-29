@@ -236,6 +236,12 @@ internal class HookInstallContext(
             available(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
     }
 
+    fun canInstallInputMemeBarBlock(settings: SettingsSnapshot): Boolean {
+        return isMain &&
+            settings.isInputMemeBarHidden &&
+            available(HookFeatureKey.HIDE_INPUT_MEME_BAR)
+    }
+
     fun canInstallMainAiComponents(settings: SettingsSnapshot): Boolean {
         return isMain &&
             settings.isAiComponentsDisabled &&

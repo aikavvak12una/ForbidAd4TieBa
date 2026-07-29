@@ -14,6 +14,8 @@ class HookSymbolsJsonTest {
         val symbols = buildHookSymbols {
             autoRefreshTriggerMethod = "com.tieba.Feed#triggerRefresh"
             feedCardBindMethod = "com.tieba.FeedCard#bind"
+            inputMemeBarControllerClass = "com.tieba.SpriteMemePanController"
+            inputMemeBarEnableMethod = "enabled"
             homeNativeGlassSubPbNextPageMoreViewId = 12345
             homeNativeGlassDynamicBackgroundColorIds = listOf(11, 22)
             scanSupportState = ScanSupportState.SUPPORTED
@@ -26,6 +28,8 @@ class HookSymbolsJsonTest {
         requireNotNull(parsed)
         assertEquals("com.tieba.Feed#triggerRefresh", parsed.autoRefreshTriggerMethod)
         assertEquals("com.tieba.FeedCard#bind", parsed.feedCardBindMethod)
+        assertEquals("com.tieba.SpriteMemePanController", parsed.inputMemeBarControllerClass)
+        assertEquals("enabled", parsed.inputMemeBarEnableMethod)
         assertEquals(12345, parsed.homeNativeGlassSubPbNextPageMoreViewId)
         assertEquals(listOf(11, 22), parsed.homeNativeGlassDynamicBackgroundColorIds)
         assertEquals(ScanSupportState.SUPPORTED, parsed.scanSupportState)

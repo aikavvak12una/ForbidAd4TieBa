@@ -114,6 +114,10 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.bottomEnterBar.pbHotTopicGuideTotalViewMethod
     val pbHotTopicGuideRefreshMethodSpecs: List<String>?
         get() = hookPoints.primary.pb.bottomEnterBar.pbHotTopicGuideRefreshMethodSpecs
+    val inputMemeBarControllerClass: String?
+        get() = hookPoints.primary.pb.inputMemeBar.inputMemeBarControllerClass
+    val inputMemeBarEnableMethod: String?
+        get() = hookPoints.primary.pb.inputMemeBar.inputMemeBarEnableMethod
     val pbEarlyAdInsertClass: String?
         get() = hookPoints.primary.pb.ad.earlyInsert.pbEarlyAdInsertClass
     val pbEarlyAdInsertMethodSpecs: List<String>?
@@ -850,6 +854,8 @@ data class HookSymbols(
             putStringArray("pbEnterFrsAnimationTipCallerClasses", pbEnterFrsAnimationTipCallerClasses)
             put("pbHotTopicGuideTotalViewMethod", pbHotTopicGuideTotalViewMethod)
             putStringArray("pbHotTopicGuideRefreshMethodSpecs", pbHotTopicGuideRefreshMethodSpecs)
+            put("inputMemeBarControllerClass", inputMemeBarControllerClass)
+            put("inputMemeBarEnableMethod", inputMemeBarEnableMethod)
             put("pbEarlyAdInsertClass", pbEarlyAdInsertClass)
             putStringArray("pbEarlyAdInsertMethodSpecs", pbEarlyAdInsertMethodSpecs)
             put("pbFirstFloorRecommendInsertClass", pbFirstFloorRecommendInsertClass)
@@ -1261,8 +1267,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 30
-        const val DEXKIT_RULE_VERSION = 17
+        const val CACHE_SCHEMA_VERSION = 31
+        const val DEXKIT_RULE_VERSION = 18
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1349,6 +1355,8 @@ data class HookSymbols(
                         obj.optStringOrNull("pbHotTopicGuideTotalViewMethod")
                     pbHotTopicGuideRefreshMethodSpecs =
                         obj.optStringArray("pbHotTopicGuideRefreshMethodSpecs").takeIf { it.isNotEmpty() }
+                    inputMemeBarControllerClass = obj.optStringOrNull("inputMemeBarControllerClass")
+                    inputMemeBarEnableMethod = obj.optStringOrNull("inputMemeBarEnableMethod")
                     pbEarlyAdInsertClass = obj.optStringOrNull("pbEarlyAdInsertClass")
                     pbEarlyAdInsertMethodSpecs = obj.optStringArray("pbEarlyAdInsertMethodSpecs")
                         .takeIf { it.isNotEmpty() }

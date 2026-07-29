@@ -11,6 +11,29 @@ import org.junit.Test
 
 class HookFeatureStatusDeriverTest {
     @Test
+    fun inputMemeBarFeatureRequiresBothRuntimeSymbols() {
+        val missing = HookFeatureStatusDeriver.derive(buildHookSymbols {})
+            .getValue(HookFeatureKey.HIDE_INPUT_MEME_BAR)
+        val readySymbols = buildHookSymbols {
+            inputMemeBarControllerClass = "com.tieba.SpriteMemePanController"
+            inputMemeBarEnableMethod = "enabled"
+        }
+        val ready = HookFeatureStatusDeriver.derive(readySymbols)
+            .getValue(HookFeatureKey.HIDE_INPUT_MEME_BAR)
+        val hookPoint = HookSymbolStatusFormatter.collectHookPointStatuses(
+            symbols = readySymbols,
+            aiPbAiEmojiCreationViewClass = "unused",
+            aiPbAiEmojiCreationPageBrowserViewClass = "unused",
+            msgTabViewModelClass = "unused",
+            msgTabContainerViewClass = "unused",
+        ).single { it.name == "InputMemeBarBlockHook" }
+
+        assertEquals(HookFeatureState.DISABLED, missing.state)
+        assertEquals(HookFeatureState.FULL, ready.state)
+        assertEquals(HookPointState.FOUND, hookPoint.state)
+    }
+
+    @Test
     fun detailedLoggingRemainsAvailableThroughStableHostLogger() {
         val status = HookFeatureStatusDeriver.derive(buildHookSymbols {})
             .getValue(HookFeatureKey.DETAILED_LOGGING)

@@ -14,6 +14,7 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.scan.AiComponentSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.HomeTabItemSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.InputMemeBarSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbAdBidSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbEarlyAdInsertSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbFirstFloorRecommendInsertSymbolScanner
@@ -320,6 +321,10 @@ internal object HookSymbolValidator {
             symbols.pbLikeAutoReplyInputContainerGetInputViewMethod != null ||
             symbols.pbLikeAutoReplyInputContainerGetSendViewMethod != null
     if (hasPbLikeAutoReplySymbols && !isPbLikeAutoReplyValid(symbols, cl)) return false
+    val hasInputMemeBarSymbols =
+        symbols.inputMemeBarControllerClass != null ||
+            symbols.inputMemeBarEnableMethod != null
+    if (hasInputMemeBarSymbols && !isInputMemeBarValid(symbols, cl)) return false
     val hasAiComponentSymbols =
         symbols.aiSpriteMemePanControllerClass != null ||
             symbols.aiSpriteMemeEnableMethod != null ||
@@ -1885,6 +1890,20 @@ private fun isAiComponentValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
         } else {
             true
         }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isInputMemeBarValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val controllerClassName = symbols.inputMemeBarControllerClass ?: return false
+    val enableMethodName = symbols.inputMemeBarEnableMethod ?: return false
+    return try {
+        val controllerClass = safeFindClass(controllerClassName, cl) ?: return false
+        controllerClass.declaredMethods.singleOrNull { method ->
+            method.name == enableMethodName &&
+                InputMemeBarSymbolScanner.isInputMemeBarEnableMethod(method)
+        } != null
     } catch (_: Throwable) {
         false
     }

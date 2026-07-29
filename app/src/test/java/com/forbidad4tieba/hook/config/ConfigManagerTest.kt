@@ -334,6 +334,39 @@ class ConfigManagerTest {
     }
 
     @Test
+    fun inputMemeBarBlockDefaultsOffAndFollowsScanAvailability() {
+        assertEquals(
+            HookFeatureKey.HIDE_INPUT_MEME_BAR,
+            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_HIDE_INPUT_MEME_BAR),
+        )
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.HIDE_INPUT_MEME_BAR to
+                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ),
+        ) {
+            assertFalse(buildSnapshot(emptyMap()).isInputMemeBarHidden)
+            assertTrue(
+                buildSnapshot(
+                    mapOf(ConfigManager.KEY_HIDE_INPUT_MEME_BAR to true),
+                ).isInputMemeBarHidden,
+            )
+        }
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.HIDE_INPUT_MEME_BAR to
+                    ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+            ),
+        ) {
+            assertFalse(
+                buildSnapshot(
+                    mapOf(ConfigManager.KEY_HIDE_INPUT_MEME_BAR to true),
+                ).isInputMemeBarHidden,
+            )
+        }
+    }
+
+    @Test
     fun dynamicHomeTopTabDisabledKeysDriveRuntimeSelection() {
         withScanAvailability(
             mapOf(

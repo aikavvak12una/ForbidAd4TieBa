@@ -171,6 +171,8 @@ internal class HookSymbolsBuilder {
     var pbLikeAutoReplyInputContainerClass: String? = null
     var pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null
     var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
+    var inputMemeBarControllerClass: String? = null
+    var inputMemeBarEnableMethod: String? = null
     var collectionPresenterField: String? = null
     var collectionPresenterListSetterMethod: String? = null
     var collectionPresenterListSetterMethodSpec: String? = null
@@ -569,6 +571,10 @@ internal class HookSymbolsBuilder {
                 pbEnterFrsAnimationTipCallerClasses,
                 pbHotTopicGuideTotalViewMethod,
                 pbHotTopicGuideRefreshMethodSpecs,
+            ),
+            inputMemeBar = PbInputMemeBarSymbolsGroup(
+                inputMemeBarControllerClass,
+                inputMemeBarEnableMethod,
             ),
             comment = PbCommentSymbolsGroup(
                 bottomSheet = ForumBottomSheetSymbolsGroup(forumBottomSheetViewClass, forumBottomSheetInitScrollMethod),

@@ -431,6 +431,10 @@ internal data class AiComponentSymbols(
     val pbPageBrowserAiEmojiCreationBindMethod: Method? = null,
 )
 
+internal data class InputMemeBarSymbols(
+    val enableMethod: Method,
+)
+
 internal data class AiImageViewerJumpButtonSymbols(
     val initMethod: Method,
 )

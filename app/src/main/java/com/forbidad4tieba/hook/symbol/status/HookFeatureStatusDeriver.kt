@@ -866,6 +866,22 @@ internal object HookFeatureStatusDeriver {
             HookFeatureStatus(state = HookFeatureState.DISABLED, missingCritical = shareTrackingCritical)
         }
 
+        val inputMemeBarCritical = ArrayList<String>(2)
+        if (symbols.inputMemeBarControllerClass.isNullOrBlank()) {
+            inputMemeBarCritical.add("inputMemeBarControllerClass")
+        }
+        if (symbols.inputMemeBarEnableMethod.isNullOrBlank()) {
+            inputMemeBarCritical.add("inputMemeBarEnableMethod")
+        }
+        out[HookFeatureKey.HIDE_INPUT_MEME_BAR] = if (inputMemeBarCritical.isEmpty()) {
+            HookFeatureStatus(state = HookFeatureState.FULL)
+        } else {
+            HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = inputMemeBarCritical,
+            )
+        }
+
         val aiComponentCritical = ArrayList<String>(5)
         if (symbols.aiSpriteMemePanControllerClass.isNullOrBlank()) {
             aiComponentCritical.add("aiSpriteMemePanControllerClass")
@@ -1260,6 +1276,7 @@ internal object HookFeatureStatusDeriver {
                 HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE,
             )
             name == "PbLikeAutoReplyHook" -> features(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
+            name == "InputMemeBarBlockHook" -> features(HookFeatureKey.HIDE_INPUT_MEME_BAR)
             name.startsWith("AiComponentDisableHook.") -> features(HookFeatureKey.DISABLE_AI_COMPONENTS)
             name.startsWith("MsgTabDefaultNotifyHook") -> features(HookFeatureKey.DEFAULT_NOTIFY_TAB)
             name == "PrivateReadReceiptBlockHook" -> features(HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE)

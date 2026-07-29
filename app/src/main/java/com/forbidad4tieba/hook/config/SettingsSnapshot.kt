@@ -19,6 +19,7 @@ data class SettingsSnapshot(
     val homeTopTabDisabledKeys: Set<String> = emptySet(),
     val isHomeTabAutoHideEnabled: Boolean = false,
     val isHomeTabRedDotHidden: Boolean = false,
+    val isInputMemeBarHidden: Boolean = false,
     val isBottomTabsCustomEnabled: Boolean = false,
     val isBottomTabHomeEnabled: Boolean = true,
     val isBottomTabEnterForumEnabled: Boolean = true,

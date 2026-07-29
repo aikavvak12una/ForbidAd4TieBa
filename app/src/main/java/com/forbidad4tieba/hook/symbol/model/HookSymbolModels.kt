@@ -32,6 +32,7 @@ object HookFeatureKey {
 
     const val SIMPLIFY_HOME_TOP_TABS = "simplify_home_tabs"
     const val SIMPLIFY_BOTTOM_TABS = "simplify_bottom_tabs"
+    const val HIDE_INPUT_MEME_BAR = "hide_input_meme_bar"
     const val HIDE_PB_BOTTOM_BANNER = "hide_pb_bottom_enter_bar"
     const val FILTER_ENTER_FORUM_WEB = "filter_enter_forum_web"
     const val OPEN_WEB_LINK_IN_SYSTEM_BROWSER = "open_web_link_in_system_browser"
@@ -65,6 +66,7 @@ object HookFeatureKey {
         ENABLE_CUSTOM_POST_FILTER,
         SIMPLIFY_HOME_TOP_TABS,
         SIMPLIFY_BOTTOM_TABS,
+        HIDE_INPUT_MEME_BAR,
         HIDE_PB_BOTTOM_BANNER,
         FILTER_ENTER_FORUM_WEB,
         OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
