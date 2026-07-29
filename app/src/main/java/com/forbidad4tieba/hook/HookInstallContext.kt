@@ -228,7 +228,10 @@ internal class HookInstallContext(
         return settings.isPbScrollCoalesceEnabled && available(HookFeatureKey.ENABLE_PB_SCROLL_COALESCE)
     }
 
-    fun canInstallPbGestureFontScale(): Boolean = available(HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE)
+    fun canInstallPbGestureFontScale(settings: SettingsSnapshot): Boolean {
+        return settings.isPbGestureFontScaleDisabled &&
+            available(HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE)
+    }
 
     fun canInstallPbLikeAutoReply(settings: SettingsSnapshot): Boolean {
         return settings.isPbLikeAutoReplyEnabled &&

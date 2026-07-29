@@ -408,7 +408,7 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (context.canInstallPbGestureFontScale()) {
+        if (context.canInstallPbGestureFontScale(settings)) {
             entries += HookInstallEntry("PbDisableGestureFontScaleHook") { cl ->
                 HookSymbolResolver.resolvePbGestureScaleSymbols(cl, symbols)?.let { targets ->
                     PbDisableGestureFontScaleHook.hook(targets)

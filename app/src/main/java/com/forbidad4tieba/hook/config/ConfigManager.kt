@@ -151,6 +151,7 @@ object ConfigManager {
     const val KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT_DARK =
         "home_native_glass_shadow_strength_percent_dark"
     const val KEY_DISABLE_AUTO_REFRESH = "disable_auto_refresh"
+    const val KEY_DISABLE_PB_GESTURE_FONT_SCALE = "disable_pb_gesture_font_scale"
     const val KEY_ENABLE_AUTO_LOAD_MORE = "enable_auto_load_more"
     const val KEY_ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
     const val KEY_PB_LIKE_AUTO_REPLY_TEXT = "pb_like_auto_reply_text"
@@ -357,6 +358,7 @@ object ConfigManager {
     val homeNativeGlassCardRadiusDp: Int get() = activeHomeNativeGlassStyle().cardRadiusDp
     val isHomeNativeGlassStrokeEnabled: Boolean get() = activeHomeNativeGlassStyle().strokeEnabled
     val isAutoRefreshDisabled: Boolean get() = settingsSnapshot.isAutoRefreshDisabled
+    val isPbGestureFontScaleDisabled: Boolean get() = settingsSnapshot.isPbGestureFontScaleDisabled
     val isAutoLoadMoreEnabled: Boolean get() = settingsSnapshot.isAutoLoadMoreEnabled
     val isPbLikeAutoReplyEnabled: Boolean get() = settingsSnapshot.isPbLikeAutoReplyEnabled
     val pbLikeAutoReplyText: String get() = settingsSnapshot.pbLikeAutoReplyText
@@ -813,6 +815,7 @@ object ConfigManager {
             homeNativeGlassLightStyle = homeNativeGlassLightStyle,
             homeNativeGlassDarkStyle = homeNativeGlassDarkStyle,
             isAutoRefreshDisabled = featureBoolean(KEY_DISABLE_AUTO_REFRESH),
+            isPbGestureFontScaleDisabled = featureBoolean(KEY_DISABLE_PB_GESTURE_FONT_SCALE),
             isAutoLoadMoreEnabled = featureBoolean(KEY_ENABLE_AUTO_LOAD_MORE),
             isPbLikeAutoReplyEnabled = restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY),
             pbLikeAutoReplyText = if (restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY)) {
@@ -1106,6 +1109,7 @@ object ConfigManager {
         return when (prefKey) {
             KEY_ENABLE_AUTO_LOAD_MORE -> HookFeatureKey.AUTO_LOAD_MORE
             KEY_DISABLE_AUTO_REFRESH -> HookFeatureKey.DISABLE_AUTO_REFRESH
+            KEY_DISABLE_PB_GESTURE_FONT_SCALE -> HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE
             KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE -> HookFeatureKey.DEFAULT_ORIGINAL_IMAGE
             KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER -> HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER
             KEY_ENABLE_PB_LIKE_AUTO_REPLY -> HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY

@@ -194,6 +194,7 @@ object UiText {
         const val DISABLE_AUTO_REFRESH_LABEL = "禁止自动刷新"
         const val DISABLE_AUTO_REFRESH_DESC = "避免首页被强制重置刷新列表"
         const val DISABLE_PB_GESTURE_FONT_SCALE_LABEL = "禁用调整字号手势"
+        const val DISABLE_PB_GESTURE_FONT_SCALE_DESC = "禁用帖子页双指缩放调整字号"
         const val FREE_COPY_LABEL = "评论自由复制"
         const val DISABLE_PB_AUTO_EXPAND_LABEL = "吧页面禁止自动展开"
         const val IMAGE_NATIVE_SHARE_LABEL = "图片添加原生分享功能"
@@ -210,7 +211,6 @@ object UiText {
         const val CRASH_REPORT_BLOCK_LABEL = "阻断崩溃与异常上报"
         val DEFAULT_ENABLED_FEATURES = listOf(
             HIDE_PB_BOTTOM_BANNER_LABEL,
-            DISABLE_PB_GESTURE_FONT_SCALE_LABEL,
             FREE_COPY_LABEL,
             DISABLE_PB_AUTO_EXPAND_LABEL,
             IMAGE_NATIVE_SHARE_LABEL,

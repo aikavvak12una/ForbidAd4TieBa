@@ -198,6 +198,12 @@ internal object SettingsMenuGroupBuilder {
                 supported = true,
             ),
             SwitchItem(
+                label = UiText.Settings.DISABLE_PB_GESTURE_FONT_SCALE_LABEL,
+                description = UiText.Settings.DISABLE_PB_GESTURE_FONT_SCALE_DESC,
+                prefKey = ConfigManager.KEY_DISABLE_PB_GESTURE_FONT_SCALE,
+                supported = true,
+            ),
+            SwitchItem(
                 label = UiText.Settings.DEFAULT_ORIGINAL_IMAGE_LABEL,
                 description = UiText.Settings.DEFAULT_ORIGINAL_IMAGE_DESC,
                 prefKey = ConfigManager.KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE,
