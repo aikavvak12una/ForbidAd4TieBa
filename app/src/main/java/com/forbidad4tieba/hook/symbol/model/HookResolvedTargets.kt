@@ -26,6 +26,11 @@ internal data class FreeCopyNativeSymbols(
     val titleContainerField: Field?,
     val titleTextField: Field?,
     val titlePostDataMethod: Method?,
+    val webViewBindMethod: Method?,
+    val webViewGetterMethod: Method?,
+    val innerWebViewGetterMethod: Method?,
+    val webViewPageDataGetterMethod: Method?,
+    val webViewFirstFloorPostGetterMethod: Method?,
     val clipboardWriteMethods: List<Method>,
 )
 

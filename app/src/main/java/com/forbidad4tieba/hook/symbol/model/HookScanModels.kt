@@ -308,6 +308,14 @@ internal data class FreeCopyTitleLongPressScanSymbols(
     val postDataMethodSpec: String? = null,
 )
 
+internal data class FreeCopyWebViewLongPressScanSymbols(
+    val bindMethodSpec: String? = null,
+    val webViewGetterMethodSpec: String? = null,
+    val innerWebViewGetterMethodSpec: String? = null,
+    val pageDataGetterMethodSpec: String? = null,
+    val firstFloorPostGetterMethodSpec: String? = null,
+)
+
 internal data class DexFreeCopyMethodMatch(
     val ownerClassName: String,
     val methodName: String,

@@ -228,6 +228,45 @@ class HookFeatureStatusDeriverTest {
     }
 
     @Test
+    fun deriveKeepsFreeCopyLongPressSupportedWhenOnlyWebViewPathExists() {
+        val status = HookFeatureStatusDeriver.derive(
+            buildHookSymbols {
+                freeCopyPostDataClass = "com.tieba.PostData"
+                freeCopyPostCopyMethodSpec = "copy|void|"
+                freeCopyPostParseMethodSpec = "parse|void|com.tieba.Protocol"
+                freeCopyPostFloorMethodSpec = "floor|int|"
+                freeCopyWebViewBindMethodSpec = "bind|void|com.tieba.PageData"
+                freeCopyWebViewGetterMethodSpec = "webView|com.tieba.TbWebView|"
+                freeCopyInnerWebViewGetterMethodSpec = "inner|android.webkit.WebView|"
+                freeCopyWebViewPageDataGetterMethodSpec = "pageData|com.tieba.AggregateData|"
+                freeCopyWebViewFirstFloorPostGetterMethodSpec =
+                    "firstFloor|com.tieba.PostData|"
+            },
+        ).getValue(HookFeatureKey.FREE_COPY_POST_LONG_PRESS)
+
+        assertEquals(HookFeatureState.PARTIAL, status.state)
+        assertTrue(status.missingCritical.isEmpty())
+        assertTrue(status.missingOptional.contains("freeCopyPostLongPressMethodSpecs"))
+        assertTrue(status.missingOptional.contains("freeCopyRichTextViewClass"))
+    }
+
+    @Test
+    fun deriveDisablesFreeCopyLongPressWhenBothRenderPathsAreIncomplete() {
+        val status = HookFeatureStatusDeriver.derive(
+            buildHookSymbols {
+                freeCopyPostDataClass = "com.tieba.PostData"
+                freeCopyPostCopyMethodSpec = "copy|void|"
+                freeCopyPostParseMethodSpec = "parse|void|com.tieba.Protocol"
+                freeCopyPostFloorMethodSpec = "floor|int|"
+            },
+        ).getValue(HookFeatureKey.FREE_COPY_POST_LONG_PRESS)
+
+        assertEquals(HookFeatureState.DISABLED, status.state)
+        assertTrue(status.missingCritical.contains("freeCopyPostLongPressMethodSpecs"))
+        assertTrue(status.missingCritical.contains("freeCopyWebViewBindMethodSpec"))
+    }
+
+    @Test
     fun deriveDisablesForumTopShiftBlockWhenBottomSheetSymbolsAreMissing() {
         val status = HookFeatureStatusDeriver.derive(buildHookSymbols {})
             .getValue(HookFeatureKey.DISABLE_FORUM_NATIVE_TOP_SHIFT)
