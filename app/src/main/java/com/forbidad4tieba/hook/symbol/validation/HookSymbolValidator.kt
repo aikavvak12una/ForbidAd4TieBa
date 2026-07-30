@@ -387,7 +387,12 @@ internal object HookSymbolValidator {
             !symbols.freeCopyTitleBindMethodSpecs.isNullOrEmpty() ||
             symbols.freeCopyTitleContainerField != null ||
             symbols.freeCopyTitleTextField != null ||
-            symbols.freeCopyTitlePostDataMethodSpec != null
+            symbols.freeCopyTitlePostDataMethodSpec != null ||
+            symbols.freeCopyWebViewBindMethodSpec != null ||
+            symbols.freeCopyWebViewGetterMethodSpec != null ||
+            symbols.freeCopyInnerWebViewGetterMethodSpec != null ||
+            symbols.freeCopyWebViewPageDataGetterMethodSpec != null ||
+            symbols.freeCopyWebViewFirstFloorPostGetterMethodSpec != null
     if (hasFreeCopyNativeSymbols && !isFreeCopyNativeValid(symbols, cl)) return false
     val hasCompleteImageViewerShareSymbols =
         symbols.imageViewerShareConfigClass != null &&
@@ -520,47 +525,125 @@ private fun isFreeCopyNativeValid(symbols: HookSymbols, cl: ClassLoader): Boolea
             titleContainerFieldName != null ||
             titleTextFieldName != null ||
             titlePostDataMethodSpec != null
-        if (!hasAnyTitleSymbol) return true
-        if (
-            titleBindSpecs.isEmpty() ||
-            titleContainerFieldName.isNullOrBlank() ||
-            titleTextFieldName.isNullOrBlank() ||
-            titlePostDataMethodSpec.isNullOrBlank() ||
-            postDataClass == null
-        ) {
-            return false
-        }
-        val titleBindMethods = titleBindSpecs.map { fullSpec ->
-            val separator = fullSpec.indexOf('#')
-            if (separator <= 0 || separator >= fullSpec.lastIndex) return false
-            val owner = safeFindClass(fullSpec.substring(0, separator), cl) ?: return false
-            resolveFullMethodSpec(owner, fullSpec.substring(separator + 1), cl)
-                ?: return false
-        }
-        val titleOwner = titleBindMethods.first().declaringClass
-        val pageDataClass = titleBindMethods.first().parameterTypes.singleOrNull()
-            ?: return false
-        if (titleBindMethods.any { method ->
-                Modifier.isStatic(method.modifiers) ||
-                    method.returnType != Void.TYPE ||
-                    method.declaringClass != titleOwner ||
-                    method.parameterTypes.singleOrNull() != pageDataClass
+        if (hasAnyTitleSymbol) {
+            if (
+                titleBindSpecs.isEmpty() ||
+                titleContainerFieldName.isNullOrBlank() ||
+                titleTextFieldName.isNullOrBlank() ||
+                titlePostDataMethodSpec.isNullOrBlank() ||
+                postDataClass == null
+            ) {
+                return false
             }
+            val titleBindMethods = titleBindSpecs.map { fullSpec ->
+                val separator = fullSpec.indexOf('#')
+                if (separator <= 0 || separator >= fullSpec.lastIndex) return false
+                val owner = safeFindClass(fullSpec.substring(0, separator), cl) ?: return false
+                resolveFullMethodSpec(owner, fullSpec.substring(separator + 1), cl)
+                    ?: return false
+            }
+            val titleOwner = titleBindMethods.first().declaringClass
+            val pageDataClass = titleBindMethods.first().parameterTypes.singleOrNull()
+                ?: return false
+            if (titleBindMethods.any { method ->
+                    Modifier.isStatic(method.modifiers) ||
+                        method.returnType != Void.TYPE ||
+                        method.declaringClass != titleOwner ||
+                        method.parameterTypes.singleOrNull() != pageDataClass
+                }
+            ) {
+                return false
+            }
+            val titleContainerField = titleOwner.getDeclaredField(titleContainerFieldName)
+            if (!ViewGroup::class.java.isAssignableFrom(titleContainerField.type)) return false
+            val titleTextField = titleOwner.getDeclaredField(titleTextFieldName)
+            if (!TextView::class.java.isAssignableFrom(titleTextField.type)) return false
+            val titlePostDataMethod = resolveFullMethodSpec(
+                pageDataClass,
+                titlePostDataMethodSpec,
+                cl,
+            ) ?: return false
+            if (
+                Modifier.isStatic(titlePostDataMethod.modifiers) ||
+                titlePostDataMethod.returnType != postDataClass ||
+                titlePostDataMethod.parameterTypes.isNotEmpty()
+            ) {
+                return false
+            }
+        }
+
+        val webViewBindSpec = symbols.freeCopyWebViewBindMethodSpec
+        val webViewGetterSpec = symbols.freeCopyWebViewGetterMethodSpec
+        val innerWebViewGetterSpec = symbols.freeCopyInnerWebViewGetterMethodSpec
+        val webViewPageDataGetterSpec = symbols.freeCopyWebViewPageDataGetterMethodSpec
+        val webViewFirstFloorPostGetterSpec =
+            symbols.freeCopyWebViewFirstFloorPostGetterMethodSpec
+        val hasAnyWebViewSymbol = webViewBindSpec != null || webViewGetterSpec != null ||
+            innerWebViewGetterSpec != null ||
+            webViewPageDataGetterSpec != null || webViewFirstFloorPostGetterSpec != null
+        if (!hasAnyWebViewSymbol) return true
+        if (
+            webViewBindSpec.isNullOrBlank() || webViewGetterSpec.isNullOrBlank() ||
+            innerWebViewGetterSpec.isNullOrBlank() ||
+            webViewPageDataGetterSpec.isNullOrBlank() ||
+            webViewFirstFloorPostGetterSpec.isNullOrBlank() || postDataClass == null
         ) {
             return false
         }
-        val titleContainerField = titleOwner.getDeclaredField(titleContainerFieldName)
-        if (!ViewGroup::class.java.isAssignableFrom(titleContainerField.type)) return false
-        val titleTextField = titleOwner.getDeclaredField(titleTextFieldName)
-        if (!TextView::class.java.isAssignableFrom(titleTextField.type)) return false
-        val titlePostDataMethod = resolveFullMethodSpec(
-            pageDataClass,
-            titlePostDataMethodSpec,
+        val webViewOwner = safeFindClass(
+            StableTiebaHookPoints.PB_COMMON_WEB_VIEW_CLASS,
             cl,
         ) ?: return false
-        !Modifier.isStatic(titlePostDataMethod.modifiers) &&
-            titlePostDataMethod.returnType == postDataClass &&
-            titlePostDataMethod.parameterTypes.isEmpty()
+        val webViewBindMethod = resolveFullMethodSpec(webViewOwner, webViewBindSpec, cl)
+            ?: return false
+        if (
+            Modifier.isStatic(webViewBindMethod.modifiers) ||
+            webViewBindMethod.returnType != Void.TYPE ||
+            webViewBindMethod.parameterTypes.size != 1
+        ) {
+            return false
+        }
+        val webViewGetterMethod = resolveFullMethodSpec(webViewOwner, webViewGetterSpec, cl)
+            ?: return false
+        if (
+            Modifier.isStatic(webViewGetterMethod.modifiers) ||
+            webViewGetterMethod.parameterTypes.isNotEmpty() ||
+            webViewGetterMethod.returnType == Void.TYPE
+        ) {
+            return false
+        }
+        val innerWebViewGetterMethod = resolveFullMethodSpec(
+            webViewGetterMethod.returnType,
+            innerWebViewGetterSpec,
+            cl,
+        ) ?: return false
+        if (
+            Modifier.isStatic(innerWebViewGetterMethod.modifiers) ||
+            innerWebViewGetterMethod.parameterTypes.isNotEmpty() ||
+            !WebView::class.java.isAssignableFrom(innerWebViewGetterMethod.returnType)
+        ) {
+            return false
+        }
+        val webViewPageDataGetterMethod = resolveFullMethodSpec(
+            webViewBindMethod.parameterTypes.single(),
+            webViewPageDataGetterSpec,
+            cl,
+        ) ?: return false
+        if (
+            Modifier.isStatic(webViewPageDataGetterMethod.modifiers) ||
+            webViewPageDataGetterMethod.parameterTypes.isNotEmpty() ||
+            webViewPageDataGetterMethod.returnType == Void.TYPE
+        ) {
+            return false
+        }
+        val firstFloorPostGetterMethod = resolveFullMethodSpec(
+            webViewPageDataGetterMethod.returnType,
+            webViewFirstFloorPostGetterSpec,
+            cl,
+        ) ?: return false
+        !Modifier.isStatic(firstFloorPostGetterMethod.modifiers) &&
+            firstFloorPostGetterMethod.parameterTypes.isEmpty() &&
+            firstFloorPostGetterMethod.returnType == postDataClass
     } catch (_: Throwable) {
         false
     }

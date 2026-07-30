@@ -254,6 +254,47 @@ internal object DexKitSemanticScanner {
             }
         }
 
+    fun scanFreeCopyFirstFloorPostGetter(
+        sourcePaths: List<String>,
+        ownerClassName: String,
+        postDataClassName: String,
+        floorMethodSpec: String,
+        logger: ScanLogger? = null,
+    ): List<DexFreeCopyMethodMatch> {
+        val floorParts = floorMethodSpec.split('|', limit = 3)
+        if (floorParts.size != 3) return emptyList()
+        val floorMethodName = floorParts[0]
+        return withBridge(
+            sourcePaths,
+            logger,
+            "FreeCopyHook.WebViewLongPressDex",
+            emptyList(),
+        ) { bridge ->
+            exactMethods(bridge, ownerClassName, logger).mapNotNull { method ->
+                if (
+                    Modifier.isStatic(method.modifiers) ||
+                    method.returnTypeName != postDataClassName ||
+                    method.paramCount != 0
+                ) {
+                    return@mapNotNull null
+                }
+                val readsFloor = method.invokes.any { invoked ->
+                    invoked.declaredClassName == postDataClassName &&
+                        invoked.methodName == floorMethodName &&
+                        invoked.returnTypeName == "int" &&
+                        invoked.paramCount == 0
+                }
+                if (!readsFloor) return@mapNotNull null
+                DexFreeCopyMethodMatch(
+                    ownerClassName = method.declaredClassName,
+                    methodName = method.methodName,
+                    returnTypeName = method.returnTypeName,
+                    parameterTypeNames = method.paramTypeNames,
+                )
+            }
+        }
+    }
+
     fun scanShareIcon(
         sourcePaths: List<String>,
         ownerClassNames: List<String>,

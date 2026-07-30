@@ -1066,6 +1066,26 @@ internal object HookSymbolStatusFormatter {
                     has(symbols.freeCopyTitlePostDataMethodSpec),
             ),
         )
+        addOptional(
+            "FreeCopyHook.WebViewLongPress",
+            "${symbols.freeCopyWebViewBindMethodSpec} " +
+                "webView=${symbols.freeCopyWebViewGetterMethodSpec}->" +
+                "${symbols.freeCopyInnerWebViewGetterMethodSpec} " +
+                "data=${symbols.freeCopyWebViewPageDataGetterMethodSpec}->" +
+                symbols.freeCopyWebViewFirstFloorPostGetterMethodSpec,
+            listOf(
+                "freeCopyWebViewBindMethodSpec" to
+                    has(symbols.freeCopyWebViewBindMethodSpec),
+                "freeCopyWebViewGetterMethodSpec" to
+                    has(symbols.freeCopyWebViewGetterMethodSpec),
+                "freeCopyInnerWebViewGetterMethodSpec" to
+                    has(symbols.freeCopyInnerWebViewGetterMethodSpec),
+                "freeCopyWebViewPageDataGetterMethodSpec" to
+                    has(symbols.freeCopyWebViewPageDataGetterMethodSpec),
+                "freeCopyWebViewFirstFloorPostGetterMethodSpec" to
+                    has(symbols.freeCopyWebViewFirstFloorPostGetterMethodSpec),
+            ),
+        )
         add(
             "CollectionSearchHook.Core",
             "${symbols.collectionPresenterField}.${symbols.collectionPresenterListSetterMethod}",

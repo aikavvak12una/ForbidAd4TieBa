@@ -221,6 +221,11 @@ internal class HookSymbolsBuilder {
     var freeCopyTitleContainerField: String? = null
     var freeCopyTitleTextField: String? = null
     var freeCopyTitlePostDataMethodSpec: String? = null
+    var freeCopyWebViewBindMethodSpec: String? = null
+    var freeCopyWebViewGetterMethodSpec: String? = null
+    var freeCopyInnerWebViewGetterMethodSpec: String? = null
+    var freeCopyWebViewPageDataGetterMethodSpec: String? = null
+    var freeCopyWebViewFirstFloorPostGetterMethodSpec: String? = null
     var mainTabDataClass: String? = null
     var mainTabAddMethod: String? = null
     var mainTabGetListMethod: String? = null
@@ -871,6 +876,14 @@ internal class HookSymbolsBuilder {
                 freeCopyTitleContainerField = freeCopyTitleContainerField,
                 freeCopyTitleTextField = freeCopyTitleTextField,
                 freeCopyTitlePostDataMethodSpec = freeCopyTitlePostDataMethodSpec,
+                freeCopyWebViewBindMethodSpec = freeCopyWebViewBindMethodSpec,
+                freeCopyWebViewGetterMethodSpec = freeCopyWebViewGetterMethodSpec,
+                freeCopyInnerWebViewGetterMethodSpec =
+                    freeCopyInnerWebViewGetterMethodSpec,
+                freeCopyWebViewPageDataGetterMethodSpec =
+                    freeCopyWebViewPageDataGetterMethodSpec,
+                freeCopyWebViewFirstFloorPostGetterMethodSpec =
+                    freeCopyWebViewFirstFloorPostGetterMethodSpec,
             ),
         )
     }
