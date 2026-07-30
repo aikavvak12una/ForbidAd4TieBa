@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      ANDROID_PLATFORM: "37"
+      ANDROID_PLATFORM: "37.0"
       ANDROID_BUILD_TOOLS: "37.0.0"
 
     steps:
@@ -42,7 +42,7 @@ jobs:
       - name: Install required Android SDK packages
         shell: bash
         run: |
-          sdkmanager \
+          sdkmanager --channel=3 \
             "platforms;android-${ANDROID_PLATFORM}" \
             "build-tools;${ANDROID_BUILD_TOOLS}"
 
