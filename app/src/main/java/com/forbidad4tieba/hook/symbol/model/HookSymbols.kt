@@ -468,6 +468,16 @@ data class HookSymbols(
         get() = hookPoints.collectionHistory.freeCopy.freeCopyTitleTextField
     val freeCopyTitlePostDataMethodSpec: String?
         get() = hookPoints.collectionHistory.freeCopy.freeCopyTitlePostDataMethodSpec
+    val freeCopyWebViewBindMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyWebViewBindMethodSpec
+    val freeCopyWebViewGetterMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyWebViewGetterMethodSpec
+    val freeCopyInnerWebViewGetterMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyInnerWebViewGetterMethodSpec
+    val freeCopyWebViewPageDataGetterMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyWebViewPageDataGetterMethodSpec
+    val freeCopyWebViewFirstFloorPostGetterMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyWebViewFirstFloorPostGetterMethodSpec
     val mainTabDataClass: String?
         get() = hookPoints.primary.home.mainTab.mainTabDataClass
     val mainTabAddMethod: String?
@@ -1067,6 +1077,20 @@ data class HookSymbols(
             put("freeCopyTitleContainerField", freeCopyTitleContainerField)
             put("freeCopyTitleTextField", freeCopyTitleTextField)
             put("freeCopyTitlePostDataMethodSpec", freeCopyTitlePostDataMethodSpec)
+            put("freeCopyWebViewBindMethodSpec", freeCopyWebViewBindMethodSpec)
+            put("freeCopyWebViewGetterMethodSpec", freeCopyWebViewGetterMethodSpec)
+            put(
+                "freeCopyInnerWebViewGetterMethodSpec",
+                freeCopyInnerWebViewGetterMethodSpec,
+            )
+            put(
+                "freeCopyWebViewPageDataGetterMethodSpec",
+                freeCopyWebViewPageDataGetterMethodSpec,
+            )
+            put(
+                "freeCopyWebViewFirstFloorPostGetterMethodSpec",
+                freeCopyWebViewFirstFloorPostGetterMethodSpec,
+            )
 
             put("mainTabDataClass", mainTabDataClass)
             put("mainTabAddMethod", mainTabAddMethod)
@@ -1308,8 +1332,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 35
-        const val DEXKIT_RULE_VERSION = 25
+        const val CACHE_SCHEMA_VERSION = 37
+        const val DEXKIT_RULE_VERSION = 27
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1611,6 +1635,16 @@ data class HookSymbols(
                     freeCopyTitleTextField = obj.optStringOrNull("freeCopyTitleTextField")
                     freeCopyTitlePostDataMethodSpec =
                         obj.optStringOrNull("freeCopyTitlePostDataMethodSpec")
+                    freeCopyWebViewBindMethodSpec =
+                        obj.optStringOrNull("freeCopyWebViewBindMethodSpec")
+                    freeCopyWebViewGetterMethodSpec =
+                        obj.optStringOrNull("freeCopyWebViewGetterMethodSpec")
+                    freeCopyInnerWebViewGetterMethodSpec =
+                        obj.optStringOrNull("freeCopyInnerWebViewGetterMethodSpec")
+                    freeCopyWebViewPageDataGetterMethodSpec =
+                        obj.optStringOrNull("freeCopyWebViewPageDataGetterMethodSpec")
+                    freeCopyWebViewFirstFloorPostGetterMethodSpec =
+                        obj.optStringOrNull("freeCopyWebViewFirstFloorPostGetterMethodSpec")
 
                     mainTabDataClass = obj.optStringOrNull("mainTabDataClass")
                     mainTabAddMethod = obj.optStringOrNull("mainTabAddMethod")

@@ -117,16 +117,42 @@ internal object HookFeatureStatusDeriver {
                 if (!hasPostParser) optional.add("freeCopyPostParseMethodSpec")
                 if (!hasSubPostParser) optional.add("freeCopySubPostParseMethodSpec")
             }
-            if (requireLongPress && symbols.freeCopyPostLongPressMethodSpecs.isNullOrEmpty()) {
-                critical.add("freeCopyPostLongPressMethodSpecs")
-            }
-            if (requireLongPress && symbols.freeCopyRichTextViewClass.isNullOrBlank()) {
-                critical.add("freeCopyRichTextViewClass")
-            }
             if (requireLongPress && symbols.freeCopyPostFloorMethodSpec.isNullOrBlank()) {
                 critical.add("freeCopyPostFloorMethodSpec")
             }
             if (requireLongPress) {
+                val nativeLongPressMissing = buildList {
+                    if (symbols.freeCopyPostLongPressMethodSpecs.isNullOrEmpty()) {
+                        add("freeCopyPostLongPressMethodSpecs")
+                    }
+                    if (symbols.freeCopyRichTextViewClass.isNullOrBlank()) {
+                        add("freeCopyRichTextViewClass")
+                    }
+                }
+                val webViewLongPressMissing = buildList {
+                    if (symbols.freeCopyWebViewBindMethodSpec.isNullOrBlank()) {
+                        add("freeCopyWebViewBindMethodSpec")
+                    }
+                    if (symbols.freeCopyWebViewGetterMethodSpec.isNullOrBlank()) {
+                        add("freeCopyWebViewGetterMethodSpec")
+                    }
+                    if (symbols.freeCopyInnerWebViewGetterMethodSpec.isNullOrBlank()) {
+                        add("freeCopyInnerWebViewGetterMethodSpec")
+                    }
+                    if (symbols.freeCopyWebViewPageDataGetterMethodSpec.isNullOrBlank()) {
+                        add("freeCopyWebViewPageDataGetterMethodSpec")
+                    }
+                    if (symbols.freeCopyWebViewFirstFloorPostGetterMethodSpec.isNullOrBlank()) {
+                        add("freeCopyWebViewFirstFloorPostGetterMethodSpec")
+                    }
+                }
+                if (nativeLongPressMissing.isNotEmpty() && webViewLongPressMissing.isNotEmpty()) {
+                    critical += nativeLongPressMissing
+                    critical += webViewLongPressMissing
+                } else {
+                    optional += nativeLongPressMissing
+                    optional += webViewLongPressMissing
+                }
                 if (symbols.freeCopyTitleBindMethodSpecs.isNullOrEmpty()) {
                     optional.add("freeCopyTitleBindMethodSpecs")
                 }
@@ -1383,6 +1409,10 @@ internal object HookFeatureStatusDeriver {
                 HookFeatureKey.FREE_COPY_COMMENT_DIALOG,
             )
             name.startsWith("FreeCopyHook.LongPress") -> features(
+                HookFeatureKey.FREE_COPY,
+                HookFeatureKey.FREE_COPY_POST_LONG_PRESS,
+            )
+            name.startsWith("FreeCopyHook.WebViewLongPress") -> features(
                 HookFeatureKey.FREE_COPY,
                 HookFeatureKey.FREE_COPY_POST_LONG_PRESS,
             )

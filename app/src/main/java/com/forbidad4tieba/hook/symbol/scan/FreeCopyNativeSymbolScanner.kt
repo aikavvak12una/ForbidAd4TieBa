@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
 import android.view.ViewGroup
+import android.webkit.WebView
 import android.widget.TextView
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
@@ -10,6 +11,7 @@ import com.forbidad4tieba.hook.symbol.model.DexFreeCopyMethodMatch
 import com.forbidad4tieba.hook.symbol.model.FreeCopyLongPressScanSymbols
 import com.forbidad4tieba.hook.symbol.model.FreeCopyNativeScanSymbols
 import com.forbidad4tieba.hook.symbol.model.FreeCopyTitleLongPressScanSymbols
+import com.forbidad4tieba.hook.symbol.model.FreeCopyWebViewLongPressScanSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -18,6 +20,17 @@ internal object FreeCopyNativeSymbolScanner {
     private const val POST_PROTO_CLASS = "tbclient.Post"
     private const val SUB_POST_PROTO_CLASS = "tbclient.SubPostList"
     private const val THREAD_DATA_CLASS = "com.baidu.tbadk.core.data.ThreadData"
+
+    private data class WebViewBindingCandidate(
+        val bindMethod: Method,
+        val pageDataGetter: Method,
+        val postDataOwnerClass: Class<*>,
+    )
+
+    private data class WebViewGetterCandidate(
+        val wrapperGetter: Method,
+        val innerWebViewGetter: Method,
+    )
 
     fun scanNative(
         context: Context,
@@ -268,6 +281,140 @@ internal object FreeCopyNativeSymbolScanner {
             containerField = titleContainerField.name,
             textField = titleTextField.name,
             postDataMethodSpec = encodeMethodSpec(postDataMethod),
+        )
+    }
+
+    fun scanWebViewLongPress(
+        context: Context,
+        cl: ClassLoader,
+        postFloorMethodSpec: String?,
+        logger: ScanLogger?,
+    ): FreeCopyWebViewLongPressScanSymbols {
+        val floorSpec = postFloorMethodSpec?.takeIf { it.isNotBlank() } ?: run {
+            log(logger, "freeCopyWebViewLongPress: floor accessor unavailable")
+            return FreeCopyWebViewLongPressScanSymbols()
+        }
+        val postDataClass = ScanReflection.safeFindClass(
+            StableTiebaHookPoints.PB_POST_DATA_CLASS,
+            cl,
+        ) ?: run {
+            log(logger, "freeCopyWebViewLongPress: PostData class missing")
+            return FreeCopyWebViewLongPressScanSymbols()
+        }
+        val ownerClass = ScanReflection.safeFindClass(
+            StableTiebaHookPoints.PB_COMMON_WEB_VIEW_CLASS,
+            cl,
+        ) ?: run {
+            log(logger, "freeCopyWebViewLongPress: PbCommonWebView class missing")
+            return FreeCopyWebViewLongPressScanSymbols()
+        }
+        val ownerMethods = scanSubStep(
+            "FreeCopyHook.WebViewLongPress.OwnerMethods",
+            logger,
+            emptyList(),
+        ) {
+            ownerClass.declaredMethods.toList()
+        }
+        val webViewGetter = selectUniqueScanCandidate(
+            "FreeCopyHook.WebViewLongPress.WebViewGetter",
+            ownerMethods.asSequence()
+                .filter { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.parameterTypes.isEmpty() &&
+                        method.returnType != Void.TYPE
+                }
+                .flatMap { wrapperGetter ->
+                    wrapperGetter.returnType.declaredMethods.asSequence()
+                        .filter { method ->
+                            !Modifier.isStatic(method.modifiers) &&
+                                method.parameterTypes.isEmpty() &&
+                                WebView::class.java.isAssignableFrom(method.returnType)
+                        }
+                        .map { innerGetter ->
+                            WebViewGetterCandidate(wrapperGetter, innerGetter)
+                        }
+                }
+                .toList(),
+            logger,
+        ) { candidate ->
+            describeMethod(candidate.wrapperGetter) + "->" +
+                describeMethod(candidate.innerWebViewGetter)
+        } ?: return FreeCopyWebViewLongPressScanSymbols()
+
+        val bindingCandidates = ownerMethods.asSequence()
+            .filter { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    !Modifier.isFinal(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 1
+            }
+            .flatMap { bindMethod ->
+                val pageDataClass = bindMethod.parameterTypes.single()
+                pageDataClass.declaredMethods.asSequence()
+                    .filter { method ->
+                        !Modifier.isStatic(method.modifiers) &&
+                            method.parameterTypes.isEmpty() &&
+                            method.returnType != Void.TYPE
+                    }
+                    .mapNotNull { pageDataGetter ->
+                        val postDataOwnerClass = pageDataGetter.returnType
+                        val hasPostDataGetter = postDataOwnerClass.declaredMethods.any { method ->
+                            !Modifier.isStatic(method.modifiers) &&
+                                method.parameterTypes.isEmpty() &&
+                                method.returnType == postDataClass
+                        }
+                        if (hasPostDataGetter) {
+                            WebViewBindingCandidate(
+                                bindMethod = bindMethod,
+                                pageDataGetter = pageDataGetter,
+                                postDataOwnerClass = postDataOwnerClass,
+                            )
+                        } else {
+                            null
+                        }
+                    }
+            }
+            .toList()
+        val binding = selectUniqueScanCandidate(
+            "FreeCopyHook.WebViewLongPress.Binding",
+            bindingCandidates,
+            logger,
+        ) { candidate ->
+            describeMethod(candidate.bindMethod) + "->" +
+                describeMethod(candidate.pageDataGetter)
+        } ?: return FreeCopyWebViewLongPressScanSymbols()
+
+        val sourcePaths = appSourcePaths(context)
+        if (sourcePaths.isEmpty()) {
+            log(logger, "freeCopyWebViewLongPress: apk source path unavailable")
+            return FreeCopyWebViewLongPressScanSymbols()
+        }
+        val firstFloorPostGetter = selectDexMethod(
+            ownerClass = binding.postDataOwnerClass,
+            matches = DexKitSemanticScanner.scanFreeCopyFirstFloorPostGetter(
+                sourcePaths = sourcePaths,
+                ownerClassName = binding.postDataOwnerClass.name,
+                postDataClassName = postDataClass.name,
+                floorMethodSpec = floorSpec,
+                logger = logger,
+            ),
+            logger = logger,
+            tag = "FreeCopyHook.WebViewLongPress.FirstFloorPostGetter",
+        ) ?: return FreeCopyWebViewLongPressScanSymbols()
+        log(
+            logger,
+            "freeCopyWebViewLongPress: bind=${describeMethod(binding.bindMethod)}, " +
+                "webView=${describeMethod(webViewGetter.wrapperGetter)}->" +
+                "${describeMethod(webViewGetter.innerWebViewGetter)}, " +
+                "post=${describeMethod(firstFloorPostGetter)}",
+        )
+        return FreeCopyWebViewLongPressScanSymbols(
+            bindMethodSpec = encodeMethodSpec(binding.bindMethod),
+            webViewGetterMethodSpec = encodeMethodSpec(webViewGetter.wrapperGetter),
+            innerWebViewGetterMethodSpec =
+                encodeMethodSpec(webViewGetter.innerWebViewGetter),
+            pageDataGetterMethodSpec = encodeMethodSpec(binding.pageDataGetter),
+            firstFloorPostGetterMethodSpec = encodeMethodSpec(firstFloorPostGetter),
         )
     }
 
