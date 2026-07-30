@@ -58,6 +58,13 @@ internal object HookSymbolResolver {
         val parameterTypeNames: List<String>,
     )
 
+    private data class FreeCopyTitleResolvedSymbols(
+        val bindMethods: List<Method> = emptyList(),
+        val containerField: Field? = null,
+        val textField: Field? = null,
+        val postDataMethod: Method? = null,
+    )
+
     private const val PLAIN_URL_CLICKABLE_SPAN_CLASS = "com.baidu.tieba.ui7"
     private const val PLAIN_URL_CLICKABLE_SPAN_TYPE_FIELD = "d"
     private const val PLAIN_URL_CLICKABLE_SPAN_URL_FIELD = "e"
@@ -4643,6 +4650,48 @@ internal object HookSymbolResolver {
         }
     }
 
+    fun resolveInputMemeBarSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): InputMemeBarSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[InputMemeBarBlockHook] skipped: scan symbols unavailable")
+                return null
+            }
+            val controllerClassName =
+                resolvedSymbols.inputMemeBarControllerClass?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[InputMemeBarBlockHook] skipped: missing inputMemeBarControllerClass")
+                    return null
+                }
+            val enableMethodName =
+                resolvedSymbols.inputMemeBarEnableMethod?.takeIf { it.isNotBlank() } ?: run {
+                    XposedCompat.log("[InputMemeBarBlockHook] skipped: missing inputMemeBarEnableMethod")
+                    return null
+                }
+            val controllerClass = safeFindClass(controllerClassName, cl) ?: run {
+                XposedCompat.log("[InputMemeBarBlockHook] skipped: class not found: $controllerClassName")
+                return null
+            }
+            val enableMethod = controllerClass.declaredMethods.singleOrNull { method ->
+                method.name == enableMethodName &&
+                    InputMemeBarSymbolScanner.isInputMemeBarEnableMethod(method)
+            } ?: run {
+                XposedCompat.log(
+                    "[InputMemeBarBlockHook] skipped: method mismatch: " +
+                        "$controllerClassName.$enableMethodName(Context,InputShowType,boolean)",
+                )
+                return null
+            }
+            enableMethod.isAccessible = true
+            InputMemeBarSymbols(enableMethod = enableMethod)
+        } catch (t: Throwable) {
+            XposedCompat.log("[InputMemeBarBlockHook] symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
     fun resolveAiImageViewerJumpButtonSymbols(
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
@@ -4797,6 +4846,299 @@ internal object HookSymbolResolver {
             )
         } catch (t: Throwable) {
             XposedCompat.log("[FreeCopyHook] popup symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
+    fun resolveFreeCopyNativeSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): FreeCopyNativeSymbols? {
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[FreeCopyHook] native skipped: scan symbols unavailable")
+                return null
+            }
+            val postDataClassName = resolvedSymbols.freeCopyPostDataClass
+                ?.takeIf { it.isNotBlank() }
+                ?: run {
+                    XposedCompat.log("[FreeCopyHook] native skipped: missing freeCopyPostDataClass")
+                    return null
+                }
+            val copyMethodSpec = resolvedSymbols.freeCopyPostCopyMethodSpec
+                ?.takeIf { it.isNotBlank() }
+                ?: run {
+                    XposedCompat.log("[FreeCopyHook] native skipped: missing freeCopyPostCopyMethodSpec")
+                    return null
+                }
+            val postDataClass = safeFindClass(postDataClassName, cl) ?: run {
+                XposedCompat.log("[FreeCopyHook] native skipped: class not found: $postDataClassName")
+                return null
+            }
+            val copyMethod = resolveMethodByCachedSpec(
+                postDataClass,
+                copyMethodSpec,
+                copyMethodSpec.substringBefore('|'),
+            ) ?: run {
+                XposedCompat.log("[FreeCopyHook] native skipped: copy method mismatch: $copyMethodSpec")
+                return null
+            }
+
+            fun resolveOptionalPostDataMethod(spec: String?): Method? {
+                val value = spec?.takeIf { it.isNotBlank() } ?: return null
+                return resolveMethodByCachedSpec(
+                    postDataClass,
+                    value,
+                    value.substringBefore('|'),
+                )
+            }
+
+            fun resolveMetadataFields(method: Method?): Pair<Field?, Field?> {
+                val protocolClass = method?.parameterTypes?.firstOrNull() ?: return null to null
+                val titleField = protocolClass.getDeclaredField("title").takeIf {
+                    it.type == String::class.java
+                } ?: return null to null
+                val floorField = protocolClass.getDeclaredField("floor").takeIf {
+                    Number::class.java.isAssignableFrom(it.type)
+                } ?: return null to null
+                titleField.isAccessible = true
+                floorField.isAccessible = true
+                return titleField to floorField
+            }
+
+            val rawPostParseMethod = resolveOptionalPostDataMethod(
+                resolvedSymbols.freeCopyPostParseMethodSpec,
+            )
+            val rawSubPostParseMethod = resolveOptionalPostDataMethod(
+                resolvedSymbols.freeCopySubPostParseMethodSpec,
+            )
+            val postFloorMethod = resolveOptionalPostDataMethod(
+                resolvedSymbols.freeCopyPostFloorMethodSpec,
+            )?.takeIf { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Int::class.javaPrimitiveType &&
+                    method.parameterTypes.isEmpty()
+            }
+            if (
+                !resolvedSymbols.freeCopyPostFloorMethodSpec.isNullOrBlank() &&
+                postFloorMethod == null
+            ) {
+                XposedCompat.log(
+                    "[FreeCopyHook] floor method mismatch: " +
+                        resolvedSymbols.freeCopyPostFloorMethodSpec,
+                )
+            }
+            val postFields = resolveMetadataFields(rawPostParseMethod)
+            val subPostFields = resolveMetadataFields(rawSubPostParseMethod)
+            val postParseMethod = rawPostParseMethod.takeIf {
+                postFields.first != null && postFields.second != null
+            }
+            val subPostParseMethod = rawSubPostParseMethod.takeIf {
+                subPostFields.first != null && subPostFields.second != null
+            }
+            if (postParseMethod == null && subPostParseMethod == null) {
+                XposedCompat.log("[FreeCopyHook] native skipped: no validated metadata parser")
+                return null
+            }
+
+            val longPressMethods = resolvedSymbols.freeCopyPostLongPressMethodSpecs.orEmpty()
+                .mapNotNull { fullSpec ->
+                    val separator = fullSpec.indexOf('#')
+                    if (separator <= 0 || separator >= fullSpec.lastIndex) {
+                        XposedCompat.log("[FreeCopyHook] long press spec invalid: $fullSpec")
+                        return@mapNotNull null
+                    }
+                    val ownerClassName = fullSpec.substring(0, separator)
+                    val methodSpec = fullSpec.substring(separator + 1)
+                    val ownerClass = safeFindClass(ownerClassName, cl) ?: run {
+                        XposedCompat.log("[FreeCopyHook] long press owner missing: $ownerClassName")
+                        return@mapNotNull null
+                    }
+                    resolveMethodByCachedSpec(
+                        ownerClass,
+                        methodSpec,
+                        methodSpec.substringBefore('|'),
+                    )?.takeIf { method ->
+                        !Modifier.isStatic(method.modifiers) &&
+                            method.returnType == Boolean::class.javaPrimitiveType &&
+                            method.parameterTypes.firstOrNull()?.let { parameterType ->
+                                View::class.java.isAssignableFrom(parameterType)
+                            } == true
+                    } ?: run {
+                        XposedCompat.log("[FreeCopyHook] long press method mismatch: $fullSpec")
+                        null
+                    }
+                }
+            val richTextViewClass = resolvedSymbols.freeCopyRichTextViewClass
+                ?.takeIf { it.isNotBlank() }
+                ?.let { safeFindClass(it, cl) }
+
+            val titleSymbols = run title@ {
+                val bindSpecs = resolvedSymbols.freeCopyTitleBindMethodSpecs.orEmpty()
+                val containerFieldName = resolvedSymbols.freeCopyTitleContainerField
+                    ?.takeIf { it.isNotBlank() }
+                val textFieldName = resolvedSymbols.freeCopyTitleTextField
+                    ?.takeIf { it.isNotBlank() }
+                val postDataMethodSpec = resolvedSymbols.freeCopyTitlePostDataMethodSpec
+                    ?.takeIf { it.isNotBlank() }
+                val hasAny = bindSpecs.isNotEmpty() ||
+                    containerFieldName != null ||
+                    textFieldName != null ||
+                    postDataMethodSpec != null
+                if (!hasAny) {
+                    return@title FreeCopyTitleResolvedSymbols()
+                }
+                if (
+                    bindSpecs.isEmpty() ||
+                    containerFieldName == null ||
+                    textFieldName == null ||
+                    postDataMethodSpec == null
+                ) {
+                    XposedCompat.log("[FreeCopyHook] title long press skipped: incomplete symbols")
+                    return@title FreeCopyTitleResolvedSymbols()
+                }
+                val bindMethods = bindSpecs.mapNotNull { fullSpec ->
+                    val separator = fullSpec.indexOf('#')
+                    if (separator <= 0 || separator >= fullSpec.lastIndex) {
+                        XposedCompat.log("[FreeCopyHook] title bind spec invalid: $fullSpec")
+                        return@mapNotNull null
+                    }
+                    val ownerClassName = fullSpec.substring(0, separator)
+                    val methodSpec = fullSpec.substring(separator + 1)
+                    val ownerClass = safeFindClass(ownerClassName, cl) ?: run {
+                        XposedCompat.log("[FreeCopyHook] title bind owner missing: $ownerClassName")
+                        return@mapNotNull null
+                    }
+                    resolveMethodByCachedSpec(
+                        ownerClass,
+                        methodSpec,
+                        methodSpec.substringBefore('|'),
+                    )?.takeIf { method ->
+                        !Modifier.isStatic(method.modifiers) &&
+                            method.returnType == Void.TYPE &&
+                            method.parameterTypes.size == 1
+                    } ?: run {
+                        XposedCompat.log("[FreeCopyHook] title bind method mismatch: $fullSpec")
+                        null
+                    }
+                }.distinct()
+                if (bindMethods.size != bindSpecs.distinct().size || bindMethods.isEmpty()) {
+                    return@title FreeCopyTitleResolvedSymbols()
+                }
+                val ownerClass = bindMethods.first().declaringClass
+                val pageDataClass = bindMethods.first().parameterTypes.single()
+                if (bindMethods.any { method ->
+                        method.declaringClass != ownerClass ||
+                            method.parameterTypes.single() != pageDataClass
+                    }
+                ) {
+                    XposedCompat.log("[FreeCopyHook] title bind methods do not share one owner/data type")
+                    return@title FreeCopyTitleResolvedSymbols()
+                }
+                val containerField = try {
+                    ownerClass.getDeclaredField(containerFieldName).takeIf { field ->
+                        ViewGroup::class.java.isAssignableFrom(field.type)
+                    }
+                } catch (_: NoSuchFieldException) {
+                    null
+                } ?: run {
+                    XposedCompat.log(
+                        "[FreeCopyHook] title container field mismatch: $containerFieldName",
+                    )
+                    return@title FreeCopyTitleResolvedSymbols()
+                }
+                val textField = try {
+                    ownerClass.getDeclaredField(textFieldName).takeIf { field ->
+                        TextView::class.java.isAssignableFrom(field.type)
+                    }
+                } catch (_: NoSuchFieldException) {
+                    null
+                } ?: run {
+                    XposedCompat.log("[FreeCopyHook] title TextView field mismatch: $textFieldName")
+                    return@title FreeCopyTitleResolvedSymbols()
+                }
+                val postDataMethod = resolveMethodByCachedSpec(
+                    pageDataClass,
+                    postDataMethodSpec,
+                    postDataMethodSpec.substringBefore('|'),
+                )?.takeIf { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.returnType == postDataClass &&
+                        method.parameterTypes.isEmpty()
+                } ?: run {
+                    XposedCompat.log(
+                        "[FreeCopyHook] title PostData method mismatch: $postDataMethodSpec",
+                    )
+                    return@title FreeCopyTitleResolvedSymbols()
+                }
+                FreeCopyTitleResolvedSymbols(
+                    bindMethods = bindMethods,
+                    containerField = containerField,
+                    textField = textField,
+                    postDataMethod = postDataMethod,
+                )
+            }
+
+            fun frameworkMethodOrNull(
+                clazz: Class<*>,
+                name: String,
+                vararg parameterTypes: Class<*>,
+            ): Method? {
+                return try {
+                    clazz.getMethod(name, *parameterTypes)
+                } catch (_: NoSuchMethodException) {
+                    null
+                }
+            }
+
+            val clipboardWriteMethods = listOfNotNull(
+                frameworkMethodOrNull(
+                    android.content.ClipboardManager::class.java,
+                    "setText",
+                    CharSequence::class.java,
+                ),
+                frameworkMethodOrNull(
+                    android.content.ClipboardManager::class.java,
+                    "setPrimaryClip",
+                    android.content.ClipData::class.java,
+                ),
+            ).distinct()
+            if (clipboardWriteMethods.isEmpty()) {
+                XposedCompat.log("[FreeCopyHook] native skipped: clipboard write methods unavailable")
+                return null
+            }
+
+            copyMethod.isAccessible = true
+            postParseMethod?.isAccessible = true
+            subPostParseMethod?.isAccessible = true
+            postFloorMethod?.isAccessible = true
+            longPressMethods.forEach { it.isAccessible = true }
+            titleSymbols.bindMethods.forEach { it.isAccessible = true }
+            titleSymbols.containerField?.isAccessible = true
+            titleSymbols.textField?.isAccessible = true
+            titleSymbols.postDataMethod?.isAccessible = true
+            clipboardWriteMethods.forEach { it.isAccessible = true }
+            FreeCopyNativeSymbols(
+                postDataClass = postDataClass,
+                copyMethod = copyMethod,
+                postParseMethod = postParseMethod,
+                subPostParseMethod = subPostParseMethod,
+                postTitleField = postFields.first.takeIf { postParseMethod != null },
+                postFloorField = postFields.second.takeIf { postParseMethod != null },
+                subPostTitleField = subPostFields.first.takeIf { subPostParseMethod != null },
+                subPostFloorField = subPostFields.second.takeIf { subPostParseMethod != null },
+                postFloorMethod = postFloorMethod,
+                richTextViewClass = richTextViewClass,
+                longPressMethods = longPressMethods,
+                titleBindMethods = titleSymbols.bindMethods,
+                titleContainerField = titleSymbols.containerField,
+                titleTextField = titleSymbols.textField,
+                titlePostDataMethod = titleSymbols.postDataMethod,
+                clipboardWriteMethods = clipboardWriteMethods,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[FreeCopyHook] native symbol resolve FAILED: ${t.message}")
             XposedCompat.log(t)
             null
         }
@@ -5307,6 +5649,17 @@ internal object HookSymbolResolver {
         var freeCopyPopupMenuClass: String? = null
         var freeCopyPopupContentViewMethod: String? = null
         var freeCopyPopupTextField: String? = null
+        var freeCopyPostDataClass: String? = null
+        var freeCopyPostCopyMethodSpec: String? = null
+        var freeCopyPostParseMethodSpec: String? = null
+        var freeCopySubPostParseMethodSpec: String? = null
+        var freeCopyPostFloorMethodSpec: String? = null
+        var freeCopyRichTextViewClass: String? = null
+        var freeCopyPostLongPressMethodSpecs: List<String>? = null
+        var freeCopyTitleBindMethodSpecs: List<String>? = null
+        var freeCopyTitleContainerField: String? = null
+        var freeCopyTitleTextField: String? = null
+        var freeCopyTitlePostDataMethodSpec: String? = null
         var homeTabItemTypeField: String? = null
         var homeTabItemCodeField: String? = null
         var homeTabItemNameField: String? = null
@@ -6040,6 +6393,51 @@ internal object HookSymbolResolver {
         freeCopyPopupContentViewMethod = freeCopyPopupScan.contentViewMethod
         freeCopyPopupTextField = freeCopyPopupScan.textField
 
+        val freeCopyNativeScan = runScanStep(
+            "FreeCopyHook.Native",
+            logger,
+            scanErrors,
+            FreeCopyNativeScanSymbols(),
+        ) {
+            FreeCopyNativeSymbolScanner.scanNative(context, cl, logger)
+        }
+        freeCopyPostDataClass = freeCopyNativeScan.postDataClass
+        freeCopyPostCopyMethodSpec = freeCopyNativeScan.copyMethodSpec
+        freeCopyPostParseMethodSpec = freeCopyNativeScan.postParseMethodSpec
+        freeCopySubPostParseMethodSpec = freeCopyNativeScan.subPostParseMethodSpec
+
+        val freeCopyLongPressScan = runScanStep(
+            "FreeCopyHook.LongPress",
+            logger,
+            scanErrors,
+            FreeCopyLongPressScanSymbols(),
+        ) {
+            FreeCopyNativeSymbolScanner.scanLongPress(context, cl, logger)
+        }
+        freeCopyRichTextViewClass = freeCopyLongPressScan.richTextViewClass
+        freeCopyPostLongPressMethodSpecs =
+            freeCopyLongPressScan.methodSpecs.takeIf { it.isNotEmpty() }
+        freeCopyPostFloorMethodSpec = freeCopyLongPressScan.postFloorMethodSpec
+
+        val freeCopyTitleLongPressScan = runScanStep(
+            "FreeCopyHook.TitleLongPress",
+            logger,
+            scanErrors,
+            FreeCopyTitleLongPressScanSymbols(),
+        ) {
+            FreeCopyNativeSymbolScanner.scanTitleLongPress(
+                context = context,
+                cl = cl,
+                postFloorMethodSpec = freeCopyPostFloorMethodSpec,
+                logger = logger,
+            )
+        }
+        freeCopyTitleBindMethodSpecs =
+            freeCopyTitleLongPressScan.bindMethodSpecs.takeIf { it.isNotEmpty() }
+        freeCopyTitleContainerField = freeCopyTitleLongPressScan.containerField
+        freeCopyTitleTextField = freeCopyTitleLongPressScan.textField
+        freeCopyTitlePostDataMethodSpec = freeCopyTitleLongPressScan.postDataMethodSpec
+
         val mainTabBottomScan = runScanStep(
             "MainTabBottomHook",
             logger,
@@ -6063,6 +6461,14 @@ internal object HookSymbolResolver {
             OriginalImageScanSymbols(),
         ) {
             OriginalImageSymbolScanner.scan(context, cl, logger)
+        }
+        val inputMemeBarScan = runScanStep(
+            "InputMemeBarBlockHook",
+            logger,
+            scanErrors,
+            InputMemeBarScanSymbols(),
+        ) {
+            InputMemeBarSymbolScanner.scan(cl, logger)
         }
         val aiComponentScan = runScanStep(
             "AiComponentDisableHook",
@@ -6370,6 +6776,17 @@ internal object HookSymbolResolver {
             this.freeCopyPopupMenuClass = freeCopyPopupMenuClass
             this.freeCopyPopupContentViewMethod = freeCopyPopupContentViewMethod
             this.freeCopyPopupTextField = freeCopyPopupTextField
+            this.freeCopyPostDataClass = freeCopyPostDataClass
+            this.freeCopyPostCopyMethodSpec = freeCopyPostCopyMethodSpec
+            this.freeCopyPostParseMethodSpec = freeCopyPostParseMethodSpec
+            this.freeCopySubPostParseMethodSpec = freeCopySubPostParseMethodSpec
+            this.freeCopyPostFloorMethodSpec = freeCopyPostFloorMethodSpec
+            this.freeCopyRichTextViewClass = freeCopyRichTextViewClass
+            this.freeCopyPostLongPressMethodSpecs = freeCopyPostLongPressMethodSpecs
+            this.freeCopyTitleBindMethodSpecs = freeCopyTitleBindMethodSpecs
+            this.freeCopyTitleContainerField = freeCopyTitleContainerField
+            this.freeCopyTitleTextField = freeCopyTitleTextField
+            this.freeCopyTitlePostDataMethodSpec = freeCopyTitlePostDataMethodSpec
 
             this.mainTabDataClass = mainTabDataClass
             this.mainTabAddMethod = mainTabAddMethod
@@ -6398,6 +6815,8 @@ internal object HookSymbolResolver {
             origImagePrimaryReadyMethod = originalImageScan.primaryReadyMethod
             origImageTriggerMethod = originalImageScan.triggerMethod
             origImageDirectStartMethod = originalImageScan.directStartMethod
+            this.inputMemeBarControllerClass = inputMemeBarScan.controllerClass
+            this.inputMemeBarEnableMethod = inputMemeBarScan.enableMethod
             this.shareTrackBuilderClass = shareTrackBuilderClass
             this.shareTrackBuildUrlMethod = shareTrackBuildUrlMethod
             this.shareTrackAppendQueryMethod = shareTrackAppendQueryMethod

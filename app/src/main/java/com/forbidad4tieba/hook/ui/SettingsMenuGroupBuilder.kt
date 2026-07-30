@@ -8,6 +8,7 @@ internal data class SettingsMenuGroupActions(
     val onCustomPostModelScore: () -> Unit,
     val onCustomPostFilterKeyword: () -> Unit,
     val onPbLikeAutoReply: () -> Unit,
+    val onFreeCopy: (List<SwitchItem>) -> Unit,
     val onPerformanceOptimization: (List<SettingGroup>) -> Unit,
     val onAutoSignIn: () -> Unit,
     val onReplyVisibilityProbe: () -> Unit,
@@ -184,6 +185,7 @@ internal object SettingsMenuGroupBuilder {
         restrictedFeaturesUnlocked: Boolean,
         actions: SettingsMenuGroupActions,
     ): List<SwitchItem> {
+        val freeCopyItems = freeCopyItems()
         val items = mutableListOf(
             SwitchItem(
                 label = UiText.Settings.AUTO_LOAD_MORE_LABEL,
@@ -192,9 +194,24 @@ internal object SettingsMenuGroupBuilder {
                 supported = true,
             ),
             SwitchItem(
+                label = UiText.Settings.FREE_COPY_LABEL,
+                description = UiText.Settings.FREE_COPY_DESC,
+                prefKey = ConfigManager.KEY_ENABLE_FREE_COPY,
+                supported = true,
+                defaultValue = true,
+                actionIcon = UiText.Settings.ACTION_ICON_SETTINGS,
+                onActionClick = { actions.onFreeCopy(freeCopyItems) },
+            ),
+            SwitchItem(
                 label = UiText.Settings.DISABLE_AUTO_REFRESH_LABEL,
                 description = UiText.Settings.DISABLE_AUTO_REFRESH_DESC,
                 prefKey = ConfigManager.KEY_DISABLE_AUTO_REFRESH,
+                supported = true,
+            ),
+            SwitchItem(
+                label = UiText.Settings.DISABLE_PB_GESTURE_FONT_SCALE_LABEL,
+                description = UiText.Settings.DISABLE_PB_GESTURE_FONT_SCALE_DESC,
+                prefKey = ConfigManager.KEY_DISABLE_PB_GESTURE_FONT_SCALE,
                 supported = true,
             ),
             SwitchItem(
@@ -281,6 +298,37 @@ internal object SettingsMenuGroupBuilder {
         return items
     }
 
+    private fun freeCopyItems(): List<SwitchItem> = listOf(
+        SwitchItem(
+            label = UiText.Settings.FREE_COPY_POST_BODY_LABEL,
+            description = UiText.Settings.FREE_COPY_POST_BODY_DESC,
+            prefKey = ConfigManager.KEY_FREE_COPY_POST_BODY,
+            supported = true,
+            defaultValue = true,
+        ),
+        SwitchItem(
+            label = UiText.Settings.FREE_COPY_POST_LONG_PRESS_LABEL,
+            description = UiText.Settings.FREE_COPY_POST_LONG_PRESS_DESC,
+            prefKey = ConfigManager.KEY_FREE_COPY_POST_LONG_PRESS,
+            supported = true,
+            defaultValue = false,
+        ),
+        SwitchItem(
+            label = UiText.Settings.FREE_COPY_COMMENT_INJECTION_LABEL,
+            description = UiText.Settings.FREE_COPY_COMMENT_INJECTION_DESC,
+            prefKey = ConfigManager.KEY_FREE_COPY_COMMENT_INJECTION,
+            supported = true,
+            defaultValue = true,
+        ),
+        SwitchItem(
+            label = UiText.Settings.FREE_COPY_COMMENT_DIALOG_LABEL,
+            description = UiText.Settings.FREE_COPY_COMMENT_DIALOG_DESC,
+            prefKey = ConfigManager.KEY_FREE_COPY_COMMENT_DIALOG,
+            supported = true,
+            defaultValue = true,
+        ),
+    )
+
     private fun performanceGroups(): List<SettingGroup> = listOf(
         SettingGroup(
             UiText.Settings.PERFORMANCE_GROUP_HOST_RUNTIME,
@@ -321,6 +369,7 @@ internal object SettingsMenuGroupBuilder {
         ),
         SwitchItem(UiText.Settings.AUTO_HIDE_HOME_TAB_LABEL, UiText.Settings.AUTO_HIDE_HOME_TAB_DESC, ConfigManager.KEY_AUTO_HIDE_HOME_TAB, true, false),
         SwitchItem(UiText.Settings.HIDE_HOME_TAB_RED_DOT_LABEL, UiText.Settings.HIDE_HOME_TAB_RED_DOT_DESC, ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT, true, false),
+        SwitchItem(UiText.Settings.HIDE_INPUT_MEME_BAR_LABEL, UiText.Settings.HIDE_INPUT_MEME_BAR_DESC, ConfigManager.KEY_HIDE_INPUT_MEME_BAR, true, false),
         SwitchItem(
             UiText.Settings.HOME_NATIVE_GLASS_LABEL,
             UiText.Settings.HOME_NATIVE_GLASS_DESC,

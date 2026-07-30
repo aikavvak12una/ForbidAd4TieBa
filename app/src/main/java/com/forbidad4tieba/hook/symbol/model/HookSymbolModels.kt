@@ -32,6 +32,7 @@ object HookFeatureKey {
 
     const val SIMPLIFY_HOME_TOP_TABS = "simplify_home_tabs"
     const val SIMPLIFY_BOTTOM_TABS = "simplify_bottom_tabs"
+    const val HIDE_INPUT_MEME_BAR = "hide_input_meme_bar"
     const val HIDE_PB_BOTTOM_BANNER = "hide_pb_bottom_enter_bar"
     const val FILTER_ENTER_FORUM_WEB = "filter_enter_forum_web"
     const val OPEN_WEB_LINK_IN_SYSTEM_BROWSER = "open_web_link_in_system_browser"
@@ -43,6 +44,10 @@ object HookFeatureKey {
     const val DISABLE_PB_GESTURE_FONT_SCALE = "disable_pb_gesture_font_scale"
     const val DISABLE_FORUM_NATIVE_TOP_SHIFT = "disable_forum_native_top_shift"
     const val FREE_COPY = "enable_free_copy"
+    const val FREE_COPY_POST_BODY = "free_copy_post_body"
+    const val FREE_COPY_POST_LONG_PRESS = "free_copy_post_long_press"
+    const val FREE_COPY_COMMENT_INJECTION = "free_copy_comment_injection"
+    const val FREE_COPY_COMMENT_DIALOG = "free_copy_comment_dialog"
     const val DEFAULT_NOTIFY_TAB = "default_notify_tab"
     const val DEFAULT_ORIGINAL_IMAGE = "enable_default_original_image"
     const val AUTO_SIGN_IN = "enable_auto_sign_in"
@@ -65,6 +70,7 @@ object HookFeatureKey {
         ENABLE_CUSTOM_POST_FILTER,
         SIMPLIFY_HOME_TOP_TABS,
         SIMPLIFY_BOTTOM_TABS,
+        HIDE_INPUT_MEME_BAR,
         HIDE_PB_BOTTOM_BANNER,
         FILTER_ENTER_FORUM_WEB,
         OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
@@ -76,6 +82,10 @@ object HookFeatureKey {
         DISABLE_PB_GESTURE_FONT_SCALE,
         DISABLE_FORUM_NATIVE_TOP_SHIFT,
         FREE_COPY,
+        FREE_COPY_POST_BODY,
+        FREE_COPY_POST_LONG_PRESS,
+        FREE_COPY_COMMENT_INJECTION,
+        FREE_COPY_COMMENT_DIALOG,
         DEFAULT_NOTIFY_TAB,
         DEFAULT_ORIGINAL_IMAGE,
         AUTO_SIGN_IN,

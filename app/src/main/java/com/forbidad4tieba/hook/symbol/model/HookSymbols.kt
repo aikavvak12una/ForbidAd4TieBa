@@ -114,6 +114,10 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.bottomEnterBar.pbHotTopicGuideTotalViewMethod
     val pbHotTopicGuideRefreshMethodSpecs: List<String>?
         get() = hookPoints.primary.pb.bottomEnterBar.pbHotTopicGuideRefreshMethodSpecs
+    val inputMemeBarControllerClass: String?
+        get() = hookPoints.primary.pb.inputMemeBar.inputMemeBarControllerClass
+    val inputMemeBarEnableMethod: String?
+        get() = hookPoints.primary.pb.inputMemeBar.inputMemeBarEnableMethod
     val pbEarlyAdInsertClass: String?
         get() = hookPoints.primary.pb.ad.earlyInsert.pbEarlyAdInsertClass
     val pbEarlyAdInsertMethodSpecs: List<String>?
@@ -442,6 +446,28 @@ data class HookSymbols(
         get() = hookPoints.collectionHistory.freeCopy.freeCopyPopupContentViewMethod
     val freeCopyPopupTextField: String?
         get() = hookPoints.collectionHistory.freeCopy.freeCopyPopupTextField
+    val freeCopyPostDataClass: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyPostDataClass
+    val freeCopyPostCopyMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyPostCopyMethodSpec
+    val freeCopyPostParseMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyPostParseMethodSpec
+    val freeCopySubPostParseMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopySubPostParseMethodSpec
+    val freeCopyPostFloorMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyPostFloorMethodSpec
+    val freeCopyRichTextViewClass: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyRichTextViewClass
+    val freeCopyPostLongPressMethodSpecs: List<String>?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyPostLongPressMethodSpecs
+    val freeCopyTitleBindMethodSpecs: List<String>?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyTitleBindMethodSpecs
+    val freeCopyTitleContainerField: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyTitleContainerField
+    val freeCopyTitleTextField: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyTitleTextField
+    val freeCopyTitlePostDataMethodSpec: String?
+        get() = hookPoints.collectionHistory.freeCopy.freeCopyTitlePostDataMethodSpec
     val mainTabDataClass: String?
         get() = hookPoints.primary.home.mainTab.mainTabDataClass
     val mainTabAddMethod: String?
@@ -850,6 +876,8 @@ data class HookSymbols(
             putStringArray("pbEnterFrsAnimationTipCallerClasses", pbEnterFrsAnimationTipCallerClasses)
             put("pbHotTopicGuideTotalViewMethod", pbHotTopicGuideTotalViewMethod)
             putStringArray("pbHotTopicGuideRefreshMethodSpecs", pbHotTopicGuideRefreshMethodSpecs)
+            put("inputMemeBarControllerClass", inputMemeBarControllerClass)
+            put("inputMemeBarEnableMethod", inputMemeBarEnableMethod)
             put("pbEarlyAdInsertClass", pbEarlyAdInsertClass)
             putStringArray("pbEarlyAdInsertMethodSpecs", pbEarlyAdInsertMethodSpecs)
             put("pbFirstFloorRecommendInsertClass", pbFirstFloorRecommendInsertClass)
@@ -1020,6 +1048,25 @@ data class HookSymbols(
             put("freeCopyPopupMenuClass", freeCopyPopupMenuClass)
             put("freeCopyPopupContentViewMethod", freeCopyPopupContentViewMethod)
             put("freeCopyPopupTextField", freeCopyPopupTextField)
+            put("freeCopyPostDataClass", freeCopyPostDataClass)
+            put("freeCopyPostCopyMethodSpec", freeCopyPostCopyMethodSpec)
+            put("freeCopyPostParseMethodSpec", freeCopyPostParseMethodSpec)
+            put("freeCopySubPostParseMethodSpec", freeCopySubPostParseMethodSpec)
+            put("freeCopyPostFloorMethodSpec", freeCopyPostFloorMethodSpec)
+            put("freeCopyRichTextViewClass", freeCopyRichTextViewClass)
+            freeCopyPostLongPressMethodSpecs?.takeIf { it.isNotEmpty() }?.let { methodSpecs ->
+                val array = org.json.JSONArray()
+                methodSpecs.forEach { array.put(it) }
+                put("freeCopyPostLongPressMethodSpecs", array)
+            }
+            freeCopyTitleBindMethodSpecs?.takeIf { it.isNotEmpty() }?.let { methodSpecs ->
+                val array = org.json.JSONArray()
+                methodSpecs.forEach { array.put(it) }
+                put("freeCopyTitleBindMethodSpecs", array)
+            }
+            put("freeCopyTitleContainerField", freeCopyTitleContainerField)
+            put("freeCopyTitleTextField", freeCopyTitleTextField)
+            put("freeCopyTitlePostDataMethodSpec", freeCopyTitlePostDataMethodSpec)
 
             put("mainTabDataClass", mainTabDataClass)
             put("mainTabAddMethod", mainTabAddMethod)
@@ -1261,8 +1308,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 30
-        const val DEXKIT_RULE_VERSION = 17
+        const val CACHE_SCHEMA_VERSION = 35
+        const val DEXKIT_RULE_VERSION = 25
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1349,6 +1396,8 @@ data class HookSymbols(
                         obj.optStringOrNull("pbHotTopicGuideTotalViewMethod")
                     pbHotTopicGuideRefreshMethodSpecs =
                         obj.optStringArray("pbHotTopicGuideRefreshMethodSpecs").takeIf { it.isNotEmpty() }
+                    inputMemeBarControllerClass = obj.optStringOrNull("inputMemeBarControllerClass")
+                    inputMemeBarEnableMethod = obj.optStringOrNull("inputMemeBarEnableMethod")
                     pbEarlyAdInsertClass = obj.optStringOrNull("pbEarlyAdInsertClass")
                     pbEarlyAdInsertMethodSpecs = obj.optStringArray("pbEarlyAdInsertMethodSpecs")
                         .takeIf { it.isNotEmpty() }
@@ -1545,6 +1594,23 @@ data class HookSymbols(
                     freeCopyPopupMenuClass = obj.optStringOrNull("freeCopyPopupMenuClass")
                     freeCopyPopupContentViewMethod = obj.optStringOrNull("freeCopyPopupContentViewMethod")
                     freeCopyPopupTextField = obj.optStringOrNull("freeCopyPopupTextField")
+                    freeCopyPostDataClass = obj.optStringOrNull("freeCopyPostDataClass")
+                    freeCopyPostCopyMethodSpec = obj.optStringOrNull("freeCopyPostCopyMethodSpec")
+                    freeCopyPostParseMethodSpec = obj.optStringOrNull("freeCopyPostParseMethodSpec")
+                    freeCopySubPostParseMethodSpec = obj.optStringOrNull("freeCopySubPostParseMethodSpec")
+                    freeCopyPostFloorMethodSpec = obj.optStringOrNull("freeCopyPostFloorMethodSpec")
+                    freeCopyRichTextViewClass = obj.optStringOrNull("freeCopyRichTextViewClass")
+                    freeCopyPostLongPressMethodSpecs =
+                        obj.optStringArray("freeCopyPostLongPressMethodSpecs")
+                            .takeIf { it.isNotEmpty() }
+                    freeCopyTitleBindMethodSpecs =
+                        obj.optStringArray("freeCopyTitleBindMethodSpecs")
+                            .takeIf { it.isNotEmpty() }
+                    freeCopyTitleContainerField =
+                        obj.optStringOrNull("freeCopyTitleContainerField")
+                    freeCopyTitleTextField = obj.optStringOrNull("freeCopyTitleTextField")
+                    freeCopyTitlePostDataMethodSpec =
+                        obj.optStringOrNull("freeCopyTitlePostDataMethodSpec")
 
                     mainTabDataClass = obj.optStringOrNull("mainTabDataClass")
                     mainTabAddMethod = obj.optStringOrNull("mainTabAddMethod")

@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.symbol.model.PbGestureScaleSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ReflectionUtils
@@ -10,6 +11,10 @@ object PbDisableGestureFontScaleHook {
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
 
     internal fun hook(targets: PbGestureScaleSymbols) {
+        if (!ConfigManager.isPbGestureFontScaleDisabled) {
+            XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: config disabled")
+            return
+        }
         val mod = XposedCompat.module ?: return
         val dispatchMethod = targets.dispatchMethod
 
@@ -38,7 +43,9 @@ object PbDisableGestureFontScaleHook {
         val methodKey = ReflectionUtils.methodSignature(method)
         if (!installedMethodKeys.add(methodKey)) return false
 
-        mod.hook(method).intercept { false }
+        mod.hook(method).intercept { chain ->
+            if (ConfigManager.isPbGestureFontScaleDisabled) false else chain.proceed()
+        }
         return true
     }
 }

@@ -171,6 +171,8 @@ internal class HookSymbolsBuilder {
     var pbLikeAutoReplyInputContainerClass: String? = null
     var pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null
     var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
+    var inputMemeBarControllerClass: String? = null
+    var inputMemeBarEnableMethod: String? = null
     var collectionPresenterField: String? = null
     var collectionPresenterListSetterMethod: String? = null
     var collectionPresenterListSetterMethodSpec: String? = null
@@ -208,6 +210,17 @@ internal class HookSymbolsBuilder {
     var freeCopyPopupMenuClass: String? = null
     var freeCopyPopupContentViewMethod: String? = null
     var freeCopyPopupTextField: String? = null
+    var freeCopyPostDataClass: String? = null
+    var freeCopyPostCopyMethodSpec: String? = null
+    var freeCopyPostParseMethodSpec: String? = null
+    var freeCopySubPostParseMethodSpec: String? = null
+    var freeCopyPostFloorMethodSpec: String? = null
+    var freeCopyRichTextViewClass: String? = null
+    var freeCopyPostLongPressMethodSpecs: List<String>? = null
+    var freeCopyTitleBindMethodSpecs: List<String>? = null
+    var freeCopyTitleContainerField: String? = null
+    var freeCopyTitleTextField: String? = null
+    var freeCopyTitlePostDataMethodSpec: String? = null
     var mainTabDataClass: String? = null
     var mainTabAddMethod: String? = null
     var mainTabGetListMethod: String? = null
@@ -570,6 +583,10 @@ internal class HookSymbolsBuilder {
                 pbHotTopicGuideTotalViewMethod,
                 pbHotTopicGuideRefreshMethodSpecs,
             ),
+            inputMemeBar = PbInputMemeBarSymbolsGroup(
+                inputMemeBarControllerClass,
+                inputMemeBarEnableMethod,
+            ),
             comment = PbCommentSymbolsGroup(
                 bottomSheet = ForumBottomSheetSymbolsGroup(forumBottomSheetViewClass, forumBottomSheetInitScrollMethod),
                 autoLoad = AutoLoadSymbolsGroup(autoRefreshTriggerMethod, autoLoadMoreConfigClass, autoLoadMoreConfigMethod),
@@ -840,9 +857,20 @@ internal class HookSymbolsBuilder {
                 ),
             ),
             freeCopy = FreeCopySymbolsGroup(
-                freeCopyPopupMenuClass,
-                freeCopyPopupContentViewMethod,
-                freeCopyPopupTextField,
+                freeCopyPopupMenuClass = freeCopyPopupMenuClass,
+                freeCopyPopupContentViewMethod = freeCopyPopupContentViewMethod,
+                freeCopyPopupTextField = freeCopyPopupTextField,
+                freeCopyPostDataClass = freeCopyPostDataClass,
+                freeCopyPostCopyMethodSpec = freeCopyPostCopyMethodSpec,
+                freeCopyPostParseMethodSpec = freeCopyPostParseMethodSpec,
+                freeCopySubPostParseMethodSpec = freeCopySubPostParseMethodSpec,
+                freeCopyPostFloorMethodSpec = freeCopyPostFloorMethodSpec,
+                freeCopyRichTextViewClass = freeCopyRichTextViewClass,
+                freeCopyPostLongPressMethodSpecs = freeCopyPostLongPressMethodSpecs,
+                freeCopyTitleBindMethodSpecs = freeCopyTitleBindMethodSpecs,
+                freeCopyTitleContainerField = freeCopyTitleContainerField,
+                freeCopyTitleTextField = freeCopyTitleTextField,
+                freeCopyTitlePostDataMethodSpec = freeCopyTitlePostDataMethodSpec,
             ),
         )
     }

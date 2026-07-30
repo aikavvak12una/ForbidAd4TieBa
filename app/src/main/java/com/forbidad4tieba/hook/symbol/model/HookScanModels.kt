@@ -288,6 +288,44 @@ internal data class FreeCopyPopupScanSymbols(
     val textField: String? = null,
 )
 
+internal data class FreeCopyNativeScanSymbols(
+    val postDataClass: String? = null,
+    val copyMethodSpec: String? = null,
+    val postParseMethodSpec: String? = null,
+    val subPostParseMethodSpec: String? = null,
+)
+
+internal data class FreeCopyLongPressScanSymbols(
+    val richTextViewClass: String? = null,
+    val methodSpecs: List<String> = emptyList(),
+    val postFloorMethodSpec: String? = null,
+)
+
+internal data class FreeCopyTitleLongPressScanSymbols(
+    val bindMethodSpecs: List<String> = emptyList(),
+    val containerField: String? = null,
+    val textField: String? = null,
+    val postDataMethodSpec: String? = null,
+)
+
+internal data class DexFreeCopyMethodMatch(
+    val ownerClassName: String,
+    val methodName: String,
+    val returnTypeName: String,
+    val parameterTypeNames: List<String>,
+    val postDataIntNoArgMethodSpecs: List<String> = emptyList(),
+)
+
+internal data class DexFreeCopyTitleMatch(
+    val ownerClassName: String,
+    val bindMethodSpecs: List<String>,
+    val textFieldName: String,
+    val pageDataClassName: String,
+    val postDataMethodSpec: String,
+    val postDataIntNoArgMethodSpecs: List<String>,
+    val evidence: String,
+)
+
 internal data class ForumBottomSheetScanSymbols(
     val viewClass: String? = null,
     val initScrollMethod: String? = null,
@@ -363,6 +401,11 @@ internal data class AiComponentScanSymbols(
     val pbPageBrowserAiEmojiCreationBindMethod: String? = null,
     val imageViewerJumpButtonOwnerClass: String? = null,
     val imageViewerJumpButtonInitMethod: String? = null,
+)
+
+internal data class InputMemeBarScanSymbols(
+    val controllerClass: String? = null,
+    val enableMethod: String? = null,
 )
 
 internal data class HomeNativeGlassResourceIds(

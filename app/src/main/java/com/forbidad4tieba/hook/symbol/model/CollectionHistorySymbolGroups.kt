@@ -100,6 +100,17 @@ data class FreeCopySymbolsGroup(
     val freeCopyPopupMenuClass: String? = null,
     val freeCopyPopupContentViewMethod: String? = null,
     val freeCopyPopupTextField: String? = null,
+    val freeCopyPostDataClass: String? = null,
+    val freeCopyPostCopyMethodSpec: String? = null,
+    val freeCopyPostParseMethodSpec: String? = null,
+    val freeCopySubPostParseMethodSpec: String? = null,
+    val freeCopyPostFloorMethodSpec: String? = null,
+    val freeCopyRichTextViewClass: String? = null,
+    val freeCopyPostLongPressMethodSpecs: List<String>? = null,
+    val freeCopyTitleBindMethodSpecs: List<String>? = null,
+    val freeCopyTitleContainerField: String? = null,
+    val freeCopyTitleTextField: String? = null,
+    val freeCopyTitlePostDataMethodSpec: String? = null,
 )
 
 private fun hasRequired(vararg values: String?): Boolean {

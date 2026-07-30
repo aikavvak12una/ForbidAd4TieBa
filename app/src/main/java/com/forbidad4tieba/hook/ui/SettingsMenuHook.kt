@@ -339,6 +339,7 @@ object SettingsMenuHook {
                     onCustomPostModelScore = { showCustomPostModelScoreDialog(context, prefs) },
                     onCustomPostFilterKeyword = { showCustomPostFilterKeywordDialog(context, prefs) },
                     onPbLikeAutoReply = { showPbLikeAutoReplyDialog(context, prefs) },
+                    onFreeCopy = { items -> showFreeCopyDialog(context, prefs, items, featureStatusMap) },
                     onPerformanceOptimization = { groups ->
                         showPerformanceOptimizationDialog(context, prefs, groups, featureStatusMap)
                     },
@@ -1403,6 +1404,107 @@ object SettingsMenuHook {
             dialog.show()
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showAdBlockDialog failed: ${t.message}")
+        }
+    }
+
+    private fun showFreeCopyDialog(
+        context: Context,
+        prefs: android.content.SharedPreferences,
+        items: List<SwitchItem>,
+        featureStatusMap: Map<String, HookFeatureStatus>,
+    ) {
+        try {
+            val density = context.resources.displayMetrics.density
+            val padding = settingsDialogPadding(density)
+            val root = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                )
+            }
+
+            val views = ArrayList<Pair<SwitchItem, Switch>>(items.size)
+            for (item in items) {
+                val support = resolveSwitchSupport(item, featureStatusMap)
+                val row = createSwitchRow(
+                    context = context,
+                    prefs = prefs,
+                    label = labelWithScanSupport(item.label, support),
+                    description = descriptionWithScanSupport(item.description, support),
+                    prefKey = null,
+                    padding = padding,
+                    enabled = support.supported,
+                    defaultValue = if (support.supported) {
+                        prefs.getBoolean(item.prefKey, item.defaultValue)
+                    } else {
+                        false
+                    },
+                )
+                val switchView = findSwitchView(row)
+                if (switchView == null) {
+                    XposedCompat.logW(
+                        "[SettingsMenuHook] showFreeCopyDialog failed: switch view missing for ${item.prefKey}",
+                    )
+                    return
+                }
+                views.add(item to switchView)
+                root.addView(row)
+            }
+
+            val postButtonSwitch = views.firstOrNull {
+                it.first.prefKey == ConfigManager.KEY_FREE_COPY_POST_BODY
+            }?.second
+            val longPressSwitch = views.firstOrNull {
+                it.first.prefKey == ConfigManager.KEY_FREE_COPY_POST_LONG_PRESS
+            }?.second
+            if (postButtonSwitch != null && longPressSwitch != null) {
+                val normalized = ConfigManager.normalizeFreeCopyPostModes(
+                    postButtonEnabled = postButtonSwitch.isChecked,
+                    longPressEnabled = longPressSwitch.isChecked,
+                )
+                postButtonSwitch.isChecked = normalized.postButtonEnabled
+                longPressSwitch.isChecked = normalized.longPressEnabled
+                postButtonSwitch.setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked && longPressSwitch.isEnabled && longPressSwitch.isChecked) {
+                        longPressSwitch.isChecked = false
+                    }
+                }
+                longPressSwitch.setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked && postButtonSwitch.isEnabled && postButtonSwitch.isChecked) {
+                        postButtonSwitch.isChecked = false
+                    }
+                }
+            }
+
+            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
+                .setSettingsTitle(context, UiText.Settings.FREE_COPY_DIALOG_TITLE)
+                .setView(createDialogScrollContainer(context, root))
+                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
+                .setPositiveButton(UiText.Settings.SAVE, null)
+                .create()
+            dialog.setOnShowListener {
+                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                    val editor = prefs.edit()
+                    for ((item, switchView) in views) {
+                        if (switchView.isEnabled) {
+                            editor.putBoolean(item.prefKey, switchView.isChecked)
+                        }
+                    }
+                    editor.apply()
+                    Toast.makeText(
+                        context,
+                        UiText.Settings.withRestartHint(UiText.Settings.FREE_COPY_SAVED),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    dialog.dismiss()
+                }
+            }
+            dialog.show()
+        } catch (t: Throwable) {
+            XposedCompat.logW("[SettingsMenuHook] showFreeCopyDialog failed: ${t.message}")
         }
     }
 

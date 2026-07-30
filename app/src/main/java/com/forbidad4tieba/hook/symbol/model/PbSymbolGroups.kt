@@ -4,6 +4,7 @@ data class PbSymbols(
     val ad: PbAdSymbolsGroup = PbAdSymbolsGroup(),
     val falling: PbFallingSymbolsGroup = PbFallingSymbolsGroup(),
     val bottomEnterBar: PbBottomEnterBarSymbolsGroup = PbBottomEnterBarSymbolsGroup(),
+    val inputMemeBar: PbInputMemeBarSymbolsGroup = PbInputMemeBarSymbolsGroup(),
     val comment: PbCommentSymbolsGroup = PbCommentSymbolsGroup(),
     val gestureScale: PbGestureScaleSymbolsGroup = PbGestureScaleSymbolsGroup(),
     val likeAutoReply: PbLikeAutoReplySymbolsGroup = PbLikeAutoReplySymbolsGroup(),
@@ -51,6 +52,11 @@ data class PbBottomEnterBarSymbolsGroup(
     val pbEnterFrsAnimationTipCallerClasses: List<String>? = null,
     val pbHotTopicGuideTotalViewMethod: String? = null,
     val pbHotTopicGuideRefreshMethodSpecs: List<String>? = null,
+)
+
+data class PbInputMemeBarSymbolsGroup(
+    val inputMemeBarControllerClass: String? = null,
+    val inputMemeBarEnableMethod: String? = null,
 )
 
 data class PbCommentSymbolsGroup(

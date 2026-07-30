@@ -46,6 +46,7 @@ import com.forbidad4tieba.hook.feature.ui.HomeTabRedDotBlockHook
 import com.forbidad4tieba.hook.feature.ui.HomeTopBarRightSlotHook
 import com.forbidad4tieba.hook.feature.ui.HomeTopTabAutoHideHook
 import com.forbidad4tieba.hook.feature.ui.ImageViewerSwipeEnterForumBlockHook
+import com.forbidad4tieba.hook.feature.ui.InputMemeBarBlockHook
 import com.forbidad4tieba.hook.feature.ui.MainTabBottomHook
 import com.forbidad4tieba.hook.feature.ui.MsgTabDefaultNotifyHook
 import com.forbidad4tieba.hook.feature.ui.PbBottomEnterBarHook
@@ -131,10 +132,17 @@ internal object HookInstallPlanner {
 
         entries += HookInstallEntry("CrashReportBlockHook") { cl -> CrashReportBlockHook.hook(cl) }
 
-        if (context.canInstallFreeCopy()) {
-            entries += HookInstallEntry("FreeCopyHook") { cl ->
+        if (context.canInstallFreeCopyCommentInjection(settings)) {
+            entries += HookInstallEntry("FreeCopyHook.CommentInjection") { cl ->
                 HookSymbolResolver.resolveFreeCopyPopupSymbols(cl, symbols)?.let { targets ->
-                    FreeCopyHook.hook(targets)
+                    FreeCopyHook.hookCommentInjection(targets)
+                }
+            }
+        }
+        if (context.canInstallFreeCopyNative(settings)) {
+            entries += HookInstallEntry("FreeCopyHook.Native") { cl ->
+                HookSymbolResolver.resolveFreeCopyNativeSymbols(cl, symbols)?.let { targets ->
+                    FreeCopyHook.hookNative(targets)
                 }
             }
         }
@@ -407,7 +415,7 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (context.canInstallPbGestureFontScale()) {
+        if (context.canInstallPbGestureFontScale(settings)) {
             entries += HookInstallEntry("PbDisableGestureFontScaleHook") { cl ->
                 HookSymbolResolver.resolvePbGestureScaleSymbols(cl, symbols)?.let { targets ->
                     PbDisableGestureFontScaleHook.hook(targets)
@@ -418,6 +426,13 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("PbLikeAutoReplyHook") { cl ->
                 HookSymbolResolver.resolvePbLikeAutoReplySymbols(cl, symbols)?.let { targets ->
                     PbLikeAutoReplyHook.hook(targets, settings.pbLikeAutoReplyText)
+                }
+            }
+        }
+        if (context.canInstallInputMemeBarBlock(settings)) {
+            entries += HookInstallEntry("InputMemeBarBlockHook") { cl ->
+                HookSymbolResolver.resolveInputMemeBarSymbols(cl, symbols)?.let { targets ->
+                    InputMemeBarBlockHook.hook(targets)
                 }
             }
         }
