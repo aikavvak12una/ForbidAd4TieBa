@@ -14,6 +14,7 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.scan.AiComponentSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.HomeTabItemSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.InputMemeBarSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbAdBidSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbEarlyAdInsertSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbFirstFloorRecommendInsertSymbolScanner
@@ -320,6 +321,10 @@ internal object HookSymbolValidator {
             symbols.pbLikeAutoReplyInputContainerGetInputViewMethod != null ||
             symbols.pbLikeAutoReplyInputContainerGetSendViewMethod != null
     if (hasPbLikeAutoReplySymbols && !isPbLikeAutoReplyValid(symbols, cl)) return false
+    val hasInputMemeBarSymbols =
+        symbols.inputMemeBarControllerClass != null ||
+            symbols.inputMemeBarEnableMethod != null
+    if (hasInputMemeBarSymbols && !isInputMemeBarValid(symbols, cl)) return false
     val hasAiComponentSymbols =
         symbols.aiSpriteMemePanControllerClass != null ||
             symbols.aiSpriteMemeEnableMethod != null ||
@@ -371,6 +376,19 @@ internal object HookSymbolValidator {
             symbols.freeCopyPopupContentViewMethod != null ||
             symbols.freeCopyPopupTextField != null
     if (hasFreeCopyPopupSymbols && !isFreeCopyPopupValid(symbols, cl)) return false
+    val hasFreeCopyNativeSymbols =
+        symbols.freeCopyPostDataClass != null ||
+            symbols.freeCopyPostCopyMethodSpec != null ||
+            symbols.freeCopyPostParseMethodSpec != null ||
+            symbols.freeCopySubPostParseMethodSpec != null ||
+            symbols.freeCopyPostFloorMethodSpec != null ||
+            symbols.freeCopyRichTextViewClass != null ||
+            !symbols.freeCopyPostLongPressMethodSpecs.isNullOrEmpty() ||
+            !symbols.freeCopyTitleBindMethodSpecs.isNullOrEmpty() ||
+            symbols.freeCopyTitleContainerField != null ||
+            symbols.freeCopyTitleTextField != null ||
+            symbols.freeCopyTitlePostDataMethodSpec != null
+    if (hasFreeCopyNativeSymbols && !isFreeCopyNativeValid(symbols, cl)) return false
     val hasCompleteImageViewerShareSymbols =
         symbols.imageViewerShareConfigClass != null &&
             symbols.imageViewerShareIsDialogField != null &&
@@ -420,6 +438,147 @@ private fun isFreeCopyPopupValid(symbols: HookSymbols, cl: ClassLoader): Boolean
     } catch (_: Throwable) {
         false
     }
+}
+
+private fun isFreeCopyNativeValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    return try {
+        val postDataClass = symbols.freeCopyPostDataClass?.let { safeFindClass(it, cl) }
+        if (symbols.freeCopyPostDataClass != null && postDataClass == null) return false
+        val richTextViewClassName = symbols.freeCopyRichTextViewClass
+        if (
+            richTextViewClassName != null &&
+            safeFindClass(richTextViewClassName, cl) == null
+        ) {
+            return false
+        }
+
+        fun resolvePostDataMethod(spec: String?): Method? {
+            val value = spec ?: return null
+            val owner = postDataClass ?: return null
+            return resolveFullMethodSpec(owner, value, cl)
+        }
+
+        symbols.freeCopyPostCopyMethodSpec?.let { spec ->
+            val method = resolvePostDataMethod(spec) ?: return false
+            if (
+                Modifier.isStatic(method.modifiers) ||
+                method.returnType != Void.TYPE ||
+                method.parameterTypes.isNotEmpty()
+            ) {
+                return false
+            }
+        }
+
+        symbols.freeCopyPostFloorMethodSpec?.let { spec ->
+            val method = resolvePostDataMethod(spec) ?: return false
+            if (
+                Modifier.isStatic(method.modifiers) ||
+                method.returnType != Int::class.javaPrimitiveType ||
+                method.parameterTypes.isNotEmpty()
+            ) {
+                return false
+            }
+        }
+
+        listOf(
+            symbols.freeCopyPostParseMethodSpec,
+            symbols.freeCopySubPostParseMethodSpec,
+        ).filterNotNull().forEach { spec ->
+            val method = resolvePostDataMethod(spec) ?: return false
+            if (Modifier.isStatic(method.modifiers) || method.returnType != Void.TYPE) return false
+            val protocolClass = method.parameterTypes.firstOrNull() ?: return false
+            val titleField = protocolClass.getDeclaredField("title")
+            val floorField = protocolClass.getDeclaredField("floor")
+            if (
+                titleField.type != String::class.java ||
+                !Number::class.java.isAssignableFrom(floorField.type)
+            ) {
+                return false
+            }
+        }
+
+        if (!symbols.freeCopyPostLongPressMethodSpecs.orEmpty().all { fullSpec ->
+            val separator = fullSpec.indexOf('#')
+            if (separator <= 0 || separator >= fullSpec.lastIndex) return false
+            val owner = safeFindClass(fullSpec.substring(0, separator), cl) ?: return false
+            val method = resolveFullMethodSpec(owner, fullSpec.substring(separator + 1), cl)
+                ?: return false
+            !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Boolean::class.javaPrimitiveType &&
+                method.parameterTypes.firstOrNull()?.let { parameterType ->
+                    View::class.java.isAssignableFrom(parameterType)
+                } == true
+        }) {
+            return false
+        }
+
+        val titleBindSpecs = symbols.freeCopyTitleBindMethodSpecs.orEmpty()
+        val titleContainerFieldName = symbols.freeCopyTitleContainerField
+        val titleTextFieldName = symbols.freeCopyTitleTextField
+        val titlePostDataMethodSpec = symbols.freeCopyTitlePostDataMethodSpec
+        val hasAnyTitleSymbol = titleBindSpecs.isNotEmpty() ||
+            titleContainerFieldName != null ||
+            titleTextFieldName != null ||
+            titlePostDataMethodSpec != null
+        if (!hasAnyTitleSymbol) return true
+        if (
+            titleBindSpecs.isEmpty() ||
+            titleContainerFieldName.isNullOrBlank() ||
+            titleTextFieldName.isNullOrBlank() ||
+            titlePostDataMethodSpec.isNullOrBlank() ||
+            postDataClass == null
+        ) {
+            return false
+        }
+        val titleBindMethods = titleBindSpecs.map { fullSpec ->
+            val separator = fullSpec.indexOf('#')
+            if (separator <= 0 || separator >= fullSpec.lastIndex) return false
+            val owner = safeFindClass(fullSpec.substring(0, separator), cl) ?: return false
+            resolveFullMethodSpec(owner, fullSpec.substring(separator + 1), cl)
+                ?: return false
+        }
+        val titleOwner = titleBindMethods.first().declaringClass
+        val pageDataClass = titleBindMethods.first().parameterTypes.singleOrNull()
+            ?: return false
+        if (titleBindMethods.any { method ->
+                Modifier.isStatic(method.modifiers) ||
+                    method.returnType != Void.TYPE ||
+                    method.declaringClass != titleOwner ||
+                    method.parameterTypes.singleOrNull() != pageDataClass
+            }
+        ) {
+            return false
+        }
+        val titleContainerField = titleOwner.getDeclaredField(titleContainerFieldName)
+        if (!ViewGroup::class.java.isAssignableFrom(titleContainerField.type)) return false
+        val titleTextField = titleOwner.getDeclaredField(titleTextFieldName)
+        if (!TextView::class.java.isAssignableFrom(titleTextField.type)) return false
+        val titlePostDataMethod = resolveFullMethodSpec(
+            pageDataClass,
+            titlePostDataMethodSpec,
+            cl,
+        ) ?: return false
+        !Modifier.isStatic(titlePostDataMethod.modifiers) &&
+            titlePostDataMethod.returnType == postDataClass &&
+            titlePostDataMethod.parameterTypes.isEmpty()
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun resolveFullMethodSpec(owner: Class<*>, raw: String, cl: ClassLoader): Method? {
+    val parts = raw.split('|', limit = 3)
+    if (parts.size != 3) return null
+    val name = parts[0].takeIf { it.isNotBlank() } ?: return null
+    val returnTypeName = parts[1].takeIf { it.isNotBlank() } ?: return null
+    val parameterTypes = parts[2].split(',')
+        .filter { it.isNotBlank() }
+        .map { typeName -> resolveCachedParameterClass(typeName, cl) ?: return null }
+        .toTypedArray()
+    val method = owner.declaredMethods.singleOrNull { candidate ->
+        candidate.name == name && candidate.parameterTypes.contentEquals(parameterTypes)
+    } ?: return null
+    return method.takeIf { it.returnType.name == returnTypeName }
 }
 
 private fun isHomeNativeGlassTopChromeValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
@@ -1885,6 +2044,20 @@ private fun isAiComponentValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
         } else {
             true
         }
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+private fun isInputMemeBarValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    val controllerClassName = symbols.inputMemeBarControllerClass ?: return false
+    val enableMethodName = symbols.inputMemeBarEnableMethod ?: return false
+    return try {
+        val controllerClass = safeFindClass(controllerClassName, cl) ?: return false
+        controllerClass.declaredMethods.singleOrNull { method ->
+            method.name == enableMethodName &&
+                InputMemeBarSymbolScanner.isInputMemeBarEnableMethod(method)
+        } != null
     } catch (_: Throwable) {
         false
     }

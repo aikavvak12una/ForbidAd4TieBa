@@ -10,6 +10,25 @@ internal data class FreeCopyPopupSymbols(
     val textField: Field,
 )
 
+internal data class FreeCopyNativeSymbols(
+    val postDataClass: Class<*>,
+    val copyMethod: Method,
+    val postParseMethod: Method?,
+    val subPostParseMethod: Method?,
+    val postTitleField: Field?,
+    val postFloorField: Field?,
+    val subPostTitleField: Field?,
+    val subPostFloorField: Field?,
+    val postFloorMethod: Method?,
+    val richTextViewClass: Class<*>?,
+    val longPressMethods: List<Method>,
+    val titleBindMethods: List<Method>,
+    val titleContainerField: Field?,
+    val titleTextField: Field?,
+    val titlePostDataMethod: Method?,
+    val clipboardWriteMethods: List<Method>,
+)
+
 internal data class PlainUrlClickableSpanSymbols(
     val spanClass: Class<*>,
     val onClickMethods: List<Method>,
@@ -429,6 +448,10 @@ internal data class AiComponentSymbols(
     val pbInitAiWriteMethod: Method,
     val pbAiEmojiCreationViewBindMethod: Method? = null,
     val pbPageBrowserAiEmojiCreationBindMethod: Method? = null,
+)
+
+internal data class InputMemeBarSymbols(
+    val enableMethod: Method,
 )
 
 internal data class AiImageViewerJumpButtonSymbols(

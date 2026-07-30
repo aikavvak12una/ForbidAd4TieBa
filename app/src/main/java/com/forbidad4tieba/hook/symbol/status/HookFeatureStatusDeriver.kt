@@ -80,16 +80,109 @@ internal object HookFeatureStatusDeriver {
                 missingCritical = pbBottomBannerMissing,
             )
         }
-        val freeCopyCritical = ArrayList<String>(3)
-        if (symbols.freeCopyPopupMenuClass.isNullOrBlank()) freeCopyCritical.add("freeCopyPopupMenuClass")
-        if (symbols.freeCopyPopupContentViewMethod.isNullOrBlank()) {
-            freeCopyCritical.add("freeCopyPopupContentViewMethod")
+        val freeCopyPopupCritical = ArrayList<String>(3)
+        if (symbols.freeCopyPopupMenuClass.isNullOrBlank()) {
+            freeCopyPopupCritical.add("freeCopyPopupMenuClass")
         }
-        if (symbols.freeCopyPopupTextField.isNullOrBlank()) freeCopyCritical.add("freeCopyPopupTextField")
-        out[HookFeatureKey.FREE_COPY] = if (freeCopyCritical.isEmpty()) {
+        if (symbols.freeCopyPopupContentViewMethod.isNullOrBlank()) {
+            freeCopyPopupCritical.add("freeCopyPopupContentViewMethod")
+        }
+        if (symbols.freeCopyPopupTextField.isNullOrBlank()) {
+            freeCopyPopupCritical.add("freeCopyPopupTextField")
+        }
+        val commentInjectionStatus = if (freeCopyPopupCritical.isEmpty()) {
             HookFeatureStatus(state = HookFeatureState.FULL)
         } else {
-            HookFeatureStatus(state = HookFeatureState.DISABLED, missingCritical = freeCopyCritical)
+            HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = freeCopyPopupCritical,
+            )
+        }
+        out[HookFeatureKey.FREE_COPY_COMMENT_INJECTION] = commentInjectionStatus
+
+        fun nativeFreeCopyStatus(requireLongPress: Boolean): HookFeatureStatus {
+            val critical = ArrayList<String>(4)
+            val optional = ArrayList<String>(2)
+            if (symbols.freeCopyPostDataClass.isNullOrBlank()) {
+                critical.add("freeCopyPostDataClass")
+            }
+            if (symbols.freeCopyPostCopyMethodSpec.isNullOrBlank()) {
+                critical.add("freeCopyPostCopyMethodSpec")
+            }
+            val hasPostParser = !symbols.freeCopyPostParseMethodSpec.isNullOrBlank()
+            val hasSubPostParser = !symbols.freeCopySubPostParseMethodSpec.isNullOrBlank()
+            if (!hasPostParser && !hasSubPostParser) {
+                critical.add("freeCopyPostMetadataParser")
+            } else {
+                if (!hasPostParser) optional.add("freeCopyPostParseMethodSpec")
+                if (!hasSubPostParser) optional.add("freeCopySubPostParseMethodSpec")
+            }
+            if (requireLongPress && symbols.freeCopyPostLongPressMethodSpecs.isNullOrEmpty()) {
+                critical.add("freeCopyPostLongPressMethodSpecs")
+            }
+            if (requireLongPress && symbols.freeCopyRichTextViewClass.isNullOrBlank()) {
+                critical.add("freeCopyRichTextViewClass")
+            }
+            if (requireLongPress && symbols.freeCopyPostFloorMethodSpec.isNullOrBlank()) {
+                critical.add("freeCopyPostFloorMethodSpec")
+            }
+            if (requireLongPress) {
+                if (symbols.freeCopyTitleBindMethodSpecs.isNullOrEmpty()) {
+                    optional.add("freeCopyTitleBindMethodSpecs")
+                }
+                if (symbols.freeCopyTitleContainerField.isNullOrBlank()) {
+                    optional.add("freeCopyTitleContainerField")
+                }
+                if (symbols.freeCopyTitleTextField.isNullOrBlank()) {
+                    optional.add("freeCopyTitleTextField")
+                }
+                if (symbols.freeCopyTitlePostDataMethodSpec.isNullOrBlank()) {
+                    optional.add("freeCopyTitlePostDataMethodSpec")
+                }
+            }
+            return when {
+                critical.isNotEmpty() -> HookFeatureStatus(
+                    state = HookFeatureState.DISABLED,
+                    missingCritical = critical,
+                    missingOptional = optional,
+                )
+                optional.isNotEmpty() -> HookFeatureStatus(
+                    state = HookFeatureState.PARTIAL,
+                    missingOptional = optional,
+                )
+                else -> HookFeatureStatus(state = HookFeatureState.FULL)
+            }
+        }
+
+        val postBodyStatus = nativeFreeCopyStatus(requireLongPress = false)
+        val postLongPressStatus = nativeFreeCopyStatus(requireLongPress = true)
+        val commentDialogStatus = nativeFreeCopyStatus(requireLongPress = false)
+        out[HookFeatureKey.FREE_COPY_POST_BODY] = postBodyStatus
+        out[HookFeatureKey.FREE_COPY_POST_LONG_PRESS] = postLongPressStatus
+        out[HookFeatureKey.FREE_COPY_COMMENT_DIALOG] = commentDialogStatus
+
+        val freeCopyChildStatuses = listOf(
+            HookFeatureKey.FREE_COPY_POST_BODY to postBodyStatus,
+            HookFeatureKey.FREE_COPY_POST_LONG_PRESS to postLongPressStatus,
+            HookFeatureKey.FREE_COPY_COMMENT_INJECTION to commentInjectionStatus,
+            HookFeatureKey.FREE_COPY_COMMENT_DIALOG to commentDialogStatus,
+        )
+        val supportedFreeCopyChildren = freeCopyChildStatuses.filter { it.second.isSupported() }
+        out[HookFeatureKey.FREE_COPY] = when {
+            supportedFreeCopyChildren.isEmpty() -> HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = freeCopyChildStatuses.map { it.first },
+            )
+            supportedFreeCopyChildren.all { it.second.state == HookFeatureState.FULL } &&
+                supportedFreeCopyChildren.size == freeCopyChildStatuses.size -> {
+                HookFeatureStatus(state = HookFeatureState.FULL)
+            }
+            else -> HookFeatureStatus(
+                state = HookFeatureState.PARTIAL,
+                missingOptional = freeCopyChildStatuses
+                    .filter { it.second.state != HookFeatureState.FULL }
+                    .map { it.first },
+            )
         }
 
         val autoSignInCritical = ArrayList<String>(10)
@@ -866,6 +959,22 @@ internal object HookFeatureStatusDeriver {
             HookFeatureStatus(state = HookFeatureState.DISABLED, missingCritical = shareTrackingCritical)
         }
 
+        val inputMemeBarCritical = ArrayList<String>(2)
+        if (symbols.inputMemeBarControllerClass.isNullOrBlank()) {
+            inputMemeBarCritical.add("inputMemeBarControllerClass")
+        }
+        if (symbols.inputMemeBarEnableMethod.isNullOrBlank()) {
+            inputMemeBarCritical.add("inputMemeBarEnableMethod")
+        }
+        out[HookFeatureKey.HIDE_INPUT_MEME_BAR] = if (inputMemeBarCritical.isEmpty()) {
+            HookFeatureStatus(state = HookFeatureState.FULL)
+        } else {
+            HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = inputMemeBarCritical,
+            )
+        }
+
         val aiComponentCritical = ArrayList<String>(5)
         if (symbols.aiSpriteMemePanControllerClass.isNullOrBlank()) {
             aiComponentCritical.add("aiSpriteMemePanControllerClass")
@@ -1260,10 +1369,23 @@ internal object HookFeatureStatusDeriver {
                 HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE,
             )
             name == "PbLikeAutoReplyHook" -> features(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
+            name == "InputMemeBarBlockHook" -> features(HookFeatureKey.HIDE_INPUT_MEME_BAR)
             name.startsWith("AiComponentDisableHook.") -> features(HookFeatureKey.DISABLE_AI_COMPONENTS)
             name.startsWith("MsgTabDefaultNotifyHook") -> features(HookFeatureKey.DEFAULT_NOTIFY_TAB)
             name == "PrivateReadReceiptBlockHook" -> features(HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE)
-            name == "FreeCopyHook.Popup" -> features(HookFeatureKey.FREE_COPY)
+            name == "FreeCopyHook.Popup" -> features(
+                HookFeatureKey.FREE_COPY,
+                HookFeatureKey.FREE_COPY_COMMENT_INJECTION,
+            )
+            name.startsWith("FreeCopyHook.Native") -> features(
+                HookFeatureKey.FREE_COPY,
+                HookFeatureKey.FREE_COPY_POST_BODY,
+                HookFeatureKey.FREE_COPY_COMMENT_DIALOG,
+            )
+            name.startsWith("FreeCopyHook.LongPress") -> features(
+                HookFeatureKey.FREE_COPY,
+                HookFeatureKey.FREE_COPY_POST_LONG_PRESS,
+            )
             name.startsWith("MainTabBottomHook") -> features(HookFeatureKey.SIMPLIFY_BOTTOM_TABS)
             name.startsWith("DefaultOriginalImageHook") -> features(HookFeatureKey.DEFAULT_ORIGINAL_IMAGE)
             name.startsWith("ShareTrackingParamCleanerHook") -> features(HookFeatureKey.CLEAN_SHARE_TRACKING_PARAMS)

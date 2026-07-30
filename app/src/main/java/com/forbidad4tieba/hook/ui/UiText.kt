@@ -110,6 +110,8 @@ object UiText {
         const val AUTO_HIDE_HOME_TAB_DESC = "浏览首页信息流时随滚动收起 Tab 栏"
         const val HIDE_HOME_TAB_RED_DOT_LABEL = "隐藏小红点"
         const val HIDE_HOME_TAB_RED_DOT_DESC = "隐藏无数字小红点提示，保留带数字的未读提示"
+        const val HIDE_INPUT_MEME_BAR_LABEL = "移除输入框表情包栏"
+        const val HIDE_INPUT_MEME_BAR_DESC = "移除回复输入框上方的表情包推荐栏"
         const val SIMPLIFY_BOTTOM_TAB_LABEL = "自定义底部 Tab"
         const val SIMPLIFY_BOTTOM_TAB_DESC = "配置首页、进吧、小卖部、消息、我的 Tab 显示"
         const val HIDE_PB_BOTTOM_BANNER_LABEL = "屏蔽帖子底部热点/进吧组件"
@@ -192,7 +194,19 @@ object UiText {
         const val DISABLE_AUTO_REFRESH_LABEL = "禁止自动刷新"
         const val DISABLE_AUTO_REFRESH_DESC = "避免首页被强制重置刷新列表"
         const val DISABLE_PB_GESTURE_FONT_SCALE_LABEL = "禁用调整字号手势"
-        const val FREE_COPY_LABEL = "评论自由复制"
+        const val DISABLE_PB_GESTURE_FONT_SCALE_DESC = "禁用帖子页双指缩放调整字号"
+        const val FREE_COPY_LABEL = "自由复制"
+        const val FREE_COPY_DESC = "自由选择贴文正文与评论内容"
+        const val FREE_COPY_DIALOG_TITLE = FREE_COPY_LABEL
+        const val FREE_COPY_SAVED = "自由复制子功能配置已保存"
+        const val FREE_COPY_POST_BODY_LABEL = "贴文正文自由复制"
+        const val FREE_COPY_POST_BODY_DESC = "点击宿主复制按钮，弹窗选择标题与正文"
+        const val FREE_COPY_POST_LONG_PRESS_LABEL = "替换长按正文为自由复制"
+        const val FREE_COPY_POST_LONG_PRESS_DESC = "长按贴文正文直接打开自由复制弹窗"
+        const val FREE_COPY_COMMENT_INJECTION_LABEL = "评论自由复制（注入）"
+        const val FREE_COPY_COMMENT_INJECTION_DESC = "在宿主评论内容弹窗中注入文本选择能力"
+        const val FREE_COPY_COMMENT_DIALOG_LABEL = "评论自由复制（弹窗）"
+        const val FREE_COPY_COMMENT_DIALOG_DESC = "点击宿主复制按钮，弹窗选择评论内容"
         const val DISABLE_PB_AUTO_EXPAND_LABEL = "吧页面禁止自动展开"
         const val IMAGE_NATIVE_SHARE_LABEL = "图片添加原生分享功能"
         const val BLOCK_UPDATE_DIALOG_LABEL = "屏蔽更新升级弹窗"
@@ -208,7 +222,6 @@ object UiText {
         const val CRASH_REPORT_BLOCK_LABEL = "阻断崩溃与异常上报"
         val DEFAULT_ENABLED_FEATURES = listOf(
             HIDE_PB_BOTTOM_BANNER_LABEL,
-            DISABLE_PB_GESTURE_FONT_SCALE_LABEL,
             FREE_COPY_LABEL,
             DISABLE_PB_AUTO_EXPAND_LABEL,
             IMAGE_NATIVE_SHARE_LABEL,
@@ -427,6 +440,19 @@ object UiText {
         const val BUTTON_LABEL = "分享"
         const val CHOOSER_TITLE = "分享"
         const val START_FAILED = "系统分享拉起失败"
+    }
+
+    object FreeCopy {
+        const val DIALOG_TITLE = "自由复制"
+        const val BUTTON_COPY_TITLE = "复制标题"
+        const val BUTTON_COPY_BODY = "复制正文"
+        const val BUTTON_CANCEL = "取消"
+        const val BUTTON_COPY_ALL = "复制全文"
+        const val CLIP_LABEL = "贴吧内容"
+        const val TOAST_TITLE_COPIED = "已复制标题"
+        const val TOAST_BODY_COPIED = "已复制正文"
+        const val TOAST_COPIED = "已复制全文"
+        const val TOAST_COPY_FAILED = "复制失败"
     }
 
 

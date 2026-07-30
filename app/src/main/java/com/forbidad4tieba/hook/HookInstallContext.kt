@@ -20,8 +20,27 @@ internal class HookInstallContext(
         return statusMap[featureKey]?.isSupported() == true
     }
 
-    fun canInstallFreeCopy(): Boolean {
-        return isMain && available(HookFeatureKey.FREE_COPY)
+    fun canInstallFreeCopyCommentInjection(settings: SettingsSnapshot): Boolean {
+        return isMain &&
+            settings.isFreeCopyEnabled &&
+            settings.isFreeCopyCommentInjectionEnabled &&
+            available(HookFeatureKey.FREE_COPY_COMMENT_INJECTION)
+    }
+
+    fun canInstallFreeCopyNative(settings: SettingsSnapshot): Boolean {
+        if (!isMain || !settings.isFreeCopyEnabled) return false
+        return (
+            settings.isFreeCopyPostBodyEnabled &&
+                available(HookFeatureKey.FREE_COPY_POST_BODY)
+            ) ||
+            (
+                settings.isFreeCopyPostLongPressEnabled &&
+                    available(HookFeatureKey.FREE_COPY_POST_LONG_PRESS)
+                ) ||
+            (
+                settings.isFreeCopyCommentDialogEnabled &&
+                    available(HookFeatureKey.FREE_COPY_COMMENT_DIALOG)
+                )
     }
 
     fun canInstallImageViewerNativeShare(): Boolean {
@@ -228,12 +247,21 @@ internal class HookInstallContext(
         return settings.isPbScrollCoalesceEnabled && available(HookFeatureKey.ENABLE_PB_SCROLL_COALESCE)
     }
 
-    fun canInstallPbGestureFontScale(): Boolean = available(HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE)
+    fun canInstallPbGestureFontScale(settings: SettingsSnapshot): Boolean {
+        return settings.isPbGestureFontScaleDisabled &&
+            available(HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE)
+    }
 
     fun canInstallPbLikeAutoReply(settings: SettingsSnapshot): Boolean {
         return settings.isPbLikeAutoReplyEnabled &&
             settings.pbLikeAutoReplyText.isNotBlank() &&
             available(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
+    }
+
+    fun canInstallInputMemeBarBlock(settings: SettingsSnapshot): Boolean {
+        return isMain &&
+            settings.isInputMemeBarHidden &&
+            available(HookFeatureKey.HIDE_INPUT_MEME_BAR)
     }
 
     fun canInstallMainAiComponents(settings: SettingsSnapshot): Boolean {
