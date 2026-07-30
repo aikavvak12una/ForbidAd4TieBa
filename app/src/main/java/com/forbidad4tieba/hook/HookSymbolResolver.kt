@@ -16,6 +16,7 @@ import android.text.style.ClickableSpan
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebView
 import android.widget.ImageView
 import android.widget.EditText
 import android.widget.AbsListView
@@ -63,6 +64,14 @@ internal object HookSymbolResolver {
         val containerField: Field? = null,
         val textField: Field? = null,
         val postDataMethod: Method? = null,
+    )
+
+    private data class FreeCopyWebViewResolvedSymbols(
+        val bindMethod: Method? = null,
+        val webViewGetterMethod: Method? = null,
+        val innerWebViewGetterMethod: Method? = null,
+        val pageDataGetterMethod: Method? = null,
+        val firstFloorPostGetterMethod: Method? = null,
     )
 
     private const val PLAIN_URL_CLICKABLE_SPAN_CLASS = "com.baidu.tieba.ui7"
@@ -5080,6 +5089,93 @@ internal object HookSymbolResolver {
                 )
             }
 
+            val webViewSymbols = run webView@ {
+                val bindSpec = resolvedSymbols.freeCopyWebViewBindMethodSpec
+                    ?.takeIf { it.isNotBlank() }
+                val webViewGetterSpec = resolvedSymbols.freeCopyWebViewGetterMethodSpec
+                    ?.takeIf { it.isNotBlank() }
+                val innerWebViewGetterSpec =
+                    resolvedSymbols.freeCopyInnerWebViewGetterMethodSpec
+                        ?.takeIf { it.isNotBlank() }
+                val pageDataGetterSpec =
+                    resolvedSymbols.freeCopyWebViewPageDataGetterMethodSpec
+                        ?.takeIf { it.isNotBlank() }
+                val firstFloorPostGetterSpec =
+                    resolvedSymbols.freeCopyWebViewFirstFloorPostGetterMethodSpec
+                        ?.takeIf { it.isNotBlank() }
+                val hasAny = bindSpec != null || webViewGetterSpec != null ||
+                    innerWebViewGetterSpec != null ||
+                    pageDataGetterSpec != null || firstFloorPostGetterSpec != null
+                if (!hasAny) return@webView FreeCopyWebViewResolvedSymbols()
+                if (
+                    bindSpec == null || webViewGetterSpec == null ||
+                    innerWebViewGetterSpec == null ||
+                    pageDataGetterSpec == null || firstFloorPostGetterSpec == null
+                ) {
+                    XposedCompat.log(
+                        "[FreeCopyHook] WebView long press skipped: incomplete symbols",
+                    )
+                    return@webView FreeCopyWebViewResolvedSymbols()
+                }
+                val ownerClass = safeFindClass(
+                    StableTiebaHookPoints.PB_COMMON_WEB_VIEW_CLASS,
+                    cl,
+                ) ?: return@webView FreeCopyWebViewResolvedSymbols()
+                val bindMethod = resolveMethodByCachedSpec(
+                    ownerClass,
+                    bindSpec,
+                    bindSpec.substringBefore('|'),
+                )?.takeIf { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.returnType == Void.TYPE &&
+                        method.parameterTypes.size == 1
+                } ?: return@webView FreeCopyWebViewResolvedSymbols()
+                val webViewGetterMethod = resolveMethodByCachedSpec(
+                    ownerClass,
+                    webViewGetterSpec,
+                    webViewGetterSpec.substringBefore('|'),
+                )?.takeIf { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.parameterTypes.isEmpty() &&
+                        method.returnType != Void.TYPE
+                } ?: return@webView FreeCopyWebViewResolvedSymbols()
+                val innerWebViewGetterMethod = resolveMethodByCachedSpec(
+                    webViewGetterMethod.returnType,
+                    innerWebViewGetterSpec,
+                    innerWebViewGetterSpec.substringBefore('|'),
+                )?.takeIf { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.parameterTypes.isEmpty() &&
+                        WebView::class.java.isAssignableFrom(method.returnType)
+                } ?: return@webView FreeCopyWebViewResolvedSymbols()
+                val pageDataClass = bindMethod.parameterTypes.single()
+                val pageDataGetterMethod = resolveMethodByCachedSpec(
+                    pageDataClass,
+                    pageDataGetterSpec,
+                    pageDataGetterSpec.substringBefore('|'),
+                )?.takeIf { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.parameterTypes.isEmpty() &&
+                        method.returnType != Void.TYPE
+                } ?: return@webView FreeCopyWebViewResolvedSymbols()
+                val firstFloorPostGetterMethod = resolveMethodByCachedSpec(
+                    pageDataGetterMethod.returnType,
+                    firstFloorPostGetterSpec,
+                    firstFloorPostGetterSpec.substringBefore('|'),
+                )?.takeIf { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.parameterTypes.isEmpty() &&
+                        method.returnType == postDataClass
+                } ?: return@webView FreeCopyWebViewResolvedSymbols()
+                FreeCopyWebViewResolvedSymbols(
+                    bindMethod = bindMethod,
+                    webViewGetterMethod = webViewGetterMethod,
+                    innerWebViewGetterMethod = innerWebViewGetterMethod,
+                    pageDataGetterMethod = pageDataGetterMethod,
+                    firstFloorPostGetterMethod = firstFloorPostGetterMethod,
+                )
+            }
+
             fun frameworkMethodOrNull(
                 clazz: Class<*>,
                 name: String,
@@ -5118,6 +5214,11 @@ internal object HookSymbolResolver {
             titleSymbols.containerField?.isAccessible = true
             titleSymbols.textField?.isAccessible = true
             titleSymbols.postDataMethod?.isAccessible = true
+            webViewSymbols.bindMethod?.isAccessible = true
+            webViewSymbols.webViewGetterMethod?.isAccessible = true
+            webViewSymbols.innerWebViewGetterMethod?.isAccessible = true
+            webViewSymbols.pageDataGetterMethod?.isAccessible = true
+            webViewSymbols.firstFloorPostGetterMethod?.isAccessible = true
             clipboardWriteMethods.forEach { it.isAccessible = true }
             FreeCopyNativeSymbols(
                 postDataClass = postDataClass,
@@ -5135,6 +5236,12 @@ internal object HookSymbolResolver {
                 titleContainerField = titleSymbols.containerField,
                 titleTextField = titleSymbols.textField,
                 titlePostDataMethod = titleSymbols.postDataMethod,
+                webViewBindMethod = webViewSymbols.bindMethod,
+                webViewGetterMethod = webViewSymbols.webViewGetterMethod,
+                innerWebViewGetterMethod = webViewSymbols.innerWebViewGetterMethod,
+                webViewPageDataGetterMethod = webViewSymbols.pageDataGetterMethod,
+                webViewFirstFloorPostGetterMethod =
+                    webViewSymbols.firstFloorPostGetterMethod,
                 clipboardWriteMethods = clipboardWriteMethods,
             )
         } catch (t: Throwable) {
@@ -5660,6 +5767,11 @@ internal object HookSymbolResolver {
         var freeCopyTitleContainerField: String? = null
         var freeCopyTitleTextField: String? = null
         var freeCopyTitlePostDataMethodSpec: String? = null
+        var freeCopyWebViewBindMethodSpec: String? = null
+        var freeCopyWebViewGetterMethodSpec: String? = null
+        var freeCopyInnerWebViewGetterMethodSpec: String? = null
+        var freeCopyWebViewPageDataGetterMethodSpec: String? = null
+        var freeCopyWebViewFirstFloorPostGetterMethodSpec: String? = null
         var homeTabItemTypeField: String? = null
         var homeTabItemCodeField: String? = null
         var homeTabItemNameField: String? = null
@@ -6438,6 +6550,28 @@ internal object HookSymbolResolver {
         freeCopyTitleTextField = freeCopyTitleLongPressScan.textField
         freeCopyTitlePostDataMethodSpec = freeCopyTitleLongPressScan.postDataMethodSpec
 
+        val freeCopyWebViewLongPressScan = runScanStep(
+            "FreeCopyHook.WebViewLongPress",
+            logger,
+            scanErrors,
+            FreeCopyWebViewLongPressScanSymbols(),
+        ) {
+            FreeCopyNativeSymbolScanner.scanWebViewLongPress(
+                context = context,
+                cl = cl,
+                postFloorMethodSpec = freeCopyPostFloorMethodSpec,
+                logger = logger,
+            )
+        }
+        freeCopyWebViewBindMethodSpec = freeCopyWebViewLongPressScan.bindMethodSpec
+        freeCopyWebViewGetterMethodSpec = freeCopyWebViewLongPressScan.webViewGetterMethodSpec
+        freeCopyInnerWebViewGetterMethodSpec =
+            freeCopyWebViewLongPressScan.innerWebViewGetterMethodSpec
+        freeCopyWebViewPageDataGetterMethodSpec =
+            freeCopyWebViewLongPressScan.pageDataGetterMethodSpec
+        freeCopyWebViewFirstFloorPostGetterMethodSpec =
+            freeCopyWebViewLongPressScan.firstFloorPostGetterMethodSpec
+
         val mainTabBottomScan = runScanStep(
             "MainTabBottomHook",
             logger,
@@ -6787,6 +6921,14 @@ internal object HookSymbolResolver {
             this.freeCopyTitleContainerField = freeCopyTitleContainerField
             this.freeCopyTitleTextField = freeCopyTitleTextField
             this.freeCopyTitlePostDataMethodSpec = freeCopyTitlePostDataMethodSpec
+            this.freeCopyWebViewBindMethodSpec = freeCopyWebViewBindMethodSpec
+            this.freeCopyWebViewGetterMethodSpec = freeCopyWebViewGetterMethodSpec
+            this.freeCopyInnerWebViewGetterMethodSpec =
+                freeCopyInnerWebViewGetterMethodSpec
+            this.freeCopyWebViewPageDataGetterMethodSpec =
+                freeCopyWebViewPageDataGetterMethodSpec
+            this.freeCopyWebViewFirstFloorPostGetterMethodSpec =
+                freeCopyWebViewFirstFloorPostGetterMethodSpec
 
             this.mainTabDataClass = mainTabDataClass
             this.mainTabAddMethod = mainTabAddMethod

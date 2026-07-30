@@ -111,6 +111,11 @@ data class FreeCopySymbolsGroup(
     val freeCopyTitleContainerField: String? = null,
     val freeCopyTitleTextField: String? = null,
     val freeCopyTitlePostDataMethodSpec: String? = null,
+    val freeCopyWebViewBindMethodSpec: String? = null,
+    val freeCopyWebViewGetterMethodSpec: String? = null,
+    val freeCopyInnerWebViewGetterMethodSpec: String? = null,
+    val freeCopyWebViewPageDataGetterMethodSpec: String? = null,
+    val freeCopyWebViewFirstFloorPostGetterMethodSpec: String? = null,
 )
 
 private fun hasRequired(vararg values: String?): Boolean {

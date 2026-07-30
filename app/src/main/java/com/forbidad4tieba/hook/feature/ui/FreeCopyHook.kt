@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.SparseArray
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebView
 import android.widget.TextView
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -99,11 +100,17 @@ object FreeCopyHook {
         } else {
             0
         }
+        val webViewLongPressInstalled = if (longPressReady) {
+            hookPostWebViewLongPress(symbols)
+        } else {
+            false
+        }
         XposedCompat.log(
             "[FreeCopyHook] native install: clipboard=$clipboardInstalled, " +
                 "metadata=$metadataInstalled, floor=${symbols.postFloorMethod != null}, " +
                 "copy=$copyInstalled, " +
-                "longPress={body=$bodyLongPressInstalled,title=$titleLongPressInstalled}",
+                "longPress={body=$bodyLongPressInstalled,title=$titleLongPressInstalled," +
+                "webView=$webViewLongPressInstalled}",
         )
     }
 
@@ -460,6 +467,81 @@ object FreeCopyHook {
             }
         }
         return installed
+    }
+
+    private fun hookPostWebViewLongPress(symbols: FreeCopyNativeSymbols): Boolean {
+        val bindMethod = symbols.webViewBindMethod ?: return false
+        val webViewGetterMethod = symbols.webViewGetterMethod ?: return false
+        val innerWebViewGetterMethod = symbols.innerWebViewGetterMethod ?: return false
+        val pageDataGetterMethod = symbols.webViewPageDataGetterMethod ?: return false
+        val firstFloorPostGetterMethod =
+            symbols.webViewFirstFloorPostGetterMethod ?: return false
+        val mod = XposedCompat.module ?: return false
+        return try {
+            mod.hook(bindMethod).intercept { chain ->
+                val result = chain.proceed()
+                if (
+                    !ConfigManager.isFreeCopyEnabled ||
+                    !ConfigManager.isFreeCopyPostLongPressEnabled
+                ) {
+                    return@intercept result
+                }
+                val owner = chain.thisObject ?: return@intercept result
+                val pageData = chain.args.firstOrNull()
+                    ?.takeIf(pageDataGetterMethod.declaringClass::isInstance)
+                    ?: return@intercept result
+                val aggregateData = try {
+                    pageDataGetterMethod.invoke(pageData)
+                } catch (t: Throwable) {
+                    logRuntimeFailure("WebView page data", t)
+                    null
+                } ?: return@intercept result
+                val postData = try {
+                    firstFloorPostGetterMethod.invoke(aggregateData)
+                } catch (t: Throwable) {
+                    logRuntimeFailure("WebView first-floor PostData", t)
+                    null
+                }?.takeIf(symbols.postDataClass::isInstance) ?: return@intercept result
+                val webViewWrapper = try {
+                    webViewGetterMethod.invoke(owner)
+                } catch (t: Throwable) {
+                    logRuntimeFailure("PB WebView wrapper", t)
+                    null
+                } ?: return@intercept result
+                val webView = try {
+                    innerWebViewGetterMethod.invoke(webViewWrapper) as? WebView
+                } catch (t: Throwable) {
+                    logRuntimeFailure("PB inner WebView", t)
+                    null
+                } ?: return@intercept result
+                webView.setOnLongClickListener { view ->
+                    if (
+                        !ConfigManager.isFreeCopyEnabled ||
+                        !ConfigManager.isFreeCopyPostLongPressEnabled
+                    ) {
+                        false
+                    } else {
+                        val hitType = (view as? WebView)?.hitTestResult?.type
+                        if (
+                            hitType == WebView.HitTestResult.IMAGE_TYPE ||
+                            hitType == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
+                        ) {
+                            false
+                        } else {
+                            invokeLongPressCopy(postData, symbols, "webView", view)
+                        }
+                    }
+                }
+                result
+            }
+            true
+        } catch (t: Throwable) {
+            XposedCompat.logW(
+                "[FreeCopyHook] WebView long press hook failed: " +
+                    "${bindMethod.declaringClass.name}.${bindMethod.name}: ${t.message}",
+            )
+            false
+        }
     }
 
     private fun invokeLongPressCopy(
