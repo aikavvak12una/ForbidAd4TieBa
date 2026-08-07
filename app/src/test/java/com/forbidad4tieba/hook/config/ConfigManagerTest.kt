@@ -238,6 +238,75 @@ class ConfigManagerTest {
     }
 
     @Test
+    fun legacyCompatSeedTurnsOnAdBlockMasterForLegacySchemaUsers() {
+        val current = mutableSharedPreferences(
+            mapOf("user_settings_version_code" to 32),
+        )
+        val legacy = mutableSharedPreferences(
+            mapOf("user_settings_version_code" to 17),
+        )
+
+        invokeLegacyCompatSeed(current, legacy)
+
+        assertTrue(current.getBoolean(ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED, false))
+        assertTrue(current.getBoolean(ConfigManager.KEY_BLOCK_AD, false))
+        assertTrue(current.getBoolean(ConfigManager.KEY_BLOCK_AD_POST_PAGE, false))
+    }
+
+    @Test
+    fun legacyCompatSeedBackfillsCustomPostFilterParentFromLegacyChildren() {
+        val current = mutableSharedPreferences(
+            mapOf("user_settings_version_code" to 32),
+        )
+        val legacy = mutableSharedPreferences(
+            mapOf(
+                "user_settings_version_code" to 17,
+                ConfigManager.KEY_FILTER_POST_VIDEO to true,
+            ),
+        )
+
+        invokeLegacyCompatSeed(current, legacy)
+
+        assertTrue(current.getBoolean(ConfigManager.KEY_ENABLE_CUSTOM_POST_FILTER, false))
+    }
+
+    @Test
+    fun legacyCompatSeedCopiesMissingUserSettingsFromLegacyPrefs() {
+        val current = mutableSharedPreferences(
+            mapOf("user_settings_version_code" to 32),
+        )
+        val legacy = mutableSharedPreferences(
+            mapOf(
+                "user_settings_version_code" to 17,
+                ConfigManager.KEY_ENABLE_AUTO_LOAD_MORE to true,
+                ConfigManager.KEY_FILTER_ENTER_FORUM_WEB to true,
+            ),
+        )
+
+        invokeLegacyCompatSeed(current, legacy)
+
+        assertTrue(current.getBoolean(ConfigManager.KEY_ENABLE_AUTO_LOAD_MORE, false))
+        assertTrue(current.getBoolean(ConfigManager.KEY_FILTER_ENTER_FORUM_WEB, false))
+    }
+
+    @Test
+    fun legacyCompatSeedSkipsInternalHookSymbolCacheKeys() {
+        val current = mutableSharedPreferences(
+            mapOf("user_settings_version_code" to 32),
+        )
+        val legacy = mutableSharedPreferences(
+            mapOf(
+                "user_settings_version_code" to 17,
+                "hook_symbol_json_v19" to "{json}",
+            ),
+        )
+
+        invokeLegacyCompatSeed(current, legacy)
+
+        assertFalse(current.contains("hook_symbol_json_v19"))
+    }
+
+    @Test
     fun topAndBottomTabChildrenDoNotBecomeRuntimeActiveWhenParentIsOff() {
         withScanAvailability(
             mapOf(
@@ -549,6 +618,25 @@ class ConfigManagerTest {
         }
     }
 
+    /**
+     * 反射调用旧配置兼容补种逻辑，验证升级场景下的主开关迁移结果。
+     *
+     * 输入为当前配置和旧版混合配置；输出为无返回值。
+     * 边界条件：测试只覆盖缺失键补种，不依赖 Android 真正的磁盘 SharedPreferences 实现。
+     */
+    private fun invokeLegacyCompatSeed(
+        current: SharedPreferences,
+        legacy: SharedPreferences,
+    ) {
+        val method = ConfigManager::class.java.getDeclaredMethod(
+            "seedLegacyCompatPrefsIfNeeded",
+            SharedPreferences::class.java,
+            SharedPreferences::class.java,
+        )
+        method.isAccessible = true
+        method.invoke(ConfigManager, current, legacy)
+    }
+
     private fun sharedPreferences(values: Map<String, Any?>): SharedPreferences {
         return Proxy.newProxyInstance(
             SharedPreferences::class.java.classLoader,
@@ -565,6 +653,66 @@ class ConfigManagerTest {
                 "unregisterOnSharedPreferenceChangeListener",
                 -> Unit
                 "edit" -> error("edit() is not supported by test SharedPreferences")
+                else -> error("Unexpected SharedPreferences call: ${method.name}")
+            }
+        } as SharedPreferences
+    }
+
+    /**
+     * 构造一个可写的内存 SharedPreferences，用于测试迁移/补种这类会调用 `edit()` 的逻辑。
+     *
+     * 输入为初始键值；输出为可读写的 SharedPreferences 代理对象。
+     * 边界条件：仅实现当前测试需要的读写能力，未覆盖的方法会直接抛错，避免静默掩盖测试缺口。
+     */
+    private fun mutableSharedPreferences(values: Map<String, Any?>): SharedPreferences {
+        val store = LinkedHashMap(values)
+        return Proxy.newProxyInstance(
+            SharedPreferences::class.java.classLoader,
+            arrayOf(SharedPreferences::class.java),
+        ) { _, method, args ->
+            val key = args?.firstOrNull() as? String
+            when (method.name) {
+                "getBoolean" -> store[key] as? Boolean ?: args?.getOrNull(1) as Boolean
+                "getInt" -> store[key] as? Int ?: args?.getOrNull(1) as Int
+                "getString" -> store[key] as? String ?: args?.getOrNull(1) as? String
+                "contains" -> store.containsKey(key)
+                "getAll" -> LinkedHashMap(store)
+                "registerOnSharedPreferenceChangeListener",
+                "unregisterOnSharedPreferenceChangeListener",
+                -> Unit
+                "edit" -> {
+                    Proxy.newProxyInstance(
+                        SharedPreferences.Editor::class.java.classLoader,
+                        arrayOf(SharedPreferences.Editor::class.java),
+                    ) { _, editorMethod, editorArgs ->
+                        val editorKey = editorArgs?.firstOrNull() as? String
+                        when (editorMethod.name) {
+                            "putBoolean" -> {
+                                store[editorKey!!] = editorArgs[1] as Boolean
+                                null
+                            }
+                            "putInt" -> {
+                                store[editorKey!!] = editorArgs[1] as Int
+                                null
+                            }
+                            "putString" -> {
+                                store[editorKey!!] = editorArgs[1] as String?
+                                null
+                            }
+                            "remove" -> {
+                                store.remove(editorKey)
+                                null
+                            }
+                            "clear" -> {
+                                store.clear()
+                                null
+                            }
+                            "apply" -> null
+                            "commit" -> true
+                            else -> error("Unexpected SharedPreferences.Editor call: ${editorMethod.name}")
+                        }
+                    }
+                }
                 else -> error("Unexpected SharedPreferences call: ${method.name}")
             }
         } as SharedPreferences

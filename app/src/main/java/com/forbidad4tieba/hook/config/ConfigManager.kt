@@ -218,6 +218,38 @@ object ConfigManager {
 
     @Volatile private var restrictedFeatureUnlockBlockedByRemote: Boolean = false
     @Volatile private var environmentWarningDialogActive: Boolean = false
+    private val legacyMigrationSkipPrefixes = listOf(
+        "hook_symbol_",
+        "last_sign_date_",
+        "last_success_day_",
+        "about_",
+    )
+    private val legacyCustomPostFilterChildKeys = listOf(
+        KEY_FILTER_POST_VOTE,
+        KEY_FILTER_POST_VIDEO,
+        KEY_FILTER_POST_REPLY,
+        KEY_FILTER_POST_HOT,
+        KEY_FILTER_POST_GOODS,
+        KEY_FILTER_POST_GAME_BOOKING,
+        KEY_FILTER_POST_HELP,
+        KEY_FILTER_POST_SCORE,
+        KEY_FILTER_POST_LOTTERY,
+        KEY_FILTER_POST_LIVE,
+        KEY_FILTER_POST_RECOMMEND_FORUM,
+        KEY_FILTER_POST_UNFOLLOWED_FORUM,
+        KEY_FILTER_POST_FORUM_KEYWORD,
+        KEY_FILTER_POST_MODEL_SCORE,
+    )
+    private val legacyAdBlockChildKeys = listOf(
+        KEY_BLOCK_AD_FEED,
+        KEY_BLOCK_AD_POST_PAGE,
+        KEY_BLOCK_AD_FORUM_PAGE,
+        KEY_BLOCK_AD_STRATEGY,
+        KEY_BLOCK_AD_SEARCH_BOX_TEXT,
+        KEY_BLOCK_AD_HOME_TOP_BAR,
+        KEY_BLOCK_AD_MINE_TAB_WEB,
+        KEY_BLOCK_AD_HOME_SIDE_BAR_WEB,
+    )
 
     const val HOME_TOP_TAB_SOURCE_HOST = "host"
     const val HOME_TOP_TAB_SOURCE_MODULE = "module"
@@ -429,9 +461,11 @@ object ConfigManager {
             if (prefs != null) return
             val appCtx = context.applicationContext ?: context
             val localPrefs = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val localLegacyPrefs = appCtx.getSharedPreferences(LEGACY_MIXED_PREFS_NAME, Context.MODE_PRIVATE)
             appContext = appCtx
             prefs = localPrefs
             ensureUserSettingsVersion(localPrefs)
+            seedLegacyCompatPrefsIfNeeded(localPrefs, localLegacyPrefs)
 
             restrictedFeatureUnlockBlockedByRemote = getModuleStatePrefs(appCtx)
                 .getBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, false)
@@ -512,6 +546,124 @@ object ConfigManager {
             p.edit()
                 .putInt(KEY_USER_SETTINGS_VERSION_CODE, currentVersion)
                 .apply()
+        }
+    }
+
+    /**
+     * 为旧版混合配置补种新版主开关，避免升级后因缺少父级开关导致广告屏蔽/帖子过滤整体失效。
+     *
+     * 输入为当前新版用户配置和旧版混合配置；输出为无返回值。
+     * 边界条件：仅在当前键缺失时写入，不覆盖用户在新版里已经手动保存过的值；如果旧版配置为空或不是旧 schema，则直接跳过。
+     */
+    private fun seedLegacyCompatPrefsIfNeeded(
+        currentPrefs: SharedPreferences,
+        legacyPrefs: SharedPreferences,
+    ) {
+        if (!shouldSeedLegacyMasterToggles(legacyPrefs)) return
+
+        val changedKeys = ArrayList<String>(12)
+        val editor = currentPrefs.edit()
+
+        fun putBooleanIfMissing(key: String, value: Boolean) {
+            if (currentPrefs.contains(key)) return
+            editor.putBoolean(key, value)
+            changedKeys.add(key)
+        }
+
+        copyLegacyEntriesIfMissing(
+            currentPrefs = currentPrefs,
+            legacyPrefs = legacyPrefs,
+            editor = editor,
+            changedKeys = changedKeys,
+        )
+
+        if (!currentPrefs.contains(KEY_RESTRICTED_FEATURES_UNLOCKED)) {
+            putBooleanIfMissing(KEY_RESTRICTED_FEATURES_UNLOCKED, true)
+        }
+
+        if (!currentPrefs.contains(KEY_ENABLE_CUSTOM_POST_FILTER) && shouldEnableLegacyCustomPostFilter(legacyPrefs)) {
+            putBooleanIfMissing(KEY_ENABLE_CUSTOM_POST_FILTER, true)
+        }
+
+        if (!currentPrefs.contains(KEY_BLOCK_AD)) {
+            putBooleanIfMissing(KEY_BLOCK_AD, true)
+            legacyAdBlockChildKeys.forEach { key ->
+                putBooleanIfMissing(key, legacyPrefs.getBoolean(key, true))
+            }
+        }
+
+        if (changedKeys.isEmpty()) return
+        editor.apply()
+    }
+
+    /**
+     * 将旧版混合配置里与用户偏好直接相关的缺失键补种到新版配置中。
+     *
+     * 输入为当前配置、旧版配置、待提交 editor 和变更键列表；输出为无返回值。
+     * 边界条件：只迁移当前缺失的键，且会跳过符号缓存、统计时间戳等内部字段，避免把历史缓存误写入新版用户配置。
+     */
+    private fun copyLegacyEntriesIfMissing(
+        currentPrefs: SharedPreferences,
+        legacyPrefs: SharedPreferences,
+        editor: SharedPreferences.Editor,
+        changedKeys: MutableList<String>,
+    ) {
+        for ((key, value) in legacyPrefs.all) {
+            if (shouldSkipLegacyMigrationKey(key) || currentPrefs.contains(key)) continue
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Float -> editor.putFloat(key, value)
+                is String -> editor.putString(key, value)
+                is Set<*> -> {
+                    val strings = value.filterIsInstance<String>().toSet()
+                    if (strings.size != value.size) continue
+                    editor.putStringSet(key, strings)
+                }
+                else -> continue
+            }
+            changedKeys.add(key)
+        }
+    }
+
+    /**
+     * 判断旧版混合配置是否属于需要补种新版主开关的历史 schema。
+     *
+     * 输入为旧版混合配置；输出为是否需要执行兼容补种。
+     * 边界条件：旧配置为空、版本号缺失或已经达到当前最低兼容版本时返回 false，避免影响新安装或已完成迁移的用户。
+     */
+    private fun shouldSeedLegacyMasterToggles(legacyPrefs: SharedPreferences): Boolean {
+        if (legacyPrefs.all.isEmpty()) return false
+        val legacyVersion = legacyPrefs.getInt(KEY_USER_SETTINGS_VERSION_CODE, 0)
+        val minSupportedVersion = BuildConfig.MIN_SUPPORTED_USER_SETTINGS_VERSION_CODE
+            .coerceAtMost(BuildConfig.VERSION_CODE)
+        return legacyVersion in 1 until minSupportedVersion
+    }
+
+    /**
+     * 判断某个旧版键是否应跳过自动迁移。
+     *
+     * 输入为旧版配置键名；输出为是否跳过。
+     * 边界条件：版本号、符号缓存、时间戳类运行态数据和 about 缓存均不迁移，避免污染新版用户偏好文件。
+     */
+    private fun shouldSkipLegacyMigrationKey(key: String): Boolean {
+        if (key == KEY_USER_SETTINGS_VERSION_CODE) return true
+        return legacyMigrationSkipPrefixes.any { key.startsWith(it) }
+    }
+
+    /**
+     * 判断旧版配置是否启用了自定义帖子过滤主开关，或至少存在生效中的子项配置。
+     *
+     * 输入为旧版混合配置；输出为是否应在新版配置里补种 `enable_custom_post_filter=true`。
+     * 边界条件：如果旧版显式关闭主开关则返回 false；若旧版没有主开关，则以任一子项为 true 作为兼容启用信号。
+     */
+    private fun shouldEnableLegacyCustomPostFilter(legacyPrefs: SharedPreferences): Boolean {
+        if (legacyPrefs.contains(KEY_ENABLE_CUSTOM_POST_FILTER)) {
+            return legacyPrefs.getBoolean(KEY_ENABLE_CUSTOM_POST_FILTER, false)
+        }
+        return legacyCustomPostFilterChildKeys.any { key ->
+            legacyPrefs.getBoolean(key, false)
         }
     }
 
