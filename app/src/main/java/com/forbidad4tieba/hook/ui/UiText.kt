@@ -274,8 +274,8 @@ object UiText {
         const val DETAILED_LOG_SAVE_NO_SESSION = "暂无日志；请开启详细日志后重启贴吧"
         const val DETAILED_LOG_SAVE_EMPTY = "本次尚未记录到日志"
         const val DETAILED_LOG_SAVE_FAILED = "日志保存失败"
-        const val FORCE_FEED_UI_OPT_LABEL = "稳定首页新版布局"
-        const val FORCE_FEED_UI_OPT_DESC = "强制启用首页新版布局，并运行期跳过部分统计上报入口\n*关闭可能导致其他UI净化功能布局异常"
+        const val MONITOR_SYNC_BLOCK_LABEL = "阻断统计与埋点上报"
+        const val MONITOR_SYNC_BLOCK_DESC = "在代码层阻断统计和埋点 SDK 的数据采集，降低 CPU、内存、磁盘 IO 与网络开销"
 
         const val ACTION_ICON_SETTINGS = "\u2630"
         const val ACTION_ICON_PLAY = "\u25b6"

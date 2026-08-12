@@ -353,6 +353,7 @@ internal object SettingsMenuGroupBuilder {
             listOf(
                 SwitchItem(UiText.Settings.DISABLE_AI_COMPONENTS_LABEL, UiText.Settings.DISABLE_AI_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_AI_COMPONENTS, true, true),
                 SwitchItem(UiText.Settings.DISABLE_VIDEO_COMPONENTS_LABEL, UiText.Settings.DISABLE_VIDEO_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_VIDEO_COMPONENTS, true, true),
+                SwitchItem(UiText.Settings.MONITOR_SYNC_BLOCK_LABEL, UiText.Settings.MONITOR_SYNC_BLOCK_DESC, ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS, true, true),
             ),
         ),
     )
@@ -378,14 +379,6 @@ internal object SettingsMenuGroupBuilder {
             false,
             UiText.Settings.ACTION_ICON_SETTINGS,
             onActionClick = actions.onHomeNativeGlass,
-        ),
-        SwitchItem(
-            UiText.Settings.FORCE_FEED_UI_OPT_LABEL,
-            UiText.Settings.FORCE_FEED_UI_OPT_DESC,
-            ConfigManager.KEY_FORCE_FEED_UI_OPT,
-            true,
-            false,
-            linkedPrefKeys = listOf(ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS),
         ),
         SwitchItem(
             UiText.Settings.SIMPLIFY_BOTTOM_TAB_LABEL,

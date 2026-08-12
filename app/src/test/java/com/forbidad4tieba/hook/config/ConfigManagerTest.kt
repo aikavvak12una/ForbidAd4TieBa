@@ -56,13 +56,11 @@ class ConfigManagerTest {
     @Test
     fun nonScanPreferencesAreAvailableWithoutScanState() {
         assertNull(ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION))
-        assertNull(ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_FORCE_FEED_UI_OPT))
         assertNull(ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT))
         assertEquals(
             ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
             ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION),
         )
-        assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_FORCE_FEED_UI_OPT))
         assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT))
     }
 
@@ -440,15 +438,12 @@ class ConfigManagerTest {
                     ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to false,
                     ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
                     ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
-                    ConfigManager.KEY_FORCE_FEED_UI_OPT to true,
                 ),
             )
 
             assertFalse(snapshot.isPerformanceOptimizationEnabled)
             assertFalse(snapshot.isMonitorSyncComponentsDisabled)
             assertFalse(snapshot.isHostPerformanceFlagsForced)
-            assertTrue(snapshot.isFeedUiOptForced)
-            assertTrue(snapshot.isForceFeedUiOptRuntimeEnabled)
         }
     }
 
@@ -497,13 +492,13 @@ class ConfigManagerTest {
             assertTrue(snapshot.isApsarasScheduleDisabled)
             assertTrue(snapshot.isAdSdkComponentsDisabled)
             assertTrue(snapshot.isVideoComponentsDisabled)
-            assertFalse(snapshot.isMonitorSyncComponentsDisabled)
+            assertTrue(snapshot.isMonitorSyncComponentsDisabled)
             assertFalse(snapshot.isTitanPatchBlockEnabled)
         }
     }
 
     @Test
-    fun homeNativeGlassDoesNotImplicitlyEnableForceFeedUiOpt() {
+    fun homeNativeGlassEnabledWithBackgroundImage() {
         withScanAvailability(
             mapOf(
                 HookFeatureKey.HOME_NATIVE_GLASS to
@@ -514,13 +509,10 @@ class ConfigManagerTest {
                 mapOf(
                     ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS to true,
                     ConfigManager.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH_LIGHT to "/tmp/bg.png",
-                    ConfigManager.KEY_FORCE_FEED_UI_OPT to false,
                 ),
             )
 
             assertTrue(snapshot.isHomeNativeGlassEnabled)
-            assertFalse(snapshot.isFeedUiOptForced)
-            assertFalse(snapshot.isForceFeedUiOptRuntimeEnabled)
         }
     }
 

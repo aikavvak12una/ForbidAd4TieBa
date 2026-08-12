@@ -175,7 +175,6 @@ object ConfigManager {
     const val KEY_DISABLE_MONITOR_SYNC_COMPONENTS = "disable_monitor_sync_components"
     const val KEY_ENABLE_PB_PERFORMANCE_MODE = "enable_pb_performance_mode"
     const val KEY_ENABLE_PB_SCROLL_COALESCE = "enable_pb_scroll_coalesce"
-    const val KEY_FORCE_FEED_UI_OPT = "force_feed_ui_opt"
     const val KEY_ENABLE_PERFORMANCE_OPTIMIZATION = "enable_performance_optimization"
     const val KEY_FORCE_HOST_PERFORMANCE_FLAGS = "force_host_performance_flags"
     const val KEY_DISABLE_APSARAS_SCHEDULE = "disable_apsaras_schedule"
@@ -388,7 +387,6 @@ object ConfigManager {
     val isVideoComponentsDisabled: Boolean get() = settingsSnapshot.isVideoComponentsDisabled
     val isMonitorSyncComponentsDisabled: Boolean get() = settingsSnapshot.isMonitorSyncComponentsDisabled
     val isPbPerformanceModeEnabled: Boolean get() = settingsSnapshot.isPbPerformanceModeEnabled
-    val isFeedUiOptForced: Boolean get() = settingsSnapshot.isFeedUiOptForced
     val isHostPerformanceFlagsForced: Boolean get() = settingsSnapshot.isHostPerformanceFlagsForced
     val isApsarasScheduleDisabled: Boolean get() = settingsSnapshot.isApsarasScheduleDisabled
     val isFlutterPreinitDisabled: Boolean get() = settingsSnapshot.isFlutterPreinitDisabled
@@ -550,11 +548,6 @@ object ConfigManager {
     fun shouldStabilizeHomeChrome(): Boolean {
         return settingsSnapshot.shouldStabilizeHomeChrome()
     }
-
-    fun shouldForceFeedUiOpt(): Boolean {
-        return settingsSnapshot.shouldForceFeedUiOpt()
-    }
-
     fun formatPerformanceStatusLines(settings: SettingsSnapshot = settingsSnapshot): List<String> {
         val currentPrefs = prefs
 
@@ -595,13 +588,6 @@ object ConfigManager {
         }
 
         val masterConfigured = configured(KEY_ENABLE_PERFORMANCE_OPTIMIZATION, false)
-        val forceFeedConfigured = configured(KEY_FORCE_FEED_UI_OPT, false)
-        val forceFeedReason = when {
-            settings.isFeedUiOptForced -> "active"
-            !isScanFeatureAvailable(KEY_FORCE_FEED_UI_OPT) -> "scan_unavailable"
-            !forceFeedConfigured -> "config_off"
-            else -> "inactive"
-        }
 
         return listOf(
             "PerformanceFeature[$KEY_ENABLE_PERFORMANCE_OPTIMIZATION] " +
@@ -619,11 +605,7 @@ object ConfigManager {
             childLine(KEY_BLOCK_TITAN_PATCH, settings.isTitanPatchBlockEnabled, false),
             childLine(KEY_DISABLE_AI_COMPONENTS, settings.isAiComponentsDisabled, true),
             childLine(KEY_DISABLE_VIDEO_COMPONENTS, settings.isVideoComponentsDisabled, true),
-            childLine(KEY_DISABLE_MONITOR_SYNC_COMPONENTS, settings.isMonitorSyncComponentsDisabled, false),
-            "PerformanceFeature[$KEY_FORCE_FEED_UI_OPT] config=${onOff(forceFeedConfigured)} " +
-                "active=${onOff(settings.isForceFeedUiOptRuntimeEnabled)} " +
-                "userActive=${onOff(settings.isFeedUiOptForced)} " +
-                "scan=${getScanFeatureAvailabilityState(KEY_FORCE_FEED_UI_OPT)} reason=$forceFeedReason",
+            childLine(KEY_DISABLE_MONITOR_SYNC_COMPONENTS, settings.isMonitorSyncComponentsDisabled, true),
         )
     }
 
@@ -797,13 +779,11 @@ object ConfigManager {
                 mineEnabled = false,
             )
         }
-        val forceFeedUiOptUserEnabled = featureBoolean(KEY_FORCE_FEED_UI_OPT)
         val monitorSyncComponentsDisabled = performanceChildBoolean(
             KEY_DISABLE_MONITOR_SYNC_COMPONENTS,
             performanceOptimizationEnabled,
-            false,
+            true,
         )
-        val forceFeedUiOptRuntimeEnabled = forceFeedUiOptUserEnabled
 
         return SettingsSnapshot(
             areRestrictedFeaturesUnlocked = restrictedUnlocked,
@@ -903,8 +883,6 @@ object ConfigManager {
                 performanceOptimizationEnabled,
                 true,
             ),
-            isFeedUiOptForced = forceFeedUiOptUserEnabled,
-            isForceFeedUiOptRuntimeEnabled = forceFeedUiOptRuntimeEnabled,
             isPerformanceOptimizationEnabled = performanceOptimizationEnabled,
             isHostPerformanceFlagsForced = performanceChildBoolean(
                 KEY_FORCE_HOST_PERFORMANCE_FLAGS,

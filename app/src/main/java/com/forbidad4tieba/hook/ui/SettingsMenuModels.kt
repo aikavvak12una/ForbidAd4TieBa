@@ -7,7 +7,6 @@ internal data class SwitchItem(
     val supported: Boolean,
     val defaultValue: Boolean = false,
     val actionIcon: String? = null,
-    val linkedPrefKeys: List<String> = emptyList(),
     val actionContentDescription: String? = null,
     val onActionClick: (() -> Unit)? = null,
 )

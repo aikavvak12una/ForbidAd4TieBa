@@ -60,8 +60,6 @@ data class SettingsSnapshot(
     val isVideoComponentsDisabled: Boolean = false,
     val isMonitorSyncComponentsDisabled: Boolean = false,
     val isPbPerformanceModeEnabled: Boolean = false,
-    val isFeedUiOptForced: Boolean = false,
-    val isForceFeedUiOptRuntimeEnabled: Boolean = false,
     val isPerformanceOptimizationEnabled: Boolean = false,
     val isHostPerformanceFlagsForced: Boolean = false,
     val isApsarasScheduleDisabled: Boolean = false,
@@ -106,5 +104,4 @@ data class SettingsSnapshot(
         return isHomeTopBarAdBlockEnabled || isHomeNativeGlassRuntimeActive()
     }
 
-    fun shouldForceFeedUiOpt(): Boolean = isForceFeedUiOptRuntimeEnabled
 }

@@ -398,7 +398,6 @@ object SettingsMenuHook {
                         actionIcon = item.actionIcon,
                         actionContentDescription = item.actionContentDescription,
                         onActionClick = item.onActionClick,
-                        linkedPrefKeys = item.linkedPrefKeys,
                     )
                     root.addView(rowView)
                 }

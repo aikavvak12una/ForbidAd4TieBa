@@ -904,7 +904,6 @@ internal fun createSwitchRow(
     actionIcon: String? = null,
     actionContentDescription: String? = null,
     onActionClick: (() -> Unit)? = null,
-    linkedPrefKeys: List<String> = emptyList(),
 ): View {
     val tokens = UiStyle.tokens(context)
     val density = context.resources.displayMetrics.density
@@ -976,7 +975,7 @@ internal fun createSwitchRow(
     @Suppress("DEPRECATION")
     val sw = Switch(context).apply {
         isChecked = if (enabled && prefKey != null) {
-            resolveSwitchChecked(prefs, prefKey, linkedPrefKeys, defaultValue)
+            resolveSwitchChecked(prefs, prefKey, defaultValue)
         } else {
             defaultValue
         }
@@ -1005,9 +1004,6 @@ internal fun createSwitchRow(
             if (enabled) {
                 if (prefKey != null) {
                     val editor = prefs.edit().putBoolean(prefKey, isChecked)
-                    for (linkedPrefKey in linkedPrefKeys) {
-                        editor.putBoolean(linkedPrefKey, isChecked)
-                    }
                     editor.apply()
                 }
             }
@@ -1021,14 +1017,12 @@ internal fun createSwitchRow(
 private fun resolveSwitchChecked(
     prefs: SharedPreferences,
     prefKey: String,
-    linkedPrefKeys: List<String>,
     defaultValue: Boolean,
 ): Boolean {
-    if (!prefs.contains(prefKey) && linkedPrefKeys.none { prefs.contains(it) }) {
+    if (!prefs.contains(prefKey)) {
         return defaultValue
     }
-    if (prefs.getBoolean(prefKey, false)) return true
-    return linkedPrefKeys.any { prefs.getBoolean(it, false) }
+    return prefs.getBoolean(prefKey, false)
 }
 
 internal fun createAboutItem(

@@ -21,7 +21,6 @@ import com.forbidad4tieba.hook.feature.im.PrivateReadReceiptBlockHook
 import com.forbidad4tieba.hook.feature.perf.AdSdkInitBlockHook
 import com.forbidad4tieba.hook.feature.perf.AiComponentDisableHook
 import com.forbidad4tieba.hook.feature.perf.ColdStartOptHook
-import com.forbidad4tieba.hook.feature.perf.ForceFeedUiOptHook
 import com.forbidad4tieba.hook.feature.perf.HostPerformanceConfigHook
 import com.forbidad4tieba.hook.feature.perf.PbPerformanceModeHook
 import com.forbidad4tieba.hook.feature.perf.TrackingBlockHook
@@ -512,9 +511,6 @@ internal object HookInstallPlanner {
         val entries = ArrayList<HookInstallEntry>()
         if (settings.isPbPerformanceModeEnabled || settings.isPostPageAdBlockEnabled) {
             entries += HookInstallEntry("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(cl) }
-        }
-        if (settings.shouldForceFeedUiOpt()) {
-            entries += HookInstallEntry("ForceFeedUiOptHook") { cl -> ForceFeedUiOptHook.hook(cl) }
         }
         if (settings.isAdSdkComponentsDisabled) {
             entries += HookInstallEntry("AdSdkInitBlockHook") { cl -> AdSdkInitBlockHook.hook(cl) }
