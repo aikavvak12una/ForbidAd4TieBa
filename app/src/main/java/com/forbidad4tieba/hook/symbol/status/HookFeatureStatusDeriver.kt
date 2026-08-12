@@ -583,9 +583,15 @@ internal object HookFeatureStatusDeriver {
             )
         }
 
-        val autoRefreshCritical = ArrayList<String>(1)
+        val autoRefreshCritical = ArrayList<String>(3)
         if (symbols.autoRefreshTriggerMethod.isNullOrBlank()) {
             autoRefreshCritical.add("autoRefreshTriggerMethod")
+        }
+        if (symbols.autoRefreshNetRequestMethod.isNullOrBlank()) {
+            autoRefreshCritical.add("autoRefreshNetRequestMethod")
+        }
+        if (symbols.autoRefreshCacheRestoreMethod.isNullOrBlank()) {
+            autoRefreshCritical.add("autoRefreshCacheRestoreMethod")
         }
         out[HookFeatureKey.DISABLE_AUTO_REFRESH] = if (autoRefreshCritical.isEmpty()) {
             HookFeatureStatus(state = HookFeatureState.FULL)

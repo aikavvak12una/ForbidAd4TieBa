@@ -799,7 +799,11 @@ internal object HookSymbolStatusFormatter {
         add(
             "AutoRefreshHook",
             "${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.${symbols.autoRefreshTriggerMethod}",
-            listOf("autoRefreshTriggerMethod" to has(symbols.autoRefreshTriggerMethod)),
+            listOf(
+                "autoRefreshTriggerMethod" to has(symbols.autoRefreshTriggerMethod),
+                "autoRefreshNetRequestMethod" to has(symbols.autoRefreshNetRequestMethod),
+                "autoRefreshCacheRestoreMethod" to has(symbols.autoRefreshCacheRestoreMethod),
+            ),
         )
         add(
             "AutoLoadMoreHook.Config",

@@ -143,6 +143,9 @@ internal class HookSymbolsBuilder {
     var forumBottomSheetViewClass: String? = null
     var forumBottomSheetInitScrollMethod: String? = null
     var autoRefreshTriggerMethod: String? = null
+    var autoRefreshNetRequestMethod: String? = null
+    var autoRefreshNetRequestMethodSpec: String? = null
+    var autoRefreshCacheRestoreMethod: String? = null
     var autoLoadMoreConfigClass: String? = null
     var autoLoadMoreConfigMethod: String? = null
     var pbCommentScrollListenerClass: String? = null
@@ -594,7 +597,14 @@ internal class HookSymbolsBuilder {
             ),
             comment = PbCommentSymbolsGroup(
                 bottomSheet = ForumBottomSheetSymbolsGroup(forumBottomSheetViewClass, forumBottomSheetInitScrollMethod),
-                autoLoad = AutoLoadSymbolsGroup(autoRefreshTriggerMethod, autoLoadMoreConfigClass, autoLoadMoreConfigMethod),
+                autoLoad = AutoLoadSymbolsGroup(
+                    autoRefreshTriggerMethod,
+                    autoRefreshNetRequestMethod,
+                    autoRefreshNetRequestMethodSpec,
+                    autoRefreshCacheRestoreMethod,
+                    autoLoadMoreConfigClass,
+                    autoLoadMoreConfigMethod,
+                ),
                 scroll = PbCommentScrollSymbolsGroup(
                     pbCommentScrollListenerClass,
                     pbCommentScrollMethod,

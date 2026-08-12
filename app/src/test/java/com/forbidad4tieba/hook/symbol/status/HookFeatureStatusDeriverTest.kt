@@ -185,14 +185,23 @@ class HookFeatureStatusDeriverTest {
             .getValue(HookFeatureKey.DISABLE_AUTO_REFRESH)
 
         assertEquals(HookFeatureState.DISABLED, status.state)
-        assertEquals(listOf("autoRefreshTriggerMethod"), status.missingCritical)
+        assertEquals(
+            listOf(
+                "autoRefreshTriggerMethod",
+                "autoRefreshNetRequestMethod",
+                "autoRefreshCacheRestoreMethod",
+            ),
+            status.missingCritical,
+        )
     }
 
     @Test
-    fun deriveMarksAutoRefreshFullWhenTriggerMethodExists() {
+    fun deriveMarksAutoRefreshFullWhenBothTargetsExist() {
         val status = HookFeatureStatusDeriver.derive(
             buildHookSymbols {
                 autoRefreshTriggerMethod = "com.tieba.Feed#triggerRefresh"
+                autoRefreshNetRequestMethod = "com.tieba.FeedModel#sendRefreshRequest"
+                autoRefreshCacheRestoreMethod = "isTaskBlocked"
             },
         ).getValue(HookFeatureKey.DISABLE_AUTO_REFRESH)
 

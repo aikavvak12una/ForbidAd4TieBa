@@ -39,6 +39,9 @@ internal object HookSymbolValidator {
     private const val TB_WEB_VIEW_CLASS = "com.baidu.tieba.browser.TbWebView"
     private const val PERSONALIZE_PAGE_VIEW_CLASS =
         "com.baidu.tieba.homepage.personalize.PersonalizePageView"
+    private const val REC_PERSONALIZE_MODEL_CLASS =
+        "com.baidu.tieba.homepage.personalize.model.RecPersonalizePageModel"
+    private const val LOW_SCORE_SCHEDULER_CLASS = "com.baidu.tieba.parser.LowScoreScheduler"
     private const val BD_SWITCH_VIEW_CLASS = "com.baidu.adp.widget.BdSwitchView.BdSwitchView"
     private const val PB_FRAGMENT_CLASS = StableTiebaHookPoints.PB_FRAGMENT_CLASS
     private const val AI_PB_NEW_EDITOR_INPUT_SHOW_TYPE_CLASS =
@@ -1836,13 +1839,68 @@ private fun isForumBottomSheetValid(symbols: HookSymbols, cl: ClassLoader): Bool
 
 private fun isAutoRefreshValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
     val methodName = symbols.autoRefreshTriggerMethod ?: return false
-    return try {
+    val hasTrigger = try {
         val targetClass = safeFindClass(PERSONALIZE_PAGE_VIEW_CLASS, cl) ?: return false
         targetClass.declaredMethods.any { method ->
             !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
                 method.name == methodName &&
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.isEmpty()
+        }
+    } catch (_: Throwable) {
+        false
+    }
+    if (!hasTrigger) return false
+
+
+    val cacheRestoreName = symbols.autoRefreshCacheRestoreMethod
+    if (cacheRestoreName != null) {
+        val cacheRestoreValid = try {
+            val schedulerClass = safeFindClass(LOW_SCORE_SCHEDULER_CLASS, cl)
+            if (schedulerClass == null) {
+                false
+            } else {
+                schedulerClass.declaredMethods.any { method ->
+                    !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
+                        method.name == cacheRestoreName &&
+                        method.returnType == Boolean::class.javaPrimitiveType &&
+                        method.parameterTypes.size == 1 &&
+                        method.parameterTypes[0] == String::class.java
+                }
+            }
+        } catch (_: Throwable) {
+            false
+        }
+        if (!cacheRestoreValid) return false
+    }
+
+
+    val netRequestNames = symbols.autoRefreshNetRequestMethod
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        ?.takeIf { it.isNotEmpty() }
+        ?: return true
+    val specs = symbols.autoRefreshNetRequestMethodSpec
+        ?.split(";")
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        .orEmpty()
+    return try {
+        val modelClass = safeFindClass(REC_PERSONALIZE_MODEL_CLASS, cl) ?: return false
+        netRequestNames.all { netRequestName ->
+            val paramCount = specs
+                .firstOrNull { it.startsWith("$netRequestName|") }
+                ?.substringAfter("|void|")
+                ?.split(",")
+                ?.filter { it.isNotBlank() }
+                ?.size
+            modelClass.declaredMethods.any { method ->
+                !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
+                    method.name == netRequestName &&
+                    method.returnType == Void.TYPE &&
+                    (paramCount == null || method.parameterTypes.size == paramCount)
+            }
         }
     } catch (_: Throwable) {
         false

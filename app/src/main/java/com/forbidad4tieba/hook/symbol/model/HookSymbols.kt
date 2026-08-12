@@ -316,6 +316,12 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.comment.bottomSheet.forumBottomSheetInitScrollMethod
     val autoRefreshTriggerMethod: String?
         get() = hookPoints.primary.pb.comment.autoLoad.autoRefreshTriggerMethod
+    val autoRefreshNetRequestMethod: String?
+        get() = hookPoints.primary.pb.comment.autoLoad.autoRefreshNetRequestMethod
+    val autoRefreshNetRequestMethodSpec: String?
+        get() = hookPoints.primary.pb.comment.autoLoad.autoRefreshNetRequestMethodSpec
+    val autoRefreshCacheRestoreMethod: String?
+        get() = hookPoints.primary.pb.comment.autoLoad.autoRefreshCacheRestoreMethod
     val autoLoadMoreConfigClass: String?
         get() = hookPoints.primary.pb.comment.autoLoad.autoLoadMoreConfigClass
     val autoLoadMoreConfigMethod: String?
@@ -990,6 +996,9 @@ data class HookSymbols(
             put("forumBottomSheetViewClass", forumBottomSheetViewClass)
             put("forumBottomSheetInitScrollMethod", forumBottomSheetInitScrollMethod)
             put("autoRefreshTriggerMethod", autoRefreshTriggerMethod)
+            put("autoRefreshNetRequestMethod", autoRefreshNetRequestMethod)
+            put("autoRefreshNetRequestMethodSpec", autoRefreshNetRequestMethodSpec)
+            put("autoRefreshCacheRestoreMethod", autoRefreshCacheRestoreMethod)
             put("autoLoadMoreConfigClass", autoLoadMoreConfigClass)
             put("autoLoadMoreConfigMethod", autoLoadMoreConfigMethod)
             put("pbCommentScrollListenerClass", pbCommentScrollListenerClass)
@@ -1332,8 +1341,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 37
-        const val DEXKIT_RULE_VERSION = 27
+        const val CACHE_SCHEMA_VERSION = 40
+        const val DEXKIT_RULE_VERSION = 30
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1544,6 +1553,10 @@ data class HookSymbols(
                     forumBottomSheetViewClass = obj.optStringOrNull("forumBottomSheetViewClass")
                     forumBottomSheetInitScrollMethod = obj.optStringOrNull("forumBottomSheetInitScrollMethod")
                     autoRefreshTriggerMethod = obj.optStringOrNull("autoRefreshTriggerMethod")
+                    autoRefreshNetRequestMethod = obj.optStringOrNull("autoRefreshNetRequestMethod")
+                    autoRefreshNetRequestMethodSpec =
+                        obj.optStringOrNull("autoRefreshNetRequestMethodSpec")
+                    autoRefreshCacheRestoreMethod = obj.optStringOrNull("autoRefreshCacheRestoreMethod")
                     autoLoadMoreConfigClass = obj.optStringOrNull("autoLoadMoreConfigClass")
                     autoLoadMoreConfigMethod = obj.optStringOrNull("autoLoadMoreConfigMethod")
                     pbCommentScrollListenerClass = obj.optStringOrNull("pbCommentScrollListenerClass")

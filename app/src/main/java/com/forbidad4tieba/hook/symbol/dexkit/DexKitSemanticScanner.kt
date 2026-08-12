@@ -43,7 +43,14 @@ internal object DexKitSemanticScanner {
     private const val FREE_COPY_POST_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.PostData"
     private const val FREE_COPY_THREAD_DATA_CLASS = "com.baidu.tbadk.core.data.ThreadData"
     private const val TEXT_VIEW_CLASS = "android.widget.TextView"
-
+    private const val REC_PERSONALIZE_MODEL_CLASS =
+        "com.baidu.tieba.homepage.personalize.model.RecPersonalizePageModel"
+    private const val REC_PERSONALIZE_REQUEST_CLASS =
+        "com.baidu.tieba.homepage.personalize.data.RecPersonalizeRequest"
+    private const val NET_MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
+    private const val REC_HTTP_SENDER_CLASS = "com.baidu.tieba.p50"
+    private const val LOW_SCORE_SCHEDULER_CLASS = "com.baidu.tieba.parser.LowScoreScheduler"
+    private const val COLD_START_DELAY_SCHEDULE_CLASS = "com.baidu.searchbox.launch.ColdStartDelaySchedule"
     fun scanFreeCopyPostDataCopy(
         sourcePaths: List<String>,
         ownerClassName: String,
@@ -364,6 +371,95 @@ internal object DexKitSemanticScanner {
             DexAutoRefreshMatch(method.methodName, score, evidence.joinToString(","))
         }
     }
+
+    /**
+     * Scans [REC_PERSONALIZE_MODEL_CLASS] for the method that builds and sends a
+     * [REC_PERSONALIZE_REQUEST_CLASS] network request. Every personalize feed refresh
+     * path (including the cold-start B0() branch that bypasses the w1() UI trigger)
+     * ultimately funnels into this request method, so blocking it covers all refresh
+     * entry points regardless of the isColdNetDataOpt() AB split.
+     */
+    fun scanRecPersonalizeRequestMethods(
+        sourcePaths: List<String>,
+        ownerClassName: String = REC_PERSONALIZE_MODEL_CLASS,
+        requestClassName: String = REC_PERSONALIZE_REQUEST_CLASS,
+        logger: ScanLogger? = null,
+    ): List<DexRecPersonalizeRequestMatch> =
+        withBridge(sourcePaths, logger, "AutoRefreshHook.RecRequestDex", emptyList()) { bridge ->
+            val methods = exactMethods(bridge, ownerClassName, logger)
+            // Feed refresh funnels into two final request methods inside
+            // RecPersonalizePageModel: m() sends through MessageManager
+            // (sendMessage), r() issues an HTTP direct request (p50.g). Both
+            // must be blocked so the cold-start refresh is covered regardless
+            // of which transport the host picks.
+            methods.mapNotNull { method ->
+                if (Modifier.isStatic(method.modifiers) || method.returnTypeName != "void") {
+                    return@mapNotNull null
+                }
+                val invokes = method.invokes.toList()
+                val sendsMessage = invokes.any { invoked ->
+                    invoked.declaredClassName == NET_MESSAGE_MANAGER_CLASS &&
+                        invoked.methodName == "sendMessage"
+                }
+                val httpDirectSend = invokes.any { invoked ->
+                    invoked.declaredClassName == REC_HTTP_SENDER_CLASS &&
+                        invoked.methodName == "g"
+                }
+                if (!sendsMessage && !httpDirectSend) return@mapNotNull null
+                val evidence = buildList {
+                    if (sendsMessage) add("sendMessage")
+                    if (httpDirectSend) add("httpDirectSend")
+                }.joinToString(",")
+                DexRecPersonalizeRequestMatch(
+                    ownerMethodName = method.methodName,
+                    paramTypes = method.paramTypeNames,
+                    evidence = evidence,
+                )
+            }
+        }
+
+    /**
+     * Scans LowScoreScheduler for the boolean(String) method used to decide
+     * whether a host task is blocked by the low-score scheduler. When the host
+     * disables home caching (disable_home_cache), the cold-start feed has no
+     * cached data to render after the auto-refresh is blocked. Returning false
+     * for that taskId restores the host's own home-cache read/write path so the
+     * last-seen feed can be shown without a network refresh.
+     */
+    fun scanHomeCacheRestoreMethod(
+        sourcePaths: List<String>,
+        ownerClassName: String = LOW_SCORE_SCHEDULER_CLASS,
+        logger: ScanLogger? = null,
+    ): DexHomeCacheRestoreMatch? =
+        withBridge(sourcePaths, logger, "AutoRefreshHook.CacheRestoreDex", null) { bridge ->
+            val methods = exactMethods(bridge, ownerClassName, logger)
+            val candidates = methods.filter { method ->
+                if (Modifier.isStatic(method.modifiers)) {
+                    return@filter false
+                }
+                if (method.returnTypeName != "boolean" || method.paramTypeNames != listOf("java.lang.String")) {
+                    return@filter false
+                }
+                val invokes = method.invokes.toList()
+                invokes.any { invoked ->
+                    invoked.declaredClassName == COLD_START_DELAY_SCHEDULE_CLASS
+                }
+            }
+            if (candidates.size != 1) {
+                val details = candidates.joinToString(",") { it.methodName }.ifBlank { "-" }
+                HookSymbolScanDiagnostics.log(
+                    logger,
+                    "cacheRestoreDex: expected=1 actual=${candidates.size} " +
+                        "owner=${ownerClassName} candidates=$details",
+                )
+                return@withBridge null
+            }
+            val match = candidates.single()
+            DexHomeCacheRestoreMatch(
+                ownerMethodName = match.methodName,
+                evidence = "coldStartDelayScheduleRef",
+            )
+        }
 
     fun scanOriginalImageMethods(
         sourcePaths: List<String>,

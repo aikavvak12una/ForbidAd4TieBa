@@ -97,6 +97,9 @@ object StableTiebaHookPoints {
     // HookSymbolResolver unless the host exposes a stable public method name.
     const val HOME_PERSONALIZE_PAGE_VIEW_CLASS =
         "com.baidu.tieba.homepage.personalize.PersonalizePageView"
+    const val REC_PERSONALIZE_MODEL_CLASS =
+        "com.baidu.tieba.homepage.personalize.model.RecPersonalizePageModel"
+    const val LOW_SCORE_SCHEDULER_CLASS = "com.baidu.tieba.parser.LowScoreScheduler"
     const val HOME_SEARCH_BOX_OWNER_CLASS =
         "com.baidu.tieba.homepage.personalize.PersonalizeHeaderViewController"
     const val HOME_PRELOAD_CONFIG_PARSER_CLASS =

@@ -508,6 +508,17 @@ internal data class DexAutoRefreshMatch(
     val evidence: String,
 )
 
+internal data class DexRecPersonalizeRequestMatch(
+    val ownerMethodName: String,
+    val paramTypes: List<String>,
+    val evidence: String,
+)
+
+internal data class DexHomeCacheRestoreMatch(
+    val ownerMethodName: String,
+    val evidence: String,
+)
+
 internal data class DexOriginalImageMethodsMatch(
     val primaryReadyMethod: String?,
     val triggerMethod: String,

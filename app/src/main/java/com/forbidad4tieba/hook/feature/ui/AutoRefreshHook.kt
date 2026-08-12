@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 object AutoRefreshHook {
     private const val FOREGROUND_BLOCK_WINDOW_MS = 3000L
+    private const val STARTUP_BLOCK_WINDOW_MS = 10000L
 
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
     private val foregroundCallbacksRegistered = AtomicBoolean(false)
@@ -62,39 +63,180 @@ object AutoRefreshHook {
         }
         val mod = XposedCompat.module ?: return
         val triggerMethod = targets.triggerMethod
-        if (!installDirectHook(mod, triggerMethod)) {
+        if (installDirectHook(mod, triggerMethod, blockNetworkSend = false)) {
+            XposedCompat.log(
+                "[AutoRefreshHook] trigger hook INSTALLED: " +
+                    "${triggerMethod.declaringClass.name}.${triggerMethod.name}()",
+            )
+        } else {
             XposedCompat.log("[AutoRefreshHook] already installed: ${ReflectionUtils.methodSignature(triggerMethod)}")
-            return
         }
-        armNextAutoRefresh("startup")
+        val netRequestMethods = targets.netRequestMethods
+        for (netRequestMethod in netRequestMethods) {
+            if (installDirectHook(mod, netRequestMethod, blockNetworkSend = true)) {
+                XposedCompat.log(
+                    "[AutoRefreshHook] net-request hook INSTALLED: " +
+                        "${netRequestMethod.declaringClass.name}.${netRequestMethod.name}()",
+                )
+            } else {
+                XposedCompat.log("[AutoRefreshHook] already installed: ${ReflectionUtils.methodSignature(netRequestMethod)}")
+            }
+        }
+        val cacheRestoreMethod = targets.cacheRestoreMethod
+        if (cacheRestoreMethod != null && installCacheRestoreHook(mod, cacheRestoreMethod)) {
+            XposedCompat.log(
+                "[AutoRefreshHook] cache-restore hook INSTALLED: " +
+                    "${cacheRestoreMethod.declaringClass.name}.${cacheRestoreMethod.name}()",
+            )
+        }
+        installRefreshAnimationHook(mod, triggerMethod.declaringClass.classLoader)
+        installUserInteractionHook(mod, triggerMethod.declaringClass.classLoader)
+        armNextAutoRefresh("startup", STARTUP_BLOCK_WINDOW_MS)
+        val netDesc = netRequestMethods.joinToString(" + ") { "${it.declaringClass.name}.${it.name}()" }
         XposedCompat.log(
             "[AutoRefreshHook] hook INSTALLED: " +
-                "${triggerMethod.declaringClass.name}.${triggerMethod.name}() blockMode=startup-and-foreground",
+                "${triggerMethod.declaringClass.name}.${triggerMethod.name}() + $netDesc " +
+                "blockMode=startup-and-foreground",
         )
     }
 
-    private fun installDirectHook(
+    /**
+     * LowScoreScheduler.C(taskId) decides whether a host task is blocked by the
+     * low-score scheduler. When the host disables home caching, the cold-start
+     * feed has no cached data after the auto-refresh is blocked. Returning false
+     * for "disable_home_cache" restores the host's own home-cache read/write path
+     * so the last-seen feed renders without a network refresh. All other taskIds
+     * keep the host's original behavior.
+     */
+    private fun installCacheRestoreHook(
         mod: io.github.libxposed.api.XposedModule,
         method: Method,
     ): Boolean {
         val methodKey = ReflectionUtils.methodSignature(method)
         if (!installedMethodKeys.add(methodKey)) return false
+        val key = "disable_home_cache"
+        mod.hook(method).intercept { chain ->
+            if (!ConfigManager.isAutoRefreshDisabled) {
+                return@intercept chain.proceed()
+            }
+            val taskId = chain.args.firstOrNull() as? String
+            if (taskId == key) {
+                XposedCompat.logD("[AutoRefreshHook] cache restore: $key -> false")
+                return@intercept false
+            }
+            chain.proceed()
+        }
+        return true
+    }
+
+    /**
+     * The pull-to-refresh loading animation is shown by
+     * BigdaySwipeRefreshLayout.setRefreshing(true) during cold start. With the
+     * auto-refresh blocked there is no completion callback to hide it, so the
+     * animation would spin forever. Skipping setRefreshing(true) while the
+     * startup window is armed keeps the cached feed visible without the stuck
+     * spinner, without touching the refresh mechanism itself (the progress view
+     * setup in W0 and the pull gesture still work). Once the user interacts and
+     * the window is disarmed, setRefreshing behaves normally again.
+     */
+    private fun installRefreshAnimationHook(
+        mod: io.github.libxposed.api.XposedModule,
+        cl: ClassLoader,
+    ) {
+        val refreshClass = XposedCompat.findClassOrNull(
+            "com.baidu.tieba.homepage.personalize.bigday.BigdaySwipeRefreshLayout",
+            cl,
+        ) ?: return
+        val method = runCatching {
+            refreshClass.getDeclaredMethod("setRefreshing", Boolean::class.javaPrimitiveType)
+        }.getOrNull() ?: return
+        runCatching {
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                if (!ConfigManager.isAutoRefreshDisabled) {
+                    return@intercept chain.proceed()
+                }
+                val refreshing = chain.args.firstOrNull() as? Boolean
+                if (refreshing == true &&
+                    blockNextAutoRefresh.get() &&
+                    SystemClock.uptimeMillis() <= blockExpiresAtMs.get()
+                ) {
+                    XposedCompat.logD("[AutoRefreshHook] skip refreshing animation (auto-refresh blocked)")
+                    return@intercept null
+                }
+                chain.proceed()
+            }
+            XposedCompat.log("[AutoRefreshHook] refresh-animation hook INSTALLED")
+        }.onFailure { t ->
+            XposedCompat.logD("[AutoRefreshHook] refresh-animation hook skipped: ${t.message}")
+        }
+    }
+
+    /**
+     * Activity.onUserInteraction() fires on real user interaction with the
+     * activity. It is the manual boundary for the auto-refresh block: once the
+     * user interacts with the app (including the pull-to-refresh gesture), the
+     * startup window is disarmed so their own refresh requests pass through.
+     * Cold start itself produces no user interaction, so the automatic refresh
+     * chain stays blocked.
+     */
+    private fun installUserInteractionHook(
+        mod: io.github.libxposed.api.XposedModule,
+        cl: ClassLoader,
+    ) {
+        val activityClass = XposedCompat.findClassOrNull("android.app.Activity", cl) ?: return
+        val method = runCatching {
+            activityClass.getDeclaredMethod("onUserInteraction")
+        }.getOrNull() ?: return
+        runCatching {
+            method.isAccessible = true
+            mod.hook(method).intercept { chain ->
+                if (blockNextAutoRefresh.compareAndSet(true, false)) {
+                    blockReason.set(null)
+                    blockExpiresAtMs.set(Long.MAX_VALUE)
+                    XposedCompat.logD("[AutoRefreshHook] user interaction, auto-refresh window disarmed")
+                }
+                chain.proceed()
+            }
+            XposedCompat.log("[AutoRefreshHook] user-interaction boundary hook INSTALLED")
+        }.onFailure { t ->
+            XposedCompat.logD("[AutoRefreshHook] user-interaction hook skipped: ${t.message}")
+        }
+    }
+
+    private fun installDirectHook(
+        mod: io.github.libxposed.api.XposedModule,
+        method: Method,
+        blockNetworkSend: Boolean,
+    ): Boolean {
+        val methodKey = ReflectionUtils.methodSignature(method)
+        if (!installedMethodKeys.add(methodKey)) return false
+
+        // Cold start fires the refresh chain multiple times (w1/B0 -> k1 ->
+        // RecPersonalizePageModel.m/r). Keep blocking every request send while
+        // the startup window is armed so no auto-refresh escapes. The window is
+        // lifted by Activity.onUserInteraction() (see installUserInteractionHook)
+        // so the user's own pull-to-refresh after launch works normally.
 
         mod.hook(method).intercept { chain ->
             if (!ConfigManager.isAutoRefreshDisabled) {
                 disarmNextAutoRefresh()
                 return@intercept chain.proceed()
             }
-            if (blockNextAutoRefresh.compareAndSet(true, false)) {
-                val reason = blockReason.getAndSet(null) ?: "armed"
-                val expiresAtMs = blockExpiresAtMs.getAndSet(Long.MAX_VALUE)
-                if (SystemClock.uptimeMillis() > expiresAtMs) {
-                    return@intercept chain.proceed()
-                }
-                XposedCompat.logW("[AutoRefreshHook] blocked $reason refresh: ${method.name}()")
-                return@intercept null
+            if (!blockNetworkSend) {
+                return@intercept chain.proceed()
             }
-            chain.proceed()
+            if (!blockNextAutoRefresh.get()) {
+                return@intercept chain.proceed()
+            }
+            val expiresAtMs = blockExpiresAtMs.get()
+            if (SystemClock.uptimeMillis() > expiresAtMs) {
+                disarmNextAutoRefresh()
+                return@intercept chain.proceed()
+            }
+            val reason = blockReason.get() ?: "armed"
+            XposedCompat.logW("[AutoRefreshHook] blocked $reason refresh: ${method.name}()")
+            return@intercept null
         }
         return true
     }

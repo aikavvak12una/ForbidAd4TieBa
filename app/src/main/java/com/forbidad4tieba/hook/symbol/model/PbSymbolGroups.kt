@@ -74,6 +74,9 @@ data class ForumBottomSheetSymbolsGroup(
 
 data class AutoLoadSymbolsGroup(
     val autoRefreshTriggerMethod: String? = null,
+    val autoRefreshNetRequestMethod: String? = null,
+    val autoRefreshNetRequestMethodSpec: String? = null,
+    val autoRefreshCacheRestoreMethod: String? = null,
     val autoLoadMoreConfigClass: String? = null,
     val autoLoadMoreConfigMethod: String? = null,
 )

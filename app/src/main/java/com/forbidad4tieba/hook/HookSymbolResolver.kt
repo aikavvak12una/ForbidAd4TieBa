@@ -1879,12 +1879,124 @@ internal object HookSymbolResolver {
                 return null
             }
             method.isAccessible = true
-            AutoRefreshSymbols(triggerMethod = method)
+
+            val netRequestMethods = resolveAutoRefreshNetRequestMethods(cl, resolvedSymbols)
+            if (netRequestMethods.isEmpty()) {
+                XposedCompat.log(
+                    "[AutoRefreshHook] skipped: net request methods unresolved: " +
+                        "trigger=${StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS}.$methodName() " +
+                        "net=${resolvedSymbols.autoRefreshNetRequestMethod}",
+                )
+                return null
+            }
+
+            val cacheRestoreMethod = resolveAutoRefreshCacheRestoreMethod(cl, resolvedSymbols)
+            if (cacheRestoreMethod == null) {
+                XposedCompat.log(
+                    "[AutoRefreshHook] skipped: cache restore method unresolved: " +
+                        "cache=${resolvedSymbols.autoRefreshCacheRestoreMethod}",
+                )
+                return null
+            }
+
+            AutoRefreshSymbols(
+                triggerMethod = method,
+                netRequestMethods = netRequestMethods,
+                cacheRestoreMethod = cacheRestoreMethod,
+            )
+
         } catch (t: Throwable) {
             XposedCompat.log("[AutoRefreshHook] symbol resolve FAILED: ${t.message}")
             XposedCompat.log(t)
             null
         }
+    }
+
+    private fun resolveAutoRefreshNetRequestMethods(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ): List<Method> {
+        val methodNames = symbols.autoRefreshNetRequestMethod
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?.takeIf { it.isNotEmpty() }
+            ?: run {
+                XposedCompat.log("[AutoRefreshHook] net request: missing autoRefreshNetRequestMethod")
+                return emptyList()
+            }
+        val specs = symbols.autoRefreshNetRequestMethodSpec
+            ?.split(";")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        val modelClass = safeFindClass(StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS, cl) ?: run {
+            XposedCompat.log(
+                "[AutoRefreshHook] net request: class not found: " +
+                    StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS,
+            )
+            return emptyList()
+        }
+        val resolved = ArrayList<Method>(methodNames.size)
+        for (methodName in methodNames) {
+            val spec = specs.firstOrNull { it.startsWith("$methodName|") }
+            val paramCount = spec?.substringAfter("|void|")?.split(",")?.filter { it.isNotBlank() }?.size
+            val candidate = collectInstanceMethods(modelClass).singleOrNull { method ->
+                method.name == methodName &&
+                    method.returnType == Void.TYPE &&
+                    (paramCount == null || method.parameterTypes.size == paramCount)
+            } ?: run {
+                XposedCompat.log(
+                    "[AutoRefreshHook] net request: method mismatch: " +
+                        "${StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS}.$methodName()",
+                )
+                return emptyList()
+            }
+            candidate.isAccessible = true
+            resolved.add(candidate)
+        }
+        if (resolved.isNotEmpty()) {
+            XposedCompat.log(
+                "[AutoRefreshHook] net request resolved: " +
+                    resolved.joinToString(", ") { "${it.declaringClass.name}.${it.name}()" },
+            )
+        }
+        return resolved
+    }
+
+    private fun resolveAutoRefreshCacheRestoreMethod(
+        cl: ClassLoader,
+        symbols: HookSymbols,
+    ): Method? {
+        val methodName = symbols.autoRefreshCacheRestoreMethod?.takeIf { it.isNotBlank() } ?: run {
+            XposedCompat.log("[AutoRefreshHook] cache restore: missing autoRefreshCacheRestoreMethod")
+            return null
+        }
+        val schedulerClass = safeFindClass(StableTiebaHookPoints.LOW_SCORE_SCHEDULER_CLASS, cl) ?: run {
+            XposedCompat.log(
+                "[AutoRefreshHook] cache restore: class not found: " +
+                    StableTiebaHookPoints.LOW_SCORE_SCHEDULER_CLASS,
+            )
+            return null
+        }
+        val candidate = collectInstanceMethods(schedulerClass).singleOrNull { method ->
+            method.name == methodName &&
+                method.returnType == Boolean::class.javaPrimitiveType &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0] == String::class.java
+        } ?: run {
+            XposedCompat.log(
+                "[AutoRefreshHook] cache restore: method mismatch: " +
+                    "${StableTiebaHookPoints.LOW_SCORE_SCHEDULER_CLASS}.$methodName(String):boolean",
+            )
+            return null
+        }
+        candidate.isAccessible = true
+        XposedCompat.log(
+            "[AutoRefreshHook] cache restore resolved: " +
+                "${StableTiebaHookPoints.LOW_SCORE_SCHEDULER_CLASS}.$methodName()",
+        )
+        return candidate
     }
 
     fun resolveAutoLoadMoreSymbols(
@@ -5691,6 +5803,9 @@ internal object HookSymbolResolver {
         var forumBottomSheetViewClass: String? = null
         var forumBottomSheetInitScrollMethod: String? = null
         var autoRefreshTriggerMethod: String? = null
+        var autoRefreshNetRequestMethod: String? = null
+        var autoRefreshCacheRestoreMethod: String? = null
+        var autoRefreshNetRequestMethodSpec: String? = null
         var autoLoadMoreConfigClass: String? = null
         var autoLoadMoreConfigMethod: String? = null
         var pbCommentScrollListenerClass: String? = null
@@ -6236,6 +6351,36 @@ internal object HookSymbolResolver {
         ) {
             AutoRefreshSymbolScanner.scan(context, cl, logger)
         }
+
+        val autoRefreshNetRequestScan = runScanStep(
+            "AutoRefreshHook.RecRequest",
+            logger,
+            scanErrors,
+            emptyList(),
+        ) {
+            AutoRefreshSymbolScanner.scanRecPersonalizeRequest(context, cl, logger)
+        }
+        autoRefreshNetRequestMethod = autoRefreshNetRequestScan
+            .map { it.ownerMethodName }
+            .distinct()
+            .joinToString(",")
+            .takeIf { it.isNotBlank() }
+        autoRefreshNetRequestMethodSpec = autoRefreshNetRequestScan
+            .map { it.ownerMethodName + "|void|" + it.paramTypes.joinToString(",") }
+            .distinct()
+            .joinToString(";")
+            .takeIf { it.isNotBlank() }
+
+        autoRefreshCacheRestoreMethod = runScanStep(
+            "AutoRefreshHook.CacheRestore",
+            logger,
+            scanErrors,
+            null as String?,
+        ) {
+            AutoRefreshSymbolScanner.scanHomeCacheRestore(context, cl, logger)?.ownerMethodName
+        }
+
+
 
         val autoLoadMoreScan = runScanStep(
             "AutoLoadMoreHook.Config",
@@ -6842,6 +6987,9 @@ internal object HookSymbolResolver {
             this.forumBottomSheetViewClass = forumBottomSheetViewClass
             this.forumBottomSheetInitScrollMethod = forumBottomSheetInitScrollMethod
             this.autoRefreshTriggerMethod = autoRefreshTriggerMethod
+            this.autoRefreshNetRequestMethod = autoRefreshNetRequestMethod
+            this.autoRefreshNetRequestMethodSpec = autoRefreshNetRequestMethodSpec
+            this.autoRefreshCacheRestoreMethod = autoRefreshCacheRestoreMethod
             this.autoLoadMoreConfigClass = autoLoadMoreConfigClass
             this.autoLoadMoreConfigMethod = autoLoadMoreConfigMethod
             this.pbCommentScrollListenerClass = pbCommentScrollListenerClass

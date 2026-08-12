@@ -165,6 +165,8 @@ internal data class SearchBoxTextAdSymbols(
 
 internal data class AutoRefreshSymbols(
     val triggerMethod: Method,
+    val netRequestMethods: List<Method>,
+    val cacheRestoreMethod: Method?,
 )
 
 internal data class AutoLoadMoreSymbols(
