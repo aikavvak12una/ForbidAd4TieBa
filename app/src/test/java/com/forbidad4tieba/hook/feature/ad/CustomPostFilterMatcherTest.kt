@@ -88,6 +88,59 @@ class CustomPostFilterMatcherTest {
     }
 
     @Test
+    fun replyBlocksCommentForwardCardType() {
+        val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+            mapOf(
+                "card_type" to "commentForwardCard",
+                "thread_type" to "81",
+                "page_from" to "recommend",
+                "title" to "回复：9月1号放大招，三兄弟开始“断卡行动”",
+            ),
+            runtimeRules(reply = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals("custom_post_type:reply:card_type=commentForwardCard", decision.reason)
+    }
+
+    @Test
+    fun replyDisabledKeepsCommentForwardCard() {
+        val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+            mapOf(
+                "card_type" to "commentForwardCard",
+                "thread_type" to "81",
+            ),
+            runtimeRules(reply = false),
+        )
+
+        assertEquals(false, decision.blocked)
+    }
+
+    @Test
+    fun replyKeepsNormalCardType() {
+        val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+            mapOf(
+                "card_type" to "normal",
+                "thread_type" to "0",
+            ),
+            runtimeRules(reply = true),
+        )
+
+        assertEquals(false, decision.blocked)
+    }
+
+    @Test
+    fun replyStillBlocksLegacyFeedOriginMountTemplateKey() {
+        val decision = CustomPostFilterMatcher.decideByTemplateKey(
+            "feed_origin_mount",
+            runtimeRules(reply = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals("custom_post_type:reply:template_key=feed_origin_mount", decision.reason)
+    }
+
+    @Test
     fun recommendForumDisabledKeepsSidewayList() {
         val decision = CustomPostFilterMatcher.decideByTemplateKey(
             "sideway_list",
@@ -101,11 +154,12 @@ class CustomPostFilterMatcherTest {
         thresholds: List<ConfigManager.ModelScoreThreshold> = emptyList(),
         lottery: Boolean = false,
         recommendForum: Boolean = false,
+        reply: Boolean = false,
     ): CustomPostFilterMatcher.RuntimeRules {
         return CustomPostFilterMatcher.RuntimeRules(
             vote = false,
             video = false,
-            reply = false,
+            reply = reply,
             hot = false,
             goods = false,
             gameBooking = false,

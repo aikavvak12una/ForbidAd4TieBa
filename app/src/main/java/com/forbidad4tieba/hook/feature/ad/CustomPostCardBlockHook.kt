@@ -456,6 +456,10 @@ object CustomPostCardBlockHook {
         rules: CustomPostFilterMatcher.RuntimeRules,
     ): Int {
         var score = 0
+        if (rules.reply) {
+            if (map.containsKey("card_type")) score += 4
+            if (map.containsKey("thread_type")) score += 3
+        }
         if (rules.help) {
             val threadType = map.stringValue("thread_type")
             val cardType = map.stringValue("card_type")

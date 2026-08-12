@@ -11,6 +11,7 @@ internal object CustomPostFilterMatcher {
     private const val THREAD_TYPE_LOTTERY = "76"
     private const val CARD_TYPE_NORMAL = "normal"
     private const val CARD_TYPE_QUESTION = "question"
+    private const val CARD_TYPE_COMMENT_FORWARD = "commentForwardCard"
     private const val CARD_TYPE_NORMAL_SCORE = "normalScore"
     private const val CARD_TYPE_BRAND_LOTTERY_AD = "brandLotteryAd"
     private const val SPECIAL_THREAD_TRUE = "1"
@@ -50,7 +51,8 @@ internal object CustomPostFilterMatcher {
         val modelScoreThresholds: List<ConfigManager.ModelScoreThreshold>,
     ) {
         val needsFeedHeadParamsCheck: Boolean =
-            gameBooking ||
+            reply ||
+                gameBooking ||
                 help ||
                 score ||
                 lottery ||
@@ -133,6 +135,13 @@ internal object CustomPostFilterMatcher {
         if (!rules.needsFeedHeadParamsCheck || params == null) {
             return Decision(blocked = false)
         }
+        val cardType = params.stringValue("card_type")
+        if (rules.reply && cardType == CARD_TYPE_COMMENT_FORWARD) {
+            return Decision(
+                blocked = true,
+                reason = "custom_post_type:reply:card_type=$cardType",
+            )
+        }
         if (rules.gameBooking) {
             val buttonName = findPromotionButtonName(params)
             if (buttonName != null) {
@@ -144,7 +153,6 @@ internal object CustomPostFilterMatcher {
         }
         val recomType = params.stringValue("recom_type")
         val threadType = params.stringValue("thread_type")
-        val cardType = params.stringValue("card_type")
         val specialThread = params.stringValue("is_special_thread")
         val forumLiked = params.stringValue("forum_is_liked")
         val forumName = params.stringValue("forum_name")
