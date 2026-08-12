@@ -23,6 +23,7 @@ internal object CustomPostFilterMatcher {
         "recommend_card_forum_attention",
         "recommend_card_person_attention",
         "recommend_card_list",
+        "sideway_list",
     )
 
     internal data class Decision(

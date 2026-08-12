@@ -122,7 +122,7 @@ object FeedAdHook {
         return out ?: list
     }
 
-    private fun shouldBlock(key: String): Boolean = isAdKey(key) || isAdContainerKey(key)
+    private fun shouldBlock(key: String): Boolean = isAdKey(key)
 
     private fun adBlockReason(key: String?): String? {
         return key?.takeIf(::shouldBlock)?.let { "ad:template_key:$it" }
@@ -132,10 +132,6 @@ object FeedAdHook {
         return key.startsWith("ad_card_") ||
             key.startsWith("fun_ad_card_") ||
             key in AD_KEYS
-    }
-
-    private fun isAdContainerKey(key: String): Boolean {
-        return key in AD_CONTAINER_KEYS
     }
 
     private fun getTemplateKey(item: Any?, methodName: String): String? {
@@ -185,7 +181,4 @@ object FeedAdHook {
         "game",
     )
 
-    private val AD_CONTAINER_KEYS = setOf(
-        "sideway_list",
-    )
 }

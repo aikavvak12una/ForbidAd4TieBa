@@ -65,9 +65,42 @@ class CustomPostFilterMatcherTest {
         assertEquals(false, decision.blocked)
     }
 
+    @Test
+    fun recommendForumBlocksSidewayListTemplateKey() {
+        val decision = CustomPostFilterMatcher.decideByTemplateKey(
+            "sideway_list",
+            runtimeRules(recommendForum = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals("custom_post_type:recommend_forum:template_key=sideway_list", decision.reason)
+    }
+
+    @Test
+    fun recommendForumBlocksSidewayListViaRecommendCardKey() {
+        val decision = CustomPostFilterMatcher.decideByRecommendCardTemplateKey(
+            "sideway_list",
+            runtimeRules(recommendForum = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals("custom_post_type:recommend_forum:template_key=sideway_list", decision.reason)
+    }
+
+    @Test
+    fun recommendForumDisabledKeepsSidewayList() {
+        val decision = CustomPostFilterMatcher.decideByTemplateKey(
+            "sideway_list",
+            runtimeRules(recommendForum = false),
+        )
+
+        assertEquals(false, decision.blocked)
+    }
+
     private fun runtimeRules(
         thresholds: List<ConfigManager.ModelScoreThreshold> = emptyList(),
         lottery: Boolean = false,
+        recommendForum: Boolean = false,
     ): CustomPostFilterMatcher.RuntimeRules {
         return CustomPostFilterMatcher.RuntimeRules(
             vote = false,
@@ -80,7 +113,7 @@ class CustomPostFilterMatcherTest {
             score = false,
             lottery = lottery,
             live = false,
-            recommendForum = false,
+            recommendForum = recommendForum,
             unfollowedForum = false,
             forumKeyword = false,
             forumKeywords = emptyList(),
