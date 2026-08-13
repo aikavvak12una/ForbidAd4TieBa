@@ -6,7 +6,10 @@ import com.forbidad4tieba.hook.core.XposedCompat
 
 object PbPerformanceModeHook {
     private val booleanOverrides = arrayOf(
-        UbsAbTestBooleanOverride("hybridPbOpt", true) { ConfigManager.isPbPerformanceModeEnabled },
+        UbsAbTestBooleanOverride("hybridPbOpt", true) {
+            // 强制帖子预加载开启时让位：hybrid webview 的 apiData 预加载通道需要 hybridPbOpt=false
+            ConfigManager.isPbPerformanceModeEnabled && !ConfigManager.isPbPreloadForced
+        },
         UbsAbTestBooleanOverride("imagePerfLog", false) { ConfigManager.isPbPerformanceModeEnabled },
         UbsAbTestBooleanOverride("isEnableHybridScrollLog", false) { ConfigManager.isPbPerformanceModeEnabled },
         UbsAbTestBooleanOverride("isPbCommentFunAdABTest", false) {

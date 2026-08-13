@@ -23,6 +23,9 @@ object ColdStartOptHook {
         UbsAbTestBooleanOverride("frsChatAsync", true) { ConfigManager.isHostPerformanceFlagsForced },
         UbsAbTestBooleanOverride("frsChatAsyncPre", true) { ConfigManager.isHostPerformanceFlagsForced },
         UbsAbTestBooleanOverride("isLowScoreDeviceOpt", true) { ConfigManager.isLowEndDeviceConfigForced },
+        // 首页框架优化 + 冷启动网络数据优化（独立开关 KEY_FORCE_HOST_FEED_COLD_OPT）
+        UbsAbTestBooleanOverride("isFeedUIOpt", true) { ConfigManager.isHostFeedColdOptEnabled },
+        UbsAbTestBooleanOverride("isColdNetDataOpt", true) { ConfigManager.isHostFeedColdOptEnabled },
         UbsAbTestBooleanOverride("isOpenApsarasSchedule", false) { ConfigManager.isApsarasScheduleDisabled },
         UbsAbTestBooleanOverride("isFrsFunAdSdkTest", false) { ConfigManager.isAdSdkComponentsDisabled },
         UbsAbTestBooleanOverride("isDuplicateRemovalFunAdABTest", false) { ConfigManager.isAdSdkComponentsDisabled },

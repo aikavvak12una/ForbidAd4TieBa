@@ -22,6 +22,8 @@ import com.forbidad4tieba.hook.feature.perf.AdSdkInitBlockHook
 import com.forbidad4tieba.hook.feature.perf.AiComponentDisableHook
 import com.forbidad4tieba.hook.feature.perf.ColdStartOptHook
 import com.forbidad4tieba.hook.feature.perf.HostPerformanceConfigHook
+import com.forbidad4tieba.hook.feature.perf.HostSlideAnimationBlockHook
+import com.forbidad4tieba.hook.feature.perf.PbForcePreloadHook
 import com.forbidad4tieba.hook.feature.perf.PbPerformanceModeHook
 import com.forbidad4tieba.hook.feature.perf.TrackingBlockHook
 import com.forbidad4tieba.hook.feature.perf.VideoPreloadBlockHook
@@ -512,6 +514,9 @@ internal object HookInstallPlanner {
         if (settings.isPbPerformanceModeEnabled || settings.isPostPageAdBlockEnabled) {
             entries += HookInstallEntry("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(cl) }
         }
+        if (settings.isPbPreloadForced) {
+            entries += HookInstallEntry("PbForcePreloadHook") { cl -> PbForcePreloadHook.hook(cl) }
+        }
         if (settings.isAdSdkComponentsDisabled) {
             entries += HookInstallEntry("AdSdkInitBlockHook") { cl -> AdSdkInitBlockHook.hook(cl) }
         }
@@ -521,13 +526,19 @@ internal object HookInstallPlanner {
         if (settings.isVideoComponentsDisabled) {
             entries += HookInstallEntry("VideoPreloadBlockHook") { cl -> VideoPreloadBlockHook.hook(cl) }
         }
+        if (settings.isHostSlideAnimationDisabled) {
+            entries += HookInstallEntry("HostSlideAnimationBlockHook") { cl ->
+                HostSlideAnimationBlockHook.hook(cl)
+            }
+        }
         if (
             settings.isHostPerformanceFlagsForced ||
             settings.isFlutterPreinitDisabled ||
             settings.isLowEndDeviceConfigForced ||
             settings.isApsarasScheduleDisabled ||
             settings.isAdSdkComponentsDisabled ||
-            settings.isVideoComponentsDisabled
+            settings.isVideoComponentsDisabled ||
+            settings.isHostFeedColdOptEnabled
         ) {
             entries += HookInstallEntry("ColdStartOptHook") { cl -> ColdStartOptHook.hook(cl) }
         }

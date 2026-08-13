@@ -334,9 +334,11 @@ internal object SettingsMenuGroupBuilder {
             UiText.Settings.PERFORMANCE_GROUP_HOST_RUNTIME,
             listOf(
                 SwitchItem(UiText.Settings.FORCE_HOST_PERFORMANCE_FLAGS_LABEL, UiText.Settings.FORCE_HOST_PERFORMANCE_FLAGS_DESC, ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS, true, true),
+                SwitchItem(UiText.Settings.DISABLE_HOST_SLIDE_ANIMATION_LABEL, UiText.Settings.DISABLE_HOST_SLIDE_ANIMATION_DESC, ConfigManager.KEY_DISABLE_HOST_SLIDE_ANIMATION, true, true),
                 SwitchItem(UiText.Settings.FORCE_LOW_END_DEVICE_CONFIG_LABEL, UiText.Settings.FORCE_LOW_END_DEVICE_CONFIG_DESC, ConfigManager.KEY_FORCE_LOW_END_DEVICE_CONFIG, true, true),
                 SwitchItem(UiText.Settings.DISABLE_APSARAS_SCHEDULE_LABEL, UiText.Settings.DISABLE_APSARAS_SCHEDULE_DESC, ConfigManager.KEY_DISABLE_APSARAS_SCHEDULE, true, true),
                 SwitchItem(UiText.Settings.PB_PERFORMANCE_MODE_LABEL, UiText.Settings.PB_PERFORMANCE_MODE_DESC, ConfigManager.KEY_ENABLE_PB_PERFORMANCE_MODE, true, true),
+                SwitchItem(UiText.Settings.PB_FORCE_PRELOAD_LABEL, UiText.Settings.PB_FORCE_PRELOAD_DESC, ConfigManager.KEY_FORCE_PB_PRELOAD, true, true),
                 SwitchItem(UiText.Settings.PB_SCROLL_COALESCE_LABEL, UiText.Settings.PB_SCROLL_COALESCE_DESC, ConfigManager.KEY_ENABLE_PB_SCROLL_COALESCE, true, true),
             ),
         ),
@@ -344,6 +346,7 @@ internal object SettingsMenuGroupBuilder {
             UiText.Settings.PERFORMANCE_GROUP_STARTUP,
             listOf(
                 SwitchItem(UiText.Settings.DISABLE_AD_SDK_COMPONENTS_LABEL, UiText.Settings.DISABLE_AD_SDK_COMPONENTS_DESC, ConfigManager.KEY_DISABLE_AD_SDK_COMPONENTS, true, true),
+                SwitchItem(UiText.Settings.FORCE_HOST_FEED_COLD_OPT_LABEL, UiText.Settings.FORCE_HOST_FEED_COLD_OPT_DESC, ConfigManager.KEY_FORCE_HOST_FEED_COLD_OPT, true, true),
                 SwitchItem(UiText.Settings.DISABLE_FLUTTER_PREINIT_LABEL, UiText.Settings.DISABLE_FLUTTER_PREINIT_DESC, ConfigManager.KEY_DISABLE_FLUTTER_PREINIT, true, true),
                 SwitchItem(UiText.Settings.BLOCK_TITAN_PATCH_LABEL, UiText.Settings.BLOCK_TITAN_PATCH_DESC, ConfigManager.KEY_BLOCK_TITAN_PATCH, true, false),
             ),

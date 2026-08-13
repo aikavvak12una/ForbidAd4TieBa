@@ -177,6 +177,9 @@ object ConfigManager {
     const val KEY_ENABLE_PB_SCROLL_COALESCE = "enable_pb_scroll_coalesce"
     const val KEY_ENABLE_PERFORMANCE_OPTIMIZATION = "enable_performance_optimization"
     const val KEY_FORCE_HOST_PERFORMANCE_FLAGS = "force_host_performance_flags"
+    const val KEY_FORCE_PB_PRELOAD = "force_pb_preload"
+    const val KEY_DISABLE_HOST_SLIDE_ANIMATION = "disable_host_slide_animation"
+    const val KEY_FORCE_HOST_FEED_COLD_OPT = "force_host_feed_cold_opt"
     const val KEY_DISABLE_APSARAS_SCHEDULE = "disable_apsaras_schedule"
     const val KEY_DISABLE_FLUTTER_PREINIT = "disable_flutter_preinit"
     const val KEY_FORCE_LOW_END_DEVICE_CONFIG = "force_low_end_device_config"
@@ -388,6 +391,9 @@ object ConfigManager {
     val isMonitorSyncComponentsDisabled: Boolean get() = settingsSnapshot.isMonitorSyncComponentsDisabled
     val isPbPerformanceModeEnabled: Boolean get() = settingsSnapshot.isPbPerformanceModeEnabled
     val isHostPerformanceFlagsForced: Boolean get() = settingsSnapshot.isHostPerformanceFlagsForced
+    val isPbPreloadForced: Boolean get() = settingsSnapshot.isPbPreloadForced
+    val isHostSlideAnimationDisabled: Boolean get() = settingsSnapshot.isHostSlideAnimationDisabled
+    val isHostFeedColdOptEnabled: Boolean get() = settingsSnapshot.isHostFeedColdOptEnabled
     val isApsarasScheduleDisabled: Boolean get() = settingsSnapshot.isApsarasScheduleDisabled
     val isFlutterPreinitDisabled: Boolean get() = settingsSnapshot.isFlutterPreinitDisabled
     val isLowEndDeviceConfigForced: Boolean get() = settingsSnapshot.isLowEndDeviceConfigForced
@@ -599,9 +605,12 @@ object ConfigManager {
             childLine(KEY_FORCE_LOW_END_DEVICE_CONFIG, settings.isLowEndDeviceConfigForced, true),
             childLine(KEY_DISABLE_APSARAS_SCHEDULE, settings.isApsarasScheduleDisabled, true),
             childLine(KEY_ENABLE_PB_PERFORMANCE_MODE, settings.isPbPerformanceModeEnabled, true),
+            childLine(KEY_FORCE_PB_PRELOAD, settings.isPbPreloadForced, true),
+            childLine(KEY_DISABLE_HOST_SLIDE_ANIMATION, settings.isHostSlideAnimationDisabled, true),
             childLine(KEY_ENABLE_PB_SCROLL_COALESCE, settings.isPbScrollCoalesceEnabled, true),
             childLine(KEY_DISABLE_AD_SDK_COMPONENTS, settings.isAdSdkComponentsDisabled, true),
             childLine(KEY_DISABLE_FLUTTER_PREINIT, settings.isFlutterPreinitDisabled, true),
+            childLine(KEY_FORCE_HOST_FEED_COLD_OPT, settings.isHostFeedColdOptEnabled, true),
             childLine(KEY_BLOCK_TITAN_PATCH, settings.isTitanPatchBlockEnabled, false),
             childLine(KEY_DISABLE_AI_COMPONENTS, settings.isAiComponentsDisabled, true),
             childLine(KEY_DISABLE_VIDEO_COMPONENTS, settings.isVideoComponentsDisabled, true),
@@ -880,6 +889,21 @@ object ConfigManager {
             isMonitorSyncComponentsDisabled = monitorSyncComponentsDisabled,
             isPbPerformanceModeEnabled = performanceChildBoolean(
                 KEY_ENABLE_PB_PERFORMANCE_MODE,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isPbPreloadForced = performanceChildBoolean(
+                KEY_FORCE_PB_PRELOAD,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isHostSlideAnimationDisabled = performanceChildBoolean(
+                KEY_DISABLE_HOST_SLIDE_ANIMATION,
+                performanceOptimizationEnabled,
+                true,
+            ),
+            isHostFeedColdOptEnabled = performanceChildBoolean(
+                KEY_FORCE_HOST_FEED_COLD_OPT,
                 performanceOptimizationEnabled,
                 true,
             ),
