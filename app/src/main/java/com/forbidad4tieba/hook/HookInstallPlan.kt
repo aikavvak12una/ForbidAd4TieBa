@@ -54,6 +54,7 @@ import com.forbidad4tieba.hook.feature.ui.PbBottomEnterBarHook
 import com.forbidad4tieba.hook.feature.ui.PbCommentAutoLoadHook
 import com.forbidad4tieba.hook.feature.ui.PbDisableGestureFontScaleHook
 import com.forbidad4tieba.hook.feature.ui.PbLikeAutoReplyHook
+import com.forbidad4tieba.hook.feature.ui.CommentAvatarDirectProfileHook
 import com.forbidad4tieba.hook.feature.ui.PbScrollCoalesceHook
 import com.forbidad4tieba.hook.feature.ui.UpgradePopWindowBlockHook
 import com.forbidad4tieba.hook.feature.web.EnterForumWebHook
@@ -427,6 +428,13 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("PbLikeAutoReplyHook") { cl ->
                 HookSymbolResolver.resolvePbLikeAutoReplySymbols(cl, symbols)?.let { targets ->
                     PbLikeAutoReplyHook.hook(targets, settings.pbLikeAutoReplyText)
+                }
+            }
+        }
+        if (context.canInstallCommentAvatarDirectProfile(settings)) {
+            entries += HookInstallEntry("CommentAvatarDirectProfileHook") { cl ->
+                HookSymbolResolver.resolveCommentAvatarDirectProfileSymbols(cl, symbols)?.let { targets ->
+                    CommentAvatarDirectProfileHook.hook(targets)
                 }
             }
         }

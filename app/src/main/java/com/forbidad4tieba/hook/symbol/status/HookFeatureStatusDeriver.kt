@@ -701,6 +701,31 @@ internal object HookFeatureStatusDeriver {
             )
         }
 
+        val commentAvatarCritical = ArrayList<String>(5)
+        if (symbols.pbCommentAvatarWireClass.isNullOrBlank()) {
+            commentAvatarCritical.add("pbCommentAvatarWireClass")
+        }
+        if (symbols.pbCommentAvatarWireMethod.isNullOrBlank()) {
+            commentAvatarCritical.add("pbCommentAvatarWireMethod")
+        }
+        if (symbols.pbCommentAvatarPostDataUserMethod.isNullOrBlank()) {
+            commentAvatarCritical.add("pbCommentAvatarPostDataUserMethod")
+        }
+        if (symbols.pbCommentAvatarHolderHeadField.isNullOrBlank()) {
+            commentAvatarCritical.add("pbCommentAvatarHolderHeadField")
+        }
+        if (symbols.pbCommentAvatarHolderHeadPendantField.isNullOrBlank()) {
+            commentAvatarCritical.add("pbCommentAvatarHolderHeadPendantField")
+        }
+        out[HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE] =
+            if (commentAvatarCritical.isEmpty()) {
+                HookFeatureStatus(state = HookFeatureState.FULL)
+            } else {
+                HookFeatureStatus(
+                    state = HookFeatureState.DISABLED,
+                    missingCritical = commentAvatarCritical,
+                )
+            }
         val replyVisibilityProbeCritical = ArrayList<String>(36)
         if (symbols.replyVisibilityProbeReplyResponseClass.isNullOrBlank()) {
             replyVisibilityProbeCritical.add("replyVisibilityProbeReplyResponseClass")
@@ -1401,6 +1426,8 @@ internal object HookFeatureStatusDeriver {
                 HookFeatureKey.DISABLE_PB_GESTURE_FONT_SCALE,
             )
             name == "PbLikeAutoReplyHook" -> features(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
+            name == "CommentAvatarDirectProfileHook" ->
+                features(HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE)
             name == "InputMemeBarBlockHook" -> features(HookFeatureKey.HIDE_INPUT_MEME_BAR)
             name.startsWith("AiComponentDisableHook.") -> features(HookFeatureKey.DISABLE_AI_COMPONENTS)
             name.startsWith("MsgTabDefaultNotifyHook") -> features(HookFeatureKey.DEFAULT_NOTIFY_TAB)

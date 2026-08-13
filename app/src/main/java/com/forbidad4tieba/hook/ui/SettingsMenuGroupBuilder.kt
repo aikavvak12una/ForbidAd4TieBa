@@ -239,6 +239,14 @@ internal object SettingsMenuGroupBuilder {
                     onActionClick = actions.onPbLikeAutoReply,
                 )
             )
+            items.add(
+                SwitchItem(
+                    label = UiText.Settings.COMMENT_AVATAR_DIRECT_PROFILE_LABEL,
+                    description = UiText.Settings.COMMENT_AVATAR_DIRECT_PROFILE_DESC,
+                    prefKey = ConfigManager.KEY_ENABLE_COMMENT_AVATAR_DIRECT_PROFILE,
+                    supported = true,
+                )
+            )
             val performanceGroups = performanceGroups()
             items.add(
                 SwitchItem(

@@ -39,6 +39,7 @@ object HookFeatureKey {
     const val HOME_NATIVE_GLASS = "enable_home_native_glass"
     const val AUTO_LOAD_MORE = "enable_auto_load_more"
     const val ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
+    const val ENABLE_COMMENT_AVATAR_DIRECT_PROFILE = "enable_comment_avatar_direct_profile"
     const val DISABLE_AUTO_REFRESH = "disable_auto_refresh"
     const val ENABLE_PB_SCROLL_COALESCE = "enable_pb_scroll_coalesce"
     const val DISABLE_PB_GESTURE_FONT_SCALE = "disable_pb_gesture_font_scale"
@@ -77,6 +78,7 @@ object HookFeatureKey {
         HOME_NATIVE_GLASS,
         AUTO_LOAD_MORE,
         ENABLE_PB_LIKE_AUTO_REPLY,
+        ENABLE_COMMENT_AVATAR_DIRECT_PROFILE,
         DISABLE_AUTO_REFRESH,
         ENABLE_PB_SCROLL_COALESCE,
         DISABLE_PB_GESTURE_FONT_SCALE,

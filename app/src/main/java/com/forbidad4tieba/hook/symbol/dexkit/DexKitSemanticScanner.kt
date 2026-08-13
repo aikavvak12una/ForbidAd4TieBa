@@ -28,6 +28,7 @@ internal object DexKitSemanticScanner {
     private const val AGREE_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.AgreeData"
     private const val AGREE_DATA_HAS_AGREE_FIELD = "hasAgree"
     private const val AGREE_DATA_AGREE_TYPE_FIELD = "agreeType"
+    private const val HEAD_PENDANT_VIEW_CLASS = "com.baidu.tbadk.core.view.HeadPendantView"
     private const val TB_FLOATING_BAR_CLASS = "com.baidu.tieba.feed.component.view.TbFloatingBar"
     private const val PAGE_BROWSER_AI_EMOJI_VIEW_CLASS =
         "com.baidu.tieba.pb.pagebrowser.comment.floor.meme.CommentFloorAiEmojiCreationView"
@@ -639,6 +640,25 @@ internal object DexKitSemanticScanner {
                 if (method.methodName.length <= 3) score += 8
                 if (score < 300) return@mapNotNull null
                 DexPbLikeAgreeClickMatch(method.methodName, score, evidence.joinToString(","))
+            }
+        }
+
+    fun verifyCommentFloorWireBodies(
+        sourcePaths: List<String>,
+        candidates: List<Pair<String, String>>,
+        logger: ScanLogger? = null,
+    ): List<Pair<String, String>> =
+        withBridge(sourcePaths, logger, "CommentAvatarDirectProfile.Dex", emptyList()) { bridge ->
+            candidates.filter { (owner, methodName) ->
+                val methods = exactMethods(bridge, owner, logger)
+                methods.any { method ->
+                    method.methodName == methodName &&
+                        method.invokes.any { invoked ->
+                            invoked.declaredClassName == HEAD_PENDANT_VIEW_CLASS &&
+                                invoked.methodName == "getHeadView"
+                        } &&
+                        method.invokes.any { invoked -> invoked.methodName == "setOnClickListener" }
+                }
             }
         }
 

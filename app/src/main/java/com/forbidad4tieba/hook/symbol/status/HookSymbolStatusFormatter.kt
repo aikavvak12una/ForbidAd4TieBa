@@ -905,6 +905,22 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "CommentAvatarDirectProfileHook",
+            "${symbols.pbCommentAvatarWireClass}.${symbols.pbCommentAvatarWireMethod}" +
+                "(PbCommenFloorItemViewHolder,int,PostData,View) -> " +
+                "PostData.${symbols.pbCommentAvatarPostDataUserMethod} " +
+                "holder.${symbols.pbCommentAvatarHolderHeadField}/" +
+                "${symbols.pbCommentAvatarHolderHeadPendantField}",
+            listOf(
+                "pbCommentAvatarWireClass" to has(symbols.pbCommentAvatarWireClass),
+                "pbCommentAvatarWireMethod" to has(symbols.pbCommentAvatarWireMethod),
+                "pbCommentAvatarPostDataUserMethod" to has(symbols.pbCommentAvatarPostDataUserMethod),
+                "pbCommentAvatarHolderHeadField" to has(symbols.pbCommentAvatarHolderHeadField),
+                "pbCommentAvatarHolderHeadPendantField" to
+                    has(symbols.pbCommentAvatarHolderHeadPendantField),
+            ),
+        )
+        add(
             "InputMemeBarBlockHook",
             "${symbols.inputMemeBarControllerClass}.${symbols.inputMemeBarEnableMethod}" +
                 "(Context,InputShowType,boolean)",

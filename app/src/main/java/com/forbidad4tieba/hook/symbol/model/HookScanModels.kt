@@ -490,6 +490,13 @@ internal data class PbLikeAutoReplyScanSymbols(
     val inputContainerGetSendViewMethod: String? = null,
 )
 
+internal data class CommentAvatarDirectProfileScanSymbols(
+    val wireClass: String? = null,
+    val wireMethod: String? = null,
+    val postDataUserMethod: String? = null,
+    val holderHeadField: String? = null,
+    val holderHeadPendantField: String? = null,
+)
 internal data class ShareIconOwnerCandidate(
     val className: String,
     val score: Int,

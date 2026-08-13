@@ -372,6 +372,19 @@ internal data class PbLikeAutoReplySymbols(
     val getSendViewMethod: Method,
 )
 
+internal data class CommentAvatarDirectProfileSymbols(
+    val wireMethod: Method,
+    val headImageField: Field,
+    val headPendantField: Field,
+    val headViewMethod: Method,
+    val postDataUserMethod: Method,
+    val getUserIdMethod: Method,
+    val getUserNameMethod: Method,
+    val personInfoConfigConstructor: java.lang.reflect.Constructor<*>,
+    val messageManagerGetInstanceMethod: Method,
+    val messageManagerSendMethod: Method,
+    val customMessageConstructor: java.lang.reflect.Constructor<*>,
+)
 internal data class MsgTabDefaultNotifySymbols(
     val locateToTabMethod: Method,
 )

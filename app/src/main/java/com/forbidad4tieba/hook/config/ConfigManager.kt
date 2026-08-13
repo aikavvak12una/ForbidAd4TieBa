@@ -159,6 +159,7 @@ object ConfigManager {
     const val KEY_FREE_COPY_COMMENT_INJECTION = "free_copy_comment_injection"
     const val KEY_FREE_COPY_COMMENT_DIALOG = "free_copy_comment_dialog"
     const val KEY_ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
+    const val KEY_ENABLE_COMMENT_AVATAR_DIRECT_PROFILE = "enable_comment_avatar_direct_profile"
     const val KEY_PB_LIKE_AUTO_REPLY_TEXT = "pb_like_auto_reply_text"
     const val KEY_VERIFY_REPLY_AFTER_POST = "verify_reply_after_post"
     const val KEY_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS = "reply_visibility_probe_max_attempts"
@@ -841,6 +842,8 @@ object ConfigManager {
                 true,
             ),
             isPbLikeAutoReplyEnabled = restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY),
+            isCommentAvatarDirectProfileEnabled =
+                restrictedBoolean(KEY_ENABLE_COMMENT_AVATAR_DIRECT_PROFILE),
             pbLikeAutoReplyText = if (restrictedBoolean(KEY_ENABLE_PB_LIKE_AUTO_REPLY)) {
                 p.getString(KEY_PB_LIKE_AUTO_REPLY_TEXT, "")?.trim().orEmpty()
             } else {
@@ -1154,6 +1157,8 @@ object ConfigManager {
             KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE -> HookFeatureKey.DEFAULT_ORIGINAL_IMAGE
             KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER -> HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER
             KEY_ENABLE_PB_LIKE_AUTO_REPLY -> HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY
+            KEY_ENABLE_COMMENT_AVATAR_DIRECT_PROFILE ->
+                HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE
             KEY_BLOCK_AD_FEED -> HookFeatureKey.BLOCK_AD_FEED
             KEY_BLOCK_AD_POST_PAGE -> HookFeatureKey.BLOCK_AD_POST_PAGE
             KEY_BLOCK_AD_FORUM_PAGE -> HookFeatureKey.BLOCK_AD_FORUM_PAGE

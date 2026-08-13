@@ -4228,6 +4228,140 @@ internal object HookSymbolResolver {
         }
     }
 
+    fun resolveCommentAvatarDirectProfileSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): CommentAvatarDirectProfileSymbols? {
+        fun requireSymbol(name: String, value: String?): String {
+            return value?.takeIf { it.isNotBlank() } ?: error("missing $name")
+        }
+
+        fun resolveClass(name: String): Class<*> {
+            return safeFindClass(name, cl) ?: error("class not found: $name")
+        }
+
+        return try {
+            val resolvedSymbols = symbols ?: run {
+                XposedCompat.log("[CommentAvatarDirectProfileHook] skipped: scan symbols unavailable")
+                return null
+            }
+            val wireClass = resolveClass(
+                requireSymbol("pbCommentAvatarWireClass", resolvedSymbols.pbCommentAvatarWireClass),
+            )
+            val wireMethodName = requireSymbol(
+                "pbCommentAvatarWireMethod",
+                resolvedSymbols.pbCommentAvatarWireMethod,
+            )
+            val wireMethod = wireClass.declaredMethods.firstOrNull { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.name == wireMethodName &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.size == 4
+            }?.apply { isAccessible = true }
+                ?: error("wire method not found: ${wireClass.name}.$wireMethodName")
+
+            val holderClass = resolveClass(StableTiebaHookPoints.PB_COMMENT_FLOOR_ITEM_VIEW_HOLDER_CLASS)
+            val headImageClass = resolveClass(StableTiebaHookPoints.HEAD_IMAGE_VIEW_CLASS)
+            val headPendantClass = resolveClass(StableTiebaHookPoints.HEAD_PENDANT_VIEW_CLASS)
+            val headImageField = XposedCompat.findField(
+                holderClass,
+                requireSymbol("pbCommentAvatarHolderHeadField", resolvedSymbols.pbCommentAvatarHolderHeadField),
+            ).also { field ->
+                if (!headImageClass.isAssignableFrom(field.type)) {
+                    error("holder head field type mismatch: ${field.type.name}")
+                }
+            }
+            val headPendantField = XposedCompat.findField(
+                holderClass,
+                requireSymbol(
+                    "pbCommentAvatarHolderHeadPendantField",
+                    resolvedSymbols.pbCommentAvatarHolderHeadPendantField,
+                ),
+            ).also { field ->
+                if (!headPendantClass.isAssignableFrom(field.type)) {
+                    error("holder head pendant field type mismatch: ${field.type.name}")
+                }
+            }
+            val headViewMethod = headPendantClass.declaredMethods.firstOrNull { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.name == "getHeadView" &&
+                    method.parameterTypes.isEmpty() &&
+                    View::class.java.isAssignableFrom(method.returnType)
+            }?.apply { isAccessible = true }
+                ?: error("HeadPendantView.getHeadView not found")
+
+            val postDataClass = resolveClass(StableTiebaHookPoints.PB_POST_DATA_CLASS)
+            val postDataUserMethod = postDataClass.declaredMethods.firstOrNull { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.name == requireSymbol(
+                        "pbCommentAvatarPostDataUserMethod",
+                        resolvedSymbols.pbCommentAvatarPostDataUserMethod,
+                    ) &&
+                    method.parameterTypes.isEmpty()
+            }?.apply { isAccessible = true }
+                ?: error("PostData user getter not found")
+
+            val metaDataClass = resolveClass(StableTiebaHookPoints.META_DATA_CLASS)
+            if (!metaDataClass.isAssignableFrom(postDataUserMethod.returnType)) {
+                error("PostData user getter return mismatch: ${postDataUserMethod.returnType.name}")
+            }
+            val getUserIdMethod = metaDataClass.methods.firstOrNull { method ->
+                method.name == "getUserId" && method.parameterTypes.isEmpty()
+            }?.apply { isAccessible = true }
+                ?: error("MetaData.getUserId not found")
+            val getUserNameMethod = metaDataClass.methods.firstOrNull { method ->
+                method.name == "getUserName" && method.parameterTypes.isEmpty()
+            }?.apply { isAccessible = true }
+                ?: error("MetaData.getUserName not found")
+
+            val personInfoConfigClass = resolveClass(StableTiebaHookPoints.PERSON_INFO_ACTIVITY_CONFIG_CLASS)
+            val personInfoConfigConstructor =
+                personInfoConfigClass.getDeclaredConstructor(Context::class.java, String::class.java, String::class.java)
+                    .apply { isAccessible = true }
+
+            val messageManagerClass = resolveClass(StableTiebaHookPoints.MESSAGE_MANAGER_CLASS)
+            val messageManagerGetInstanceMethod = messageManagerClass.methods.firstOrNull { method ->
+                Modifier.isStatic(method.modifiers) &&
+                    method.name == "getInstance" &&
+                    method.parameterTypes.isEmpty() &&
+                    messageManagerClass.isAssignableFrom(method.returnType)
+            }?.apply { isAccessible = true }
+                ?: error("MessageManager.getInstance not found")
+            val messageClass = resolveClass(StableTiebaHookPoints.MESSAGE_CLASS)
+            val messageManagerSendMethod = messageManagerClass.methods.firstOrNull { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.name == "sendMessage" &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes[0].isAssignableFrom(messageClass)
+            }?.apply { isAccessible = true }
+                ?: error("MessageManager.sendMessage not found")
+            val customMessageClass = resolveClass(StableTiebaHookPoints.CUSTOM_MESSAGE_CLASS)
+            if (!messageClass.isAssignableFrom(customMessageClass)) {
+                error("CustomMessage is not a Message")
+            }
+            val customMessageConstructor =
+                customMessageClass.getDeclaredConstructor(Int::class.javaPrimitiveType, Any::class.java)
+                    .apply { isAccessible = true }
+
+            CommentAvatarDirectProfileSymbols(
+                wireMethod = wireMethod,
+                headImageField = headImageField,
+                headPendantField = headPendantField,
+                headViewMethod = headViewMethod,
+                postDataUserMethod = postDataUserMethod,
+                getUserIdMethod = getUserIdMethod,
+                getUserNameMethod = getUserNameMethod,
+                personInfoConfigConstructor = personInfoConfigConstructor,
+                messageManagerGetInstanceMethod = messageManagerGetInstanceMethod,
+                messageManagerSendMethod = messageManagerSendMethod,
+                customMessageConstructor = customMessageConstructor,
+            )
+        } catch (t: Throwable) {
+            XposedCompat.log("[CommentAvatarDirectProfileHook] symbol resolve FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
     fun resolveMsgTabDefaultNotifySymbols(
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
@@ -5834,6 +5968,11 @@ internal object HookSymbolResolver {
         var pbLikeAutoReplyInputContainerClass: String? = null
         var pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null
         var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
+        var pbCommentAvatarWireClass: String? = null
+        var pbCommentAvatarWireMethod: String? = null
+        var pbCommentAvatarPostDataUserMethod: String? = null
+        var pbCommentAvatarHolderHeadField: String? = null
+        var pbCommentAvatarHolderHeadPendantField: String? = null
         var collectionPresenterField: String? = null
         var collectionPresenterListSetterMethod: String? = null
         var collectionPresenterListSetterMethodSpec: String? = null
@@ -6437,6 +6576,19 @@ internal object HookSymbolResolver {
         pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyScan.inputContainerGetInputViewMethod
         pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyScan.inputContainerGetSendViewMethod
 
+        val commentAvatarScan = runScanStep(
+            "CommentAvatarDirectProfileHook",
+            logger,
+            scanErrors,
+            CommentAvatarDirectProfileScanSymbols(),
+        ) {
+            CommentAvatarDirectProfileSymbolScanner.scan(context, candidatesWithWhitelist, cl, logger)
+        }
+        pbCommentAvatarWireClass = commentAvatarScan.wireClass
+        pbCommentAvatarWireMethod = commentAvatarScan.wireMethod
+        pbCommentAvatarPostDataUserMethod = commentAvatarScan.postDataUserMethod
+        pbCommentAvatarHolderHeadField = commentAvatarScan.holderHeadField
+        pbCommentAvatarHolderHeadPendantField = commentAvatarScan.holderHeadPendantField
         val imageViewerShareScan = runScanStep(
             "ImageViewerShareHooks",
             logger,
@@ -7018,6 +7170,11 @@ internal object HookSymbolResolver {
             this.pbLikeAutoReplyInputContainerClass = pbLikeAutoReplyInputContainerClass
             this.pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyInputContainerGetInputViewMethod
             this.pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyInputContainerGetSendViewMethod
+            this.pbCommentAvatarWireClass = pbCommentAvatarWireClass
+            this.pbCommentAvatarWireMethod = pbCommentAvatarWireMethod
+            this.pbCommentAvatarPostDataUserMethod = pbCommentAvatarPostDataUserMethod
+            this.pbCommentAvatarHolderHeadField = pbCommentAvatarHolderHeadField
+            this.pbCommentAvatarHolderHeadPendantField = pbCommentAvatarHolderHeadPendantField
 
             this.collectionPresenterField = collectionPresenterField
             this.collectionPresenterListSetterMethod = collectionPresenterListSetterMethod

@@ -258,6 +258,12 @@ internal class HookInstallContext(
             available(HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY)
     }
 
+    fun canInstallCommentAvatarDirectProfile(settings: SettingsSnapshot): Boolean {
+        return isMain &&
+            settings.isCommentAvatarDirectProfileEnabled &&
+            available(HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE)
+    }
+
     fun canInstallInputMemeBarBlock(settings: SettingsSnapshot): Boolean {
         return isMain &&
             settings.isInputMemeBarHidden &&

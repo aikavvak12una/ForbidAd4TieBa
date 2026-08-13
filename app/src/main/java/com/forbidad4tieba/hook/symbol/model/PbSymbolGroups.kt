@@ -65,6 +65,8 @@ data class PbCommentSymbolsGroup(
     val scroll: PbCommentScrollSymbolsGroup = PbCommentScrollSymbolsGroup(),
     val bottomList: PbCommentBottomListSymbolsGroup = PbCommentBottomListSymbolsGroup(),
     val bottomRecycler: PbCommentBottomRecyclerSymbolsGroup = PbCommentBottomRecyclerSymbolsGroup(),
+    val avatarDirectProfile: PbCommentAvatarDirectProfileSymbolsGroup =
+        PbCommentAvatarDirectProfileSymbolsGroup(),
 )
 
 data class ForumBottomSheetSymbolsGroup(
@@ -100,7 +102,13 @@ data class PbCommentBottomRecyclerSymbolsGroup(
     val pbCommentBottomRecyclerScrollMethod: String? = null,
     val pbCommentBottomRecyclerOwnerField: String? = null,
 )
-
+data class PbCommentAvatarDirectProfileSymbolsGroup(
+    val pbCommentAvatarWireClass: String? = null,
+    val pbCommentAvatarWireMethod: String? = null,
+    val pbCommentAvatarPostDataUserMethod: String? = null,
+    val pbCommentAvatarHolderHeadField: String? = null,
+    val pbCommentAvatarHolderHeadPendantField: String? = null,
+)
 data class PbGestureScaleSymbolsGroup(
     val pbGestureScaleManagerClass: String? = null,
     val pbGestureScaleDispatchMethod: String? = null,

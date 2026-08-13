@@ -43,6 +43,7 @@ data class SettingsSnapshot(
     val isFreeCopyCommentInjectionEnabled: Boolean = true,
     val isFreeCopyCommentDialogEnabled: Boolean = true,
     val isPbLikeAutoReplyEnabled: Boolean = false,
+    val isCommentAvatarDirectProfileEnabled: Boolean = false,
     val pbLikeAutoReplyText: String = "",
     val isReplyVisibilityProbeEnabled: Boolean = false,
     val replyVisibilityProbeMaxAttempts: Int =
