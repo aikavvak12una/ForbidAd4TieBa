@@ -275,7 +275,7 @@ internal object CustomPostFilterMatcher {
     private fun classifyByTemplateKey(templateKey: String): PostType? {
         return when (templateKey) {
             "feed_input_guide" -> PostType.HELP
-            "card_vote" -> PostType.VOTE
+            "card_vote", "card_multi_vote", "feed_discuss", "feed_pk" -> PostType.VOTE
             "video", "video_card", "staggered_video" -> PostType.VIDEO
             "feed_origin_mount" -> PostType.REPLY
             "recommend_info", "hot_card", "hot_topic_card", "multi_thread_card" -> PostType.HOT

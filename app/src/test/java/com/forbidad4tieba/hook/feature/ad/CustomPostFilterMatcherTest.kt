@@ -150,14 +150,69 @@ class CustomPostFilterMatcherTest {
         assertEquals(false, decision.blocked)
     }
 
+    @Test
+    fun voteBlocksCardVoteTemplateKey() {
+        val decision = CustomPostFilterMatcher.decideByTemplateKey(
+            "card_vote",
+            runtimeRules(vote = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals("custom_post_type:vote:template_key=card_vote", decision.reason)
+    }
+
+    @Test
+    fun voteBlocksCardMultiVoteTemplateKey() {
+        val decision = CustomPostFilterMatcher.decideByTemplateKey(
+            "card_multi_vote",
+            runtimeRules(vote = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals("custom_post_type:vote:template_key=card_multi_vote", decision.reason)
+    }
+
+    @Test
+    fun voteBlocksFeedDiscussTemplateKey() {
+        val decision = CustomPostFilterMatcher.decideByTemplateKey(
+            "feed_discuss",
+            runtimeRules(vote = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals("custom_post_type:vote:template_key=feed_discuss", decision.reason)
+    }
+
+    @Test
+    fun voteBlocksFeedPkTemplateKey() {
+        val decision = CustomPostFilterMatcher.decideByTemplateKey(
+            "feed_pk",
+            runtimeRules(vote = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals("custom_post_type:vote:template_key=feed_pk", decision.reason)
+    }
+
+    @Test
+    fun voteDisabledKeepsFeedDiscussTemplateKey() {
+        val decision = CustomPostFilterMatcher.decideByTemplateKey(
+            "feed_discuss",
+            runtimeRules(vote = false),
+        )
+
+        assertEquals(false, decision.blocked)
+    }
+
     private fun runtimeRules(
         thresholds: List<ConfigManager.ModelScoreThreshold> = emptyList(),
         lottery: Boolean = false,
         recommendForum: Boolean = false,
         reply: Boolean = false,
+        vote: Boolean = false,
     ): CustomPostFilterMatcher.RuntimeRules {
         return CustomPostFilterMatcher.RuntimeRules(
-            vote = false,
+            vote = vote,
             video = false,
             reply = reply,
             hot = false,
