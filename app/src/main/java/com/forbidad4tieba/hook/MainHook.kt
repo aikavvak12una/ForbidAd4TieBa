@@ -176,9 +176,6 @@ class MainHook : XposedModule() {
             XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
             if (isMainProcess) {
                 ModuleForegroundActivityTracker.register(app)
-                if (startupSettings.isAutoRefreshDisabled) {
-                    AutoRefreshHook.registerForegroundCallbacks(app)
-                }
                 if (startupSettings.isMineTabWebAdBlockEnabled) {
                     MineTabWebBlockHook.onAppContextReady(app)
                 }
@@ -228,7 +225,14 @@ class MainHook : XposedModule() {
             )
         }
         val isMainProcess = HookProcess.isMain(processName)
+        if (isMainProcess) {
+            // Scan availability is applied above, so this gating reflects the
+            // real feature state (the early startup snapshot cannot, because the
+            // scan has not run yet). registerForegroundCallbacks is idempotent.
+            AutoRefreshHook.registerForegroundCallbacks(app)
+        }
         val settingsSnapshot = ConfigManager.snapshot()
+
         if (
             firstApplicationReady &&
             isMainProcess &&

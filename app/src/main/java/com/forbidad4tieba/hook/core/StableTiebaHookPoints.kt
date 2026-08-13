@@ -31,6 +31,8 @@ object StableTiebaHookPoints {
     const val FEED_CARD_ORIGIN_MOUNT_VIEW_CLASS =
         "com.baidu.tieba.feed.component.mount.CardOriginMountView"
     const val FORUM_ACTIVITY_CLASS = "com.baidu.tieba.forum.ForumActivity"
+    const val HOME_SWIPE_REFRESH_LAYOUT_CLASS =
+        "com.baidu.tieba.homepage.personalize.bigday.BigdaySwipeRefreshLayout"
     const val FORUM_BOTTOM_SHEET_VIEW_CLASS =
         "com.baidu.tieba.forum.widget.TbBottomSheetView"
     const val FORUM_BOTTOM_SHEET_SETUP_METHOD = "setup"
