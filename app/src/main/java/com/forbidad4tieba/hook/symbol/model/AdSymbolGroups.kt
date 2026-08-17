@@ -8,6 +8,12 @@ data class AdSymbols(
     val typeAdapter: TypeAdapterSymbolsGroup = TypeAdapterSymbolsGroup(),
     val feedCard: FeedCardSymbolsGroup = FeedCardSymbolsGroup(),
     val forumPage: ForumPageAdSymbolsGroup = ForumPageAdSymbolsGroup(),
+    val homeBottomEasterEgg: HomeBottomEasterEggAdSymbolsGroup = HomeBottomEasterEggAdSymbolsGroup(),
+)
+
+data class HomeBottomEasterEggAdSymbolsGroup(
+    val parserClass: String? = null,
+    val parserMethod: String? = null,
 )
 
 data class FeedTemplateSymbolsGroup(

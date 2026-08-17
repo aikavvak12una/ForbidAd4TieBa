@@ -6,6 +6,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.FeedAdHook
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogHook
 import com.forbidad4tieba.hook.feature.ad.ForumPageAdBlockHook
+import com.forbidad4tieba.hook.feature.ad.HomeBottomEasterEggAdHook
 import com.forbidad4tieba.hook.feature.ad.PbAdRequestBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbEarlyAdBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbFallingAdHook
@@ -240,6 +241,7 @@ internal object HookInstallPlanner {
         val postAdBlockHook = context.canInstallPostAdBlock(settings)
         val forumPageAdBlockHook = context.canInstallForumPageAdBlock(settings)
         val strategyAdBlockHook = context.canInstallStrategyAdBlock(settings)
+        val homeBottomEasterEggAdBlockHook = context.canInstallHomeBottomEasterEggAdBlock(settings)
         val pbEarlyAdBlockHook = context.canInstallPbEarlyAdBlock(settings)
         val pbFirstFloorRecommendBlockHook =
             context.canInstallPbFirstFloorRecommendBlock(settings)
@@ -299,6 +301,13 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("StrategyAdHook.symbols") { cl ->
                 HookSymbolResolver.resolveStrategyAdSymbols(cl, symbols)?.let { targets ->
                     StrategyAdHook.hookWithSymbols(targets)
+                }
+            }
+        }
+        if (homeBottomEasterEggAdBlockHook) {
+            entries += HookInstallEntry("HomeBottomEasterEggAdHook") { cl ->
+                HookSymbolResolver.resolveHomeBottomEasterEggAdSymbols(cl, symbols)?.let { targets ->
+                    HomeBottomEasterEggAdHook.hook(targets)
                 }
             }
         }
@@ -366,15 +375,30 @@ internal object HookInstallPlanner {
                 }
             }
         }
-        if (context.canInstallSystemBrowser(settings)) {
+        val commentAvatarDirectProfile = context.canInstallCommentAvatarDirectProfile(settings)
+        val systemBrowser = context.canInstallSystemBrowser(settings)
+        if (systemBrowser || commentAvatarDirectProfile) {
             entries += HookInstallEntry("PlainUrlDirectBrowserHook") { cl ->
+                val spanTargets = HookSymbolResolver.resolvePlainUrlClickableSpanSymbols(cl, symbols)
+                val messageTarget = HookSymbolResolver.resolvePlainUrlMessageDispatchSymbols(cl, symbols)
+                val browserHelperTargets = if (systemBrowser) {
+                    HookSymbolResolver.resolvePlainUrlBrowserHelperSymbols(cl, symbols)
+                } else {
+                    null
+                }
+                val mountCardTargets = if (systemBrowser) {
+                    HookSymbolResolver.resolveMountCardLinkLayoutSymbols(cl, symbols)
+                } else {
+                    null
+                }
+                val clickSpanMarkerField = HookSymbolResolver.resolvePlainUrlClickSpanMarkerField(cl)
                 val targets = PlainUrlDirectBrowserHook.RuntimeTargets(
-                    spanTargets = HookSymbolResolver.resolvePlainUrlClickableSpanSymbols(cl, symbols),
-                    messageTarget = HookSymbolResolver.resolvePlainUrlMessageDispatchSymbols(cl, symbols),
-                    browserHelperTargets = HookSymbolResolver.resolvePlainUrlBrowserHelperSymbols(cl, symbols),
-                    webContainerTargets = HookSymbolResolver.resolvePlainUrlWebContainerSymbols(cl, symbols),
-                    mountCardTargets = HookSymbolResolver.resolveMountCardLinkLayoutSymbols(cl, symbols),
-                    clickSpanMarkerField = HookSymbolResolver.resolvePlainUrlClickSpanMarkerField(cl),
+                    spanTargets = spanTargets,
+                    messageTarget = messageTarget,
+                    browserHelperTargets = browserHelperTargets,
+                    webContainerTargets = null,
+                    mountCardTargets = mountCardTargets,
+                    clickSpanMarkerField = clickSpanMarkerField,
                     isClickMessageCmd = HookSymbolResolver::isPlainUrlClickMessageCmd,
                     resolveMessageDataSymbols = HookSymbolResolver::resolvePlainUrlMessageDataSymbols,
                 )
@@ -428,13 +452,6 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("PbLikeAutoReplyHook") { cl ->
                 HookSymbolResolver.resolvePbLikeAutoReplySymbols(cl, symbols)?.let { targets ->
                     PbLikeAutoReplyHook.hook(targets, settings.pbLikeAutoReplyText)
-                }
-            }
-        }
-        if (context.canInstallCommentAvatarDirectProfile(settings)) {
-            entries += HookInstallEntry("CommentAvatarDirectProfileHook") { cl ->
-                HookSymbolResolver.resolveCommentAvatarDirectProfileSymbols(cl, symbols)?.let { targets ->
-                    CommentAvatarDirectProfileHook.hook(targets)
                 }
             }
         }
@@ -510,6 +527,14 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("FeedInfoLogHook") { cl ->
                 HookSymbolResolver.resolveFeedInfoLogSymbols(cl, symbols)?.let { targets ->
                     FeedInfoLogHook.hook(targets)
+                }
+            }
+        }
+
+        if (commentAvatarDirectProfile) {
+            entries += HookInstallEntry("CommentAvatarDirectProfileHook") { cl ->
+                HookSymbolResolver.resolveGlobalDirectProfileSymbols(cl)?.let { targets ->
+                    CommentAvatarDirectProfileHook.hook(targets)
                 }
             }
         }

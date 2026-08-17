@@ -310,6 +310,14 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "HomeBottomEasterEggAdHook.Parser",
+            "${symbols.homeBottomEasterEggParserClass}.${symbols.homeBottomEasterEggParserMethod}",
+            listOf(
+                "homeBottomEasterEggParserClass" to has(symbols.homeBottomEasterEggParserClass),
+                "homeBottomEasterEggParserMethod" to has(symbols.homeBottomEasterEggParserMethod),
+            ),
+        )
+        add(
             "SearchBoxTextAdHook.Hint",
             "${symbols.searchBoxViewClass}.${symbols.searchBoxSetHintMethod}",
             listOf(
@@ -902,22 +910,6 @@ internal object HookSymbolStatusFormatter {
                     has(symbols.pbLikeAutoReplyInputContainerGetInputViewMethod),
                 "pbLikeAutoReplyInputContainerGetSendViewMethod" to
                     has(symbols.pbLikeAutoReplyInputContainerGetSendViewMethod),
-            ),
-        )
-        add(
-            "CommentAvatarDirectProfileHook",
-            "${symbols.pbCommentAvatarWireClass}.${symbols.pbCommentAvatarWireMethod}" +
-                "(PbCommenFloorItemViewHolder,int,PostData,View) -> " +
-                "PostData.${symbols.pbCommentAvatarPostDataUserMethod} " +
-                "holder.${symbols.pbCommentAvatarHolderHeadField}/" +
-                "${symbols.pbCommentAvatarHolderHeadPendantField}",
-            listOf(
-                "pbCommentAvatarWireClass" to has(symbols.pbCommentAvatarWireClass),
-                "pbCommentAvatarWireMethod" to has(symbols.pbCommentAvatarWireMethod),
-                "pbCommentAvatarPostDataUserMethod" to has(symbols.pbCommentAvatarPostDataUserMethod),
-                "pbCommentAvatarHolderHeadField" to has(symbols.pbCommentAvatarHolderHeadField),
-                "pbCommentAvatarHolderHeadPendantField" to
-                    has(symbols.pbCommentAvatarHolderHeadPendantField),
             ),
         )
         add(

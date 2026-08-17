@@ -345,4 +345,20 @@ class HookFeatureStatusDeriverTest {
         )
         assertEquals(HookFeatureState.PARTIAL, statuses.getValue(HookFeatureKey.BLOCK_AD).state)
     }
+
+    @Test
+    fun deriveDisablesHomeBottomEasterEggAdWhenParserSymbolsAreMissing() {
+        val missing = HookFeatureStatusDeriver.derive(buildHookSymbols {})
+            .getValue(HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG)
+        assertEquals(HookFeatureState.DISABLED, missing.state)
+        assertTrue(missing.missingCritical.contains("homeBottomEasterEggParserClass"))
+
+        val ready = HookFeatureStatusDeriver.derive(
+            buildHookSymbols {
+                homeBottomEasterEggParserClass = "com.tieba.EasterEggParser"
+                homeBottomEasterEggParserMethod = "parseJson"
+            },
+        ).getValue(HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG)
+        assertEquals(HookFeatureState.FULL, ready.state)
+    }
 }
