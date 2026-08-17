@@ -47,3 +47,8 @@ compile.log
 out.txt
 files.txt
 docs/
+
+# Workspace-local (fork dev)
+AGENTS.md
+target_app/
+local_docs/

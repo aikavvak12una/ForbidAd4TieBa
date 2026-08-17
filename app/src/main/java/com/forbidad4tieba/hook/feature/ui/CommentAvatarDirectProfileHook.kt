@@ -1,25 +1,25 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import android.content.Context
+import android.net.Uri
 import android.view.View
+import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
-import com.forbidad4tieba.hook.symbol.model.CommentAvatarDirectProfileSymbols
+import com.forbidad4tieba.hook.symbol.model.GlobalDirectProfileSymbols
+import org.json.JSONObject
+import java.net.URLDecoder
 
 /**
- * 评论头像直达主页：帖子页楼层/评论区点击用户头像时跳过"吧友名片"弹窗，
- * 直接打开原生用户主页（与名片中"Ta的主页"一致）。
- *
- * 挂载点是评论楼层适配器的监听装配方法（22.9.1.0 的 `itd.S`、22.0.1.0 的 `w0d.R`），
- * 该方法以 `(PbCommenFloorItemViewHolder, int, PostData, View)` 签名在每次绑定楼层时
- * 设置头像点击监听。在其 after-hook 中把 `holder.p`（HeadImageView）、`holder.D`
- * （HeadPendantView）及其 `getHeadView()` 的点击监听替换为直达主页的监听；
- * 用户 id/名字在绑定时刻从 `PostData` 的用户元数据取一次，不依赖宿主资源 ID。
- *
- * 任何环节失败都 fail closed：不安装或运行时禁用，头像点击回落宿主原行为（名片弹窗）。
+ * 头像直达主页：在宿主消息创建处把吧友名片配置替换为个人主页配置，
+ * 并把吧页面信息流的 H5 名片路由改为同一条内部消息路径。
  */
 object CommentAvatarDirectProfileHook {
-
     private const val TAG = "[CommentAvatarDirectProfileHook]"
     private const val PERSON_INFO_MSG_ID = 2002003
+    private const val PERSON_PROFILE_MSG_ID = 2002001
+    private const val CUSTOM_BUSINESS_CARD_PATH = "hybrid-main-frs/customBusinessCard"
+    private const val PORTAL_ROUTE_PREFIX = "tiebaapp://router/portal"
+    private const val USER_CENTER_ROUTE_PREFIX = "com.baidu.tieba://unidispatch/usercenter?portrait="
 
     @Volatile
     private var hooked = false
@@ -27,29 +27,60 @@ object CommentAvatarDirectProfileHook {
     @Volatile
     private var runtimeDisabled = false
 
-    internal fun hook(targets: CommentAvatarDirectProfileSymbols) {
+    @Volatile
+    private var runtimeTargets: GlobalDirectProfileSymbols? = null
+
+    private val directHeaderClickListener = View.OnClickListener { view ->
+        val targets = runtimeTargets ?: return@OnClickListener
+        val userId = runCatching {
+            targets.clickableHeaderGetUserIdMethod.invoke(view) as? String
+        }.getOrNull()
+        openUserId(view.context, userId)
+    }
+
+    internal fun hook(targets: GlobalDirectProfileSymbols) {
         val mod = XposedCompat.module ?: return
-        if (!tryMarkHooked()) return
+        if (!tryMarkHooked(targets)) return
         try {
-            mod.hook(targets.wireMethod).intercept { chain ->
-                if (runtimeDisabled) return@intercept chain.proceed()
-                val holder = chain.args.getOrNull(0)
-                val postData = chain.args.getOrNull(2)
+            mod.hook(targets.clickableHeaderSetDataMethod).intercept { chain ->
                 val result = chain.proceed()
-                if (holder != null && postData != null) {
-                    try {
-                        attachDirectProfileListeners(targets, holder, postData)
-                    } catch (t: Throwable) {
-                        runtimeDisabled = true
-                        XposedCompat.log("$TAG listener attach FAILED, disabled: ${t.message}")
-                        XposedCompat.log(t)
-                    }
+                if (ConfigManager.isCommentAvatarDirectProfileEnabled) {
+                    (chain.thisObject as? View)?.setOnClickListener(directHeaderClickListener)
                 }
                 result
             }
+            targets.urlManagerDealOneLinkMethods.forEach { method ->
+                mod.hook(method).intercept { chain ->
+                    if (!ConfigManager.isCommentAvatarDirectProfileEnabled) {
+                        return@intercept chain.proceed()
+                    }
+                    val portrait = chain.args.firstNotNullOfOrNull(::extractBusinessCardPortrait)
+                        ?: return@intercept chain.proceed()
+                    if (openPortrait(portrait)) {
+                        XposedCompat.logD { "$TAG handled customBusinessCard internally" }
+                        return@intercept handledResult(method.returnType)
+                    }
+                    chain.proceed()
+                }
+            }
+            mod.hook(targets.customMessageConstructor).intercept { chain ->
+                if (!ConfigManager.isCommentAvatarDirectProfileEnabled || runtimeDisabled) {
+                    return@intercept chain.proceed()
+                }
+                val replacementArgs = try {
+                    rewritePersonInfoMessage(targets, chain.args)
+                } catch (t: Throwable) {
+                    runtimeDisabled = true
+                    XposedCompat.log("$TAG card message rewrite failed, disabled: ${t.message}")
+                    XposedCompat.log(t)
+                    null
+                }
+                if (replacementArgs == null) chain.proceed() else chain.proceed(replacementArgs)
+            }
             XposedCompat.log(
-                "$TAG hook INSTALLED: ${targets.wireMethod.declaringClass.name}." +
-                    "${targets.wireMethod.name}(PbCommenFloorItemViewHolder,int,PostData,View)",
+                "$TAG hook INSTALLED: header=ClickableHeaderImageView.setData " +
+                    "message=CustomMessage(int,Object) " +
+                    "routes=${targets.urlManagerDealOneLinkMethods.size}",
             )
         } catch (t: Throwable) {
             resetHooked()
@@ -58,73 +89,163 @@ object CommentAvatarDirectProfileHook {
         }
     }
 
-    private fun attachDirectProfileListeners(
-        targets: CommentAvatarDirectProfileSymbols,
-        holder: Any,
-        postData: Any,
-    ) {
-        if (runtimeDisabled) return
-        val meta = invokeOrNull { targets.postDataUserMethod.invoke(postData) } ?: return
-        val userId = invokeOrNull { targets.getUserIdMethod.invoke(meta) } as? String
-        val userName = invokeOrNull { targets.getUserNameMethod.invoke(meta) } as? String
-        if (userId.isNullOrBlank()) return
-
-        val headImage = invokeOrNull { targets.headImageField.get(holder) } as? View
-        val pendant = invokeOrNull { targets.headPendantField.get(holder) } as? View
-        val headView = if (pendant != null) {
-            invokeOrNull { targets.headViewMethod.invoke(pendant) } as? View
-        } else {
-            null
-        }
-        val views = listOfNotNull(headImage, pendant, headView).distinct()
-        if (views.isEmpty()) return
-
-        val listener = DirectProfileClickListener(targets, userId, userName.orEmpty())
-        views.forEach { view -> view.setOnClickListener(listener) }
-        XposedCompat.logD { "$TAG swapped ${views.size} avatar listener(s), uid=$userId" }
-    }
-
-    private class DirectProfileClickListener(
-        private val targets: CommentAvatarDirectProfileSymbols,
-        private val userId: String,
-        private val userName: String,
-    ) : View.OnClickListener {
-
-        override fun onClick(view: View) {
-            if (runtimeDisabled) return
-            try {
-                val context = view.context ?: return
-                val config = targets.personInfoConfigConstructor.newInstance(context, userId, userName)
-                val manager = targets.messageManagerGetInstanceMethod.invoke(null)
-                val message = targets.customMessageConstructor.newInstance(PERSON_INFO_MSG_ID, config)
-                targets.messageManagerSendMethod.invoke(manager, message)
-                XposedCompat.logD { "$TAG direct profile jump: uid=$userId" }
-            } catch (t: Throwable) {
-                runtimeDisabled = true
-                XposedCompat.log("$TAG click FAILED, disabled for this process: ${t.message}")
-                XposedCompat.log(t)
-            }
-        }
-    }
-
-    private inline fun <T> invokeOrNull(block: () -> T): T? {
+    internal fun openUserId(context: Context?, rawUserId: String?): Boolean {
+        if (!ConfigManager.isCommentAvatarDirectProfileEnabled || runtimeDisabled) return false
+        val targets = runtimeTargets ?: return false
+        val userId = parsePositiveUserId(rawUserId) ?: return false
+        val targetContext = context ?: return false
         return try {
-            block()
-        } catch (_: Throwable) {
-            null
+            val isSelf = targets.currentAccountMethod?.let { method ->
+                runCatching { method.invoke(null) as? String }.getOrNull() == userId.toString()
+            } ?: false
+            val config = targets.personPolymericConfigConstructor.newInstance(targetContext)
+            targets.personPolymericCreateNormalConfigMethod.invoke(config, userId, isSelf, false)
+            sendProfileMessage(targets, config)
+            XposedCompat.logD { "$TAG direct profile jump: uid=$userId" }
+            true
+        } catch (t: Throwable) {
+            runtimeDisabled = true
+            XposedCompat.log("$TAG profile jump FAILED, disabled for this process: ${t.message}")
+            XposedCompat.log(t)
+            false
         }
     }
 
-    private fun tryMarkHooked(): Boolean {
+    private fun rewritePersonInfoMessage(
+        targets: GlobalDirectProfileSymbols,
+        args: List<Any?>,
+    ): Array<Any?>? {
+        if ((args.firstOrNull() as? Int) != PERSON_INFO_MSG_ID) return null
+        val info = args.getOrNull(1)?.takeIf { targets.personInfoConfigClass.isInstance(it) } ?: return null
+        val intent = runCatching {
+            targets.personInfoGetIntentMethod.invoke(info) as? android.content.Intent
+        }.getOrNull() ?: return null
+        val userId = intent.getStringExtra("user_id") ?: return null
+        val context = runCatching {
+            targets.personInfoGetContextMethod.invoke(info) as? Context
+        }.getOrNull() ?: return null
+        val userIdLong = parsePositiveUserId(userId) ?: return null
+        val isSelf = targets.currentAccountMethod?.let { method ->
+            runCatching { method.invoke(null) as? String }.getOrNull() == userIdLong.toString()
+        } ?: false
+        val config = targets.personPolymericConfigConstructor.newInstance(context)
+        targets.personPolymericCreateNormalConfigMethod.invoke(config, userIdLong, isSelf, false)
+        copySourceExtras(targets, intent, config)
+        XposedCompat.logD { "$TAG replaced person card message: uid=$userIdLong" }
+        return arrayOf(PERSON_PROFILE_MSG_ID, config)
+    }
+
+    private fun sendProfileMessage(targets: GlobalDirectProfileSymbols, config: Any) {
+        val message = targets.customMessageConstructor.newInstance(PERSON_PROFILE_MSG_ID, config)
+        val manager = targets.messageManagerGetInstanceMethod.invoke(null)
+            ?: error("MessageManager.getInstance returned null")
+        targets.messageManagerSendMethod.invoke(manager, message)
+    }
+
+    private fun openPortrait(rawPortrait: String): Boolean {
+        val targets = runtimeTargets ?: return false
+        return try {
+            val context = targets.applicationGetInstMethod.invoke(null) as? Context ?: return false
+            val config = targets.personPolymericConfigConstructor.newInstance(context)
+            targets.personPolymericSetUriMethod.invoke(
+                config,
+                Uri.parse(USER_CENTER_ROUTE_PREFIX + Uri.encode(rawPortrait)),
+            )
+            sendProfileMessage(targets, config)
+            true
+        } catch (t: Throwable) {
+            XposedCompat.logW("$TAG portrait route failed: ${t.message}")
+            false
+        }
+    }
+
+    private fun copySourceExtras(
+        targets: GlobalDirectProfileSymbols,
+        source: android.content.Intent,
+        config: Any,
+    ) {
+        val targetIntent = runCatching {
+            targets.personPolymericGetIntentMethod.invoke(config) as? android.content.Intent
+        }.getOrNull() ?: return
+        listOf("thread_id", "nid", "video_person_from", "portrait").forEach { key ->
+            source.getStringExtra(key)?.let { value -> targetIntent.putExtra(key, value) }
+        }
+        if (source.hasExtra("is_video_thread")) {
+            targetIntent.putExtra("is_video_thread", source.getBooleanExtra("is_video_thread", false))
+        }
+    }
+
+    private fun extractBusinessCardPortrait(argument: Any?): String? {
+        return when (argument) {
+            is String -> extractBusinessCardPortraitFromRoute(argument)
+            is Array<*> -> argument.asSequence()
+                .filterIsInstance<String>()
+                .firstNotNullOfOrNull(::extractBusinessCardPortraitFromRoute)
+            else -> null
+        }
+    }
+
+    private fun extractBusinessCardPortraitFromRoute(rawRoute: String): String? {
+        val trimmed = rawRoute.trim()
+        if (!trimmed.startsWith(PORTAL_ROUTE_PREFIX, ignoreCase = true)) return null
+        val decodedRoute = runCatching { URLDecoder.decode(trimmed, Charsets.UTF_8.name()) }.getOrNull()
+            ?: trimmed
+        if (!decodedRoute.contains(CUSTOM_BUSINESS_CARD_PATH, ignoreCase = true)) return null
+        val paramsValue = queryParameter(trimmed, "params") ?: return null
+        val paramsJson = runCatching { URLDecoder.decode(paramsValue, Charsets.UTF_8.name()) }.getOrNull()
+            ?: return null
+        val pageParams = runCatching { JSONObject(paramsJson).optJSONObject("pageParams") }.getOrNull()
+            ?: return null
+        if (!pageParams.optString("url").contains(CUSTOM_BUSINESS_CARD_PATH, ignoreCase = true)) return null
+        return pageParams.optJSONObject("initData")
+            ?.optString("friendPortrait")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun queryParameter(route: String, key: String): String? {
+        val query = route.substringAfter('?', missingDelimiterValue = "")
+        if (query.isEmpty()) return null
+        return query.split('&').firstNotNullOfOrNull { part ->
+            val separator = part.indexOf('=')
+            if (separator <= 0 || part.substring(0, separator) != key) null else part.substring(separator + 1)
+        }
+    }
+
+    private fun handledResult(returnType: Class<*>): Any? {
+        return when (returnType) {
+            Boolean::class.javaPrimitiveType -> true
+            Int::class.javaPrimitiveType -> 1
+            else -> null
+        }
+    }
+
+    private fun parsePositiveUserId(rawUserId: String?): Long? {
+        val normalized = rawUserId?.trim()?.takeIf { value ->
+            value.isNotEmpty() && value.all(Char::isDigit)
+        } ?: return null
+        return normalized.toLongOrNull()?.takeIf { it > 0L }
+    }
+
+    internal fun extractBusinessCardPortraitForTest(rawRoute: String): String? =
+        extractBusinessCardPortraitFromRoute(rawRoute)
+
+    internal fun parsePositiveUserIdForTest(rawUserId: String?): Long? = parsePositiveUserId(rawUserId)
+
+    private fun tryMarkHooked(targets: GlobalDirectProfileSymbols): Boolean {
         synchronized(this) {
             if (hooked) return false
             hooked = true
             runtimeDisabled = false
+            runtimeTargets = targets
             return true
         }
     }
 
     private fun resetHooked() {
-        synchronized(this) { hooked = false }
+        synchronized(this) {
+            hooked = false
+            runtimeTargets = null
+        }
     }
 }

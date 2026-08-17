@@ -93,6 +93,13 @@ internal class HookInstallContext(
         )
     }
 
+    fun canInstallHomeBottomEasterEggAdBlock(settings: SettingsSnapshot): Boolean {
+        return isMain && canInstallAdBlockSubFeature(
+            settings.isHomeBottomEasterEggAdBlockEnabled,
+            HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
+        )
+    }
+
     fun canInstallPbEarlyAdBlock(settings: SettingsSnapshot): Boolean {
         return canInstallAdBlockSubFeature(
             settings.isPostPageAdBlockEnabled,

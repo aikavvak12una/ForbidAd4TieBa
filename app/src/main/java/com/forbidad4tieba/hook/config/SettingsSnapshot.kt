@@ -11,6 +11,7 @@ data class SettingsSnapshot(
     val isHomeTopBarAdBlockEnabled: Boolean = false,
     val isMineTabWebAdBlockEnabled: Boolean = false,
     val isHomeSideBarWebAdBlockEnabled: Boolean = false,
+    val isHomeBottomEasterEggAdBlockEnabled: Boolean = false,
     val isHomeTopTabsCustomEnabled: Boolean = false,
     val isHomeTopTabMaterialEnabled: Boolean = true,
     val isHomeTopTabRecommendEnabled: Boolean = true,

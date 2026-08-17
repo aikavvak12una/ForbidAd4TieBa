@@ -10,29 +10,25 @@ import com.forbidad4tieba.hook.core.XposedCompat
  * 1. 宿主帖子预加载开关 `com.baidu.tbadk.TbSingleton.isPbPreloadSwitchOn()` 由服务端 SwitchCenter
  *    下发（key=pb_preloading，默认开），客户端无设置入口。本 hook 在该方法上强制返回 true：
  *    即使服务端关闭开关，点击帖子时仍会标记 needPreLoad 并使用卡片数据秒开首屏，
- *    同时后台预取完整页数据（xfa / u8d / CDN 路径）。
+ *    同时后台预取完整页数据。
  * 2. hybrid webview 预加载通道依赖 `UbsABTestHelper.hybridPbOpt()==false`（否则宿主在
  *    PbCommonWebView 写入数据时打印"过滤apiData"并丢弃预加载数据，webview 只能自行重新拉取）。
  *    强制预加载开启时同步把该 AB 方法强制为 false，保证预加载数据能注入 hybrid 页面。
- * 3. native 帖子打开时 `AbsPbActivity.w1` 的预加载渲染分支需要 `A1()==true`（PbActivity 默认 false）
- *    且 `PbPreloadHelperKt.c()`(isPbNoCacheDataSwitchOn)==false（账号在 PB 新架构实验时默认 true）。
- *    强制预加载开启时把 `PbActivity.A1()` 强制为 true、`UbsABTestHelper.isPbArchTest()` 强制为 false，
- *    使 xfa 中已缓存的卡片数据（tid 匹配时）能直接渲染首屏。
+ * 3. `UbsABTestHelper.isPbArchTest()==false` 允许宿主使用帖子数据缓存。必须保留 Activity
+ *    原始的预加载分支判定：同一帖子再次进入时，宿主会按自身策略拒绝重复预加载；强制进入
+ *    缓存渲染分支会跳过普通加载路径，导致评论请求完全不发起。
  *
- * 跨版本说明：isPbPreloadSwitchOn 与 hybridPbOpt 双版本稳定；A1() 与 isPbArchTest 为
- * 22.9.1.0 专属结构，旧版本找不到时仅跳过对应 hook（fail closed），不影响其余 hook。
+ * 跨版本说明：isPbPreloadSwitchOn 与 hybridPbOpt 双版本稳定；isPbArchTest 在旧版本找不到时
+ * 仅跳过对应 hook（fail closed），不影响其余 hook。
  */
 object PbForcePreloadHook {
     private const val TAG = "[PbForcePreloadHook]"
     private const val METHOD_IS_PB_PRELOAD_SWITCH_ON = "isPbPreloadSwitchOn"
-    private const val PB_ACTIVITY_CLASS = "com.baidu.tieba.pb.pb.main.PbActivity"
-    private const val METHOD_A1 = "A1"
 
     private val abOverrides = arrayOf(
         // 保证 hybrid 页面能注入 apiData 预加载数据
         UbsAbTestBooleanOverride("hybridPbOpt", false) { ConfigManager.isPbPreloadForced },
-        // isPbArchTest=false → PbPreloadHelperKt.c()(isPbNoCacheDataSwitchOn)=false：
-        // 让 w1 预加载渲染分支通过、xdd.t 走 u8d/CDN 缓存（22.9.1.0 专属，旧版找不到则跳过）
+        // 允许宿主使用帖子数据缓存；旧版找不到该公开 AB 方法时跳过
         UbsAbTestBooleanOverride("isPbArchTest", false) { ConfigManager.isPbPreloadForced },
     )
 
@@ -100,32 +96,7 @@ object PbForcePreloadHook {
                 }
             }
 
-            // 3. PbActivity.A1() -> true：放行 w1 的 native 预加载渲染分支（22.9.1.0 专属）
-            val pbActivityClass = XposedCompat.findClassOrNull(PB_ACTIVITY_CLASS, cl)
-            if (pbActivityClass == null) {
-                XposedCompat.log("$TAG $PB_ACTIVITY_CLASS NOT FOUND, A1 override skipped (old version)")
-            } else {
-                val a1Method = XposedCompat.findMethodOrNull(pbActivityClass, METHOD_A1)
-                if (
-                    a1Method == null ||
-                    a1Method.parameterTypes.isNotEmpty() ||
-                    a1Method.returnType != Boolean::class.javaPrimitiveType
-                ) {
-                    XposedCompat.log("$TAG $PB_ACTIVITY_CLASS.A1() NOT FOUND or invalid, override skipped")
-                } else {
-                    a1Method.isAccessible = true
-                    mod.hook(a1Method).intercept { chain ->
-                        if (ConfigManager.isPbPreloadForced) {
-                            true
-                        } else {
-                            chain.proceed()
-                        }
-                    }
-                    installed++
-                }
-            }
-
-            XposedCompat.log("$TAG hooks INSTALLED: count=$installed/${2 + abOverrides.size}")
+            XposedCompat.log("$TAG hooks INSTALLED: count=$installed/${1 + abOverrides.size}")
         } catch (t: Throwable) {
             resetHooked()
             XposedCompat.log("$TAG install FAILED: ${t.message}")

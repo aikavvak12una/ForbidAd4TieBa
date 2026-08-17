@@ -38,6 +38,11 @@ internal object DexKitSemanticScanner {
     private const val SHARE_DIALOG_ADD_OUTSIDE_METHOD = "addOutsideTextView"
     private const val TIEBA_DRAWABLE_CLASS = "com.baidu.tieba.R\$drawable"
     private const val JAVA_LIST_CLASS = "java.util.List"
+    private const val JSON_OBJECT_CLASS = "org.json.JSONObject"
+    private const val EASTER_EGG_DATA_CLASS = "com.baidu.tieba.easteregg.data.EasterEggAdData"
+    private const val EASTER_EGG_DATA_HOLDER_CLASS =
+        "com.baidu.tieba.easteregg.data.EasterEggAdDataHolder"
+
     private const val LIST_UTILS_CLASS = "com.baidu.tbadk.core.util.ListUtils"
     private const val ORIGINAL_IMAGE_DOWNLOAD_TIP_PREF_KEY = "original_img_down_tip"
     private const val FREE_COPY_LONG_PRESS_STAT_KEY = "card_long_click"
@@ -52,6 +57,62 @@ internal object DexKitSemanticScanner {
     private const val REC_HTTP_SENDER_CLASS = "com.baidu.tieba.p50"
     private const val LOW_SCORE_SCHEDULER_CLASS = "com.baidu.tieba.parser.LowScoreScheduler"
     private const val COLD_START_DELAY_SCHEDULE_CLASS = "com.baidu.searchbox.launch.ColdStartDelaySchedule"
+
+    fun scanHomeBottomEasterEggParser(
+        sourcePaths: List<String>,
+        logger: ScanLogger? = null,
+    ): HomeBottomEasterEggAdScanSymbols =
+        withBridge(
+            sourcePaths,
+            logger,
+            "HomeBottomEasterEggAdHook.ParserDex",
+            HomeBottomEasterEggAdScanSymbols(),
+        ) { bridge ->
+            val matches = findMethodsByString(
+                bridge,
+                "floating_icon",
+                logger,
+                "HomeBottomEasterEggAdHook.FindFloatingIcon",
+            ).asSequence()
+                .filter { method -> method.hasString("easter_egg") }
+                .filter { method ->
+                    !Modifier.isStatic(method.modifiers) &&
+                        method.returnTypeName == "void" &&
+                        method.paramTypeNames == listOf(JSON_OBJECT_CLASS)
+                }
+                .filter { method ->
+                    method.invokes.any { it.declaredClassName.startsWith(EASTER_EGG_DATA_CLASS) } &&
+                        method.invokes.any { it.declaredClassName.startsWith(EASTER_EGG_DATA_HOLDER_CLASS) }
+                }
+                .distinctBy { method ->
+                    method.declaredClassName + "#" + method.methodName + "(" +
+                        method.paramTypeNames.joinToString(",") + ")"
+                }
+                .toList()
+
+            when (matches.size) {
+                1 -> HomeBottomEasterEggAdScanSymbols(
+                    parserClass = matches.single().declaredClassName,
+                    parserMethod = matches.single().methodName,
+                )
+                0 -> {
+                    HookSymbolScanDiagnostics.log(
+                        logger,
+                        "HomeBottomEasterEggAdHook.ParserDex: no unique structural candidate",
+                    )
+                    HomeBottomEasterEggAdScanSymbols()
+                }
+                else -> {
+                    recordIssue(
+                        logger,
+                        "HomeBottomEasterEggAdHook.ParserDex",
+                        "ambiguous candidates=${matches.joinToString { it.declaredClassName + "#" + it.methodName }}",
+                    )
+                    HomeBottomEasterEggAdScanSymbols()
+                }
+            }
+        }
+
     fun scanFreeCopyPostDataCopy(
         sourcePaths: List<String>,
         ownerClassName: String,

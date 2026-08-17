@@ -9,14 +9,15 @@ import android.text.Spanned
 import android.util.Patterns
 import android.view.View
 import android.widget.TextView
+import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.feature.ui.CommentAvatarDirectProfileHook
 import com.forbidad4tieba.hook.symbol.model.MountCardLinkLayoutSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlBrowserHelperSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlClickableSpanSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDataSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDispatchSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlWebContainerSymbols
-import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.Locale
@@ -26,8 +27,12 @@ import java.util.regex.Pattern
 
 object PlainUrlDirectBrowserHook {
     private const val ORDINARY_URL_TYPE = 2
+    private const val USER_SPAN_TYPE = 16
     private const val TIEBA_WEB_HOST = "tieba.baidu.com"
-    private const val TIEBA_WEB_VIEW_SCHEMA = "com.baidu.tieba://tbwebview"
+    private val TIEBA_PRIVATE_ROUTE_SCHEMES = listOf(
+        "com.baidu.tieba://",
+        "tiebaapp://",
+    )
     private const val WEB_VIEW_TAG_URL = "tag_url"
     private const val INTENT_KEY_URI = "key_uri"
     private const val MAX_NESTED_WEB_URL_DEPTH = 3
@@ -57,8 +62,10 @@ object PlainUrlDirectBrowserHook {
         targets: RuntimeTargets,
     ) {
         val mod = XposedCompat.module ?: return
-        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) {
-            XposedCompat.logD("[PlainUrlDirectBrowserHook] skipped: config disabled")
+        val browserEnabled = ConfigManager.isOpenWebLinkInSystemBrowserEnabled
+        val profileEnabled = ConfigManager.isCommentAvatarDirectProfileEnabled
+        if (!browserEnabled && !profileEnabled) {
+            XposedCompat.logD("[PlainUrlDirectBrowserHook] skipped: shared navigation disabled")
             return
         }
         if (!installed.compareAndSet(false, true)) {
@@ -75,9 +82,22 @@ object PlainUrlDirectBrowserHook {
                 for (onClickMethod in spanTargets.onClickMethods) {
                     if (!installedMethodKeys.add(methodKey(onClickMethod))) continue
                     mod.hook(onClickMethod).intercept { chain ->
-                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
                         val span = chain.thisObject ?: return@intercept chain.proceed()
                         val view = chain.args.firstOrNull() as? View
+                        val type = readIntField(spanTargets.typeField, span)
+                        if (
+                            ConfigManager.isCommentAvatarDirectProfileEnabled &&
+                            type == USER_SPAN_TYPE
+                        ) {
+                            val userId = runCatching { spanTargets.urlField.get(span) as? String }.getOrNull()
+                            if (CommentAvatarDirectProfileHook.openUserId(view?.context, userId)) {
+                                markClickSpan(clickSpanField)
+                                return@intercept null
+                            }
+                        }
+                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) {
+                            return@intercept chain.proceed()
+                        }
                         val normalizedUrl = resolveWebUrl(spanTargets.typeField, spanTargets.urlField, spanTargets.textField, span, view)
                             ?: return@intercept chain.proceed()
 
@@ -91,7 +111,6 @@ object PlainUrlDirectBrowserHook {
             val messageTarget = targets.messageTarget
             if (messageTarget != null && installedMethodKeys.add(methodKey(messageTarget.dispatchMethod))) {
                 mod.hook(messageTarget.dispatchMethod).intercept { chain ->
-                    if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
                     val message = chain.args.firstOrNull() ?: return@intercept chain.proceed()
                     if (!messageTarget.customResponsedMessageClass.isInstance(message)) {
                         return@intercept chain.proceed()
@@ -107,6 +126,14 @@ object PlainUrlDirectBrowserHook {
                         ?: return@intercept chain.proceed()
                     val rawUrl = runCatching { dataSymbols.urlField.get(data) as? String }.getOrNull()
                     val rawText = runCatching { dataSymbols.textField.get(data) as? String }.getOrNull()
+                    if (
+                        ConfigManager.isCommentAvatarDirectProfileEnabled &&
+                        type == USER_SPAN_TYPE
+                    ) {
+                        val context = runCatching { messageTarget.getInstMethod.invoke(null) as? Context }.getOrNull()
+                        if (CommentAvatarDirectProfileHook.openUserId(context, rawUrl)) return@intercept null
+                    }
+                    if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
                     val normalizedUrl = chooseWebUrl(type, rawUrl, rawText, null)
                         ?: return@intercept chain.proceed()
                     val context = runCatching { messageTarget.getInstMethod.invoke(null) as? Context }.getOrNull()
@@ -293,6 +320,11 @@ object PlainUrlDirectBrowserHook {
     private fun normalizeWebUrl(rawUrl: String?, depth: Int): String? {
         val trimmed = rawUrl?.let(::trimTrailingUrlPunctuation)?.takeIf { it.isNotEmpty() } ?: return null
         val candidates = decodedCandidates(trimmed, preferDecoded = !containsExplicitWebUrl(trimmed))
+        // Private routes belong to the host even when their query contains a
+        // web-looking value such as `url=http://com.baidu.tieba/...`.
+        if (candidates.any(::isTiebaPrivateRoute)) {
+            return null
+        }
         if (depth < MAX_NESTED_WEB_URL_DEPTH) {
             for (candidate in candidates) {
                 if (!shouldInspectNestedWebUrl(candidate)) continue
@@ -320,9 +352,22 @@ object PlainUrlDirectBrowserHook {
         return url.lowercase(Locale.ROOT).contains(TIEBA_WEB_HOST)
     }
 
+    internal fun isTiebaPrivateWebViewRoute(value: String): Boolean {
+        return isTiebaPrivateRoute(value)
+    }
+
+    internal fun normalizeWebUrlForTest(value: String): String? {
+        return normalizeWebUrl(value)
+    }
+
+    internal fun isTiebaPrivateRoute(value: String): Boolean {
+        val lower = value.trim().lowercase(Locale.ROOT)
+        return TIEBA_PRIVATE_ROUTE_SCHEMES.any(lower::startsWith)
+    }
+
     private fun shouldInspectNestedWebUrl(value: String): Boolean {
         val lower = value.lowercase(Locale.ROOT)
-        return lower.startsWith(TIEBA_WEB_VIEW_SCHEMA) || lower.contains(TIEBA_WEB_HOST)
+        return isTiebaPrivateRoute(value) || lower.contains(TIEBA_WEB_HOST)
     }
 
     private fun extractNestedWebUrlValues(value: String): List<String> {

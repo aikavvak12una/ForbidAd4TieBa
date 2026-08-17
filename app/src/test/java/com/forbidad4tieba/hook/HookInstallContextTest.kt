@@ -324,6 +324,36 @@ class HookInstallContextTest {
         assertTrue(fallingPath.canInstallPbFallingAdBlock(settings))
     }
 
+    @Test
+    fun homeBottomEasterEggAdRequiresMainProcessEnabledSettingAndParser() {
+        val symbols = buildHookSymbols {
+            homeBottomEasterEggParserClass = "com.tieba.EasterEggParser"
+            homeBottomEasterEggParserMethod = "parseJson"
+        }
+        val enabled = SettingsSnapshot(isHomeBottomEasterEggAdBlockEnabled = true)
+
+        assertTrue(
+            HookInstallContext(Constants.TARGET_PACKAGE, symbols)
+                .canInstallHomeBottomEasterEggAdBlock(enabled),
+        )
+        assertTrue(
+            HookInstallPlanner.symbolPlan(Constants.TARGET_PACKAGE, symbols, enabled)
+                .entries.any { it.id == "HomeBottomEasterEggAdHook" },
+        )
+        assertFalse(
+            HookInstallContext(Constants.TARGET_PACKAGE, symbols)
+                .canInstallHomeBottomEasterEggAdBlock(SettingsSnapshot()),
+        )
+        assertFalse(
+            HookInstallContext(Constants.TARGET_PACKAGE + ":remote", symbols)
+                .canInstallHomeBottomEasterEggAdBlock(enabled),
+        )
+        assertFalse(
+            HookInstallContext(Constants.TARGET_PACKAGE, buildHookSymbols {})
+                .canInstallHomeBottomEasterEggAdBlock(enabled),
+        )
+    }
+
     private fun nativeShareSymbols(
         mutate: HookSymbolsBuilder.() -> Unit = {},
     ) = buildHookSymbols {

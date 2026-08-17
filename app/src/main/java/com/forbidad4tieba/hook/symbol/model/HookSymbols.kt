@@ -74,6 +74,10 @@ data class HookSymbols(
         get() = hookPoints.primary.ad.zga.zgaClass
     val zgaMethods: List<String>?
         get() = hookPoints.primary.ad.zga.zgaMethods
+    val homeBottomEasterEggParserClass: String?
+        get() = hookPoints.primary.ad.homeBottomEasterEgg.parserClass
+    val homeBottomEasterEggParserMethod: String?
+        get() = hookPoints.primary.ad.homeBottomEasterEgg.parserMethod
     val searchBoxViewClass: String?
         get() = hookPoints.primary.home.search.searchBoxViewClass
     val searchBoxSetHintMethod: String?
@@ -378,16 +382,6 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.likeAutoReply.inputContainer.pbLikeAutoReplyInputContainerGetInputViewMethod
     val pbLikeAutoReplyInputContainerGetSendViewMethod: String?
         get() = hookPoints.primary.pb.likeAutoReply.inputContainer.pbLikeAutoReplyInputContainerGetSendViewMethod
-    val pbCommentAvatarWireClass: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarWireClass
-    val pbCommentAvatarWireMethod: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarWireMethod
-    val pbCommentAvatarPostDataUserMethod: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarPostDataUserMethod
-    val pbCommentAvatarHolderHeadField: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarHolderHeadField
-    val pbCommentAvatarHolderHeadPendantField: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarHolderHeadPendantField
     val collectionPresenterField: String?
         get() = hookPoints.collectionHistory.collection.presenter.collectionPresenterField
     val collectionPresenterListSetterMethod: String?
@@ -882,6 +876,8 @@ data class HookSymbols(
 
             put("zgaClass", zgaClass)
             putStringArray("zgaMethods", zgaMethods)
+            put("homeBottomEasterEggParserClass", homeBottomEasterEggParserClass)
+            put("homeBottomEasterEggParserMethod", homeBottomEasterEggParserMethod)
             put("searchBoxViewClass", searchBoxViewClass)
             put("searchBoxSetHintMethod", searchBoxSetHintMethod)
             put("homeSearchBoxOwnerClass", homeSearchBoxOwnerClass)
@@ -1037,12 +1033,6 @@ data class HookSymbols(
             put("pbLikeAutoReplyInputContainerClass", pbLikeAutoReplyInputContainerClass)
             put("pbLikeAutoReplyInputContainerGetInputViewMethod", pbLikeAutoReplyInputContainerGetInputViewMethod)
             put("pbLikeAutoReplyInputContainerGetSendViewMethod", pbLikeAutoReplyInputContainerGetSendViewMethod)
-            put("pbCommentAvatarWireClass", pbCommentAvatarWireClass)
-            put("pbCommentAvatarWireMethod", pbCommentAvatarWireMethod)
-            put("pbCommentAvatarPostDataUserMethod", pbCommentAvatarPostDataUserMethod)
-            put("pbCommentAvatarHolderHeadField", pbCommentAvatarHolderHeadField)
-            put("pbCommentAvatarHolderHeadPendantField", pbCommentAvatarHolderHeadPendantField)
-
             put("collectionPresenterField", collectionPresenterField)
             put("collectionPresenterListSetterMethod", collectionPresenterListSetterMethod)
             put("collectionPresenterListSetterMethodSpec", collectionPresenterListSetterMethodSpec)
@@ -1356,8 +1346,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 41
-        const val DEXKIT_RULE_VERSION = 31
+        const val CACHE_SCHEMA_VERSION = 43
+        const val DEXKIT_RULE_VERSION = 32
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1418,6 +1408,8 @@ data class HookSymbols(
 
                     zgaClass = obj.optStringOrNull("zgaClass")
                     zgaMethods = zgaMethodsList
+                    homeBottomEasterEggParserClass = obj.optStringOrNull("homeBottomEasterEggParserClass")
+                    homeBottomEasterEggParserMethod = obj.optStringOrNull("homeBottomEasterEggParserMethod")
                     searchBoxViewClass = obj.optStringOrNull("searchBoxViewClass")
                     searchBoxSetHintMethod = obj.optStringOrNull("searchBoxSetHintMethod")
                     homeSearchBoxOwnerClass = obj.optStringOrNull("homeSearchBoxOwnerClass")
@@ -1603,14 +1595,6 @@ data class HookSymbols(
                         obj.optStringOrNull("pbLikeAutoReplyInputContainerGetInputViewMethod")
                     pbLikeAutoReplyInputContainerGetSendViewMethod =
                         obj.optStringOrNull("pbLikeAutoReplyInputContainerGetSendViewMethod")
-                    pbCommentAvatarWireClass = obj.optStringOrNull("pbCommentAvatarWireClass")
-                    pbCommentAvatarWireMethod = obj.optStringOrNull("pbCommentAvatarWireMethod")
-                    pbCommentAvatarPostDataUserMethod =
-                        obj.optStringOrNull("pbCommentAvatarPostDataUserMethod")
-                    pbCommentAvatarHolderHeadField = obj.optStringOrNull("pbCommentAvatarHolderHeadField")
-                    pbCommentAvatarHolderHeadPendantField =
-                        obj.optStringOrNull("pbCommentAvatarHolderHeadPendantField")
-
                     collectionPresenterField = obj.optStringOrNull("collectionPresenterField")
                     collectionPresenterListSetterMethod = obj.optStringOrNull("collectionPresenterListSetterMethod")
                     collectionPresenterListSetterMethodSpec =

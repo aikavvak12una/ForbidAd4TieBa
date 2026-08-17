@@ -151,6 +151,12 @@ class ConfigManagerTest {
             HookFeatureKey.BLOCK_AD_FEED,
             ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_BLOCK_AD_FEED),
         )
+        assertEquals(
+            HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
+            ConfigManager.scanFeatureKeyForPrefKeyOrNull(
+                ConfigManager.KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
+            ),
+        )
     }
 
     @Test

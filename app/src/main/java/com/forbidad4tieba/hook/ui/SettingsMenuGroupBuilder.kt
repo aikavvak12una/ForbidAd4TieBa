@@ -92,6 +92,13 @@ internal object SettingsMenuGroupBuilder {
             true,
         ),
         SwitchItem(
+            UiText.Settings.BLOCK_AD_HOME_BOTTOM_EASTER_EGG_LABEL,
+            UiText.Settings.BLOCK_AD_HOME_BOTTOM_EASTER_EGG_DESC,
+            ConfigManager.KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
+            true,
+            true,
+        ),
+        SwitchItem(
             UiText.Settings.FILTER_ENTER_FORUM_WEB_LABEL,
             UiText.Settings.FILTER_ENTER_FORUM_WEB_DESC,
             ConfigManager.KEY_FILTER_ENTER_FORUM_WEB,

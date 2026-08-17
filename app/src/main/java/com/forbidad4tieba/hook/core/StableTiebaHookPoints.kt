@@ -162,13 +162,11 @@ object StableTiebaHookPoints {
     const val MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
     const val MESSAGE_CLASS = "com.baidu.adp.framework.message.Message"
     const val CUSTOM_MESSAGE_CLASS = "com.baidu.adp.framework.message.CustomMessage"
-    const val PB_COMMENT_FLOOR_ITEM_VIEW_HOLDER_CLASS =
-        "com.baidu.tieba.pb.widget.holder.PbCommenFloorItemViewHolder"
-    const val HEAD_IMAGE_VIEW_CLASS = "com.baidu.tbadk.core.view.HeadImageView"
-    const val HEAD_PENDANT_VIEW_CLASS = "com.baidu.tbadk.core.view.HeadPendantView"
-    const val META_DATA_CLASS = "com.baidu.tbadk.data.MetaData"
     const val PERSON_INFO_ACTIVITY_CONFIG_CLASS =
         "com.baidu.tbadk.core.atomData.PersonInfoActivityConfig"
+    const val PERSON_POLYMERIC_ACTIVITY_CONFIG_CLASS =
+        "com.baidu.tbadk.core.atomData.PersonPolymericActivityConfig"
+    const val URL_MANAGER_CLASS = "com.baidu.tbadk.core.util.UrlManager"
     const val TB_WEB_VIEW_CLASS = "com.baidu.tieba.browser.TbWebView"
     const val HOME_SIDE_BAR_WEB_VIEW_CLASS = "com.baidu.tieba.sidebar.SideBarWebView"
     const val SIDEBAR_PERSON_INFO_BINDING_CLASS =
@@ -179,6 +177,9 @@ object StableTiebaHookPoints {
     const val SOCIAL_BAR_WRAPPER_CLASS = "com.baidu.tieba.compact.SocialBarWrapper"
     const val HEAD_PENDANT_CLICKABLE_VIEW_CLASS =
         "com.baidu.tbadk.core.view.HeadPendantClickableView"
+    const val CLICKABLE_HEADER_IMAGE_VIEW_CLASS =
+        "com.baidu.tbadk.core.view.ClickableHeaderImageView"
+    const val THREAD_DATA_CLASS = "com.baidu.tbadk.core.data.ThreadData"
     const val EM_TEXT_VIEW_CLASS = "com.baidu.tbadk.core.elementsMaven.view.EMTextView"
     const val TB_RICH_TEXT_VIEW_CLASS = "com.baidu.tbadk.widget.richText.TbRichTextView"
     const val TB_IMAGE_CLASS = "com.baidu.tbadk.widget.image.TbImage"
@@ -204,6 +205,12 @@ object StableTiebaHookPoints {
     const val METHOD_GET_INPUT_VIEW = "getInputView"
     const val METHOD_GET_SEND_VIEW = "getSendView"
     const val METHOD_GET_CURRENT_ACCOUNT = "getCurrentAccount"
+    const val METHOD_GET_INSTANCE = "getInstance"
+    const val METHOD_GET_INST = "getInst"
+    const val METHOD_DEAL_ONE_LINK = "dealOneLink"
+    const val METHOD_DEAL_ONE_LINK_WITH_DIALOG = "dealOneLinkWithDialog"
+    const val METHOD_SET_DATA = "setData"
+    const val METHOD_GET_USER_ID = "getUserId"
     const val METHOD_ADD_POST_DATA = "addPostData"
     const val METHOD_POST_NET_DATA = "postNetData"
     const val METHOD_SET_NEED_TBS = "setNeedTbs"
