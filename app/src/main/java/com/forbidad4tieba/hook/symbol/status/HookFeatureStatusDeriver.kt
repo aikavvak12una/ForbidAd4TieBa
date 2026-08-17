@@ -1216,6 +1216,17 @@ internal object HookFeatureStatusDeriver {
             missingOptional = strategyOptional,
         )
 
+        out[HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG] = statusFromMissing(
+            listOfNotNull(
+                "homeBottomEasterEggParserClass".takeIf {
+                    symbols.homeBottomEasterEggParserClass.isNullOrBlank()
+                },
+                "homeBottomEasterEggParserMethod".takeIf {
+                    symbols.homeBottomEasterEggParserMethod.isNullOrBlank()
+                },
+            ),
+        )
+
         out[HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT] = statusFromMissing(
             listOfNotNull(
                 "searchBoxViewClass".takeIf { symbols.searchBoxViewClass.isNullOrBlank() },
@@ -1276,6 +1287,7 @@ internal object HookFeatureStatusDeriver {
                 out.getValue(HookFeatureKey.BLOCK_AD_HOME_TOP_BAR),
                 out.getValue(HookFeatureKey.BLOCK_AD_MINE_TAB_WEB),
                 out.getValue(HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB),
+                out.getValue(HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG),
             ),
         )
 
@@ -1360,6 +1372,7 @@ internal object HookFeatureStatusDeriver {
                 statusMap.getValue(HookFeatureKey.BLOCK_AD_HOME_TOP_BAR),
                 statusMap.getValue(HookFeatureKey.BLOCK_AD_MINE_TAB_WEB),
                 statusMap.getValue(HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB),
+                statusMap.getValue(HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG),
             ),
         )
     }
@@ -1389,6 +1402,9 @@ internal object HookFeatureStatusDeriver {
             name == "ReplyServerResponseLogHook" -> features(HookFeatureKey.DETAILED_LOGGING)
             name == "AgreeServerResponseLogHook" -> features(HookFeatureKey.DETAILED_LOGGING)
             name.startsWith("StrategyAdHook.") -> features(HookFeatureKey.BLOCK_AD_STRATEGY)
+            name == "HomeBottomEasterEggAdHook.Parser" -> features(
+                HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
+            )
             name.startsWith("SearchBoxTextAdHook.") -> features(HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT)
             name == "HomeTopBarRightSlotHook" -> features(HookFeatureKey.BLOCK_AD_HOME_TOP_BAR)
             name == "PbBottomEnterBarHook" ||

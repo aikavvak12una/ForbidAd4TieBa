@@ -310,6 +310,14 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "HomeBottomEasterEggAdHook.Parser",
+            "${symbols.homeBottomEasterEggParserClass}.${symbols.homeBottomEasterEggParserMethod}",
+            listOf(
+                "homeBottomEasterEggParserClass" to has(symbols.homeBottomEasterEggParserClass),
+                "homeBottomEasterEggParserMethod" to has(symbols.homeBottomEasterEggParserMethod),
+            ),
+        )
+        add(
             "SearchBoxTextAdHook.Hint",
             "${symbols.searchBoxViewClass}.${symbols.searchBoxSetHintMethod}",
             listOf(

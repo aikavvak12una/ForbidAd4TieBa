@@ -80,6 +80,7 @@ object ConfigManager {
     const val KEY_BLOCK_AD_HOME_TOP_BAR = "block_ad_home_top_bar"
     const val KEY_BLOCK_AD_MINE_TAB_WEB = "block_ad_mine_tab_web"
     const val KEY_BLOCK_AD_HOME_SIDE_BAR_WEB = "block_ad_home_side_bar_web"
+    const val KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG = "block_ad_home_bottom_easter_egg"
     const val KEY_SIMPLIFY_HOME_TABS = "simplify_home_tabs"
     const val KEY_CUSTOM_HOME_TOP_TABS = KEY_SIMPLIFY_HOME_TABS
     const val KEY_HOME_TOP_TAB_MATERIAL = "home_top_tab_material"
@@ -339,6 +340,7 @@ object ConfigManager {
     val isHomeTopBarAdBlockEnabled: Boolean get() = settingsSnapshot.isHomeTopBarAdBlockEnabled
     val isMineTabWebAdBlockEnabled: Boolean get() = settingsSnapshot.isMineTabWebAdBlockEnabled
     val isHomeSideBarWebAdBlockEnabled: Boolean get() = settingsSnapshot.isHomeSideBarWebAdBlockEnabled
+    val isHomeBottomEasterEggAdBlockEnabled: Boolean get() = settingsSnapshot.isHomeBottomEasterEggAdBlockEnabled
     val isPbAdExperimentBlockEnabled: Boolean get() = settingsSnapshot.isPostPageAdBlockEnabled
     val isHomeTopTabsCustomEnabled: Boolean get() = settingsSnapshot.isHomeTopTabsCustomEnabled
     val isHomeTopTabMaterialEnabled: Boolean get() = settingsSnapshot.isHomeTopTabMaterialEnabled
@@ -808,6 +810,7 @@ object ConfigManager {
             isHomeTopBarAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_HOME_TOP_BAR),
             isMineTabWebAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_MINE_TAB_WEB),
             isHomeSideBarWebAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_HOME_SIDE_BAR_WEB),
+            isHomeBottomEasterEggAdBlockEnabled = adBlockChildBoolean(KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG),
             isHomeTopTabsCustomEnabled = homeTopTabsCustomEnabled,
             isHomeTopTabMaterialEnabled = homeTopTabSelection.materialEnabled,
             isHomeTopTabRecommendEnabled = homeTopTabSelection.recommendEnabled,
@@ -1169,6 +1172,7 @@ object ConfigManager {
             KEY_BLOCK_AD_HOME_TOP_BAR -> HookFeatureKey.BLOCK_AD_HOME_TOP_BAR
             KEY_BLOCK_AD_MINE_TAB_WEB -> HookFeatureKey.BLOCK_AD_MINE_TAB_WEB
             KEY_BLOCK_AD_HOME_SIDE_BAR_WEB -> HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB
+            KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG -> HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG
             KEY_ENABLE_DETAILED_LOGGING -> HookFeatureKey.DETAILED_LOGGING
 
             KEY_FILTER_POST_VOTE,

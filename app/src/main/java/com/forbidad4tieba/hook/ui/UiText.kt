@@ -29,6 +29,8 @@ object UiText {
         const val BLOCK_AD_MINE_TAB_WEB_DESC = "隐藏我的页 Web 推广区块"
         const val BLOCK_AD_HOME_SIDE_BAR_WEB_LABEL = "净化首页侧边栏"
         const val BLOCK_AD_HOME_SIDE_BAR_WEB_DESC = "隐藏首页侧边栏 Web 推广区块"
+        const val BLOCK_AD_HOME_BOTTOM_EASTER_EGG_LABEL = "首页悬浮广告"
+        const val BLOCK_AD_HOME_BOTTOM_EASTER_EGG_DESC = "屏蔽首页底部倒计时彩蛋广告及视频素材预下载"
         const val CUSTOM_POST_FILTER_LABEL = "首页推荐自定义屏蔽"
         const val CUSTOM_POST_FILTER_DESC = "按帖子类型或特征屏蔽信息流卡片"
         const val CUSTOM_POST_FILTER_VOTE_LABEL = "屏蔽投票帖"

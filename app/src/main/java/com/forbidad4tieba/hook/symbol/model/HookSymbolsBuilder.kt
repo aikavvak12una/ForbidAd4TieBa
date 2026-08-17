@@ -24,6 +24,8 @@ internal class HookSymbolsBuilder {
     var closeAdDataMethodJ1: String? = null
     var zgaClass: String? = null
     var zgaMethods: List<String>? = null
+    var homeBottomEasterEggParserClass: String? = null
+    var homeBottomEasterEggParserMethod: String? = null
     var searchBoxViewClass: String? = null
     var searchBoxSetHintMethod: String? = null
     var homeSearchBoxOwnerClass: String? = null
@@ -527,6 +529,10 @@ internal class HookSymbolsBuilder {
                 forumGameFloatingBarField,
                 forumBusinessPromotBizClass,
                 forumBusinessPromotJumpMethod,
+            ),
+            homeBottomEasterEgg = HomeBottomEasterEggAdSymbolsGroup(
+                homeBottomEasterEggParserClass,
+                homeBottomEasterEggParserMethod,
             ),
         )
     }

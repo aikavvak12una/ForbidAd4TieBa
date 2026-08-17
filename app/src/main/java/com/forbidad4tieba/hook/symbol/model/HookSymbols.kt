@@ -74,6 +74,10 @@ data class HookSymbols(
         get() = hookPoints.primary.ad.zga.zgaClass
     val zgaMethods: List<String>?
         get() = hookPoints.primary.ad.zga.zgaMethods
+    val homeBottomEasterEggParserClass: String?
+        get() = hookPoints.primary.ad.homeBottomEasterEgg.parserClass
+    val homeBottomEasterEggParserMethod: String?
+        get() = hookPoints.primary.ad.homeBottomEasterEgg.parserMethod
     val searchBoxViewClass: String?
         get() = hookPoints.primary.home.search.searchBoxViewClass
     val searchBoxSetHintMethod: String?
@@ -872,6 +876,8 @@ data class HookSymbols(
 
             put("zgaClass", zgaClass)
             putStringArray("zgaMethods", zgaMethods)
+            put("homeBottomEasterEggParserClass", homeBottomEasterEggParserClass)
+            put("homeBottomEasterEggParserMethod", homeBottomEasterEggParserMethod)
             put("searchBoxViewClass", searchBoxViewClass)
             put("searchBoxSetHintMethod", searchBoxSetHintMethod)
             put("homeSearchBoxOwnerClass", homeSearchBoxOwnerClass)
@@ -1340,8 +1346,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 42
-        const val DEXKIT_RULE_VERSION = 31
+        const val CACHE_SCHEMA_VERSION = 43
+        const val DEXKIT_RULE_VERSION = 32
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1402,6 +1408,8 @@ data class HookSymbols(
 
                     zgaClass = obj.optStringOrNull("zgaClass")
                     zgaMethods = zgaMethodsList
+                    homeBottomEasterEggParserClass = obj.optStringOrNull("homeBottomEasterEggParserClass")
+                    homeBottomEasterEggParserMethod = obj.optStringOrNull("homeBottomEasterEggParserMethod")
                     searchBoxViewClass = obj.optStringOrNull("searchBoxViewClass")
                     searchBoxSetHintMethod = obj.optStringOrNull("searchBoxSetHintMethod")
                     homeSearchBoxOwnerClass = obj.optStringOrNull("homeSearchBoxOwnerClass")

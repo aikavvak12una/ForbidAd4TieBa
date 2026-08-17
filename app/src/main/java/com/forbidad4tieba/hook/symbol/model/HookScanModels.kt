@@ -53,6 +53,11 @@ internal data class StrategyAdScanSymbols(
     val zgaMethods: List<String>? = null,
 )
 
+internal data class HomeBottomEasterEggAdScanSymbols(
+    val parserClass: String? = null,
+    val parserMethod: String? = null,
+)
+
 internal data class SettingsScanSymbols(
     val settingsClass: String? = null,
     val initMethod: String? = null,

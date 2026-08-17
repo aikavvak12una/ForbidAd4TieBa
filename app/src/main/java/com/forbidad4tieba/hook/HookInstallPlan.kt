@@ -6,6 +6,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.FeedAdHook
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogHook
 import com.forbidad4tieba.hook.feature.ad.ForumPageAdBlockHook
+import com.forbidad4tieba.hook.feature.ad.HomeBottomEasterEggAdHook
 import com.forbidad4tieba.hook.feature.ad.PbAdRequestBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbEarlyAdBlockHook
 import com.forbidad4tieba.hook.feature.ad.PbFallingAdHook
@@ -240,6 +241,7 @@ internal object HookInstallPlanner {
         val postAdBlockHook = context.canInstallPostAdBlock(settings)
         val forumPageAdBlockHook = context.canInstallForumPageAdBlock(settings)
         val strategyAdBlockHook = context.canInstallStrategyAdBlock(settings)
+        val homeBottomEasterEggAdBlockHook = context.canInstallHomeBottomEasterEggAdBlock(settings)
         val pbEarlyAdBlockHook = context.canInstallPbEarlyAdBlock(settings)
         val pbFirstFloorRecommendBlockHook =
             context.canInstallPbFirstFloorRecommendBlock(settings)
@@ -299,6 +301,13 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("StrategyAdHook.symbols") { cl ->
                 HookSymbolResolver.resolveStrategyAdSymbols(cl, symbols)?.let { targets ->
                     StrategyAdHook.hookWithSymbols(targets)
+                }
+            }
+        }
+        if (homeBottomEasterEggAdBlockHook) {
+            entries += HookInstallEntry("HomeBottomEasterEggAdHook") { cl ->
+                HookSymbolResolver.resolveHomeBottomEasterEggAdSymbols(cl, symbols)?.let { targets ->
+                    HomeBottomEasterEggAdHook.hook(targets)
                 }
             }
         }

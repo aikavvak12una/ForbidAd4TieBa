@@ -316,6 +316,10 @@ internal data class StrategyAdSymbols(
     val zgaMethods: List<Method>,
 )
 
+internal data class HomeBottomEasterEggAdSymbols(
+    val parserMethod: Method,
+)
+
 internal data class PbGestureScaleSymbols(
     val dispatchMethod: Method,
 )

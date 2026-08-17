@@ -28,6 +28,7 @@ object HookFeatureKey {
     const val BLOCK_AD_HOME_TOP_BAR = "block_ad_home_top_bar"
     const val BLOCK_AD_MINE_TAB_WEB = "block_ad_mine_tab_web"
     const val BLOCK_AD_HOME_SIDE_BAR_WEB = "block_ad_home_side_bar_web"
+    const val BLOCK_AD_HOME_BOTTOM_EASTER_EGG = "block_ad_home_bottom_easter_egg"
     const val ENABLE_CUSTOM_POST_FILTER = "enable_custom_post_filter"
 
     const val SIMPLIFY_HOME_TOP_TABS = "simplify_home_tabs"
@@ -68,6 +69,7 @@ object HookFeatureKey {
         BLOCK_AD_HOME_TOP_BAR,
         BLOCK_AD_MINE_TAB_WEB,
         BLOCK_AD_HOME_SIDE_BAR_WEB,
+        BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
         ENABLE_CUSTOM_POST_FILTER,
         SIMPLIFY_HOME_TOP_TABS,
         SIMPLIFY_BOTTOM_TABS,

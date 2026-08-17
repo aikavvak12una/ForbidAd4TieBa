@@ -3833,6 +3833,50 @@ internal object HookSymbolResolver {
         }
     }
 
+    fun resolveHomeBottomEasterEggAdSymbols(
+        cl: ClassLoader,
+        symbols: HookSymbols? = getMemorySymbols(),
+    ): HomeBottomEasterEggAdSymbols? {
+        val resolvedSymbols = symbols ?: run {
+            XposedCompat.log("[HomeBottomEasterEggAdHook] skipped: scan symbols unavailable")
+            return null
+        }
+        val className = resolvedSymbols.homeBottomEasterEggParserClass?.takeIf { it.isNotBlank() } ?: run {
+            XposedCompat.log("[HomeBottomEasterEggAdHook] skipped: parser class missing")
+            return null
+        }
+        val methodName = resolvedSymbols.homeBottomEasterEggParserMethod?.takeIf { it.isNotBlank() } ?: run {
+            XposedCompat.log("[HomeBottomEasterEggAdHook] skipped: parser method missing")
+            return null
+        }
+        return try {
+            val clazz = safeFindClass(className, cl) ?: run {
+                XposedCompat.log("[HomeBottomEasterEggAdHook] parser class NOT FOUND: $className")
+                return null
+            }
+            val matches = clazz.declaredMethods.filter { method ->
+                method.name == methodName &&
+                    !Modifier.isStatic(method.modifiers) &&
+                    method.returnType == Void.TYPE &&
+                    method.parameterTypes.contentEquals(arrayOf(JSONObject::class.java))
+            }
+            if (matches.size != 1) {
+                XposedCompat.log(
+                    "[HomeBottomEasterEggAdHook] parser restore rejected: " +
+                        "$className#$methodName matches=${matches.size}",
+                )
+                null
+            } else {
+                matches.single().isAccessible = true
+                HomeBottomEasterEggAdSymbols(matches.single())
+            }
+        } catch (t: Throwable) {
+            XposedCompat.log("[HomeBottomEasterEggAdHook] parser restore FAILED: ${t.message}")
+            XposedCompat.log(t)
+            null
+        }
+    }
+
     private fun resolveConstantReturnMethod(
         cl: ClassLoader,
         className: String?,
@@ -5812,6 +5856,8 @@ internal object HookSymbolResolver {
         var closeAdDataMethodJ1: String? = null
         var zgaClass: String? = null
         var zgaMethodsList: List<String>? = null
+        var homeBottomEasterEggParserClass: String? = null
+        var homeBottomEasterEggParserMethod: String? = null
         var homePersonalizeAnchorClasses: List<String>? = null
         var pbFallingViewClass: String? = null
         var pbFallingInitMethod: String? = null
@@ -6177,6 +6223,17 @@ internal object HookSymbolResolver {
         closeAdDataMethodJ1 = strategyAdScan.closeAdDataMethodJ1
         zgaClass = strategyAdScan.zgaClass
         zgaMethodsList = strategyAdScan.zgaMethods
+
+        val homeBottomEasterEggScan = runScanStep(
+            "HomeBottomEasterEggAdHook",
+            logger,
+            scanErrors,
+            HomeBottomEasterEggAdScanSymbols(),
+        ) {
+            HomeBottomEasterEggAdSymbolScanner.scan(context, cl, logger)
+        }
+        homeBottomEasterEggParserClass = homeBottomEasterEggScan.parserClass
+        homeBottomEasterEggParserMethod = homeBottomEasterEggScan.parserMethod
 
         val homeHeaderScan = runScanStep(
             "HomeHeaderHooks",
@@ -6971,6 +7028,8 @@ internal object HookSymbolResolver {
             this.closeAdDataMethodJ1 = closeAdDataMethodJ1
             this.zgaClass = zgaClass
             zgaMethods = zgaMethodsList
+            this.homeBottomEasterEggParserClass = homeBottomEasterEggParserClass
+            this.homeBottomEasterEggParserMethod = homeBottomEasterEggParserMethod
             applyHomeHeaderScan(homeHeaderScan)
             this.homePersonalizeAnchorClasses = homePersonalizeAnchorClasses
             this.pbFallingViewClass = pbFallingViewClass
