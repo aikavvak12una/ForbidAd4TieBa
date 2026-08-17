@@ -694,8 +694,13 @@ internal object HookSymbolResolver {
             val initDataMethod = resolvedSymbols.plainUrlWebContainerInitDataMethod
                 ?.takeIf { it.isNotBlank() }
                 ?.let { methodName ->
-                    activityClass.declaredMethods.firstOrNull { method ->
-                        PlainUrlWebContainerSymbolScanner.isInitDataMethod(method, methodName)
+                    val method = try {
+                        activityClass.getDeclaredMethod(methodName)
+                    } catch (_: NoSuchMethodException) {
+                        null
+                    }
+                    method?.takeIf { candidate ->
+                        PlainUrlWebContainerSymbolScanner.isInitDataMethod(candidate, methodName)
                     } ?: run {
                         XposedCompat.log("[PlainUrlDirectBrowserHook] web container initData skipped: method mismatch")
                         null
@@ -734,8 +739,13 @@ internal object HookSymbolResolver {
             )
             return null
         }
-        return webViewClientClass.declaredMethods.firstOrNull { method ->
-            PlainUrlWebContainerSymbolScanner.isShouldOverrideUrlLoadingMethod(method, methodName)
+        val method = try {
+            webViewClientClass.getDeclaredMethod(methodName, WebView::class.java, String::class.java)
+        } catch (_: NoSuchMethodException) {
+            null
+        }
+        return method?.takeIf { candidate ->
+            PlainUrlWebContainerSymbolScanner.isShouldOverrideUrlLoadingMethod(candidate, methodName)
         } ?: run {
             XposedCompat.log("[PlainUrlDirectBrowserHook] web container navigation skipped: method mismatch")
             null
@@ -4228,140 +4238,118 @@ internal object HookSymbolResolver {
         }
     }
 
-    fun resolveCommentAvatarDirectProfileSymbols(
-        cl: ClassLoader,
-        symbols: HookSymbols? = getMemorySymbols(),
-    ): CommentAvatarDirectProfileSymbols? {
-        fun requireSymbol(name: String, value: String?): String {
-            return value?.takeIf { it.isNotBlank() } ?: error("missing $name")
-        }
-
-        fun resolveClass(name: String): Class<*> {
-            return safeFindClass(name, cl) ?: error("class not found: $name")
-        }
-
+    fun resolveGlobalDirectProfileSymbols(cl: ClassLoader): GlobalDirectProfileSymbols? {
         return try {
-            val resolvedSymbols = symbols ?: run {
-                XposedCompat.log("[CommentAvatarDirectProfileHook] skipped: scan symbols unavailable")
-                return null
-            }
-            val wireClass = resolveClass(
-                requireSymbol("pbCommentAvatarWireClass", resolvedSymbols.pbCommentAvatarWireClass),
-            )
-            val wireMethodName = requireSymbol(
-                "pbCommentAvatarWireMethod",
-                resolvedSymbols.pbCommentAvatarWireMethod,
-            )
-            val wireMethod = wireClass.declaredMethods.firstOrNull { method ->
+            fun find(name: String): Class<*> = safeFindClass(name, cl) ?: error("class not found: $name")
+            val messageManagerClass = find(StableTiebaHookPoints.MESSAGE_MANAGER_CLASS)
+            val messageClass = find(StableTiebaHookPoints.MESSAGE_CLASS)
+            val customMessageClass = find(StableTiebaHookPoints.CUSTOM_MESSAGE_CLASS)
+            if (!messageClass.isAssignableFrom(customMessageClass)) error("CustomMessage is not Message")
+            val clickableHeaderClass = find(StableTiebaHookPoints.CLICKABLE_HEADER_IMAGE_VIEW_CLASS)
+            val threadDataClass = find(StableTiebaHookPoints.THREAD_DATA_CLASS)
+            val clickableHeaderSetDataMethod = clickableHeaderClass.getDeclaredMethod(
+                StableTiebaHookPoints.METHOD_SET_DATA,
+                threadDataClass,
+                Boolean::class.javaPrimitiveType,
+                Boolean::class.javaPrimitiveType,
+            ).takeIf { method ->
+                !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE
+            }?.apply { isAccessible = true }
+                ?: error("ClickableHeaderImageView.setData(ThreadData,boolean,boolean) mismatch")
+            val clickableHeaderGetUserIdMethod = clickableHeaderClass.methods.singleOrNull { method ->
                 !Modifier.isStatic(method.modifiers) &&
-                    method.name == wireMethodName &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 4
+                    method.name == StableTiebaHookPoints.METHOD_GET_USER_ID &&
+                    method.parameterTypes.isEmpty() && method.returnType == String::class.java
             }?.apply { isAccessible = true }
-                ?: error("wire method not found: ${wireClass.name}.$wireMethodName")
-
-            val holderClass = resolveClass(StableTiebaHookPoints.PB_COMMENT_FLOOR_ITEM_VIEW_HOLDER_CLASS)
-            val headImageClass = resolveClass(StableTiebaHookPoints.HEAD_IMAGE_VIEW_CLASS)
-            val headPendantClass = resolveClass(StableTiebaHookPoints.HEAD_PENDANT_VIEW_CLASS)
-            val headImageField = XposedCompat.findField(
-                holderClass,
-                requireSymbol("pbCommentAvatarHolderHeadField", resolvedSymbols.pbCommentAvatarHolderHeadField),
-            ).also { field ->
-                if (!headImageClass.isAssignableFrom(field.type)) {
-                    error("holder head field type mismatch: ${field.type.name}")
-                }
-            }
-            val headPendantField = XposedCompat.findField(
-                holderClass,
-                requireSymbol(
-                    "pbCommentAvatarHolderHeadPendantField",
-                    resolvedSymbols.pbCommentAvatarHolderHeadPendantField,
-                ),
-            ).also { field ->
-                if (!headPendantClass.isAssignableFrom(field.type)) {
-                    error("holder head pendant field type mismatch: ${field.type.name}")
-                }
-            }
-            val headViewMethod = headPendantClass.declaredMethods.firstOrNull { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.name == "getHeadView" &&
-                    method.parameterTypes.isEmpty() &&
-                    View::class.java.isAssignableFrom(method.returnType)
-            }?.apply { isAccessible = true }
-                ?: error("HeadPendantView.getHeadView not found")
-
-            val postDataClass = resolveClass(StableTiebaHookPoints.PB_POST_DATA_CLASS)
-            val postDataUserMethod = postDataClass.declaredMethods.firstOrNull { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.name == requireSymbol(
-                        "pbCommentAvatarPostDataUserMethod",
-                        resolvedSymbols.pbCommentAvatarPostDataUserMethod,
-                    ) &&
-                    method.parameterTypes.isEmpty()
-            }?.apply { isAccessible = true }
-                ?: error("PostData user getter not found")
-
-            val metaDataClass = resolveClass(StableTiebaHookPoints.META_DATA_CLASS)
-            if (!metaDataClass.isAssignableFrom(postDataUserMethod.returnType)) {
-                error("PostData user getter return mismatch: ${postDataUserMethod.returnType.name}")
-            }
-            val getUserIdMethod = metaDataClass.methods.firstOrNull { method ->
-                method.name == "getUserId" && method.parameterTypes.isEmpty()
-            }?.apply { isAccessible = true }
-                ?: error("MetaData.getUserId not found")
-            val getUserNameMethod = metaDataClass.methods.firstOrNull { method ->
-                method.name == "getUserName" && method.parameterTypes.isEmpty()
-            }?.apply { isAccessible = true }
-                ?: error("MetaData.getUserName not found")
-
-            val personInfoConfigClass = resolveClass(StableTiebaHookPoints.PERSON_INFO_ACTIVITY_CONFIG_CLASS)
-            val personInfoConfigConstructor =
-                personInfoConfigClass.getDeclaredConstructor(Context::class.java, String::class.java, String::class.java)
-                    .apply { isAccessible = true }
-
-            val messageManagerClass = resolveClass(StableTiebaHookPoints.MESSAGE_MANAGER_CLASS)
-            val messageManagerGetInstanceMethod = messageManagerClass.methods.firstOrNull { method ->
+                ?: error("ClickableHeaderImageView.getUserId not found")
+            val messageManagerGetInstanceMethod = messageManagerClass.methods.singleOrNull { method ->
                 Modifier.isStatic(method.modifiers) &&
-                    method.name == "getInstance" &&
-                    method.parameterTypes.isEmpty() &&
-                    messageManagerClass.isAssignableFrom(method.returnType)
-            }?.apply { isAccessible = true }
-                ?: error("MessageManager.getInstance not found")
-            val messageClass = resolveClass(StableTiebaHookPoints.MESSAGE_CLASS)
-            val messageManagerSendMethod = messageManagerClass.methods.firstOrNull { method ->
+                    method.name == StableTiebaHookPoints.METHOD_GET_INSTANCE &&
+                    method.parameterTypes.isEmpty() && messageManagerClass.isAssignableFrom(method.returnType)
+            }?.apply { isAccessible = true } ?: error("MessageManager.getInstance not found")
+            val sendMethod = messageManagerClass.methods.singleOrNull { method ->
                 !Modifier.isStatic(method.modifiers) &&
-                    method.name == "sendMessage" &&
-                    method.parameterTypes.size == 1 &&
-                    method.parameterTypes[0].isAssignableFrom(messageClass)
-            }?.apply { isAccessible = true }
-                ?: error("MessageManager.sendMessage not found")
-            val customMessageClass = resolveClass(StableTiebaHookPoints.CUSTOM_MESSAGE_CLASS)
-            if (!messageClass.isAssignableFrom(customMessageClass)) {
-                error("CustomMessage is not a Message")
-            }
-            val customMessageConstructor =
-                customMessageClass.getDeclaredConstructor(Int::class.javaPrimitiveType, Any::class.java)
-                    .apply { isAccessible = true }
-
-            CommentAvatarDirectProfileSymbols(
-                wireMethod = wireMethod,
-                headImageField = headImageField,
-                headPendantField = headPendantField,
-                headViewMethod = headViewMethod,
-                postDataUserMethod = postDataUserMethod,
-                getUserIdMethod = getUserIdMethod,
-                getUserNameMethod = getUserNameMethod,
-                personInfoConfigConstructor = personInfoConfigConstructor,
-                messageManagerGetInstanceMethod = messageManagerGetInstanceMethod,
-                messageManagerSendMethod = messageManagerSendMethod,
+                    method.name == StableTiebaHookPoints.METHOD_SEND_MESSAGE &&
+                    method.parameterTypes.contentEquals(arrayOf(messageClass))
+            }?.apply { isAccessible = true } ?: error("MessageManager.sendMessage(Message) not unique")
+            val customMessageConstructor = customMessageClass
+                .getDeclaredConstructor(Int::class.javaPrimitiveType, Any::class.java)
+                .apply { isAccessible = true }
+            val personInfoClass = find(StableTiebaHookPoints.PERSON_INFO_ACTIVITY_CONFIG_CLASS)
+            val personInfoGetContextMethod = personInfoClass.methods.singleOrNull { method ->
+                method.name == "getContext" && method.parameterTypes.isEmpty() &&
+                    Context::class.java.isAssignableFrom(method.returnType)
+            }?.apply { isAccessible = true } ?: error("PersonInfoActivityConfig.getContext not found")
+            val personInfoGetIntentMethod = personInfoClass.methods.singleOrNull { method ->
+                method.name == "getIntent" && method.parameterTypes.isEmpty() &&
+                    android.content.Intent::class.java.isAssignableFrom(method.returnType)
+            }?.apply { isAccessible = true } ?: error("PersonInfoActivityConfig.getIntent not found")
+            val personPolymericClass = find(StableTiebaHookPoints.PERSON_POLYMERIC_ACTIVITY_CONFIG_CLASS)
+            val polymericConstructor = personPolymericClass.getDeclaredConstructor(Context::class.java)
+                .apply { isAccessible = true }
+            val createNormalMethod = personPolymericClass.methods.singleOrNull { method ->
+                method.name == "createNormalConfig" &&
+                    method.parameterTypes.contentEquals(
+                        arrayOf(Long::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType),
+                    ) && personPolymericClass.isAssignableFrom(method.returnType)
+            }?.apply { isAccessible = true } ?: error("PersonPolymericActivityConfig.createNormalConfig not found")
+            val personPolymericGetIntentMethod = personPolymericClass.methods.singleOrNull { method ->
+                method.name == "getIntent" && method.parameterTypes.isEmpty() &&
+                    android.content.Intent::class.java.isAssignableFrom(method.returnType)
+            }?.apply { isAccessible = true } ?: error("PersonPolymericActivityConfig.getIntent not found")
+            val personPolymericSetUriMethod = personPolymericClass.methods.singleOrNull { method ->
+                method.name == "setUri" && method.parameterTypes.contentEquals(arrayOf(android.net.Uri::class.java)) &&
+                    method.returnType == Void.TYPE
+            }?.apply { isAccessible = true } ?: error("PersonPolymericActivityConfig.setUri not found")
+            val applicationClass = find(StableTiebaHookPoints.TBADK_CORE_APPLICATION_CLASS)
+            val currentAccountMethod = applicationClass.methods.singleOrNull {
+                    Modifier.isStatic(it.modifiers) &&
+                        it.name == StableTiebaHookPoints.METHOD_GET_CURRENT_ACCOUNT &&
+                        it.parameterTypes.isEmpty() && it.returnType == String::class.java
+                }?.apply { isAccessible = true }
+            val applicationGetInstMethod = applicationClass.methods.singleOrNull { method ->
+                Modifier.isStatic(method.modifiers) &&
+                    method.name == StableTiebaHookPoints.METHOD_GET_INST &&
+                    method.parameterTypes.isEmpty() && applicationClass.isAssignableFrom(method.returnType)
+            }?.apply { isAccessible = true } ?: error("TbadkCoreApplication.getInst not found")
+            val urlManagerClass = find(StableTiebaHookPoints.URL_MANAGER_CLASS)
+            val urlManagerDealOneLinkMethods = urlManagerClass.methods.filter { method ->
+                !Modifier.isStatic(method.modifiers) &&
+                    method.name == StableTiebaHookPoints.METHOD_DEAL_ONE_LINK_WITH_DIALOG &&
+                    method.returnType == Boolean::class.javaPrimitiveType &&
+                    method.parameterTypes.size == 7 &&
+                    method.parameterTypes[1] == String::class.java &&
+                    method.parameterTypes[2] == Array<String>::class.java &&
+                    method.parameterTypes[3] == Boolean::class.javaPrimitiveType &&
+                    method.parameterTypes[5] == Boolean::class.javaPrimitiveType &&
+                    method.parameterTypes[6] == android.os.Bundle::class.java
+            }.singleOrNull()?.apply { isAccessible = true }
+                ?.let(::listOf)
+                ?: error("UrlManager.dealOneLinkWithDialog target not unique")
+            GlobalDirectProfileSymbols(
+                clickableHeaderSetDataMethod = clickableHeaderSetDataMethod,
+                clickableHeaderGetUserIdMethod = clickableHeaderGetUserIdMethod,
                 customMessageConstructor = customMessageConstructor,
+                personInfoConfigClass = personInfoClass,
+                personInfoGetContextMethod = personInfoGetContextMethod,
+                personInfoGetIntentMethod = personInfoGetIntentMethod,
+                personPolymericConfigConstructor = polymericConstructor,
+                personPolymericCreateNormalConfigMethod = createNormalMethod,
+                personPolymericGetIntentMethod = personPolymericGetIntentMethod,
+                personPolymericSetUriMethod = personPolymericSetUriMethod,
+                currentAccountMethod = currentAccountMethod,
+                applicationGetInstMethod = applicationGetInstMethod,
+                messageManagerGetInstanceMethod = messageManagerGetInstanceMethod,
+                messageManagerSendMethod = sendMethod,
+                urlManagerDealOneLinkMethods = urlManagerDealOneLinkMethods,
             )
         } catch (t: Throwable) {
-            XposedCompat.log("[CommentAvatarDirectProfileHook] symbol resolve FAILED: ${t.message}")
+            XposedCompat.log("[CommentAvatarDirectProfileHook] global symbol resolve FAILED: ${t.message}")
             XposedCompat.log(t)
             null
         }
     }
+
     fun resolveMsgTabDefaultNotifySymbols(
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
@@ -5968,11 +5956,6 @@ internal object HookSymbolResolver {
         var pbLikeAutoReplyInputContainerClass: String? = null
         var pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null
         var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
-        var pbCommentAvatarWireClass: String? = null
-        var pbCommentAvatarWireMethod: String? = null
-        var pbCommentAvatarPostDataUserMethod: String? = null
-        var pbCommentAvatarHolderHeadField: String? = null
-        var pbCommentAvatarHolderHeadPendantField: String? = null
         var collectionPresenterField: String? = null
         var collectionPresenterListSetterMethod: String? = null
         var collectionPresenterListSetterMethodSpec: String? = null
@@ -6576,19 +6559,6 @@ internal object HookSymbolResolver {
         pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyScan.inputContainerGetInputViewMethod
         pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyScan.inputContainerGetSendViewMethod
 
-        val commentAvatarScan = runScanStep(
-            "CommentAvatarDirectProfileHook",
-            logger,
-            scanErrors,
-            CommentAvatarDirectProfileScanSymbols(),
-        ) {
-            CommentAvatarDirectProfileSymbolScanner.scan(context, candidatesWithWhitelist, cl, logger)
-        }
-        pbCommentAvatarWireClass = commentAvatarScan.wireClass
-        pbCommentAvatarWireMethod = commentAvatarScan.wireMethod
-        pbCommentAvatarPostDataUserMethod = commentAvatarScan.postDataUserMethod
-        pbCommentAvatarHolderHeadField = commentAvatarScan.holderHeadField
-        pbCommentAvatarHolderHeadPendantField = commentAvatarScan.holderHeadPendantField
         val imageViewerShareScan = runScanStep(
             "ImageViewerShareHooks",
             logger,
@@ -7170,12 +7140,6 @@ internal object HookSymbolResolver {
             this.pbLikeAutoReplyInputContainerClass = pbLikeAutoReplyInputContainerClass
             this.pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyInputContainerGetInputViewMethod
             this.pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyInputContainerGetSendViewMethod
-            this.pbCommentAvatarWireClass = pbCommentAvatarWireClass
-            this.pbCommentAvatarWireMethod = pbCommentAvatarWireMethod
-            this.pbCommentAvatarPostDataUserMethod = pbCommentAvatarPostDataUserMethod
-            this.pbCommentAvatarHolderHeadField = pbCommentAvatarHolderHeadField
-            this.pbCommentAvatarHolderHeadPendantField = pbCommentAvatarHolderHeadPendantField
-
             this.collectionPresenterField = collectionPresenterField
             this.collectionPresenterListSetterMethod = collectionPresenterListSetterMethod
             this.collectionPresenterListSetterMethodSpec = collectionPresenterListSetterMethodSpec

@@ -297,17 +297,18 @@ class MainHook : XposedModule() {
             AboutInfoManager.fetchAtStartupIfNeeded(appContext)
 
             XposedCompat.log("[MainHook] > Symbols loaded: source=${symbols.source}, settings=${symbols.settingsClass}, home=${symbols.homeTabClass}")
-            if (symbolLoadResult.pendingScan) {
-                XposedCompat.log("[MainHook] > Scan availability skipped: no cached symbols yet")
-            }
-            HookSymbolResolver.formatFeatureStatusLines(symbols).forEach { line ->
-                XposedCompat.log("[MainHook] > $line")
-            }
-            HookSymbolResolver.formatHookPointStatusLines(symbols).forEach { line ->
-                XposedCompat.log("[MainHook] > $line")
-            }
-
             HookInstaller.install(symbolPlan, cl)
+            runStartupTask("log symbol diagnostics") {
+                if (symbolLoadResult.pendingScan) {
+                    XposedCompat.log("[MainHook] > Scan availability skipped: no cached symbols yet")
+                }
+                HookSymbolResolver.formatFeatureStatusLines(symbols).forEach { line ->
+                    XposedCompat.log("[MainHook] > $line")
+                }
+                HookSymbolResolver.formatHookPointStatusLines(symbols).forEach { line ->
+                    XposedCompat.log("[MainHook] > $line")
+                }
+            }
 
         } catch (t: Throwable) {
             synchronized(this@MainHook) { sSymbolHooksInstalled = false }

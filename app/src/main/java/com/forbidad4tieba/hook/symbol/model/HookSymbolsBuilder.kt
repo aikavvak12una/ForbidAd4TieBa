@@ -174,11 +174,6 @@ internal class HookSymbolsBuilder {
     var pbLikeAutoReplyInputContainerClass: String? = null
     var pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null
     var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
-    var pbCommentAvatarWireClass: String? = null
-    var pbCommentAvatarWireMethod: String? = null
-    var pbCommentAvatarPostDataUserMethod: String? = null
-    var pbCommentAvatarHolderHeadField: String? = null
-    var pbCommentAvatarHolderHeadPendantField: String? = null
     var inputMemeBarControllerClass: String? = null
     var inputMemeBarEnableMethod: String? = null
     var collectionPresenterField: String? = null
@@ -626,13 +621,6 @@ internal class HookSymbolsBuilder {
                     pbCommentBottomRecyclerScrollClass,
                     pbCommentBottomRecyclerScrollMethod,
                     pbCommentBottomRecyclerOwnerField,
-                ),
-                avatarDirectProfile = PbCommentAvatarDirectProfileSymbolsGroup(
-                    pbCommentAvatarWireClass,
-                    pbCommentAvatarWireMethod,
-                    pbCommentAvatarPostDataUserMethod,
-                    pbCommentAvatarHolderHeadField,
-                    pbCommentAvatarHolderHeadPendantField,
                 ),
             ),
             gestureScale = PbGestureScaleSymbolsGroup(

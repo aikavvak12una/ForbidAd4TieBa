@@ -582,6 +582,19 @@ internal object HookFeatureStatusDeriver {
                 missingOptional = plainUrlDirectMissing,
             )
         }
+        val directProfileNavigationMissing = buildList {
+            if (!plainUrlDirectReady) addAll(plainUrlDirectMissing)
+            if (!plainUrlMessageReady) addAll(plainUrlMessageMissing)
+        }.distinct()
+        out[HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE] =
+            if (directProfileNavigationMissing.isEmpty()) {
+                HookFeatureStatus(state = HookFeatureState.FULL)
+            } else {
+                HookFeatureStatus(
+                    state = HookFeatureState.PARTIAL,
+                    missingOptional = directProfileNavigationMissing,
+                )
+            }
 
         val autoRefreshCritical = ArrayList<String>(3)
         if (symbols.autoRefreshTriggerMethod.isNullOrBlank()) {
@@ -701,31 +714,6 @@ internal object HookFeatureStatusDeriver {
             )
         }
 
-        val commentAvatarCritical = ArrayList<String>(5)
-        if (symbols.pbCommentAvatarWireClass.isNullOrBlank()) {
-            commentAvatarCritical.add("pbCommentAvatarWireClass")
-        }
-        if (symbols.pbCommentAvatarWireMethod.isNullOrBlank()) {
-            commentAvatarCritical.add("pbCommentAvatarWireMethod")
-        }
-        if (symbols.pbCommentAvatarPostDataUserMethod.isNullOrBlank()) {
-            commentAvatarCritical.add("pbCommentAvatarPostDataUserMethod")
-        }
-        if (symbols.pbCommentAvatarHolderHeadField.isNullOrBlank()) {
-            commentAvatarCritical.add("pbCommentAvatarHolderHeadField")
-        }
-        if (symbols.pbCommentAvatarHolderHeadPendantField.isNullOrBlank()) {
-            commentAvatarCritical.add("pbCommentAvatarHolderHeadPendantField")
-        }
-        out[HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE] =
-            if (commentAvatarCritical.isEmpty()) {
-                HookFeatureStatus(state = HookFeatureState.FULL)
-            } else {
-                HookFeatureStatus(
-                    state = HookFeatureState.DISABLED,
-                    missingCritical = commentAvatarCritical,
-                )
-            }
         val replyVisibilityProbeCritical = ArrayList<String>(36)
         if (symbols.replyVisibilityProbeReplyResponseClass.isNullOrBlank()) {
             replyVisibilityProbeCritical.add("replyVisibilityProbeReplyResponseClass")
@@ -1414,6 +1402,11 @@ internal object HookFeatureStatusDeriver {
             name.startsWith("PostAdHook.DataFilter") -> features(HookFeatureKey.BLOCK_AD_POST_PAGE)
             name.startsWith("ForumPageAdBlockHook") -> features(HookFeatureKey.BLOCK_AD_FORUM_PAGE)
             name.startsWith("EnterForumWebHook") -> features(HookFeatureKey.FILTER_ENTER_FORUM_WEB)
+            name == "PlainUrlDirectBrowserHook.Direct" ||
+                name == "PlainUrlDirectBrowserHook.Message" -> features(
+                HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
+                HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE,
+            )
             name.startsWith("PlainUrlDirectBrowserHook.") -> features(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
             name == "MineTabWebBlockHook" -> features(HookFeatureKey.BLOCK_AD_MINE_TAB_WEB)
             name == "HomeSideBarWebBlockHook" -> features(HookFeatureKey.BLOCK_AD_HOME_SIDE_BAR_WEB)

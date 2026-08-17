@@ -378,16 +378,6 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.likeAutoReply.inputContainer.pbLikeAutoReplyInputContainerGetInputViewMethod
     val pbLikeAutoReplyInputContainerGetSendViewMethod: String?
         get() = hookPoints.primary.pb.likeAutoReply.inputContainer.pbLikeAutoReplyInputContainerGetSendViewMethod
-    val pbCommentAvatarWireClass: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarWireClass
-    val pbCommentAvatarWireMethod: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarWireMethod
-    val pbCommentAvatarPostDataUserMethod: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarPostDataUserMethod
-    val pbCommentAvatarHolderHeadField: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarHolderHeadField
-    val pbCommentAvatarHolderHeadPendantField: String?
-        get() = hookPoints.primary.pb.comment.avatarDirectProfile.pbCommentAvatarHolderHeadPendantField
     val collectionPresenterField: String?
         get() = hookPoints.collectionHistory.collection.presenter.collectionPresenterField
     val collectionPresenterListSetterMethod: String?
@@ -1037,12 +1027,6 @@ data class HookSymbols(
             put("pbLikeAutoReplyInputContainerClass", pbLikeAutoReplyInputContainerClass)
             put("pbLikeAutoReplyInputContainerGetInputViewMethod", pbLikeAutoReplyInputContainerGetInputViewMethod)
             put("pbLikeAutoReplyInputContainerGetSendViewMethod", pbLikeAutoReplyInputContainerGetSendViewMethod)
-            put("pbCommentAvatarWireClass", pbCommentAvatarWireClass)
-            put("pbCommentAvatarWireMethod", pbCommentAvatarWireMethod)
-            put("pbCommentAvatarPostDataUserMethod", pbCommentAvatarPostDataUserMethod)
-            put("pbCommentAvatarHolderHeadField", pbCommentAvatarHolderHeadField)
-            put("pbCommentAvatarHolderHeadPendantField", pbCommentAvatarHolderHeadPendantField)
-
             put("collectionPresenterField", collectionPresenterField)
             put("collectionPresenterListSetterMethod", collectionPresenterListSetterMethod)
             put("collectionPresenterListSetterMethodSpec", collectionPresenterListSetterMethodSpec)
@@ -1356,7 +1340,7 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 41
+        const val CACHE_SCHEMA_VERSION = 42
         const val DEXKIT_RULE_VERSION = 31
 
         fun unsupported(
@@ -1603,14 +1587,6 @@ data class HookSymbols(
                         obj.optStringOrNull("pbLikeAutoReplyInputContainerGetInputViewMethod")
                     pbLikeAutoReplyInputContainerGetSendViewMethod =
                         obj.optStringOrNull("pbLikeAutoReplyInputContainerGetSendViewMethod")
-                    pbCommentAvatarWireClass = obj.optStringOrNull("pbCommentAvatarWireClass")
-                    pbCommentAvatarWireMethod = obj.optStringOrNull("pbCommentAvatarWireMethod")
-                    pbCommentAvatarPostDataUserMethod =
-                        obj.optStringOrNull("pbCommentAvatarPostDataUserMethod")
-                    pbCommentAvatarHolderHeadField = obj.optStringOrNull("pbCommentAvatarHolderHeadField")
-                    pbCommentAvatarHolderHeadPendantField =
-                        obj.optStringOrNull("pbCommentAvatarHolderHeadPendantField")
-
                     collectionPresenterField = obj.optStringOrNull("collectionPresenterField")
                     collectionPresenterListSetterMethod = obj.optStringOrNull("collectionPresenterListSetterMethod")
                     collectionPresenterListSetterMethodSpec =

@@ -261,13 +261,6 @@ internal object HookSymbolValidator {
             symbols.pbCommentBottomRecyclerScrollMethod != null ||
             symbols.pbCommentBottomRecyclerOwnerField != null
     if (hasPbCommentBottomSymbols && !isPbCommentBottomMechanismValid(symbols, cl)) return false
-    val hasCommentAvatarSymbols =
-        symbols.pbCommentAvatarWireClass != null ||
-            symbols.pbCommentAvatarWireMethod != null ||
-            symbols.pbCommentAvatarPostDataUserMethod != null ||
-            symbols.pbCommentAvatarHolderHeadField != null ||
-            symbols.pbCommentAvatarHolderHeadPendantField != null
-    if (hasCommentAvatarSymbols && !isCommentAvatarDirectProfileValid(symbols, cl)) return false
     val hasHomeNativeGlassTopChromeSymbols =
         !symbols.homeNativeGlassTopChromeTabSelectedMethodSpecs.isNullOrEmpty()
     if (hasHomeNativeGlassTopChromeSymbols && !isHomeNativeGlassTopChromeValid(symbols, cl)) {
@@ -1972,49 +1965,6 @@ private fun isPbCommentScrollValid(symbols: HookSymbols, cl: ClassLoader): Boole
                 method.returnType == Void.TYPE &&
                 method.parameterTypes.isEmpty()
         }
-    } catch (_: Throwable) {
-        false
-    }
-}
-
-private fun isCommentAvatarDirectProfileValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-    val wireClassName = symbols.pbCommentAvatarWireClass ?: return false
-    val wireMethodName = symbols.pbCommentAvatarWireMethod ?: return false
-    val postDataUserMethodName = symbols.pbCommentAvatarPostDataUserMethod ?: return false
-    val headFieldName = symbols.pbCommentAvatarHolderHeadField ?: return false
-    val pendantFieldName = symbols.pbCommentAvatarHolderHeadPendantField ?: return false
-    return try {
-        val holderClass = safeFindClass(
-            StableTiebaHookPoints.PB_COMMENT_FLOOR_ITEM_VIEW_HOLDER_CLASS,
-            cl,
-        ) ?: return false
-        val postDataClass = safeFindClass(StableTiebaHookPoints.PB_POST_DATA_CLASS, cl) ?: return false
-        val headImageClass = safeFindClass(StableTiebaHookPoints.HEAD_IMAGE_VIEW_CLASS, cl) ?: return false
-        val pendantClass = safeFindClass(StableTiebaHookPoints.HEAD_PENDANT_VIEW_CLASS, cl) ?: return false
-        val metaDataClass = safeFindClass(StableTiebaHookPoints.META_DATA_CLASS, cl) ?: return false
-
-        val wireClass = safeFindClass(wireClassName, cl) ?: return false
-        val hasWireMethod = wireClass.declaredMethods.any { method ->
-            !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
-                method.name == wireMethodName &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 4
-        }
-        if (!hasWireMethod) return false
-
-        val headField = holderClass.declaredFields.firstOrNull { it.name == headFieldName }
-            ?: return false
-        if (!headImageClass.isAssignableFrom(headField.type)) return false
-        val pendantField = holderClass.declaredFields.firstOrNull { it.name == pendantFieldName }
-            ?: return false
-        if (!pendantClass.isAssignableFrom(pendantField.type)) return false
-
-        val userMethod = postDataClass.declaredMethods.firstOrNull { method ->
-            !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
-                method.name == postDataUserMethodName &&
-                method.parameterTypes.isEmpty()
-        } ?: return false
-        metaDataClass.isAssignableFrom(userMethod.returnType)
     } catch (_: Throwable) {
         false
     }

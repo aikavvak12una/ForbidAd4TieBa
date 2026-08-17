@@ -357,6 +357,8 @@ object ConfigManager {
     val isEnterForumWebFilterEnabled: Boolean get() = settingsSnapshot.isEnterForumWebFilterEnabled
     val isOpenWebLinkInSystemBrowserEnabled: Boolean
         get() = settingsSnapshot.isOpenWebLinkInSystemBrowserEnabled
+    val isCommentAvatarDirectProfileEnabled: Boolean
+        get() = settingsSnapshot.isCommentAvatarDirectProfileEnabled
     val isHomeNativeGlassEnabled: Boolean get() = settingsSnapshot.isHomeNativeGlassEnabled
     val isHomeTabDynamicTintEnabled: Boolean get() = settingsSnapshot.isHomeTabDynamicTintEnabled
     val hasAnyHomeNativeGlassBackgroundImage: Boolean

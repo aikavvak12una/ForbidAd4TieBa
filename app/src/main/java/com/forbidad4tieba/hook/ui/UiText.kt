@@ -163,9 +163,9 @@ object UiText {
         const val AUTO_LOAD_MORE_DESC = "浏览信息流和帖子评论时自动静默加载下一页\n*滑动卡顿尝试关闭此功能"
         const val PB_LIKE_AUTO_REPLY_LABEL = "快捷回复"
         const val PB_LIKE_AUTO_REPLY_DESC = "点赞帖子后，自动发送预设回复内容"
-        const val COMMENT_AVATAR_DIRECT_PROFILE_LABEL = "评论头像直达主页"
+        const val COMMENT_AVATAR_DIRECT_PROFILE_LABEL = "头像直达主页"
         const val COMMENT_AVATAR_DIRECT_PROFILE_DESC =
-            "帖子页楼层/评论区点击用户头像时跳过吧友名片，直接打开用户主页"
+            "点击用户头像或用户名时跳过吧友名片，直接打开用户主页"
         const val PB_LIKE_AUTO_REPLY_DIALOG_TITLE = "快捷回复"
         const val PB_LIKE_AUTO_REPLY_CONTENT_LABEL = "回复内容"
         const val PB_LIKE_AUTO_REPLY_CONTENT_HINT = "输入点赞帖子后自动发送的回复"
