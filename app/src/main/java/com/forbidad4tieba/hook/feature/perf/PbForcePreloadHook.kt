@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.perf
 
+import android.app.Activity
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -14,16 +15,28 @@ import com.forbidad4tieba.hook.core.XposedCompat
  * 2. hybrid webview 预加载通道依赖 `UbsABTestHelper.hybridPbOpt()==false`（否则宿主在
  *    PbCommonWebView 写入数据时打印"过滤apiData"并丢弃预加载数据，webview 只能自行重新拉取）。
  *    强制预加载开启时同步把该 AB 方法强制为 false，保证预加载数据能注入 hybrid 页面。
- * 3. `UbsABTestHelper.isPbArchTest()==false` 允许宿主使用帖子数据缓存。必须保留 Activity
- *    原始的预加载分支判定：同一帖子再次进入时，宿主会按自身策略拒绝重复预加载；强制进入
- *    缓存渲染分支会跳过普通加载路径，导致评论请求完全不发起。
+ * 3. native 帖子打开时 `AbsPbActivity.w1` 的预加载渲染分支需要 `A1()==true`（PbActivity 默认
+ *    false）且 `PbPreloadHelperKt.c()`(isPbNoCacheDataSwitchOn)==false。强制预加载开启时把
+ *    `UbsABTestHelper.isPbArchTest()` 强制为 false，并让 `PbActivity.A1()` 仅在每个 tid 首次
+ *    进入时强制 true（用 xfa 中已缓存的卡片数据直接渲染首屏）；同一 tid 再次进入时放行宿主
+ *    原始 false，走普通加载路径发起完整请求，保证评论正常加载。
+ *    （无条件强制 A1()==true 会让重复进入同一帖子时也跳过普通加载路径，而宿主会按自身策略
+ *    拒绝重复预取完整页数据，导致评论请求完全不发起。）
  *
- * 跨版本说明：isPbPreloadSwitchOn 与 hybridPbOpt 双版本稳定；isPbArchTest 在旧版本找不到时
- * 仅跳过对应 hook（fail closed），不影响其余 hook。
+ * 跨版本说明：isPbPreloadSwitchOn 与 hybridPbOpt 双版本稳定；A1() 与 isPbArchTest 为
+ * 22.9.1.0 专属结构，旧版本找不到时仅跳过对应 hook（fail closed），不影响其余 hook。
  */
 object PbForcePreloadHook {
     private const val TAG = "[PbForcePreloadHook]"
     private const val METHOD_IS_PB_PRELOAD_SWITCH_ON = "isPbPreloadSwitchOn"
+    private const val METHOD_A1 = "A1"
+
+    // 宿主 PbActivity intent 稳定携带的帖子 id extra（PbActivityConfig.KEY_THREAD_ID），
+    // 用于区分同一帖子的首次/重复进入；属于协议字符串，非混淆符号。
+    private const val INTENT_EXTRA_THREAD_ID = "thread_id"
+
+    // 已走完"首次预加载渲染"的 tid 上限，防止长会话中集合无界增长（进程内、不持久化）。
+    private const val MAX_TRACKED_TIDS = 128
 
     private val abOverrides = arrayOf(
         // 保证 hybrid 页面能注入 apiData 预加载数据
@@ -34,6 +47,25 @@ object PbForcePreloadHook {
 
     @Volatile private var hooked = false
 
+    // 已通过预加载渲染分支"秒开"过的 tid（插入序，供有界淘汰）。
+    private val preloadRenderedTids = LinkedHashSet<String>(64)
+
+    /**
+     * 记录一个 tid 的首次预加载渲染：首次进入返回 true（可强制 A1()==true），
+     * 同一 tid 再次进入返回 false（放行宿主原始判定，保证评论请求正常发起）。
+     */
+    @Synchronized
+    private fun markFirstPreloadRender(tid: String): Boolean {
+        if (!preloadRenderedTids.add(tid)) return false
+        while (preloadRenderedTids.size > MAX_TRACKED_TIDS) {
+            val oldest = preloadRenderedTids.iterator()
+            if (oldest.hasNext()) {
+                oldest.next()
+                oldest.remove()
+            }
+        }
+        return true
+    }
     fun hook(cl: ClassLoader) {
         if (!ConfigManager.isPbPreloadForced) {
             XposedCompat.logD("$TAG skipped: config disabled")
@@ -96,7 +128,41 @@ object PbForcePreloadHook {
                 }
             }
 
-            XposedCompat.log("$TAG hooks INSTALLED: count=$installed/${1 + abOverrides.size}")
+            // 3. PbActivity.A1() -> 首次进入 true：放行 w1 的 native 预加载渲染分支（22.9.1.0
+            //    专属）。同一 tid 再次进入时放行原始 false，走普通加载路径保证评论请求正常发起。
+            val pbActivityClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_ACTIVITY_CLASS, cl)
+            if (pbActivityClass == null) {
+                XposedCompat.log("$TAG ${StableTiebaHookPoints.PB_ACTIVITY_CLASS} NOT FOUND, A1 override skipped (old version)")
+            } else {
+                val a1Method = XposedCompat.findMethodOrNull(pbActivityClass, METHOD_A1)
+                if (
+                    a1Method == null ||
+                    a1Method.parameterTypes.isNotEmpty() ||
+                    a1Method.returnType != Boolean::class.javaPrimitiveType
+                ) {
+                    XposedCompat.log("$TAG ${StableTiebaHookPoints.PB_ACTIVITY_CLASS}.A1() NOT FOUND or invalid, override skipped")
+                } else {
+                    a1Method.isAccessible = true
+                    mod.hook(a1Method).intercept { chain ->
+                        if (ConfigManager.isPbPreloadForced) {
+                            val activity = chain.thisObject as? Activity
+                            val tid = activity?.intent?.getStringExtra(INTENT_EXTRA_THREAD_ID)
+                            if (!tid.isNullOrEmpty() && markFirstPreloadRender(tid)) {
+                                XposedCompat.logD("$TAG A1() forced true (first entry, tid=$tid)")
+                                true
+                            } else {
+                                XposedCompat.logD("$TAG A1() kept original (repeated entry or missing tid)")
+                                chain.proceed()
+                            }
+                        } else {
+                            chain.proceed()
+                        }
+                    }
+                    installed++
+                }
+            }
+
+            XposedCompat.log("$TAG hooks INSTALLED: count=$installed/${2 + abOverrides.size}")
         } catch (t: Throwable) {
             resetHooked()
             XposedCompat.log("$TAG install FAILED: ${t.message}")
