@@ -514,6 +514,7 @@ internal data class DexAutoRefreshMatch(
 )
 
 internal data class DexRecPersonalizeRequestMatch(
+    val ownerClassName: String,
     val ownerMethodName: String,
     val paramTypes: List<String>,
     val evidence: String,

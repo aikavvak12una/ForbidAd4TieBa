@@ -814,6 +814,13 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
+            "PbForcePreloadHook.RenderGate",
+            "${StableTiebaHookPoints.PB_ACTIVITY_CLASS}.${symbols.pbPreloadRenderGateMethod}",
+            listOf(
+                "pbPreloadRenderGateMethod" to has(symbols.pbPreloadRenderGateMethod),
+            ),
+        )
+        add(
             "AutoLoadMoreHook.Config",
             "${symbols.autoLoadMoreConfigClass}.${symbols.autoLoadMoreConfigMethod}",
             listOf(

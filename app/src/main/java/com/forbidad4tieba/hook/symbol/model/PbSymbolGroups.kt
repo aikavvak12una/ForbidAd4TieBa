@@ -79,6 +79,7 @@ data class AutoLoadSymbolsGroup(
     val autoRefreshCacheRestoreMethod: String? = null,
     val autoLoadMoreConfigClass: String? = null,
     val autoLoadMoreConfigMethod: String? = null,
+    val pbPreloadRenderGateMethod: String? = null,
 )
 
 data class PbCommentScrollSymbolsGroup(

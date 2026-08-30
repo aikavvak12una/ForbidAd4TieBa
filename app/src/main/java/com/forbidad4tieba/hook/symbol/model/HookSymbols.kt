@@ -326,6 +326,8 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.comment.autoLoad.autoRefreshNetRequestMethodSpec
     val autoRefreshCacheRestoreMethod: String?
         get() = hookPoints.primary.pb.comment.autoLoad.autoRefreshCacheRestoreMethod
+    val pbPreloadRenderGateMethod: String?
+        get() = hookPoints.primary.pb.comment.autoLoad.pbPreloadRenderGateMethod
     val autoLoadMoreConfigClass: String?
         get() = hookPoints.primary.pb.comment.autoLoad.autoLoadMoreConfigClass
     val autoLoadMoreConfigMethod: String?
@@ -1005,6 +1007,7 @@ data class HookSymbols(
             put("autoRefreshNetRequestMethod", autoRefreshNetRequestMethod)
             put("autoRefreshNetRequestMethodSpec", autoRefreshNetRequestMethodSpec)
             put("autoRefreshCacheRestoreMethod", autoRefreshCacheRestoreMethod)
+            put("pbPreloadRenderGateMethod", pbPreloadRenderGateMethod)
             put("autoLoadMoreConfigClass", autoLoadMoreConfigClass)
             put("autoLoadMoreConfigMethod", autoLoadMoreConfigMethod)
             put("pbCommentScrollListenerClass", pbCommentScrollListenerClass)
@@ -1346,8 +1349,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 43
-        const val DEXKIT_RULE_VERSION = 32
+        const val CACHE_SCHEMA_VERSION = 44
+        const val DEXKIT_RULE_VERSION = 33
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1564,6 +1567,7 @@ data class HookSymbols(
                     autoRefreshNetRequestMethodSpec =
                         obj.optStringOrNull("autoRefreshNetRequestMethodSpec")
                     autoRefreshCacheRestoreMethod = obj.optStringOrNull("autoRefreshCacheRestoreMethod")
+                    pbPreloadRenderGateMethod = obj.optStringOrNull("pbPreloadRenderGateMethod")
                     autoLoadMoreConfigClass = obj.optStringOrNull("autoLoadMoreConfigClass")
                     autoLoadMoreConfigMethod = obj.optStringOrNull("autoLoadMoreConfigMethod")
                     pbCommentScrollListenerClass = obj.optStringOrNull("pbCommentScrollListenerClass")

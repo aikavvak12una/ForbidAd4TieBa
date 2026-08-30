@@ -33,10 +33,10 @@ internal object AutoRefreshSymbolScanner {
     }
 
     /**
-     * Scans for the RecPersonalizePageModel network-request method. All feed refresh
-     * paths (including the cold-start B0() branch that bypasses the w1() UI trigger)
-     * funnel into this method, so it must be blocked as well to keep the feature
-     * effective when UbsABTestHelper.isColdNetDataOpt() routes refresh through B0().
+     * Scans for every home-feed network-request method. All refresh paths
+     * (including the cold-start branch that bypasses the UI trigger) call the
+     * host's "homepage net start" tracker, so the scan keys on that anchor and
+     * accepts matches on whatever classes the host currently hosts them.
      */
     fun scanRecPersonalizeRequest(
         context: Context,
@@ -56,13 +56,16 @@ internal object AutoRefreshSymbolScanner {
             log(logger, "recRequestDex: no semantic match")
             return emptyList()
         }
-        val targetClass = safeFindClass(StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS, cl)
-        if (targetClass == null) {
-            log(logger, "recRequestDex: class not found: ${StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS}")
-            return emptyList()
-        }
+        // Each match carries its own declaring class: the host splits refresh
+        // transports across several classes, so validating them all against one
+        // hardcoded owner would drop every match that does not live there.
         val valid = matches.filter { match ->
-            val methodShape = targetClass.declaredMethods.any { method ->
+            val ownerClass = safeFindClass(match.ownerClassName, cl)
+            if (ownerClass == null) {
+                log(logger, "recRequestDex: class not found: ${match.ownerClassName}")
+                return@filter false
+            }
+            val methodShape = ownerClass.declaredMethods.any { method ->
                 !Modifier.isStatic(method.modifiers) &&
                     method.name == match.ownerMethodName &&
                     method.returnType == Void.TYPE &&
@@ -72,7 +75,7 @@ internal object AutoRefreshSymbolScanner {
                 log(
                     logger,
                     "recRequestDex: method shape mismatch: " +
-                        "${StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS}.${match.ownerMethodName} " +
+                        "${match.ownerClassName}.${match.ownerMethodName} " +
                         "params=${match.paramTypes}",
                 )
             }
@@ -81,7 +84,7 @@ internal object AutoRefreshSymbolScanner {
         valid.forEach { match ->
             log(
                 logger,
-                "recRequestDex matched: ${StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS}.${match.ownerMethodName} " +
+                "recRequestDex matched: ${match.ownerClassName}.${match.ownerMethodName} " +
                     "params=${match.paramTypes} evidence=${match.evidence}",
             )
         }

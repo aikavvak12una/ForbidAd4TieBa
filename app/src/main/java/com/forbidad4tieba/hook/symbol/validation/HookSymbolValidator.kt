@@ -1881,21 +1881,27 @@ private fun isAutoRefreshValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
         ?.filter { it.isNotBlank() }
         ?.takeIf { it.isNotEmpty() }
         ?: return true
+    // Spec entries are name|void|paramTypes|ownerClass; validate each against
+    // its own owner class, since refresh transports span several host classes.
     val specs = symbols.autoRefreshNetRequestMethodSpec
         ?.split(";")
         ?.map { it.trim() }
         ?.filter { it.isNotBlank() }
         .orEmpty()
     return try {
-        val modelClass = safeFindClass(REC_PERSONALIZE_MODEL_CLASS, cl) ?: return false
         netRequestNames.all { netRequestName ->
-            val paramCount = specs
+            val parts = specs
                 .firstOrNull { it.startsWith("$netRequestName|") }
-                ?.substringAfter("|void|")
+                ?.split("|")
+            val paramCount = parts
+                ?.getOrNull(2)
                 ?.split(",")
                 ?.filter { it.isNotBlank() }
                 ?.size
-            modelClass.declaredMethods.any { method ->
+            val ownerClassName = parts?.getOrNull(3)?.takeIf { it.isNotBlank() }
+                ?: REC_PERSONALIZE_MODEL_CLASS
+            val ownerClass = safeFindClass(ownerClassName, cl) ?: return@all false
+            ownerClass.declaredMethods.any { method ->
                 !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
                     method.name == netRequestName &&
                     method.returnType == Void.TYPE &&
