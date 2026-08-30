@@ -180,7 +180,7 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("BottomTabTopLineHook") { cl -> BottomTabTopLineHook.hook(cl) }
         }
         if (context.isMain) {
-            entries += performanceEntries(settings)
+            entries += performanceEntries(settings, symbols)
             entries += HookInstallEntry("HelpCenterFooterBlockHook") { cl -> HelpCenterFooterBlockHook.hook(cl) }
             if (context.canInstallMineTabWebBlock(settings)) {
                 entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl, symbols) }
@@ -542,13 +542,18 @@ internal object HookInstallPlanner {
         return HookInstallPlan(processName, "symbol", entries)
     }
 
-    private fun performanceEntries(settings: SettingsSnapshot): List<HookInstallEntry> {
+    private fun performanceEntries(
+        settings: SettingsSnapshot,
+        symbols: HookSymbols,
+    ): List<HookInstallEntry> {
         val entries = ArrayList<HookInstallEntry>()
         if (settings.isPbPerformanceModeEnabled || settings.isPostPageAdBlockEnabled) {
             entries += HookInstallEntry("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(cl) }
         }
         if (settings.isPbPreloadForced) {
-            entries += HookInstallEntry("PbForcePreloadHook") { cl -> PbForcePreloadHook.hook(cl) }
+            entries += HookInstallEntry("PbForcePreloadHook") { cl ->
+                PbForcePreloadHook.hook(cl, symbols.pbPreloadRenderGateMethod)
+            }
         }
         if (settings.isAdSdkComponentsDisabled) {
             entries += HookInstallEntry("AdSdkInitBlockHook") { cl -> AdSdkInitBlockHook.hook(cl) }

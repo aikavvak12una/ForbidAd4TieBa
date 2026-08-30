@@ -51,10 +51,14 @@ internal object DexKitSemanticScanner {
     private const val TEXT_VIEW_CLASS = "android.widget.TextView"
     private const val REC_PERSONALIZE_MODEL_CLASS =
         "com.baidu.tieba.homepage.personalize.model.RecPersonalizePageModel"
-    private const val REC_PERSONALIZE_REQUEST_CLASS =
-        "com.baidu.tieba.homepage.personalize.data.RecPersonalizeRequest"
-    private const val NET_MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
-    private const val REC_HTTP_SENDER_CLASS = "com.baidu.tieba.p50"
+    /**
+     * Log literal emitted by the host's cold-start tracker when a homepage
+     * network request begins. Used as the semantic anchor for locating every
+     * feed refresh entry point; see [scanRecPersonalizeRequestMethods].
+     */
+    private const val HOME_NET_START_ANCHOR = "onHomepageNetStart"
+    /** Unobfuscated Kotlin file class gating PB preload; anchor for [scanPbPreloadRenderGate]. */
+    private const val PB_PRELOAD_HELPER_CLASS = "com.baidu.tieba.pb.pb.preload.PbPreloadHelperKt"
     private const val LOW_SCORE_SCHEDULER_CLASS = "com.baidu.tieba.parser.LowScoreScheduler"
     private const val COLD_START_DELAY_SCHEDULE_CLASS = "com.baidu.searchbox.launch.ColdStartDelaySchedule"
 
@@ -435,49 +439,124 @@ internal object DexKitSemanticScanner {
     }
 
     /**
-     * Scans [REC_PERSONALIZE_MODEL_CLASS] for the method that builds and sends a
-     * [REC_PERSONALIZE_REQUEST_CLASS] network request. Every personalize feed refresh
-     * path (including the cold-start B0() branch that bypasses the w1() UI trigger)
-     * ultimately funnels into this request method, so blocking it covers all refresh
-     * entry points regardless of the isColdNetDataOpt() AB split.
+     * Finds the boolean gate that opens the PB native preload-render branch.
+     *
+     * The host's PB activity base class decides between "render from preloaded
+     * card data" and "normal full load" inside the method that also consults
+     * [PB_PRELOAD_HELPER_CLASS] — an unobfuscated Kotlin file class, and the
+     * anchor here. Inside that method the branch is driven by a single
+     * `invoke-virtual` on the activity class itself returning boolean with no
+     * parameters; that method is the gate.
+     *
+     * Anchoring on the helper class instead of the gate's own name matters
+     * because the gate is renamed on every host build (it was `A1` on 22.9.1.0
+     * and is `B1` on 22.10.1.0), while the helper class name is stable.
+     * Requires the gate to be unique, so an ambiguous shape fails closed.
+     */
+    fun scanPbPreloadRenderGate(
+        sourcePaths: List<String>,
+        absActivityClassName: String,
+        logger: ScanLogger? = null,
+    ): String? = withBridge(sourcePaths, logger, "PbForcePreloadHook.RenderGateDex") { bridge ->
+        val branchMethods = exactMethods(bridge, absActivityClassName, logger).filter { method ->
+            method.invokes.any { invoked ->
+                invoked.declaredClassName == PB_PRELOAD_HELPER_CLASS
+            }
+        }
+        if (branchMethods.isEmpty()) {
+            recordIssue(
+                logger,
+                "$TAG.PbPreloadRenderGate",
+                "no $absActivityClassName method invokes $PB_PRELOAD_HELPER_CLASS",
+            )
+            return@withBridge null
+        }
+        val gates = branchMethods
+            .flatMap { method -> method.invokes.toList() }
+            .filter { invoked ->
+                invoked.declaredClassName == absActivityClassName &&
+                    invoked.returnTypeName == "boolean" &&
+                    invoked.paramTypeNames.isEmpty()
+            }
+            .map { it.methodName }
+            .distinct()
+        return@withBridge selectUniqueGate(gates, logger)
+    }
+
+    private fun selectUniqueGate(gates: List<String>, logger: ScanLogger?): String? {
+        if (gates.size == 1) return gates.single()
+        recordIssue(
+            logger,
+            "$TAG.PbPreloadRenderGate",
+            if (gates.isEmpty()) {
+                "no boolean no-arg gate found in preload branch"
+            } else {
+                "ambiguous gate candidates=" + gates.joinToString(",")
+            },
+        )
+        return null
+    }
+
+    /**
+     * Finds every home-feed network request entry point the host exposes.
+     *
+     * The host marks the start of a homepage network request by calling its
+     * cold-start tracker, whose body carries the literal "onHomepageNetStart".
+     * That string is the semantic anchor: R8 renames the tracker class, the
+     * tracker method and the request methods, but the log literal survives, and
+     * every refresh transport has to pass through the tracker. The callers of
+     * that tracker are therefore exactly the set of methods that must be blocked
+     * — across whatever classes the host currently splits them into.
+     *
+     * Matching a fixed owner class plus a fixed invoked method name instead
+     * (the previous rule) silently loses refresh paths: on 22.10.1.0 it found
+     * only 1 of the 4 real entry points, because the host had moved two of them
+     * onto a second class and renamed the tracker method.
      */
     fun scanRecPersonalizeRequestMethods(
         sourcePaths: List<String>,
-        ownerClassName: String = REC_PERSONALIZE_MODEL_CLASS,
-        requestClassName: String = REC_PERSONALIZE_REQUEST_CLASS,
         logger: ScanLogger? = null,
     ): List<DexRecPersonalizeRequestMatch> =
         withBridge(sourcePaths, logger, "AutoRefreshHook.RecRequestDex", emptyList()) { bridge ->
-            val methods = exactMethods(bridge, ownerClassName, logger)
-            // Feed refresh funnels into two final request methods inside
-            // RecPersonalizePageModel: m() sends through MessageManager
-            // (sendMessage), r() issues an HTTP direct request (p50.g). Both
-            // must be blocked so the cold-start refresh is covered regardless
-            // of which transport the host picks.
-            methods.mapNotNull { method ->
-                if (Modifier.isStatic(method.modifiers) || method.returnTypeName != "void") {
-                    return@mapNotNull null
-                }
-                val invokes = method.invokes.toList()
-                val sendsMessage = invokes.any { invoked ->
-                    invoked.declaredClassName == NET_MESSAGE_MANAGER_CLASS &&
-                        invoked.methodName == "sendMessage"
-                }
-                val httpDirectSend = invokes.any { invoked ->
-                    invoked.declaredClassName == REC_HTTP_SENDER_CLASS &&
-                        invoked.methodName == "g"
-                }
-                if (!sendsMessage && !httpDirectSend) return@mapNotNull null
-                val evidence = buildList {
-                    if (sendsMessage) add("sendMessage")
-                    if (httpDirectSend) add("httpDirectSend")
-                }.joinToString(",")
-                DexRecPersonalizeRequestMatch(
-                    ownerMethodName = method.methodName,
-                    paramTypes = method.paramTypeNames,
-                    evidence = evidence,
+            val trackers = try {
+                bridge.findMethod(
+                    FindMethod.create()
+                        .searchPackages("com.baidu.tieba")
+                        .matcher(
+                            MethodMatcher.create()
+                                .addUsingString(HOME_NET_START_ANCHOR, StringMatchType.Contains),
+                        ),
+                ).toList()
+            } catch (t: Throwable) {
+                recordIssue(
+                    logger,
+                    "$TAG.RecRequestTracker",
+                    HookSymbolScanDiagnostics.formatScanException(t),
                 )
+                return@withBridge emptyList()
             }
+            if (trackers.isEmpty()) {
+                recordIssue(
+                    logger,
+                    "$TAG.RecRequestTracker",
+                    "no method carries anchor '$HOME_NET_START_ANCHOR'",
+                )
+                return@withBridge emptyList()
+            }
+            trackers
+                .flatMap { tracker -> tracker.callers.orEmpty().toList() }
+                .distinctBy { it.descriptor }
+                .mapNotNull { method ->
+                    if (Modifier.isStatic(method.modifiers) || method.returnTypeName != "void") {
+                        return@mapNotNull null
+                    }
+                    DexRecPersonalizeRequestMatch(
+                        ownerClassName = method.declaredClassName,
+                        ownerMethodName = method.methodName,
+                        paramTypes = method.paramTypeNames,
+                        evidence = "homeNetStart",
+                    )
+                }
         }
 
     /**

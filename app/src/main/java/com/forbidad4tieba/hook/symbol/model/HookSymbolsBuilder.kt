@@ -150,6 +150,7 @@ internal class HookSymbolsBuilder {
     var autoRefreshCacheRestoreMethod: String? = null
     var autoLoadMoreConfigClass: String? = null
     var autoLoadMoreConfigMethod: String? = null
+    var pbPreloadRenderGateMethod: String? = null
     var pbCommentScrollListenerClass: String? = null
     var pbCommentScrollMethod: String? = null
     var pbCommentScrollFragmentField: String? = null
@@ -610,6 +611,7 @@ internal class HookSymbolsBuilder {
                     autoRefreshCacheRestoreMethod,
                     autoLoadMoreConfigClass,
                     autoLoadMoreConfigMethod,
+                    pbPreloadRenderGateMethod,
                 ),
                 scroll = PbCommentScrollSymbolsGroup(
                     pbCommentScrollListenerClass,

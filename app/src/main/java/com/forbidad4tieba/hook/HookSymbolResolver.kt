@@ -1926,39 +1926,42 @@ internal object HookSymbolResolver {
         cl: ClassLoader,
         symbols: HookSymbols,
     ): List<Method> {
-        val methodNames = symbols.autoRefreshNetRequestMethod
-            ?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotBlank() }
-            ?.takeIf { it.isNotEmpty() }
-            ?: run {
-                XposedCompat.log("[AutoRefreshHook] net request: missing autoRefreshNetRequestMethod")
-                return emptyList()
-            }
+        // Each spec entry is name|void|paramTypes|ownerClass. The owner class is
+        // authoritative: refresh transports live on more than one host class, so
+        // resolving every name against a single hardcoded class drops matches.
         val specs = symbols.autoRefreshNetRequestMethodSpec
             ?.split(";")
             ?.map { it.trim() }
             ?.filter { it.isNotBlank() }
-            .orEmpty()
-        val modelClass = safeFindClass(StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS, cl) ?: run {
-            XposedCompat.log(
-                "[AutoRefreshHook] net request: class not found: " +
-                    StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS,
-            )
-            return emptyList()
-        }
-        val resolved = ArrayList<Method>(methodNames.size)
-        for (methodName in methodNames) {
-            val spec = specs.firstOrNull { it.startsWith("$methodName|") }
-            val paramCount = spec?.substringAfter("|void|")?.split(",")?.filter { it.isNotBlank() }?.size
-            val candidate = collectInstanceMethods(modelClass).singleOrNull { method ->
+            ?.takeIf { it.isNotEmpty() }
+            ?: run {
+                XposedCompat.log("[AutoRefreshHook] net request: missing autoRefreshNetRequestMethodSpec")
+                return emptyList()
+            }
+        val resolved = ArrayList<Method>(specs.size)
+        for (spec in specs) {
+            val parts = spec.split("|")
+            val methodName = parts.getOrNull(0)?.takeIf { it.isNotBlank() } ?: run {
+                XposedCompat.log("[AutoRefreshHook] net request: malformed spec: $spec")
+                return emptyList()
+            }
+            val paramCount = parts.getOrNull(2)
+                ?.split(",")
+                ?.filter { it.isNotBlank() }
+                ?.size
+            val ownerClassName = parts.getOrNull(3)?.takeIf { it.isNotBlank() }
+                ?: StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS
+            val ownerClass = safeFindClass(ownerClassName, cl) ?: run {
+                XposedCompat.log("[AutoRefreshHook] net request: class not found: $ownerClassName")
+                return emptyList()
+            }
+            val candidate = collectInstanceMethods(ownerClass).singleOrNull { method ->
                 method.name == methodName &&
                     method.returnType == Void.TYPE &&
                     (paramCount == null || method.parameterTypes.size == paramCount)
             } ?: run {
                 XposedCompat.log(
-                    "[AutoRefreshHook] net request: method mismatch: " +
-                        "${StableTiebaHookPoints.REC_PERSONALIZE_MODEL_CLASS}.$methodName()",
+                    "[AutoRefreshHook] net request: method mismatch: $ownerClassName.$methodName()",
                 )
                 return emptyList()
             }
@@ -5976,6 +5979,7 @@ internal object HookSymbolResolver {
         var autoRefreshNetRequestMethodSpec: String? = null
         var autoLoadMoreConfigClass: String? = null
         var autoLoadMoreConfigMethod: String? = null
+        var pbPreloadRenderGateMethod: String? = null
         var pbCommentScrollListenerClass: String? = null
         var pbCommentScrollMethod: String? = null
         var pbCommentScrollFragmentField: String? = null
@@ -6544,8 +6548,13 @@ internal object HookSymbolResolver {
             .distinct()
             .joinToString(",")
             .takeIf { it.isNotBlank() }
+        // name|void|paramTypes|ownerClass — the owner class is part of the spec
+        // because the host spreads refresh transports over several classes.
         autoRefreshNetRequestMethodSpec = autoRefreshNetRequestScan
-            .map { it.ownerMethodName + "|void|" + it.paramTypes.joinToString(",") }
+            .map {
+                it.ownerMethodName + "|void|" + it.paramTypes.joinToString(",") +
+                    "|" + it.ownerClassName
+            }
             .distinct()
             .joinToString(";")
             .takeIf { it.isNotBlank() }
@@ -6557,6 +6566,15 @@ internal object HookSymbolResolver {
             null as String?,
         ) {
             AutoRefreshSymbolScanner.scanHomeCacheRestore(context, cl, logger)?.ownerMethodName
+        }
+
+        pbPreloadRenderGateMethod = runScanStep(
+            "PbForcePreloadHook.RenderGate",
+            logger,
+            scanErrors,
+            null as String?,
+        ) {
+            PbForcePreloadSymbolScanner.scanRenderGate(context, cl, logger)
         }
 
 
@@ -7173,6 +7191,7 @@ internal object HookSymbolResolver {
             this.autoRefreshCacheRestoreMethod = autoRefreshCacheRestoreMethod
             this.autoLoadMoreConfigClass = autoLoadMoreConfigClass
             this.autoLoadMoreConfigMethod = autoLoadMoreConfigMethod
+            this.pbPreloadRenderGateMethod = pbPreloadRenderGateMethod
             this.pbCommentScrollListenerClass = pbCommentScrollListenerClass
             this.pbCommentScrollMethod = pbCommentScrollMethod
             this.pbCommentScrollFragmentField = pbCommentScrollFragmentField

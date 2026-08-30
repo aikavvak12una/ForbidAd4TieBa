@@ -52,3 +52,5 @@ docs/
 AGENTS.md
 target_app/
 local_docs/
+.mcp.json
+CLAUDE.md

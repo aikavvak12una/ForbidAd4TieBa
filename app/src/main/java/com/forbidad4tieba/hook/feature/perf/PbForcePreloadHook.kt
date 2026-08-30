@@ -29,7 +29,6 @@ import com.forbidad4tieba.hook.core.XposedCompat
 object PbForcePreloadHook {
     private const val TAG = "[PbForcePreloadHook]"
     private const val METHOD_IS_PB_PRELOAD_SWITCH_ON = "isPbPreloadSwitchOn"
-    private const val METHOD_A1 = "A1"
 
     // 宿主 PbActivity intent 稳定携带的帖子 id extra（PbActivityConfig.KEY_THREAD_ID），
     // 用于区分同一帖子的首次/重复进入；属于协议字符串，非混淆符号。
@@ -66,7 +65,7 @@ object PbForcePreloadHook {
         }
         return true
     }
-    fun hook(cl: ClassLoader) {
+    fun hook(cl: ClassLoader, renderGateMethodName: String?) {
         if (!ConfigManager.isPbPreloadForced) {
             XposedCompat.logD("$TAG skipped: config disabled")
             return
@@ -128,30 +127,38 @@ object PbForcePreloadHook {
                 }
             }
 
-            // 3. PbActivity.A1() -> 首次进入 true：放行 w1 的 native 预加载渲染分支（22.9.1.0
-            //    专属）。同一 tid 再次进入时放行原始 false，走普通加载路径保证评论请求正常发起。
+            // 3. 预加载渲染门控 -> 首次进入 true：放行 AbsPbActivity 的 native 预加载渲染分支。
+            //    同一 tid 再次进入时放行原始 false，走普通加载路径保证评论请求正常发起。
+            //    门控方法名逐版本变化（22.9.1.0 为 A1、22.10.1.0 为 B1），由符号解析器按
+            //    PbPreloadHelperKt 锚点解析后传入；解析不到即跳过本 hook（fail closed）。
+            val gateMethodName = renderGateMethodName?.takeIf { it.isNotBlank() }
             val pbActivityClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.PB_ACTIVITY_CLASS, cl)
-            if (pbActivityClass == null) {
-                XposedCompat.log("$TAG ${StableTiebaHookPoints.PB_ACTIVITY_CLASS} NOT FOUND, A1 override skipped (old version)")
+            if (gateMethodName == null) {
+                XposedCompat.log("$TAG preload render gate unresolved, override skipped")
+            } else if (pbActivityClass == null) {
+                XposedCompat.log("$TAG ${StableTiebaHookPoints.PB_ACTIVITY_CLASS} NOT FOUND, gate override skipped")
             } else {
-                val a1Method = XposedCompat.findMethodOrNull(pbActivityClass, METHOD_A1)
+                val gateMethod = XposedCompat.findMethodOrNull(pbActivityClass, gateMethodName)
                 if (
-                    a1Method == null ||
-                    a1Method.parameterTypes.isNotEmpty() ||
-                    a1Method.returnType != Boolean::class.javaPrimitiveType
+                    gateMethod == null ||
+                    gateMethod.parameterTypes.isNotEmpty() ||
+                    gateMethod.returnType != Boolean::class.javaPrimitiveType
                 ) {
-                    XposedCompat.log("$TAG ${StableTiebaHookPoints.PB_ACTIVITY_CLASS}.A1() NOT FOUND or invalid, override skipped")
+                    XposedCompat.log(
+                        "$TAG ${StableTiebaHookPoints.PB_ACTIVITY_CLASS}.$gateMethodName() " +
+                            "NOT FOUND or invalid, override skipped",
+                    )
                 } else {
-                    a1Method.isAccessible = true
-                    mod.hook(a1Method).intercept { chain ->
+                    gateMethod.isAccessible = true
+                    mod.hook(gateMethod).intercept { chain ->
                         if (ConfigManager.isPbPreloadForced) {
                             val activity = chain.thisObject as? Activity
                             val tid = activity?.intent?.getStringExtra(INTENT_EXTRA_THREAD_ID)
                             if (!tid.isNullOrEmpty() && markFirstPreloadRender(tid)) {
-                                XposedCompat.logD("$TAG A1() forced true (first entry, tid=$tid)")
+                                XposedCompat.logD("$TAG gate forced true (first entry, tid=$tid)")
                                 true
                             } else {
-                                XposedCompat.logD("$TAG A1() kept original (repeated entry or missing tid)")
+                                XposedCompat.logD("$TAG gate kept original (repeated entry or missing tid)")
                                 chain.proceed()
                             }
                         } else {
