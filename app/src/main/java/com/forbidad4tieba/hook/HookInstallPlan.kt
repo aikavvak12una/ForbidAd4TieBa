@@ -3,6 +3,7 @@ package com.forbidad4tieba.hook
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.feature.account.AccountListDedupHook
 import com.forbidad4tieba.hook.feature.ad.FeedAdHook
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogHook
 import com.forbidad4tieba.hook.feature.ad.ForumPageAdBlockHook
@@ -182,6 +183,7 @@ internal object HookInstallPlanner {
         if (context.isMain) {
             entries += performanceEntries(settings, symbols)
             entries += HookInstallEntry("HelpCenterFooterBlockHook") { cl -> HelpCenterFooterBlockHook.hook(cl) }
+            entries += HookInstallEntry("AccountListDedupHook") { cl -> AccountListDedupHook.hook(cl) }
             if (context.canInstallMineTabWebBlock(settings)) {
                 entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl, symbols) }
             }
