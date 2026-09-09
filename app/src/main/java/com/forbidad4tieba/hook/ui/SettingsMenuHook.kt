@@ -346,6 +346,9 @@ object SettingsMenuHook {
                     onAutoSignIn = { AutoSignInManager.tryAutoSignIn(context, force = true) },
                     onReplyVisibilityProbe = { showReplyVisibilityProbeDialog(context, prefs) },
                     onDetailedLogSave = { saveDetailedLog(context) },
+                    onTabCustomization = { items ->
+                        TabCustomizationDialog.show(context, prefs, items, featureStatusMap)
+                    },
                     onHomeTopTab = { showHomeTopTabDialog(context, prefs) },
                     onHomeNativeGlass = { showHomeNativeGlassDialog(context, prefs) },
                     onBottomTab = { showBottomTabDialog(context, prefs) },

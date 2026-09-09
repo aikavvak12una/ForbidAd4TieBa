@@ -522,6 +522,96 @@ class ConfigManagerTest {
         }
     }
 
+
+    @Test
+    fun tabCustomizationUpgradePreservesEachPreviouslyEnabledFeature() {
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.SIMPLIFY_HOME_TOP_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+                HookFeatureKey.SIMPLIFY_BOTTOM_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ),
+        ) {
+            val keys = listOf(
+                ConfigManager.KEY_CUSTOM_HOME_TOP_TABS,
+                ConfigManager.KEY_CUSTOM_BOTTOM_TABS,
+                ConfigManager.KEY_AUTO_HIDE_HOME_TAB,
+            )
+            keys.forEachIndexed { index, key ->
+                val snapshot = buildSnapshot(mapOf(key to true))
+                assertEquals(
+                    keys.indices.map { it == index },
+                    listOf(snapshot.isHomeTopTabsCustomEnabled, snapshot.isBottomTabsCustomEnabled,
+                        snapshot.isHomeTabAutoHideEnabled),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun tabCustomizationMasterOffSuppressesAllThreeChildrenAndTheirConfiguration() {
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.SIMPLIFY_HOME_TOP_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+                HookFeatureKey.SIMPLIFY_BOTTOM_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ),
+        ) {
+            val values = mapOf<String, Any?>(
+                ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to false,
+                ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
+                ConfigManager.KEY_CUSTOM_BOTTOM_TABS to true,
+                ConfigManager.KEY_AUTO_HIDE_HOME_TAB to true,
+                ConfigManager.KEY_HOME_TOP_TAB_DISABLED_KEYS to "code:material",
+                ConfigManager.KEY_BOTTOM_TAB_RETAIL_STORE to false,
+                ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT to true,
+            )
+            val disabled = buildSnapshot(values)
+            assertFalse(disabled.isHomeTopTabsCustomEnabled)
+            assertFalse(disabled.isBottomTabsCustomEnabled)
+            assertFalse(disabled.isHomeTabAutoHideEnabled)
+            assertTrue(disabled.homeTopTabDisabledKeys.isEmpty())
+            assertFalse(disabled.isBottomTabHomeEnabled)
+            assertTrue(disabled.isHomeTabRedDotHidden)
+
+            val restored = buildSnapshot(values + (ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true))
+            assertTrue(restored.isHomeTopTabsCustomEnabled)
+            assertTrue(restored.isBottomTabsCustomEnabled)
+            assertTrue(restored.isHomeTabAutoHideEnabled)
+            assertFalse(restored.isHomeTopTabMaterialEnabled)
+            assertTrue(restored.isBottomTabHomeEnabled)
+            assertFalse(restored.isBottomTabRetailStoreEnabled)
+        }
+    }
+
+    @Test
+    fun tabCustomizationMasterDoesNotEnableUnselectedChildren() {
+        val snapshot = buildSnapshot(mapOf(ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true))
+        assertFalse(snapshot.isHomeTopTabsCustomEnabled)
+        assertFalse(snapshot.isBottomTabsCustomEnabled)
+        assertFalse(snapshot.isHomeTabAutoHideEnabled)
+    }
+
+    @Test
+    fun tabCustomizationMasterDoesNotBypassUnavailableChildSymbols() {
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.SIMPLIFY_HOME_TOP_TABS to ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+                HookFeatureKey.SIMPLIFY_BOTTOM_TABS to ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+            ),
+        ) {
+            val snapshot = buildSnapshot(
+                mapOf(
+                    ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true,
+                    ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
+                    ConfigManager.KEY_CUSTOM_BOTTOM_TABS to true,
+                    ConfigManager.KEY_AUTO_HIDE_HOME_TAB to true,
+                ),
+            )
+            assertFalse(snapshot.isHomeTopTabsCustomEnabled)
+            assertFalse(snapshot.isBottomTabsCustomEnabled)
+            assertTrue(snapshot.isHomeTabAutoHideEnabled)
+        }
+    }
+
     private fun buildSnapshot(values: Map<String, Any?>): SettingsSnapshot {
         val method = ConfigManager::class.java.getDeclaredMethod(
             "buildSettingsSnapshot",

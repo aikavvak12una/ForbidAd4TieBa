@@ -7,6 +7,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -25,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 object SystemBarCompatHook {
     private const val TAG = "[SystemBarCompatHook]"
     private const val NAV_MODE_GESTURAL = 2
+    private const val NAVIGATION_MODE_SETTING = "navigation_mode"
     private val registered = AtomicBoolean(false)
     private val firstErrorLogged = AtomicBoolean(false)
     private val windowActivities = Collections.synchronizedMap(WeakHashMap<Window, Activity>())
@@ -42,6 +44,9 @@ object SystemBarCompatHook {
 
     @Volatile
     private var navigationBarInteractionModeResourceId = 0
+
+    @Volatile
+    private var secureNavigationMode: Int? = null
 
     private data class NoArgViewMethodLookup(
         val method: Method?,
@@ -230,18 +235,31 @@ object SystemBarCompatHook {
             logFirstError("navigation mode resource lookup failed: ${t.message}")
             0
         }
+        secureNavigationMode = try {
+            Settings.Secure.getInt(
+                app.contentResolver,
+                NAVIGATION_MODE_SETTING,
+                Int.MIN_VALUE,
+            ).takeIf { it in 0..NAV_MODE_GESTURAL }
+        } catch (t: Throwable) {
+            logFirstError("secure navigation mode lookup failed: ${t.message}")
+            null
+        }
     }
 
     private fun shouldApply(activity: Activity): Boolean {
         if (!isGestureNavigation(activity)) return false
         if (isHomeNativeGlassRuntimeActive()) return isSupportedActivity(activity)
-        return ConfigManager.isHomeTabAutoHideEnabled && isMainTabActivity(activity)
+        return (
+            ConfigManager.isHomeTabAutoHideEnabled
+            ) && isMainTabActivity(activity)
     }
 
     private fun isHomeNativeGlassRuntimeActive(): Boolean {
         return ConfigManager.isHomeNativeGlassEnabled &&
             ConfigManager.hasAnyHomeNativeGlassBackgroundImage
     }
+
 
     @Suppress("DEPRECATION")
     private fun applyGestureNavigationCompat(activity: Activity) {
@@ -391,6 +409,7 @@ object SystemBarCompatHook {
         state.gestureBridgeColor = color
     }
 
+
     private fun restoreGestureBridgeIfNeeded(wrapper: View, state: BottomTabInsetState) {
         if (state.gestureBridgeColor == null) return
         wrapper.background = state.background
@@ -493,8 +512,17 @@ object SystemBarCompatHook {
     private fun isGestureNavigation(activity: Activity): Boolean {
         val res = activity.resources ?: return false
         val id = navigationBarInteractionModeResourceId
-        if (id <= 0) return false
-        return runCatching { res.getInteger(id) == NAV_MODE_GESTURAL }.getOrDefault(false)
+        val frameworkMode = if (id > 0) {
+            runCatching { res.getInteger(id) }.getOrNull()
+        } else {
+            null
+        }
+        return isGestureNavigationMode(secureNavigationMode, frameworkMode)
+    }
+
+    internal fun isGestureNavigationMode(secureMode: Int?, frameworkMode: Int?): Boolean {
+        val mode = secureMode?.takeIf { it in 0..NAV_MODE_GESTURAL } ?: frameworkMode
+        return mode == NAV_MODE_GESTURAL
     }
 
     private fun isSupportedActivity(activity: Activity): Boolean {

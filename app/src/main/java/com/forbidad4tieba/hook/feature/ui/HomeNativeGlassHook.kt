@@ -197,7 +197,9 @@ object HomeNativeGlassHook {
             val enterForumCapsuleHooks = installPbEnterForumCapsuleDynamicTintHooks(cl)
             val tabDynamicTintEnabled = feedPlan.hasHomeFeedTargets && ConfigManager.isHomeTabDynamicTintEnabled
             val topTabObservers = if (tabDynamicTintEnabled) installHomeTopTabObservers(cl) else 0
-            val bottomTabDynamicTintHooks = if (tabDynamicTintEnabled) {
+            val bottomTabDynamicTintHooks = if (
+                tabDynamicTintEnabled
+            ) {
                 installHomeBottomTabDynamicTintHooks(cl)
             } else {
                 0

@@ -81,6 +81,7 @@ object ConfigManager {
     const val KEY_BLOCK_AD_MINE_TAB_WEB = "block_ad_mine_tab_web"
     const val KEY_BLOCK_AD_HOME_SIDE_BAR_WEB = "block_ad_home_side_bar_web"
     const val KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG = "block_ad_home_bottom_easter_egg"
+    const val KEY_ENABLE_TAB_CUSTOMIZATION = "enable_tab_customization"
     const val KEY_SIMPLIFY_HOME_TABS = "simplify_home_tabs"
     const val KEY_CUSTOM_HOME_TOP_TABS = KEY_SIMPLIFY_HOME_TABS
     const val KEY_HOME_TOP_TAB_MATERIAL = "home_top_tab_material"
@@ -441,6 +442,7 @@ object ConfigManager {
             appContext = appCtx
             prefs = localPrefs
             ensureUserSettingsVersion(localPrefs)
+            TabCustomizationPreferences.ensureInitialized(localPrefs)
 
             restrictedFeatureUnlockBlockedByRemote = getModuleStatePrefs(appCtx)
                 .getBoolean(KEY_REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE, false)
@@ -751,7 +753,8 @@ object ConfigManager {
         val hasHomeNativeGlassStyle = homeNativeGlassLightStyle.hasBackgroundImage() ||
             homeNativeGlassDarkStyle.hasBackgroundImage()
         val homeNativeGlassEnabled = featureBoolean(KEY_ENABLE_HOME_NATIVE_GLASS)
-        val homeTopTabsCustomEnabled = featureBoolean(KEY_CUSTOM_HOME_TOP_TABS)
+        val tabCustomizationEnabled = TabCustomizationPreferences.isEnabled(p)
+        val homeTopTabsCustomEnabled = tabCustomizationEnabled && featureBoolean(KEY_CUSTOM_HOME_TOP_TABS)
         val homeTopTabSelection = if (homeTopTabsCustomEnabled) {
             val disabledKeys = readHomeTopTabDisabledKeys(p)
             val rawSelection = HomeTopTabSelection(
@@ -778,7 +781,7 @@ object ConfigManager {
                 disabledKeys = emptySet(),
             )
         }
-        val bottomTabsCustomEnabled = featureBoolean(KEY_CUSTOM_BOTTOM_TABS)
+        val bottomTabsCustomEnabled = tabCustomizationEnabled && featureBoolean(KEY_CUSTOM_BOTTOM_TABS)
         val bottomTabSelection = if (bottomTabsCustomEnabled) {
             loadBottomTabSelectionFromPrefs(
                 p,
@@ -817,7 +820,7 @@ object ConfigManager {
             isHomeTopTabLiveEnabled = homeTopTabSelection.liveEnabled,
             isHomeTopTabFollowedEnabled = homeTopTabSelection.followedEnabled,
             homeTopTabDisabledKeys = homeTopTabSelection.disabledKeys,
-            isHomeTabAutoHideEnabled = featureBoolean(KEY_AUTO_HIDE_HOME_TAB),
+            isHomeTabAutoHideEnabled = tabCustomizationEnabled && featureBoolean(KEY_AUTO_HIDE_HOME_TAB),
             isHomeTabRedDotHidden = featureBoolean(KEY_HIDE_HOME_TAB_RED_DOT),
             isInputMemeBarHidden = featureBoolean(KEY_HIDE_INPUT_MEME_BAR),
             isBottomTabsCustomEnabled = bottomTabsCustomEnabled,
