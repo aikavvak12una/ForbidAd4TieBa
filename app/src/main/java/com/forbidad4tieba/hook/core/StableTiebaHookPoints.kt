@@ -155,6 +155,8 @@ object StableTiebaHookPoints {
         "com.baidu.tieba.homepage.personalize.view.HomeTabBarRightSlot"
     const val HOME_FEED_PROMPT_BAR_CONTROLLER_CLASS =
         "com.baidu.tieba.homepage.personalize.controller.FeedPromptBarController"
+    const val HOME_FEED_PERSONALIZE_BAR_CONTROLLER_CLASS =
+        "com.baidu.tieba.homepage.personalize.controller.FeedPersonalizeBarController"
     const val NETWORK_CLASS = "com.baidu.tbadk.core.util.NetWork"
     const val TB_CONFIG_CLASS = "com.baidu.tbadk.TbConfig"
     const val ACCOUNT_DATA_CLASS = "com.baidu.tbadk.core.data.AccountData"

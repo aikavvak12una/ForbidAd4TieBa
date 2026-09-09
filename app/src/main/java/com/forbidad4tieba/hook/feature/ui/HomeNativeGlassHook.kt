@@ -28,6 +28,7 @@ import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassHook
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
@@ -197,7 +198,11 @@ object HomeNativeGlassHook {
             val enterForumCapsuleHooks = installPbEnterForumCapsuleDynamicTintHooks(cl)
             val tabDynamicTintEnabled = feedPlan.hasHomeFeedTargets && ConfigManager.isHomeTabDynamicTintEnabled
             val topTabObservers = if (tabDynamicTintEnabled) installHomeTopTabObservers(cl) else 0
-            val bottomTabDynamicTintHooks = if (tabDynamicTintEnabled) {
+            // The liquid glass pill owns the bottom bar background; letting the dynamic tint also
+            // write it would leave the visible result decided by whichever ran last.
+            val bottomTabDynamicTintHooks = if (
+                tabDynamicTintEnabled && !ConfigManager.isBottomTabLiquidGlassEnabled
+            ) {
                 installHomeBottomTabDynamicTintHooks(cl)
             } else {
                 0
@@ -1597,6 +1602,10 @@ object HomeNativeGlassHook {
 
     private fun applyHomeBottomTabDynamicTintForBackgroundWrite(view: View): Boolean {
         if (view.javaClass.name != StableTiebaHookPoints.FRAGMENT_TAB_WIDGET_CLASS) return false
+        // Once the liquid-glass state is attached, its transparent surface is the sole owner of
+        // this background. Swallow later skin writes instead of letting the native tint repaint
+        // the widget underneath it.
+        if (BottomTabLiquidGlassHook.ownsBottomBar(view)) return true
         if (
             !ConfigManager.isHomeNativeGlassEnabled ||
             !ConfigManager.isHomeTabDynamicTintEnabled ||
@@ -1622,6 +1631,7 @@ object HomeNativeGlassHook {
 
     private fun applyHomeBottomTabBoundaryTintForSkinBackgroundWrite(view: View): Boolean {
         if (view.javaClass.name != "android.view.View") return false
+        if (BottomTabLiquidGlassHook.ownsBottomBar(view)) return true
         if (
             !ConfigManager.isHomeNativeGlassEnabled ||
             !ConfigManager.isHomeTabDynamicTintEnabled ||
@@ -4817,6 +4827,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyHomeBottomTabDynamicTintForMatchingViews(root: View, shouldApply: Boolean) {
+        if (BottomTabLiquidGlassHook.ownsBottomBar(root)) return
         if (root.javaClass.name in HOME_BOTTOM_TAB_HOST_CLASSES) {
             applyHomeBottomTabDynamicTint(root, shouldApply)
             return
@@ -4849,6 +4860,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyHomeBottomTabDynamicTint(tabHost: View, shouldApply: Boolean) {
+        if (BottomTabLiquidGlassHook.ownsBottomBar(tabHost)) return
         val targets = resolveHomeBottomTabDynamicTintTargets(tabHost)
         val color = if (
             shouldApply &&
@@ -4888,6 +4900,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyHomeBottomTabBoundaryDecorations(tabHostOrWidget: View, color: Int?) {
+        if (BottomTabLiquidGlassHook.ownsBottomBar(tabHostOrWidget)) return
         if (tabHostOrWidget.javaClass.name == StableTiebaHookPoints.FRAGMENT_TAB_WIDGET_CLASS) {
             if (color != null) {
                 invokeBooleanMethod(tabHostOrWidget, "setShouldDrawTopLine", false)

@@ -522,6 +522,119 @@ class ConfigManagerTest {
         }
     }
 
+    @Test fun liquidGlassSnapshotUsesCustomSettingsOnlyWhenEnabled() {
+        val values = mapOf<String, Any?>(
+            ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
+            BottomTabLiquidGlassPreferences.HEIGHT to 84,
+            BottomTabLiquidGlassPreferences.WIDTH to 80,
+            BottomTabLiquidGlassPreferences.BOTTOM_GAP to 40,
+            BottomTabLiquidGlassPreferences.PRESS to false,
+        )
+        assertEquals(BottomTabLiquidGlassConfig(84, 80, 40, pressEffectEnabled = false),
+            buildSnapshot(values).bottomTabLiquidGlass)
+        assertEquals(BottomTabLiquidGlassConfig.DEFAULT,
+            buildSnapshot(values + (ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to false)).bottomTabLiquidGlass)
+    }
+
+    @Test
+    fun tabCustomizationUpgradePreservesEachPreviouslyEnabledFeature() {
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.SIMPLIFY_HOME_TOP_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+                HookFeatureKey.SIMPLIFY_BOTTOM_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ),
+        ) {
+            val keys = listOf(
+                ConfigManager.KEY_CUSTOM_HOME_TOP_TABS,
+                ConfigManager.KEY_CUSTOM_BOTTOM_TABS,
+                ConfigManager.KEY_AUTO_HIDE_HOME_TAB,
+                ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS,
+            )
+            keys.forEachIndexed { index, key ->
+                val snapshot = buildSnapshot(mapOf(key to true))
+                assertEquals(
+                    keys.indices.map { it == index },
+                    listOf(snapshot.isHomeTopTabsCustomEnabled, snapshot.isBottomTabsCustomEnabled,
+                        snapshot.isHomeTabAutoHideEnabled, snapshot.isBottomTabLiquidGlassEnabled),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun tabCustomizationMasterOffSuppressesAllFourChildrenAndTheirConfiguration() {
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.SIMPLIFY_HOME_TOP_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+                HookFeatureKey.SIMPLIFY_BOTTOM_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            ),
+        ) {
+            val values = mapOf<String, Any?>(
+                ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to false,
+                ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
+                ConfigManager.KEY_CUSTOM_BOTTOM_TABS to true,
+                ConfigManager.KEY_AUTO_HIDE_HOME_TAB to true,
+                ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
+                ConfigManager.KEY_HOME_TOP_TAB_DISABLED_KEYS to "code:material",
+                ConfigManager.KEY_BOTTOM_TAB_RETAIL_STORE to false,
+                BottomTabLiquidGlassPreferences.HEIGHT to 84,
+                ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT to true,
+            )
+            val disabled = buildSnapshot(values)
+            assertFalse(disabled.isHomeTopTabsCustomEnabled)
+            assertFalse(disabled.isBottomTabsCustomEnabled)
+            assertFalse(disabled.isHomeTabAutoHideEnabled)
+            assertFalse(disabled.isBottomTabLiquidGlassEnabled)
+            assertTrue(disabled.homeTopTabDisabledKeys.isEmpty())
+            assertFalse(disabled.isBottomTabHomeEnabled)
+            assertEquals(BottomTabLiquidGlassConfig.DEFAULT, disabled.bottomTabLiquidGlass)
+            assertTrue(disabled.isHomeTabRedDotHidden)
+
+            val restored = buildSnapshot(values + (ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true))
+            assertTrue(restored.isHomeTopTabsCustomEnabled)
+            assertTrue(restored.isBottomTabsCustomEnabled)
+            assertTrue(restored.isHomeTabAutoHideEnabled)
+            assertTrue(restored.isBottomTabLiquidGlassEnabled)
+            assertFalse(restored.isHomeTopTabMaterialEnabled)
+            assertTrue(restored.isBottomTabHomeEnabled)
+            assertFalse(restored.isBottomTabRetailStoreEnabled)
+            assertEquals(84, restored.bottomTabLiquidGlass.heightDp)
+        }
+    }
+
+    @Test
+    fun tabCustomizationMasterDoesNotEnableUnselectedChildren() {
+        val snapshot = buildSnapshot(mapOf(ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true))
+        assertFalse(snapshot.isHomeTopTabsCustomEnabled)
+        assertFalse(snapshot.isBottomTabsCustomEnabled)
+        assertFalse(snapshot.isHomeTabAutoHideEnabled)
+        assertFalse(snapshot.isBottomTabLiquidGlassEnabled)
+    }
+
+    @Test
+    fun tabCustomizationMasterDoesNotBypassUnavailableChildSymbols() {
+        withScanAvailability(
+            mapOf(
+                HookFeatureKey.SIMPLIFY_HOME_TOP_TABS to ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+                HookFeatureKey.SIMPLIFY_BOTTOM_TABS to ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+            ),
+        ) {
+            val snapshot = buildSnapshot(
+                mapOf(
+                    ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true,
+                    ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
+                    ConfigManager.KEY_CUSTOM_BOTTOM_TABS to true,
+                    ConfigManager.KEY_AUTO_HIDE_HOME_TAB to true,
+                    ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
+                ),
+            )
+            assertFalse(snapshot.isHomeTopTabsCustomEnabled)
+            assertFalse(snapshot.isBottomTabsCustomEnabled)
+            assertTrue(snapshot.isHomeTabAutoHideEnabled)
+            assertTrue(snapshot.isBottomTabLiquidGlassEnabled)
+        }
+    }
+
     private fun buildSnapshot(values: Map<String, Any?>): SettingsSnapshot {
         val method = ConfigManager::class.java.getDeclaredMethod(
             "buildSettingsSnapshot",

@@ -13,9 +13,11 @@ internal data class SettingsMenuGroupActions(
     val onAutoSignIn: () -> Unit,
     val onReplyVisibilityProbe: () -> Unit,
     val onDetailedLogSave: () -> Unit,
+    val onTabCustomization: (List<SwitchItem>) -> Unit,
     val onHomeTopTab: () -> Unit,
     val onHomeNativeGlass: () -> Unit,
     val onBottomTab: () -> Unit,
+    val onBottomTabLiquidGlass: () -> Unit,
 )
 
 internal object SettingsMenuGroupBuilder {
@@ -378,15 +380,15 @@ internal object SettingsMenuGroupBuilder {
 
     private fun uiOptimizeItems(actions: SettingsMenuGroupActions): List<SwitchItem> = listOf(
         SwitchItem(
-            UiText.Settings.SIMPLIFY_HOME_TAB_LABEL,
-            UiText.Settings.SIMPLIFY_HOME_TAB_DESC,
-            ConfigManager.KEY_CUSTOM_HOME_TOP_TABS,
+            UiText.Settings.TAB_CUSTOMIZATION_LABEL,
+            UiText.Settings.TAB_CUSTOMIZATION_DESC,
+            ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION,
             true,
             false,
             UiText.Settings.ACTION_ICON_SETTINGS,
-            onActionClick = actions.onHomeTopTab,
+            actionContentDescription = UiText.Settings.TAB_CUSTOMIZATION_LABEL,
+            onActionClick = { actions.onTabCustomization(tabCustomizationItems(actions)) },
         ),
-        SwitchItem(UiText.Settings.AUTO_HIDE_HOME_TAB_LABEL, UiText.Settings.AUTO_HIDE_HOME_TAB_DESC, ConfigManager.KEY_AUTO_HIDE_HOME_TAB, true, false),
         SwitchItem(UiText.Settings.HIDE_HOME_TAB_RED_DOT_LABEL, UiText.Settings.HIDE_HOME_TAB_RED_DOT_DESC, ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT, true, false),
         SwitchItem(UiText.Settings.HIDE_INPUT_MEME_BAR_LABEL, UiText.Settings.HIDE_INPUT_MEME_BAR_DESC, ConfigManager.KEY_HIDE_INPUT_MEME_BAR, true, false),
         SwitchItem(
@@ -398,6 +400,19 @@ internal object SettingsMenuGroupBuilder {
             UiText.Settings.ACTION_ICON_SETTINGS,
             onActionClick = actions.onHomeNativeGlass,
         ),
+    )
+
+    private fun tabCustomizationItems(actions: SettingsMenuGroupActions): List<SwitchItem> = listOf(
+        SwitchItem(
+            UiText.Settings.SIMPLIFY_HOME_TAB_LABEL,
+            UiText.Settings.SIMPLIFY_HOME_TAB_DESC,
+            ConfigManager.KEY_CUSTOM_HOME_TOP_TABS,
+            true,
+            false,
+            UiText.Settings.ACTION_ICON_SETTINGS,
+            actionContentDescription = UiText.Settings.SIMPLIFY_HOME_TAB_LABEL,
+            onActionClick = actions.onHomeTopTab,
+        ),
         SwitchItem(
             UiText.Settings.SIMPLIFY_BOTTOM_TAB_LABEL,
             UiText.Settings.SIMPLIFY_BOTTOM_TAB_DESC,
@@ -405,7 +420,25 @@ internal object SettingsMenuGroupBuilder {
             true,
             false,
             UiText.Settings.ACTION_ICON_SETTINGS,
+            actionContentDescription = UiText.Settings.SIMPLIFY_BOTTOM_TAB_LABEL,
             onActionClick = actions.onBottomTab,
+        ),
+        SwitchItem(
+            UiText.Settings.AUTO_HIDE_HOME_TAB_LABEL,
+            UiText.Settings.AUTO_HIDE_HOME_TAB_DESC,
+            ConfigManager.KEY_AUTO_HIDE_HOME_TAB,
+            true,
+            false,
+        ),
+        SwitchItem(
+            UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_LABEL,
+            UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_DESC,
+            ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS,
+            true,
+            false,
+            UiText.Settings.ACTION_ICON_SETTINGS,
+            actionContentDescription = UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_LABEL,
+            onActionClick = actions.onBottomTabLiquidGlass,
         ),
     )
 

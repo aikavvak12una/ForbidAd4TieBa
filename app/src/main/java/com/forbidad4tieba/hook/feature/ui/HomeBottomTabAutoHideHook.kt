@@ -359,7 +359,9 @@ object HomeBottomTabAutoHideHook {
             val state = synchronized(tabHostStates) {
                 tabHostStates[tabHost]
             } ?: return@addOnLayoutChangeListener
-            if (state.hidden) {
+            // hidden is the requested state throughout the fade. Only reposition a completed,
+            // invisible bar; snapping here during a relayout interrupts the running animator.
+            if (state.hidden && v.visibility == View.INVISIBLE) {
                 v.translationY = hiddenOffset(v)
             }
         }
@@ -403,6 +405,7 @@ object HomeBottomTabAutoHideHook {
                             wrapper.animate().setListener(null)
                             if (state.hidden) {
                                 wrapper.visibility = View.INVISIBLE
+                                wrapper.translationY = hiddenOffset(wrapper)
                             }
                         }
                     })

@@ -59,6 +59,7 @@ import com.forbidad4tieba.hook.feature.ui.PbLikeAutoReplyHook
 import com.forbidad4tieba.hook.feature.ui.CommentAvatarDirectProfileHook
 import com.forbidad4tieba.hook.feature.ui.PbScrollCoalesceHook
 import com.forbidad4tieba.hook.feature.ui.UpgradePopWindowBlockHook
+import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassHook
 import com.forbidad4tieba.hook.feature.web.EnterForumWebHook
 import com.forbidad4tieba.hook.feature.web.FollowedTabWebHook
 import com.forbidad4tieba.hook.feature.web.HelpCenterFooterBlockHook
@@ -177,7 +178,14 @@ internal object HookInstallPlanner {
         if (context.isMain && settings.isHomeTabRedDotHidden) {
             entries += HookInstallEntry("HomeTabRedDotBlockHook") { cl -> HomeTabRedDotBlockHook.hook(cl) }
         }
-        if (context.canInstallHomeNativeGlass(settings)) {
+        if (context.isMain && settings.isBottomTabLiquidGlassEnabled) {
+            entries += HookInstallEntry("BottomTabLiquidGlassHook") { cl ->
+                BottomTabLiquidGlassHook.hook(cl)
+            }
+        }
+        // The liquid glass pill owns the bottom bar chrome; the line/shadow cleanup hook would
+        // fight it over the same backgrounds.
+        if (context.canInstallHomeNativeGlass(settings) && !settings.isBottomTabLiquidGlassEnabled) {
             entries += HookInstallEntry("BottomTabTopLineHook") { cl -> BottomTabTopLineHook.hook(cl) }
         }
         if (context.isMain) {

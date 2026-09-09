@@ -7,6 +7,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -15,6 +16,7 @@ import android.view.WindowManager
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassHook
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Collections
@@ -25,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 object SystemBarCompatHook {
     private const val TAG = "[SystemBarCompatHook]"
     private const val NAV_MODE_GESTURAL = 2
+    private const val NAVIGATION_MODE_SETTING = "navigation_mode"
     private val registered = AtomicBoolean(false)
     private val firstErrorLogged = AtomicBoolean(false)
     private val windowActivities = Collections.synchronizedMap(WeakHashMap<Window, Activity>())
@@ -42,6 +45,9 @@ object SystemBarCompatHook {
 
     @Volatile
     private var navigationBarInteractionModeResourceId = 0
+
+    @Volatile
+    private var secureNavigationMode: Int? = null
 
     private data class NoArgViewMethodLookup(
         val method: Method?,
@@ -230,17 +236,35 @@ object SystemBarCompatHook {
             logFirstError("navigation mode resource lookup failed: ${t.message}")
             0
         }
+        secureNavigationMode = try {
+            Settings.Secure.getInt(
+                app.contentResolver,
+                NAVIGATION_MODE_SETTING,
+                Int.MIN_VALUE,
+            ).takeIf { it in 0..NAV_MODE_GESTURAL }
+        } catch (t: Throwable) {
+            logFirstError("secure navigation mode lookup failed: ${t.message}")
+            null
+        }
     }
 
     private fun shouldApply(activity: Activity): Boolean {
         if (!isGestureNavigation(activity)) return false
         if (isHomeNativeGlassRuntimeActive()) return isSupportedActivity(activity)
-        return ConfigManager.isHomeTabAutoHideEnabled && isMainTabActivity(activity)
+        return (
+            ConfigManager.isHomeTabAutoHideEnabled ||
+                isBottomTabLiquidGlassRuntimeActive()
+            ) && isMainTabActivity(activity)
     }
 
     private fun isHomeNativeGlassRuntimeActive(): Boolean {
         return ConfigManager.isHomeNativeGlassEnabled &&
             ConfigManager.hasAnyHomeNativeGlassBackgroundImage
+    }
+
+    private fun isBottomTabLiquidGlassRuntimeActive(): Boolean {
+        return ConfigManager.isBottomTabLiquidGlassEnabled &&
+            BottomTabLiquidGlassHook.isRuntimeActive()
     }
 
     @Suppress("DEPRECATION")
@@ -367,6 +391,10 @@ object SystemBarCompatHook {
 
     private fun applyHomeBottomTabGestureBridge(activity: Activity, tabHost: View, wrapper: View) {
         val state = synchronized(bottomTabInsetStates) { bottomTabInsetStates[wrapper] } ?: return
+        if (BottomTabLiquidGlassHook.ownsBottomBar(wrapper)) {
+            clearGestureBridgeForLiquidGlass(wrapper, state)
+            return
+        }
         if (!ConfigManager.isHomeTabAutoHideEnabled || isHomeNativeGlassRuntimeActive()) {
             restoreGestureBridgeIfNeeded(wrapper, state)
             return
@@ -389,6 +417,12 @@ object SystemBarCompatHook {
         if (state.gestureBridgeColor == color && opaqueBackgroundColor(wrapper) == color) return
         wrapper.background = ColorDrawable(color)
         state.gestureBridgeColor = color
+    }
+
+    private fun clearGestureBridgeForLiquidGlass(wrapper: View, state: BottomTabInsetState) {
+        if (state.gestureBridgeColor == null) return
+        wrapper.background = null
+        state.gestureBridgeColor = null
     }
 
     private fun restoreGestureBridgeIfNeeded(wrapper: View, state: BottomTabInsetState) {
@@ -493,8 +527,17 @@ object SystemBarCompatHook {
     private fun isGestureNavigation(activity: Activity): Boolean {
         val res = activity.resources ?: return false
         val id = navigationBarInteractionModeResourceId
-        if (id <= 0) return false
-        return runCatching { res.getInteger(id) == NAV_MODE_GESTURAL }.getOrDefault(false)
+        val frameworkMode = if (id > 0) {
+            runCatching { res.getInteger(id) }.getOrNull()
+        } else {
+            null
+        }
+        return isGestureNavigationMode(secureNavigationMode, frameworkMode)
+    }
+
+    internal fun isGestureNavigationMode(secureMode: Int?, frameworkMode: Int?): Boolean {
+        val mode = secureMode?.takeIf { it in 0..NAV_MODE_GESTURAL } ?: frameworkMode
+        return mode == NAV_MODE_GESTURAL
     }
 
     private fun isSupportedActivity(activity: Activity): Boolean {

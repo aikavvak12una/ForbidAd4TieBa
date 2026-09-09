@@ -27,6 +27,8 @@ data class SettingsSnapshot(
     val isBottomTabRetailStoreEnabled: Boolean = true,
     val isBottomTabMessageEnabled: Boolean = true,
     val isBottomTabMineEnabled: Boolean = true,
+    val isBottomTabLiquidGlassEnabled: Boolean = false,
+    val bottomTabLiquidGlass: BottomTabLiquidGlassConfig = BottomTabLiquidGlassConfig.DEFAULT,
     val isEnterForumWebFilterEnabled: Boolean = false,
     val isOpenWebLinkInSystemBrowserEnabled: Boolean = false,
     val isHomeNativeGlassEnabled: Boolean = false,
