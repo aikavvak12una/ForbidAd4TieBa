@@ -151,6 +151,9 @@ internal class HookSymbolsBuilder {
     var autoLoadMoreConfigClass: String? = null
     var autoLoadMoreConfigMethod: String? = null
     var pbPreloadRenderGateMethod: String? = null
+    var performanceAbMethods: List<String>? = null
+    var trackingMethods: List<String>? = null
+    var defaultPopups: DefaultPopupSymbols = DefaultPopupSymbols()
     var pbCommentScrollListenerClass: String? = null
     var pbCommentScrollMethod: String? = null
     var pbCommentScrollFragmentField: String? = null
@@ -405,6 +408,9 @@ internal class HookSymbolsBuilder {
                 privateMessage = buildPrivateMessageSymbols(),
                 collectionHistory = buildCollectionHistorySymbols(),
                 media = buildMediaSymbols(),
+                performanceAbMethods = performanceAbMethods,
+                trackingMethods = trackingMethods,
+                defaultPopups = defaultPopups,
             ),
             resources = buildResourceSymbols(),
             meta = buildScanMeta(),

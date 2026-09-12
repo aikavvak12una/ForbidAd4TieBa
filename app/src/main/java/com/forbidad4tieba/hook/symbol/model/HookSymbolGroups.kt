@@ -7,6 +7,9 @@ data class HookPointSymbols(
     val privateMessage: PrivateMessageSymbols = PrivateMessageSymbols(),
     val collectionHistory: CollectionHistorySymbols = CollectionHistorySymbols(),
     val media: MediaHookPointSymbols = MediaHookPointSymbols(),
+    val performanceAbMethods: List<String>? = null,
+    val trackingMethods: List<String>? = null,
+    val defaultPopups: DefaultPopupSymbols = DefaultPopupSymbols(),
 )
 
 data class PrimaryHookPointSymbols(

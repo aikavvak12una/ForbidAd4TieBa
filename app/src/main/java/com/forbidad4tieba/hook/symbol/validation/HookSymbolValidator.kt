@@ -18,6 +18,10 @@ import com.forbidad4tieba.hook.symbol.scan.InputMemeBarSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbAdBidSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbEarlyAdInsertSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbFirstFloorRecommendInsertSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.PerformanceAbSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.TrackingSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.DefaultPopupSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.PbForcePreloadSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlBrowserHelperSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlClickableSpanSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlWebContainerSymbolScanner
@@ -56,6 +60,10 @@ internal object HookSymbolValidator {
         "com.baidu.tieba.pb.pagebrowser.comment.floor.meme.CommentFloorAiEmojiCreationView"
 
     fun isUsable(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    if (!PerformanceAbSymbolScanner.isCacheValid(cl, symbols.performanceAbMethods)) return false
+    if (!TrackingSymbolScanner.isCacheValid(cl, symbols.trackingMethods)) return false
+    if (!DefaultPopupSymbolScanner.isCacheValid(cl, symbols.defaultPopups)) return false
+    if (!PbForcePreloadSymbolScanner.isCacheValid(cl, symbols.pbPreloadRenderGateMethod)) return false
     if (!isSettingsValid(symbols, cl)) return false
     val hasHomeSymbols =
         symbols.homeTabClass != null ||

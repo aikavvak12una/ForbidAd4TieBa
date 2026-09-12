@@ -254,6 +254,8 @@ object UiText {
         const val CLEAN_SHARE_TRACKING_DESC = "移除分享链接中的追踪参数"
         const val PRIVACY_IDENTIFIER_BLOCK_LABEL = "阻断 CUID / UUID 历史标识"
         const val CRASH_REPORT_BLOCK_LABEL = "阻断崩溃与异常上报"
+        const val BLOCK_FIRST_LIKE_POPUP_LABEL = "屏蔽首赞弹窗"
+        const val BLOCK_NOTIFICATION_GUIDE_LABEL = "屏蔽开启通知引导"
         val DEFAULT_ENABLED_FEATURES = listOf(
             HIDE_PB_BOTTOM_BANNER_LABEL,
             FREE_COPY_LABEL,
@@ -261,6 +263,8 @@ object UiText {
             IMAGE_NATIVE_SHARE_LABEL,
             BLOCK_UPDATE_DIALOG_LABEL,
             BLOCK_HOME_FEED_PROMPT_BAR_LABEL,
+            BLOCK_FIRST_LIKE_POPUP_LABEL,
+            BLOCK_NOTIFICATION_GUIDE_LABEL,
             COLLECTION_SEARCH_LABEL,
             HISTORY_SEARCH_LABEL,
             DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL,
@@ -277,7 +281,7 @@ object UiText {
         const val PERFORMANCE_GROUP_STARTUP = "启动与框架"
         const val PERFORMANCE_GROUP_COMPONENT = "运行期阻断"
         const val FORCE_HOST_PERFORMANCE_FLAGS_LABEL = "启用宿主轻量配置"
-        const val FORCE_HOST_PERFORMANCE_FLAGS_DESC = "强制官方冷启动 TTI、Idle、Cookie 降频、头像异步、吧页聊天等 13 个性能 AB 走轻量路径，减少启动期与空闲期主线程工作。\n* 冷启动省流/省电，个别功能可能延迟加载"
+        const val FORCE_HOST_PERFORMANCE_FLAGS_DESC = "强制官方冷启动 TTI、Idle、Cookie 降频、图片内存优化、吧页聊天等 8 个性能 AB 走轻量路径，减少启动期与空闲期主线程工作。\n* 个别功能可能延迟加载；图片采用宿主的低内存解码策略，渐变和透明效果需留意"
         const val DISABLE_HOST_SLIDE_ANIMATION_LABEL = "关闭全局滑动动画"
         const val DISABLE_HOST_SLIDE_ANIMATION_DESC = "强制关闭宿主云控的全局滑动动画（页面切换、列表滑动过渡），滑动更跟手、低端机帧率更稳。\n* 过渡动画消失，视觉切换变硬"
         const val DISABLE_APSARAS_SCHEDULE_LABEL = "禁用飞天调度"
@@ -285,7 +289,7 @@ object UiText {
         const val DISABLE_FLUTTER_PREINIT_LABEL = "禁用 Flutter 预热"
         const val DISABLE_FLUTTER_PREINIT_DESC = "阻止 Flutter NPS 插件在启动或 idle 阶段预初始化，省启动资源。\n* 首次进入 Flutter 相关页面会变慢"
         const val FORCE_LOW_END_DEVICE_CONFIG_LABEL = "强制低端机精简"
-        const val FORCE_LOW_END_DEVICE_CONFIG_DESC = "强制设备分 -1 并按低端机精简：关闭 feed 图片预取、禁止空闲任务重跑、延迟视频自动播放 5 秒。\n* Feed 图片滚动到才加载、视频自动播放变慢；WebView 磁盘缓存代理在强制帖子预加载开启时保留"
+        const val FORCE_LOW_END_DEVICE_CONFIG_DESC = "强制设备分 -1 并按低端机精简：关闭 feed 图片预取、禁止空闲任务重跑、延迟视频自动播放 5 秒。\n* Feed 图片滚动到才加载、视频自动播放变慢；强制帖子预加载开启时保留 WebView 加载代理，包括解除服务端的同名禁用项"
         const val BLOCK_TITAN_PATCH_LABEL = "禁用热修复"
         const val BLOCK_TITAN_PATCH_DESC = "阻止热修复框架加载补丁并清除已下载的补丁文件。\n* 仅排查异常时开启，保持关闭以接收官方修复"
         const val PRIVATE_READ_RECEIPT_INVISIBLE_LABEL = "拦截已读检测"
@@ -301,7 +305,7 @@ object UiText {
         const val DISABLE_VIDEO_COMPONENTS_LABEL = "关闭视频预加载"
         const val DISABLE_VIDEO_COMPONENTS_DESC = "运行期关闭信息流视频预加载和预连接，减少网络与内存占用。\n* 滑动到视频时首帧等待变长，视频播放本身不受影响"
         const val PB_PERFORMANCE_MODE_LABEL = "帖子页性能优化"
-        const val PB_PERFORMANCE_MODE_DESC = "启用帖子页轻量分支：hybrid 渲染、关闭滚动日志、图片性能日志与 PB 广告实验。\n* 帖子页为网页形态渲染；与强制帖子预加载同时开启时预加载优先，此开关的 hybrid 覆盖让位"
+        const val PB_PERFORMANCE_MODE_DESC = "启用帖子页轻量分支：hybrid 优化、关闭图片性能日志与 PB 广告实验。\n* 与强制帖子预加载同时开启时预加载优先，此开关的 hybrid 覆盖让位"
         const val PB_FORCE_PRELOAD_LABEL = "强制帖子预加载"
         const val PB_FORCE_PRELOAD_DESC = "即使服务端关闭帖子预加载开关也强制开启：点击帖子用卡片数据秒开首屏、预取完整页数据，并放行 native 预加载渲染分支与 hybrid apiData 注入。\n* 更多后台预取流量；与帖子页性能优化同时开启时优先保证预加载"
         const val PB_SCROLL_COALESCE_LABEL = "合并帖子页滚动回调"
@@ -315,7 +319,7 @@ object UiText {
         const val DETAILED_LOG_SAVE_EMPTY = "本次尚未记录到日志"
         const val DETAILED_LOG_SAVE_FAILED = "日志保存失败"
         const val MONITOR_SYNC_BLOCK_LABEL = "阻断统计与埋点上报"
-        const val MONITOR_SYNC_BLOCK_DESC = "在代码层阻断统计和埋点 SDK（Loki/百度统计）的数据采集，降低 CPU、内存、磁盘 IO 与网络开销。\n* 官方统计/功能优化数据缺失"
+        const val MONITOR_SYNC_BLOCK_DESC = "阻断 Loki 统计服务、页面轨迹采集与百度统计自动采集，降低 CPU、内存、磁盘 IO 与网络开销。\n* 官方统计/功能优化数据缺失"
 
         const val ACTION_ICON_SETTINGS = "\u2630"
         const val ACTION_ICON_PLAY = "\u25b6"

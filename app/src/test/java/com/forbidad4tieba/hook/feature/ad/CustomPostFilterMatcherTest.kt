@@ -7,6 +7,103 @@ import org.junit.Test
 
 class CustomPostFilterMatcherTest {
     @Test
+    fun helpBlocksQuestionGoodCardFromReportedFeedHead() {
+        val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+            mapOf(
+                "card_type" to "question_good",
+                "thread_type" to "0",
+                "is_special_thread" to "1",
+                "page_from" to "recommend",
+                "recom_type" to "1",
+                "thread_id" to "11011126696",
+                "forum_name" to "起点",
+                "title" to "有人知道13年网文界发生什么了吗？",
+            ),
+            runtimeRules(help = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals(
+            "custom_post_type:help:thread_type=0,card_type=question_good,is_special_thread=1",
+            decision.reason,
+        )
+    }
+
+    @Test
+    fun helpStillBlocksNormalAndQuestionSpecialThreads() {
+        for (cardType in listOf("normal", "question")) {
+            val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+                mapOf("card_type" to cardType, "thread_type" to "0", "is_special_thread" to "1"),
+                runtimeRules(help = true),
+            )
+
+            assertTrue(cardType, decision.blocked)
+        }
+    }
+
+    @Test
+    fun helpDisabledKeepsAllRecognizedHelpCardTypes() {
+        for (cardType in listOf("normal", "question", "question_good")) {
+            val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+                mapOf("card_type" to cardType, "thread_type" to "0", "is_special_thread" to "1"),
+                runtimeRules(help = false),
+            )
+
+            assertEquals(cardType, false, decision.blocked)
+        }
+    }
+
+    @Test
+    fun helpRequiresAllStructuredMarkers() {
+        val helpParams = mapOf("card_type" to "question_good", "thread_type" to "0", "is_special_thread" to "1")
+        val nonHelpParams = listOf(
+            helpParams - "card_type",
+            helpParams - "thread_type",
+            helpParams - "is_special_thread",
+            helpParams + ("is_special_thread" to "0"),
+            helpParams + ("thread_type" to "81"),
+            helpParams + ("card_type" to "question_unknown"),
+        )
+        for (params in nonHelpParams) {
+            val decision = CustomPostFilterMatcher.decideByFeedHeadParams(params, runtimeRules(help = true))
+
+            assertEquals(params.toString(), false, decision.blocked)
+        }
+    }
+
+    @Test
+    fun helpDoesNotClassifyOrdinaryPostsByTitleOrAbstract() {
+        val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+            mapOf(
+                "card_type" to "normal",
+                "thread_type" to "0",
+                "is_special_thread" to "0",
+                "title" to "求助：这个问题应该如何处理？",
+                "abstract" to "讨论求助帖和悬赏帖的区别",
+            ),
+            runtimeRules(help = true),
+        )
+
+        assertEquals(false, decision.blocked)
+    }
+
+    @Test
+    fun helpAcceptsNumericProtocolMarkers() {
+        val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+            mapOf("card_type" to "question_good", "thread_type" to 0, "is_special_thread" to 1),
+            runtimeRules(help = true),
+        )
+
+        assertTrue(decision.blocked)
+    }
+
+    @Test
+    fun helpInputGuideRemainsControlledByHelpSwitch() {
+        assertTrue(CustomPostFilterMatcher.decideByTemplateKey("feed_input_guide", runtimeRules(help = true)).blocked)
+        assertEquals(false, CustomPostFilterMatcher.decideByTemplateKey("feed_input_guide", runtimeRules(help = false)).blocked)
+    }
+
+    @Test
     fun modelScoreUsesPersistedThresholdLoadedAtStartup() {
         val modelKey = CustomPostModelScoreCatalog.MSD_SCORE
 
@@ -210,6 +307,7 @@ class CustomPostFilterMatcherTest {
         recommendForum: Boolean = false,
         reply: Boolean = false,
         vote: Boolean = false,
+        help: Boolean = false,
     ): CustomPostFilterMatcher.RuntimeRules {
         return CustomPostFilterMatcher.RuntimeRules(
             vote = vote,
@@ -218,7 +316,7 @@ class CustomPostFilterMatcherTest {
             hot = false,
             goods = false,
             gameBooking = false,
-            help = false,
+            help = help,
             score = false,
             lottery = lottery,
             live = false,

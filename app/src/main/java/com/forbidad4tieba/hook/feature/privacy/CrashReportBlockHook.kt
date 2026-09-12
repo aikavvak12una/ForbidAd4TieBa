@@ -25,37 +25,10 @@ object CrashReportBlockHook {
             className = "com.baidu.searchbox.logsystem.basic.Loki",
             methodName = "init",
             returnValue = null,
-            parameterTypeNames = listOf("android.content.Context"),
-            staticMethod = true,
-        ),
-        MethodTarget(
-            className = "com.baidu.searchbox.logsystem.basic.Loki",
-            methodName = "init",
-            returnValue = null,
             parameterTypeNames = listOf(
                 "android.content.Context",
                 "com.baidu.searchbox.logsystem.basic.javacrash.BaseUncaughtExceptionHandler",
             ),
-            staticMethod = true,
-        ),
-        MethodTarget(
-            className = "com.baidu.searchbox.logsystem.basic.Loki",
-            methodName = "initNative",
-            returnValue = null,
-            parameterTypeNames = listOf("android.content.Context"),
-            staticMethod = true,
-        ),
-        MethodTarget(
-            className = "com.baidu.searchbox.logsystem.basic.Loki",
-            methodName = "initNative",
-            returnValue = null,
-            parameterTypeNames = listOf("android.content.Context", "boolean"),
-            staticMethod = true,
-        ),
-        MethodTarget(
-            className = "com.baidu.searchbox.logsystem.basic.Loki",
-            methodName = "initService",
-            returnValue = null,
             staticMethod = true,
         ),
         MethodTarget(

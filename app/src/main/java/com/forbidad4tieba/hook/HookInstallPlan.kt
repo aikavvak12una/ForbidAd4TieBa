@@ -42,6 +42,8 @@ import com.forbidad4tieba.hook.feature.ui.FreeCopyHook
 import com.forbidad4tieba.hook.feature.ui.HistorySearchHook
 import com.forbidad4tieba.hook.feature.ui.HomeBottomTabAutoHideHook
 import com.forbidad4tieba.hook.feature.ui.HomeFeedPromptBarBlockHook
+import com.forbidad4tieba.hook.feature.ui.FirstLikePopupBlockHook
+import com.forbidad4tieba.hook.feature.ui.NotificationGuideBlockHook
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHook
 import com.forbidad4tieba.hook.feature.ui.HomeSideBarSettingsEntryHook
 import com.forbidad4tieba.hook.feature.ui.HomeTabHook
@@ -68,6 +70,7 @@ import com.forbidad4tieba.hook.feature.web.MineTabWebBlockHook
 import com.forbidad4tieba.hook.feature.web.PlainUrlDirectBrowserHook
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.ui.SettingsMenuHook
+import java.lang.reflect.Method
 
 internal data class HookInstallEntry(
     val id: String,
@@ -152,6 +155,12 @@ internal object HookInstallPlanner {
             }
         }
         if (context.isMain) {
+            entries += HookInstallEntry("FirstLikePopupBlockHook") { cl ->
+                HookSymbolResolver.resolveFirstLikePopupSymbols(cl, symbols)?.let(FirstLikePopupBlockHook::hook)
+            }
+            entries += HookInstallEntry("NotificationGuideBlockHook") { cl ->
+                HookSymbolResolver.resolveNotificationGuideSymbols(cl, symbols)?.let(NotificationGuideBlockHook::hook)
+            }
             if (settings.isDetailedLoggingEnabled) {
                 entries += HookInstallEntry("TiebaHostLogHook") { cl ->
                     TiebaHostLogHook.hook(cl)
@@ -557,19 +566,24 @@ internal object HookInstallPlanner {
         symbols: HookSymbols,
     ): List<HookInstallEntry> {
         val entries = ArrayList<HookInstallEntry>()
+        var abMethods: Map<String, Method>? = null
+        fun abSymbols(cl: ClassLoader): Map<String, Method> = abMethods
+            ?: HookSymbolResolver.resolvePerformanceAbSymbols(cl, symbols).also { abMethods = it }
         if (settings.isPbPerformanceModeEnabled || settings.isPostPageAdBlockEnabled) {
-            entries += HookInstallEntry("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(cl) }
+            entries += HookInstallEntry("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(abSymbols(cl)) }
         }
         if (settings.isPbPreloadForced) {
             entries += HookInstallEntry("PbForcePreloadHook") { cl ->
-                PbForcePreloadHook.hook(cl, symbols.pbPreloadRenderGateMethod)
+                PbForcePreloadHook.hook(cl, symbols.pbPreloadRenderGateMethod, abSymbols(cl))
             }
         }
         if (settings.isAdSdkComponentsDisabled) {
             entries += HookInstallEntry("AdSdkInitBlockHook") { cl -> AdSdkInitBlockHook.hook(cl) }
         }
         if (settings.isMonitorSyncComponentsDisabled) {
-            entries += HookInstallEntry("TrackingBlockHook") { cl -> TrackingBlockHook.hook(cl) }
+            entries += HookInstallEntry("TrackingBlockHook") { cl ->
+                TrackingBlockHook.hook(HookSymbolResolver.resolveTrackingSymbols(cl, symbols))
+            }
         }
         if (settings.isVideoComponentsDisabled) {
             entries += HookInstallEntry("VideoPreloadBlockHook") { cl -> VideoPreloadBlockHook.hook(cl) }
@@ -582,13 +596,12 @@ internal object HookInstallPlanner {
         if (
             settings.isHostPerformanceFlagsForced ||
             settings.isFlutterPreinitDisabled ||
-            settings.isLowEndDeviceConfigForced ||
             settings.isApsarasScheduleDisabled ||
             settings.isAdSdkComponentsDisabled ||
             settings.isVideoComponentsDisabled ||
             settings.isHostFeedColdOptEnabled
         ) {
-            entries += HookInstallEntry("ColdStartOptHook") { cl -> ColdStartOptHook.hook(cl) }
+            entries += HookInstallEntry("ColdStartOptHook") { cl -> ColdStartOptHook.hook(abSymbols(cl)) }
         }
         if (
             settings.isAdSdkComponentsDisabled ||

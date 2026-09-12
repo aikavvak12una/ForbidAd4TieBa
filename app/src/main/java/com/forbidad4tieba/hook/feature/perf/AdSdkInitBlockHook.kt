@@ -57,12 +57,6 @@ object AdSdkInitBlockHook {
         ),
         MethodTarget(
             className = "com.qq.e.comm.managers.GDTAdSdk",
-            methodName = "init",
-            returnTypeName = "void",
-            parameterTypeNames = listOf("android.content.Context", "java.lang.String"),
-        ),
-        MethodTarget(
-            className = "com.qq.e.comm.managers.GDTAdSdk",
             methodName = "initWithoutStart",
             returnTypeName = "void",
             parameterTypeNames = listOf("android.content.Context", "java.lang.String"),

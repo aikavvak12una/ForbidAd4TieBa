@@ -4,6 +4,8 @@ import android.app.Activity
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.symbol.model.PerformanceAbTarget
+import java.lang.reflect.Method
 
 /**
  * 强制帖子预加载。
@@ -23,8 +25,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
  *    （无条件强制 A1()==true 会让重复进入同一帖子时也跳过普通加载路径，而宿主会按自身策略
  *    拒绝重复预取完整页数据，导致评论请求完全不发起。）
  *
- * 跨版本说明：isPbPreloadSwitchOn 与 hybridPbOpt 双版本稳定；A1() 与 isPbArchTest 为
- * 22.9.1.0 专属结构，旧版本找不到时仅跳过对应 hook（fail closed），不影响其余 hook。
+ * 门控与 AB 方法通过当前宿主符号校验；缺失时关闭强制预加载，避免只覆盖部分开关。
  */
 object PbForcePreloadHook {
     private const val TAG = "[PbForcePreloadHook]"
@@ -39,9 +40,9 @@ object PbForcePreloadHook {
 
     private val abOverrides = arrayOf(
         // 保证 hybrid 页面能注入 apiData 预加载数据
-        UbsAbTestBooleanOverride("hybridPbOpt", false) { ConfigManager.isPbPreloadForced },
-        // 允许宿主使用帖子数据缓存；旧版找不到该公开 AB 方法时跳过
-        UbsAbTestBooleanOverride("isPbArchTest", false) { ConfigManager.isPbPreloadForced },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.HYBRID_PB, false) { ConfigManager.isPbPreloadForced },
+        // 允许宿主使用帖子数据缓存。
+        UbsAbTestBooleanOverride(PerformanceAbTarget.PB_ARCH, false) { ConfigManager.isPbPreloadForced },
     )
 
     @Volatile private var hooked = false
@@ -65,7 +66,7 @@ object PbForcePreloadHook {
         }
         return true
     }
-    fun hook(cl: ClassLoader, renderGateMethodName: String?) {
+    fun hook(cl: ClassLoader, renderGateMethodName: String?, abMethods: Map<String, Method>) {
         if (!ConfigManager.isPbPreloadForced) {
             XposedCompat.logD("$TAG skipped: config disabled")
             return
@@ -107,25 +108,7 @@ object PbForcePreloadHook {
             installed++
 
             // 2. hybridPbOpt -> false + isPbArchTest -> false（AB 覆盖）
-            val helperClass = UbsAbTestBooleanOverrideInstaller.findHelperClass(cl)
-            if (helperClass == null) {
-                XposedCompat.log(
-                    "$TAG AB helper class NOT FOUND: ${StableTiebaHookPoints.UBS_AB_TEST_HELPER_CLASS}",
-                )
-            } else {
-                for (entry in abOverrides) {
-                    val abMethod = UbsAbTestBooleanOverrideInstaller.findMethod(helperClass, entry.methodName)
-                    if (abMethod == null) {
-                        XposedCompat.log(
-                            "$TAG AB method NOT FOUND or invalid: " +
-                                UbsAbTestBooleanOverrideInstaller.methodSignature(entry.methodName),
-                        )
-                        continue
-                    }
-                    UbsAbTestBooleanOverrideInstaller.install(mod, abMethod, entry)
-                    installed++
-                }
-            }
+            installed += UbsAbTestBooleanOverrideInstaller.installEnabled("$TAG.AB", mod, abMethods, abOverrides)
 
             // 3. 预加载渲染门控 -> 首次进入 true：放行 AbsPbActivity 的 native 预加载渲染分支。
             //    同一 tid 再次进入时放行原始 false，走普通加载路径保证评论请求正常发起。

@@ -1,8 +1,9 @@
 package com.forbidad4tieba.hook.feature.perf
 
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.symbol.model.PerformanceAbTarget
+import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicBoolean
 
 
@@ -12,27 +13,26 @@ object ColdStartOptHook {
 
 
     private val overrides = arrayOf(
-        UbsAbTestBooleanOverride("coldStartTTIOpt", true) { ConfigManager.isHostPerformanceFlagsForced },
-        UbsAbTestBooleanOverride("coldStartTTIOpt2", true) { ConfigManager.isHostPerformanceFlagsForced },
-        UbsAbTestBooleanOverride("idleTaskOpt", true) {
+        UbsAbTestBooleanOverride(PerformanceAbTarget.COLD_START_TTI, true) { ConfigManager.isHostPerformanceFlagsForced },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.COLD_START_TTI_2, true) { ConfigManager.isHostPerformanceFlagsForced },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.IDLE_TASK, true) {
             ConfigManager.isHostPerformanceFlagsForced || ConfigManager.isFlutterPreinitDisabled
         },
-        UbsAbTestBooleanOverride("idleTaskOpt2", true) { ConfigManager.isHostPerformanceFlagsForced },
-        UbsAbTestBooleanOverride("cookieRepeatedOpt", true) { ConfigManager.isHostPerformanceFlagsForced },
-        UbsAbTestBooleanOverride("isFeedUserIconOpt", true) { ConfigManager.isHostPerformanceFlagsForced },
-        UbsAbTestBooleanOverride("frsChatAsync", true) { ConfigManager.isHostPerformanceFlagsForced },
-        UbsAbTestBooleanOverride("frsChatAsyncPre", true) { ConfigManager.isHostPerformanceFlagsForced },
-        UbsAbTestBooleanOverride("isLowScoreDeviceOpt", true) { ConfigManager.isLowEndDeviceConfigForced },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.IDLE_TASK_2, true) { ConfigManager.isHostPerformanceFlagsForced },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.COOKIE_REPEATED, true) { ConfigManager.isHostPerformanceFlagsForced },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.FEED_ICON, true) { ConfigManager.isHostPerformanceFlagsForced },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.FRS_CHAT_ASYNC, true) { ConfigManager.isHostPerformanceFlagsForced },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.FRS_CHAT_PRELOAD, true) { ConfigManager.isHostPerformanceFlagsForced },
         // 首页框架优化 + 冷启动网络数据优化（独立开关 KEY_FORCE_HOST_FEED_COLD_OPT）
-        UbsAbTestBooleanOverride("isFeedUIOpt", true) { ConfigManager.isHostFeedColdOptEnabled },
-        UbsAbTestBooleanOverride("isColdNetDataOpt", true) { ConfigManager.isHostFeedColdOptEnabled },
-        UbsAbTestBooleanOverride("isOpenApsarasSchedule", false) { ConfigManager.isApsarasScheduleDisabled },
-        UbsAbTestBooleanOverride("isFrsFunAdSdkTest", false) { ConfigManager.isAdSdkComponentsDisabled },
-        UbsAbTestBooleanOverride("isDuplicateRemovalFunAdABTest", false) { ConfigManager.isAdSdkComponentsDisabled },
-        UbsAbTestBooleanOverride("isAutoPlayNextVideo", false) { ConfigManager.isVideoComponentsDisabled },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.FEED_UI, true) { ConfigManager.isHostFeedColdOptEnabled },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.COLD_NET_DATA, true) { ConfigManager.isHostFeedColdOptEnabled },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.APSARAS_SCHEDULE, false) { ConfigManager.isApsarasScheduleDisabled },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.FRS_AD_SDK, false) { ConfigManager.isAdSdkComponentsDisabled },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.DUPLICATE_AD, false) { ConfigManager.isAdSdkComponentsDisabled },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.AUTO_PLAY_NEXT_VIDEO, false) { ConfigManager.isVideoComponentsDisabled },
     )
 
-    fun hook(cl: ClassLoader) {
+    fun hook(abMethods: Map<String, Method>) {
         if (!UbsAbTestBooleanOverrideInstaller.hasEnabledOverride(overrides)) {
             XposedCompat.logD("$TAG skipped: config disabled")
             return
@@ -44,27 +44,8 @@ object ColdStartOptHook {
             return
         }
 
-        val helperClass = UbsAbTestBooleanOverrideInstaller.findHelperClass(cl)
-        if (helperClass == null) {
-            installed.set(false)
-            XposedCompat.logD("$TAG class NOT FOUND: ${StableTiebaHookPoints.UBS_AB_TEST_HELPER_CLASS}")
-            return
-        }
-
-        var totalInstalled = 0
-        for (override in overrides) {
-            val method = UbsAbTestBooleanOverrideInstaller.findMethod(helperClass, override.methodName) ?: continue
-            try {
-                UbsAbTestBooleanOverrideInstaller.install(mod, method, override)
-                totalInstalled++
-            } catch (t: Throwable) {
-                XposedCompat.logD { "$TAG hook ${helperClass.name}.${override.methodName} skipped: ${t.message}" }
-            }
-        }
-
-        if (totalInstalled > 0) {
-            XposedCompat.log("$TAG hooks INSTALLED: count=$totalInstalled/${overrides.size}")
-        } else {
+        val totalInstalled = UbsAbTestBooleanOverrideInstaller.installEnabled(TAG, mod, abMethods, overrides)
+        if (totalInstalled == 0) {
             installed.set(false)
             XposedCompat.logD("$TAG no AB test methods found in this version")
         }

@@ -457,6 +457,10 @@ class ConfigManagerTest {
     fun performanceChildrenBecomeRuntimeActiveWhenMasterIsOn() {
         withScanAvailability(
             mapOf(
+                HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS to
+                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+                HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to
+                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
                 HookFeatureKey.DISABLE_AI_COMPONENTS to
                     ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
                 HookFeatureKey.ENABLE_PB_SCROLL_COALESCE to
@@ -484,7 +488,11 @@ class ConfigManagerTest {
 
     @Test
     fun performanceChildrenUseEnabledDefaultsOnlyWhenMasterIsOn() {
-        withScanAvailability(emptyMap()) {
+        withScanAvailability(mapOf(
+            HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            HookFeatureKey.DISABLE_APSARAS_SCHEDULE to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+        )) {
             val snapshot = buildSnapshot(
                 mapOf(
                     ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
@@ -500,6 +508,25 @@ class ConfigManagerTest {
             assertTrue(snapshot.isVideoComponentsDisabled)
             assertTrue(snapshot.isMonitorSyncComponentsDisabled)
             assertFalse(snapshot.isTitanPatchBlockEnabled)
+        }
+    }
+
+    @Test
+    fun trackingRequiresVerifiedSymbolsDespiteEnabledPreference() {
+        for (state in listOf(ConfigManager.ScanFeatureAvailabilityState.UNKNOWN, ConfigManager.ScanFeatureAvailabilityState.DISABLED)) {
+            withScanAvailability(mapOf(
+                HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS to state,
+                HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            )) {
+                val snapshot = buildSnapshot(mapOf(
+                    ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+                    ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
+                    ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
+                ))
+                assertFalse(snapshot.isMonitorSyncComponentsDisabled)
+                assertTrue(snapshot.isHostPerformanceFlagsForced)
+            }
         }
     }
 
@@ -534,6 +561,26 @@ class ConfigManagerTest {
             buildSnapshot(values).bottomTabLiquidGlass)
         assertEquals(BottomTabLiquidGlassConfig.DEFAULT,
             buildSnapshot(values + (ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to false)).bottomTabLiquidGlass)
+    }
+
+    @Test
+    fun pbPerformanceMissingSubHookDisablesRuntimeDespiteEnabledPreference() {
+        withScanAvailability(mapOf(
+            HookFeatureKey.ENABLE_PB_PERFORMANCE_MODE to ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+            HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+        )) {
+            val snapshot = buildSnapshot(mapOf(
+                ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+                ConfigManager.KEY_ENABLE_PB_PERFORMANCE_MODE to true,
+                ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
+            ))
+            assertFalse(snapshot.isPbPerformanceModeEnabled)
+            assertTrue(snapshot.isHostPerformanceFlagsForced)
+            val status = ConfigManager.formatPerformanceStatusLines(snapshot)
+                .single { it.startsWith("PerformanceFeature[enable_pb_performance_mode]") }
+            assertTrue(status.contains("active=OFF scan=DISABLED reason=scan_unavailable"))
+        }
     }
 
     @Test

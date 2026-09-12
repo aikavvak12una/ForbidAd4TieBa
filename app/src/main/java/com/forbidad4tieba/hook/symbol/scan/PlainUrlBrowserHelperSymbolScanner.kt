@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.model.PlainUrlBrowserHelperScanSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
@@ -43,6 +44,10 @@ internal object PlainUrlBrowserHelperSymbolScanner {
         if (!Modifier.isStatic(method.modifiers)) return false
         if (method.returnType != Void.TYPE) return false
         val parameterTypes = method.parameterTypes
+        // Unused legacy wrapper; its four-argument delegate remains covered.
+        if (parameterTypes.contentEquals(arrayOf(Context::class.java, String::class.java, Bundle::class.java))) {
+            return false
+        }
         return parameterTypes.any { Context::class.java.isAssignableFrom(it) } &&
             parameterTypes.any { it == String::class.java || it == Uri::class.java }
     }

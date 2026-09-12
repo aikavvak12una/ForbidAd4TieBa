@@ -47,9 +47,9 @@ internal object HookSymbolResolver {
     private const val KEY_CACHE_MODULE_VERSION = HookSymbolCacheKeys.MODULE_VERSION
     private const val KEY_SYMBOL_VERIFIED_FP = HookSymbolCacheKeys.VERIFIED_FP
     // Update these target version bounds when adapting a new Tieba release.
-    private const val TARGET_TIEBA_VERSION_NAME = "22.9.1.0"
-    private const val MIN_TIEBA_VERSION_CODE = 369098752L
-    private const val MAX_TIEBA_VERSION_CODE = 369688832L
+    private const val TARGET_TIEBA_VERSION_NAME = "22.11.1.0"
+    private const val MIN_TIEBA_VERSION_CODE = 369819904L
+    private const val MAX_TIEBA_VERSION_CODE = 369819904L
     private const val VERSION_TYPE_META_NAME = "versionType"
     private const val OFFICIAL_VERSION_TYPE = "3"
 
@@ -258,6 +258,18 @@ internal object HookSymbolResolver {
     private val memoryCache = HookSymbolMemoryCache()
 
     fun getMemorySymbols(): HookSymbols? = memoryCache.currentSymbols()
+
+    fun resolvePerformanceAbSymbols(cl: ClassLoader, symbols: HookSymbols): Map<String, Method> =
+        PerformanceAbSymbolScanner.restore(cl, symbols.performanceAbMethods)
+
+    fun resolveTrackingSymbols(cl: ClassLoader, symbols: HookSymbols): Map<TrackingTarget, Method> =
+        TrackingSymbolScanner.restore(cl, symbols.trackingMethods)
+
+    fun resolveFirstLikePopupSymbols(cl: ClassLoader, symbols: HookSymbols): FirstLikePopupTargets? =
+        DefaultPopupSymbolScanner.restoreFirstLike(cl, symbols.defaultPopups)
+
+    fun resolveNotificationGuideSymbols(cl: ClassLoader, symbols: HookSymbols): Method? =
+        DefaultPopupSymbolScanner.restoreNotification(cl, symbols.defaultPopups)
 
     fun resolveAutoSignInHybridNativeProxySymbols(
         cl: ClassLoader,
@@ -6577,6 +6589,20 @@ internal object HookSymbolResolver {
             PbForcePreloadSymbolScanner.scanRenderGate(context, cl, logger)
         }
 
+        val performanceAbMethods = runScanStep(
+            "PerformanceAB", logger, scanErrors, emptyList<String>(),
+        ) {
+            PerformanceAbSymbolScanner.scan(context, cl, logger)
+        }
+
+        val trackingMethods = runScanStep("Tracking", logger, scanErrors, emptyList<String>()) {
+            TrackingSymbolScanner.scan(context, cl, logger)
+        }
+
+        val defaultPopups = runScanStep("DefaultPopups", logger, scanErrors, DefaultPopupSymbols()) {
+            DefaultPopupSymbolScanner.scan(context, cl, logger)
+        }
+
 
 
         val autoLoadMoreScan = runScanStep(
@@ -7192,6 +7218,9 @@ internal object HookSymbolResolver {
             this.autoLoadMoreConfigClass = autoLoadMoreConfigClass
             this.autoLoadMoreConfigMethod = autoLoadMoreConfigMethod
             this.pbPreloadRenderGateMethod = pbPreloadRenderGateMethod
+            this.performanceAbMethods = performanceAbMethods
+            this.trackingMethods = trackingMethods
+            this.defaultPopups = defaultPopups
             this.pbCommentScrollListenerClass = pbCommentScrollListenerClass
             this.pbCommentScrollMethod = pbCommentScrollMethod
             this.pbCommentScrollFragmentField = pbCommentScrollFragmentField

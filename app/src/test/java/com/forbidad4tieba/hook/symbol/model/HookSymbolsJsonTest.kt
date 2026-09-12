@@ -77,6 +77,12 @@ class HookSymbolsJsonTest {
         index: Int,
     ): Any {
         return when (type) {
+            DefaultPopupSymbols::class.java -> DefaultPopupSymbols(
+                firstLikeResponseClass = "host.LikeResponse",
+                firstLikeToastMethod = "parseToast",
+                notificationGuideClass = "host.PushGuide",
+                notificationGuideMethod = "tryShow",
+            )
             String::class.java -> "value_$fieldName"
             Int::class.javaPrimitiveType, Int::class.javaObjectType -> 10_000 + index
             Long::class.javaPrimitiveType, Long::class.javaObjectType -> 100_000L + index

@@ -573,6 +573,12 @@ object ConfigManager {
 
         fun onOff(value: Boolean): String = if (value) "ON" else "OFF"
 
+        fun scanState(key: String): String = if (scanFeatureKeyForPrefKeyOrNull(key) == null) {
+            "NOT_REQUIRED"
+        } else {
+            getScanFeatureAvailabilityState(key).toString()
+        }
+
         fun masterReason(configured: Boolean, active: Boolean): String {
             return when {
                 active -> "active"
@@ -598,7 +604,7 @@ object ConfigManager {
             val configured = configured(key, defaultValue)
             return "PerformanceFeature[$key] config=${onOff(configured)} " +
                 "master=${onOff(settings.isPerformanceOptimizationEnabled)} " +
-                "active=${onOff(active)} scan=${getScanFeatureAvailabilityState(key)} " +
+                "active=${onOff(active)} scan=${scanState(key)} " +
                 "reason=${childReason(key, configured, active)}"
         }
 
@@ -607,7 +613,7 @@ object ConfigManager {
         return listOf(
             "PerformanceFeature[$KEY_ENABLE_PERFORMANCE_OPTIMIZATION] " +
                 "config=${onOff(masterConfigured)} active=${onOff(settings.isPerformanceOptimizationEnabled)} " +
-                "scan=${getScanFeatureAvailabilityState(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)} " +
+                "scan=${scanState(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)} " +
                 "restricted=${onOff(settings.areRestrictedFeaturesUnlocked)} " +
                 "reason=${masterReason(masterConfigured, settings.isPerformanceOptimizationEnabled)}",
             childLine(KEY_FORCE_HOST_PERFORMANCE_FLAGS, settings.isHostPerformanceFlagsForced, true),
