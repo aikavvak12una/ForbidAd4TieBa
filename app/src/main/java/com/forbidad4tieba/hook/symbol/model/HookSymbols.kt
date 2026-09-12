@@ -7,6 +7,12 @@ data class HookSymbols(
     val resources: ResourceSymbols = ResourceSymbols(),
     val meta: ScanMeta = ScanMeta(),
 ) {
+    val performanceAbMethods: List<String>?
+        get() = hookPoints.performanceAbMethods
+    val trackingMethods: List<String>?
+        get() = hookPoints.trackingMethods
+    val defaultPopups: DefaultPopupSymbols
+        get() = hookPoints.defaultPopups
     val settings: SettingsSymbols
         get() = hookPoints.primary.settings
     val home: HomeSymbols
@@ -854,6 +860,9 @@ data class HookSymbols(
                 put(name, array)
             }
 
+            putStringArray("performanceAbMethods", performanceAbMethods)
+            putStringArray("trackingMethods", trackingMethods)
+            put("defaultPopups", defaultPopups.toJson())
             put("homeTabClass", homeTabClass)
             put("homeTabRebuildMethod", homeTabRebuildMethod)
             put("homeTabListField", homeTabListField)
@@ -1349,8 +1358,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 44
-        const val DEXKIT_RULE_VERSION = 33
+        const val CACHE_SCHEMA_VERSION = 48
+        const val DEXKIT_RULE_VERSION = 38
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1568,6 +1577,9 @@ data class HookSymbols(
                         obj.optStringOrNull("autoRefreshNetRequestMethodSpec")
                     autoRefreshCacheRestoreMethod = obj.optStringOrNull("autoRefreshCacheRestoreMethod")
                     pbPreloadRenderGateMethod = obj.optStringOrNull("pbPreloadRenderGateMethod")
+                    performanceAbMethods = obj.optStringArray("performanceAbMethods").takeIf { it.isNotEmpty() }
+                    trackingMethods = obj.optStringArray("trackingMethods").takeIf { it.isNotEmpty() }
+                    defaultPopups = DefaultPopupSymbols.fromJson(obj.optJSONObject("defaultPopups"))
                     autoLoadMoreConfigClass = obj.optStringOrNull("autoLoadMoreConfigClass")
                     autoLoadMoreConfigMethod = obj.optStringOrNull("autoLoadMoreConfigMethod")
                     pbCommentScrollListenerClass = obj.optStringOrNull("pbCommentScrollListenerClass")

@@ -1291,6 +1291,9 @@ internal object HookFeatureStatusDeriver {
             ),
         )
 
+        out.putAll(PerformanceAbStatus.features(symbols))
+        out[HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS] = TrackingStatus.feature(symbols)
+        out.putAll(DefaultPopupStatus.features(symbols.defaultPopups))
         for (key in featureKeys) {
             if (!out.containsKey(key)) out[key] = HookFeatureStatus()
         }

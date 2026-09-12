@@ -257,26 +257,35 @@ object HostPerformanceConfigHook {
             settings.isLowEndDeviceConfigForced
     }
 
-    private fun moduleLowDevBlockItems(): List<String> {
+    private fun moduleLowDevBlockItems(forcePbPreload: Boolean): List<String> {
         val items = ArrayList<String>(2)
         items.add(LOW_DEV_DISABLE_PRELOAD_FEED_IMAGE)
-        // disable_webview_proxy 会关闭 WebViewDiskLoader（hybrid 帖子 webview 资源磁盘缓存）。
-        // 强制帖子预加载开启时保留该代理，避免 hybrid 帖子页资源回退到纯网络。
-        if (!ConfigManager.isPbPreloadForced) {
+        // disable_webview_proxy 会断开 WebViewDiskLoader 的下游代理。
+        // 强制帖子预加载开启时保留该代理，包括撤销服务端列表中的同名禁用项。
+        if (!forcePbPreload) {
             items.add(LOW_DEV_DISABLE_WEBVIEW_PROXY)
         }
         return items
     }
 
-    private fun mergeLowDevBlockList(original: String): String {
-        val json = try {
+    internal fun mergeLowDevBlockList(
+        original: String,
+        forcePbPreload: Boolean = ConfigManager.isPbPreloadForced,
+    ): String {
+        val originalItems = try {
             JSONArray(original)
         } catch (t: Throwable) {
             JSONArray()
         }
+        val json = JSONArray()
         val existing = HashSet<String>()
-        for (i in 0 until json.length()) existing.add(json.optString(i))
-        for (item in moduleLowDevBlockItems()) {
+        for (i in 0 until originalItems.length()) {
+            val item = originalItems.opt(i)
+            if (forcePbPreload && item == LOW_DEV_DISABLE_WEBVIEW_PROXY) continue
+            json.put(item)
+            if (item is String) existing.add(item)
+        }
+        for (item in moduleLowDevBlockItems(forcePbPreload)) {
             if (existing.add(item)) json.put(item)
         }
         return json.toString()

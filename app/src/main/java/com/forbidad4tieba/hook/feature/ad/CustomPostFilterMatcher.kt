@@ -11,6 +11,7 @@ internal object CustomPostFilterMatcher {
     private const val THREAD_TYPE_LOTTERY = "76"
     private const val CARD_TYPE_NORMAL = "normal"
     private const val CARD_TYPE_QUESTION = "question"
+    private const val CARD_TYPE_QUESTION_GOOD = "question_good"
     private const val CARD_TYPE_COMMENT_FORWARD = "commentForwardCard"
     private const val CARD_TYPE_NORMAL_SCORE = "normalScore"
     private const val CARD_TYPE_BRAND_LOTTERY_AD = "brandLotteryAd"
@@ -224,7 +225,9 @@ internal object CustomPostFilterMatcher {
     }
 
     private fun isHelpCardType(cardType: String?): Boolean {
-        return cardType == CARD_TYPE_NORMAL || cardType == CARD_TYPE_QUESTION
+        return cardType == CARD_TYPE_NORMAL ||
+            cardType == CARD_TYPE_QUESTION ||
+            cardType == CARD_TYPE_QUESTION_GOOD
     }
 
     private fun findPromotionButtonName(params: Map<*, *>): String? {

@@ -1285,6 +1285,9 @@ internal object HookSymbolStatusFormatter {
             )
         }
 
+        out.addAll(PerformanceAbStatus.hookPoints(symbols))
+        out.addAll(TrackingStatus.hookPoints(symbols))
+        out.addAll(DefaultPopupStatus.hookPoints(symbols.defaultPopups))
         return out
     }
 

@@ -5,6 +5,7 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
+import java.lang.reflect.Modifier
 
 /**
  * Resolves the symbols the force-PB-preload feature needs.
@@ -43,6 +44,7 @@ internal object PbForcePreloadSymbolScanner {
             ?: return null
         val shapeOk = methods.any { method ->
             method.name == gateName &&
+                !Modifier.isStatic(method.modifiers) &&
                 method.returnType == Boolean::class.javaPrimitiveType &&
                 method.parameterTypes.isEmpty()
         }
@@ -54,11 +56,33 @@ internal object PbForcePreloadSymbolScanner {
             )
             return null
         }
+        if (!isPreloadSwitchValid(cl)) {
+            log(logger, "pbPreloadRenderGate: isPbPreloadSwitchOn signature invalid or missing")
+            return null
+        }
         log(
             logger,
             "pbPreloadRenderGate matched: ${StableTiebaHookPoints.PB_ACTIVITY_CLASS}.$gateName",
         )
         return gateName
+    }
+
+    fun isCacheValid(cl: ClassLoader, gateName: String?): Boolean {
+        if (gateName == null) return true
+        if (!isPreloadSwitchValid(cl)) return false
+        val clazz = ScanReflection.safeFindClass(StableTiebaHookPoints.PB_ACTIVITY_CLASS, cl) ?: return false
+        return scanSubStep("PbForcePreloadHook.RenderGate.Restore", null, false) {
+            val method = clazz.getDeclaredMethod(gateName)
+            !Modifier.isStatic(method.modifiers) && method.returnType == Boolean::class.javaPrimitiveType
+        }
+    }
+
+    private fun isPreloadSwitchValid(cl: ClassLoader): Boolean {
+        val clazz = ScanReflection.safeFindClass(StableTiebaHookPoints.TB_SINGLETON_CLASS, cl) ?: return false
+        return scanSubStep("PbForcePreloadHook.Switch", null, false) {
+            val method = clazz.getDeclaredMethod("isPbPreloadSwitchOn")
+            !Modifier.isStatic(method.modifiers) && method.returnType == Boolean::class.javaPrimitiveType
+        }
     }
 
     private fun appSourcePaths(context: Context): List<String> {
