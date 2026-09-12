@@ -276,7 +276,8 @@ internal object SettingsMenuGroupBuilder {
                     ConfigManager.KEY_ENABLE_AUTO_SIGN_IN,
                     true,
                     false,
-                    UiText.Settings.ACTION_ICON_PLAY,
+                    UiText.Settings.ACTION_ICON_SETTINGS,
+                    actionContentDescription = UiText.AutoSignIn.RESULT_TITLE,
                     onActionClick = actions.onAutoSignIn,
                 )
             )

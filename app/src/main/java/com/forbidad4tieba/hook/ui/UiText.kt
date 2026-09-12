@@ -273,7 +273,7 @@ object UiText {
             CRASH_REPORT_BLOCK_LABEL,
         ).joinToString("\n")
         const val AUTO_SIGN_IN_LABEL = "自动签到"
-        const val AUTO_SIGN_IN_DESC = "启动时按官方批量规则自动签到"
+        const val AUTO_SIGN_IN_DESC = "启动时静默签到，失败时汇总提醒；点右侧查看结果或手动重试"
         const val PERFORMANCE_OPTIMIZATION_DESC = "优化运行时性能消耗，可能造成功能异常"
         const val PERFORMANCE_OPTIMIZATION_DIALOG_TITLE = "性能优化"
         const val PERFORMANCE_OPTIMIZATION_SAVED = "性能优化配置已保存"
@@ -536,23 +536,38 @@ object UiText {
 
     object AutoSignIn {
         const val TOAST_TASK_RUNNING = "自动签到任务正在进行中，请稍后再试"
-        const val TOAST_BDUSS_MISSING = "自动签到失败：未找到账户凭证(BDUSS)，请先登录贴吧"
-        const val TOAST_TBS_MISSING = "自动签到失败：无法获取 tbs 参数"
-        const val TOAST_SIGN_PEAK_PAUSED = "签到高峰期，已暂停"
+        const val TOAST_BDUSS_MISSING = "签到需要登录贴吧，请先登录"
+        const val TOAST_START_MANUAL = "正在签到，结束后显示结果"
+        const val TOAST_UNAVAILABLE = "当前自动签到不可用，请查看模块扫描状态"
+        const val TOAST_STORAGE_ERROR = "签到已停止：无法读取或保存进度"
+        const val RESULT_TITLE = "自动签到结果"
+        const val NO_RESULTS = "当前账号暂无签到记录，可手动执行一次签到。"
+        const val BUTTON_START = "立即签到"
+        const val BUTTON_RETRY = "重新签到"
+        const val BUTTON_CLOSE = "关闭"
+        const val CHANNEL_NAME = "自动签到结果"
+        const val CHANNEL_DESCRIPTION = "仅在签到失败时静默汇总提醒"
+        const val TASK_FAILED_TITLE = "自动签到暂未完成"
+        const val VIEW_RESULT_HINT = "完整结果：模块设置 → 自动签到"
+        const val NOTIFICATIONS_OFF_HINT = "系统通知或此通知渠道已关闭；签到结果仍保存在这里。"
+        const val NO_ERROR_CODE = "无业务错误码"
+        const val FAILURE_API = "接口返回失败"
+        const val FAILURE_NO_RESPONSE = "未收到接口响应"
+        const val FAILURE_INVALID_RESPONSE = "接口响应无法识别"
+        const val FAILURE_REQUEST = "请求失败"
+        const val FAILURE_TIMEOUT = "请求超时"
+        const val FAILURE_UNCONFIRMED = "未能确认签到成功"
+        const val FAILURE_INVALID_FORUM = "贴吧信息不完整，无法发起签到"
+        const val FAILURE_INTERRUPTED = "上次请求中断，未收到结果"
+        const val FAILURE_SERVER_NOTICE = "需先处理贴吧官方提示"
 
-        fun toastAlreadyAllSigned(totalLiked: Int): String =
-            "当前 $totalLiked 个贴吧已全部签到"
-
-        fun toastStart(total: Int): String =
-            "自动签到开始：共有 $total 个吧待签到"
-
-        fun toastBatchDone(signedCount: Int, leftCount: Int): String =
-            "批量签到${signedCount}，剩余${leftCount}"
-
-        fun toastAllSigned(total: Int): String = "自动签到成功：已签到 $total 个吧"
-        fun toastPartialDone(signedCount: Int, leftCount: Int): String =
-            "已签到 $signedCount 个吧，剩余 $leftCount 个吧未签到"
-
-        fun toastError(message: String?): String = "自动签到异常：${message.orEmpty()}"
+        fun failureTitle(count: Int) = "自动签到：$count 个吧未签到"
+        fun summary(signed: Int, already: Int, failed: Int, pending: Int) =
+            "已签到 ${signed + already} 个，失败 $failed 个" + if (pending > 0) "，待处理 $pending 个" else ""
+        fun finishedAt(time: String) = "任务结束于 $time"
+        fun taskFailure(code: String, message: String) = "任务未完成 · 错误码：$code\n$message"
+        fun forumFailure(name: String, id: String, code: String, message: String) =
+            "${name.ifEmpty { id }} · 错误码：$code\n$message"
+        fun moreFailures(count: Int) = "另有 $count 个失败项，请在模块内查看完整结果。"
     }
 }
