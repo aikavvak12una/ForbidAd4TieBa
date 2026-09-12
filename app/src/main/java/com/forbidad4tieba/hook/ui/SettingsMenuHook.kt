@@ -343,7 +343,7 @@ object SettingsMenuHook {
                     onPerformanceOptimization = { groups ->
                         showPerformanceOptimizationDialog(context, prefs, groups, featureStatusMap)
                     },
-                    onAutoSignIn = { AutoSignInManager.tryAutoSignIn(context, force = true) },
+                    onAutoSignIn = { AutoSignInManager.showResult(context) },
                     onReplyVisibilityProbe = { showReplyVisibilityProbeDialog(context, prefs) },
                     onDetailedLogSave = { saveDetailedLog(context) },
                     onTabCustomization = { items ->
