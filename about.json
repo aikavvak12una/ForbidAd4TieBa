@@ -9,21 +9,56 @@
     }
   ],
   "controls": {
-  "environmentLevels": {
-    "0": {
-      "showWarningDialog": false,
-      "lockHiddenFeatures": false
+    "environmentLevels": {
+"0": { "showWarningDialog": true, "lockHiddenFeatures": false },
+"1": { "showWarningDialog": true, "lockHiddenFeatures": false },
+"2": { "showWarningDialog": true, "lockHiddenFeatures": true }
     },
-    "1": {
-      "showWarningDialog": true,
-      "lockHiddenFeatures": false
-    },
-    "2": {
-      "showWarningDialog": true,
-      "lockHiddenFeatures": false
+    "rules": [
+      {
+        "id": "forbidembedded",
+        "enabled": false,
+        "when": {
+    "field": "module_version_code",
+    "op": "gte",
+    "value": 0
+          
+        },
+        "actions": [
+          {
+            "type": "customDialog",
+            "id": "forbidembeddeddialog",
+            "revision": 1,
+            "title": "注意",
+            "message": "现在开始免root框架的集成、内嵌模式将无法使用去广告、自动签到等隐藏功能，建议切换到本地模式继续使用"
+          }
+        ]
+      },
+      {
+      "id": "account_blacklist_lock_hidden_features",
+      "enabled": true,
+      "when": {
+   "all": [
+            {
+                "field": "account_id",
+        "op": "in",
+        "value": ["262361654488", "6760930227  0"]
+            }
+          ]
+      },
+      "actions": [
+          { "type": "lockHiddenFeatures" },
+        {
+            "type": "customDialog",
+            "id": "test_bduss_lock_dialog",
+            "revision": 1,
+            "title": "222",
+            "message": "LOCKED"
+          }
+      ]
     }
-  }
-},
+    ]
+  },
   "telemetry": [
     {
       "name": "usage_daily",
