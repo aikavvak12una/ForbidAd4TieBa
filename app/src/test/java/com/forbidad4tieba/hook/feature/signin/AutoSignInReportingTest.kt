@@ -41,8 +41,30 @@ class AutoSignInReportingTest {
         assertTrue(AutoSignInNoticePolicy.shouldNotify(changed, AutoSignInNoticePolicy.fingerprint(original)))
     }
 
-    @Test fun successDoesNotGenerateNotification() {
-        assertFalse(AutoSignInNoticePolicy.shouldNotify(report().copy(failures = emptyList()), null))
+    @Test fun successNotifiesOncePerDayIncludingWhenEverythingWasAlreadySigned() {
+        val success = SignInReport("20260912", 1000L, 4, 4, 0, emptyList())
+        assertTrue(AutoSignInNoticePolicy.shouldNotify(success, null))
+        val fingerprint = AutoSignInNoticePolicy.fingerprint(success)
+        val checkedAgain = success.copy(finishedAt = 9000L, signed = 0, alreadySigned = 4)
+        assertFalse(AutoSignInNoticePolicy.shouldNotify(checkedAgain, fingerprint))
+        assertTrue(AutoSignInNoticePolicy.shouldNotify(checkedAgain.copy(day = "20260913"), fingerprint))
+        assertTrue(AutoSignInNoticePolicy.shouldNotify(checkedAgain, null))
+    }
+
+    @Test fun recoveryPublishesSuccessAfterThePreviousFailureNotification() {
+        val failed = report()
+        val success = failed.copy(signed = 2, failures = emptyList())
+        assertTrue(AutoSignInNoticePolicy.shouldNotify(success, AutoSignInNoticePolicy.fingerprint(failed)))
+        assertTrue(AutoSignInNoticePolicy.shouldNotify(failed, AutoSignInNoticePolicy.fingerprint(success)))
+    }
+
+    @Test fun successNotificationDeduplicationSurvivesPersistence() {
+        val success = SignInReport("20260912", 1000L, 4, 2, 2, emptyList())
+        val state = SignInDayState("20260912", automaticDone = true, report = success,
+            notifiedFingerprint = AutoSignInNoticePolicy.fingerprint(success))
+        val restored = AutoSignInStateCodec.decode(AutoSignInStateCodec.encode(state))
+        assertEquals(state, restored)
+        assertFalse(AutoSignInNoticePolicy.shouldNotify(success, restored.notifiedFingerprint))
     }
 
     @Test fun roundTripPreservesAttemptsResultsAndNotificationDeduplication() {

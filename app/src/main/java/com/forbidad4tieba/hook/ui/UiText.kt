@@ -546,7 +546,8 @@ object UiText {
         const val BUTTON_RETRY = "重新签到"
         const val BUTTON_CLOSE = "关闭"
         const val CHANNEL_NAME = "自动签到结果"
-        const val CHANNEL_DESCRIPTION = "仅在签到失败时静默汇总提醒"
+        const val CHANNEL_DESCRIPTION = "静默汇总签到成功或失败的结果"
+        const val SUCCESS_TITLE = "自动签到成功"
         const val TASK_FAILED_TITLE = "自动签到暂未完成"
         const val VIEW_RESULT_HINT = "完整结果：模块设置 → 自动签到"
         const val NOTIFICATIONS_OFF_HINT = "系统通知或此通知渠道已关闭；签到结果仍保存在这里。"
@@ -568,6 +569,6 @@ object UiText {
         fun taskFailure(code: String, message: String) = "任务未完成 · 错误码：$code\n$message"
         fun forumFailure(name: String, id: String, code: String, message: String) =
             "${name.ifEmpty { id }} · 错误码：$code\n$message"
-        fun moreFailures(count: Int) = "另有 $count 个失败项，请在模块内查看完整结果。"
+        fun moreFailures(count: Int) = "另有 $count 个失败项，在模块内查看完整结果。"
     }
 }
