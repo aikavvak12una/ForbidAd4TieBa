@@ -19,14 +19,6 @@ internal object AutoSignInFeedback {
         try {
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             val tag = "tbhook_signin_$accountKey"
-            if (!report.hasFailures) {
-                manager.cancel(tag, NOTIFICATION_ID)
-                if (state.notifiedFingerprint != null) {
-                    state.notifiedFingerprint = null
-                    check(store.save(state)) { "Unable to persist cleared sign-in notification" }
-                }
-                return
-            }
             if (!AutoSignInNoticePolicy.shouldNotify(report, state.notifiedFingerprint)) return
             if (!notificationsAllowed(context)) return
             val channel = NotificationChannel(CHANNEL, UiText.AutoSignIn.CHANNEL_NAME,
@@ -55,11 +47,16 @@ internal object AutoSignInFeedback {
 
     @Suppress("DEPRECATION")
     internal fun buildNotification(context: Context, report: SignInReport): Notification {
-        val title = if (report.taskFailure != null) UiText.AutoSignIn.TASK_FAILED_TITLE
-            else UiText.AutoSignIn.failureTitle(report.failures.size)
+        val title = when {
+            report.taskFailure != null -> UiText.AutoSignIn.TASK_FAILED_TITLE
+            report.hasFailures -> UiText.AutoSignIn.failureTitle(report.failures.size)
+            else -> UiText.AutoSignIn.SUCCESS_TITLE
+        }
+        val icon = if (report.hasFailures) android.R.drawable.stat_notify_error
+            else android.R.drawable.stat_notify_sync_noanim
         val summary = AutoSignInReportText.summary(report)
         val builder = Notification.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(icon)
             .setContentTitle(title)
             .setContentText(summary)
             .setStyle(Notification.BigTextStyle().bigText(AutoSignInReportText.detail(report, 8)))
@@ -73,7 +70,7 @@ internal object AutoSignInFeedback {
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setCategory(Notification.CATEGORY_STATUS)
             .setPublicVersion(Notification.Builder(context, CHANNEL)
-                .setSmallIcon(android.R.drawable.stat_notify_error)
+                .setSmallIcon(icon)
                 .setContentTitle(title).setContentText(UiText.AutoSignIn.VIEW_RESULT_HINT).build())
         return builder.build()
     }

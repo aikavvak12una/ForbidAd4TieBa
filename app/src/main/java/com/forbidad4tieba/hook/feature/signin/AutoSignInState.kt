@@ -114,7 +114,7 @@ internal object AutoSignInNoticePolicy {
     }.toString())
 
     fun shouldNotify(report: SignInReport, lastFingerprint: String?): Boolean =
-        report.hasFailures && fingerprint(report) != lastFingerprint
+        fingerprint(report) != lastFingerprint
 
     private fun digest(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }

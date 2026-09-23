@@ -51,12 +51,24 @@ internal class AutoSignInTask(
             for (batch in batches) {
                 if (!reserve(state, batch)) return null
                 val result = gateway.signBatch(batch)
+                val batchUnavailable = result.failure != null
                 for (forum in batch) {
-                    record(state, forum, result.attempts[forum.key] ?: SignInAttempt(false,
-                        result.failure ?: SignInFailure(SignInFailureKind.UNCONFIRMED)))
+                    val attempt = result.attempts[forum.key]
+                    if (batchUnavailable && attempt?.success != true) {
+                        // A failed batch request does not diagnose an individual forum or
+                        // consume its single-sign retries. Persist the refund before fallback.
+                        state.forums.getValue(forum.key).apply {
+                            attempts--
+                            failure = null
+                        }
+                    } else {
+                        record(state, forum, attempt ?: SignInAttempt(false,
+                            SignInFailure(SignInFailureKind.UNCONFIRMED)))
+                    }
                 }
                 checkpoint(state)
                 if (!canContinue()) return null
+                if (batchUnavailable) break
             }
         }
 

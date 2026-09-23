@@ -32,6 +32,76 @@ class AutoSignInTaskTest {
         assertEquals(3, api.calls.count { it == gone.key })
     }
 
+    @Test fun unavailableBatchStopsLaterBatchesAndKeepsTheSingleSignRetryBudget() {
+        for (kind in listOf(SignInFailureKind.API, SignInFailureKind.TIMEOUT,
+                SignInFailureKind.NO_RESPONSE, SignInFailureKind.INVALID_RESPONSE,
+                SignInFailureKind.REQUEST_FAILED)) {
+            val api = FakeGateway(listOf(gone, alive), batchSize = 1)
+            api.batchReply = { SignInBatchResult(failure =
+                SignInFailure(kind, "fixture_batch_unavailable", "批签不可用")) }
+            val state = SignInDayState("20260912")
+            val report = task(api).run(state, false)!!
+
+            assertEquals(kind.name, listOf(listOf(gone.key)), api.batches)
+            assertEquals(kind.name, 3, api.singleCalls.count { it == gone.key })
+            assertEquals(kind.name, 1, api.singleCalls.count { it == alive.key })
+            assertEquals(1, report.signed)
+            assertEquals(listOf(SignInFailedForum(gone, denied, 3)), report.failures)
+            assertNull(report.taskFailure)
+            assertTrue(state.automaticDone)
+            val detail = AutoSignInReportText.detail(report)
+            assertTrue(detail.contains(denied.code!!))
+            assertFalse(detail.contains("fixture_batch_unavailable"))
+        }
+    }
+
+    @Test fun unavailableBatchIsQuietWhenEverySingleSignSucceeds() {
+        val api = FakeGateway(listOf(gone, alive), batchSize = 1)
+        api.recovered = true
+        api.batchReply = { SignInBatchResult(failure =
+            SignInFailure(SignInFailureKind.API, "fixture_batch_unavailable")) }
+        val report = task(api).run(SignInDayState("20260912"), false)!!
+
+        assertEquals(1, api.batches.size)
+        assertEquals(listOf(gone.key, alive.key), api.singleCalls)
+        assertEquals(2, report.signed)
+        assertFalse(report.hasFailures)
+    }
+
+    @Test fun failedBatchKeepsExplicitSuccessesAndFallsBackForTheRemainingForums() {
+        val later = SignInForum("3", "后续吧", 8)
+        val api = FakeGateway(listOf(alive, gone, later), batchSize = 2)
+        api.batchReply = { SignInBatchResult(mapOf(alive.key to SignInAttempt(true)),
+            SignInFailure(SignInFailureKind.API, "fixture_batch_unavailable")) }
+        val report = task(api).run(SignInDayState("20260912"), false)!!
+
+        assertEquals(1, api.batches.size)
+        assertFalse(api.singleCalls.contains(alive.key))
+        assertEquals(3, api.singleCalls.count { it == gone.key })
+        assertEquals(1, api.singleCalls.count { it == later.key })
+        assertEquals(2, report.signed)
+        assertEquals(listOf(SignInFailedForum(gone, denied, 3)), report.failures)
+    }
+
+    @Test fun refundedBatchAttemptAndSingleSignProgressSurviveProcessDeath() {
+        val api = FakeGateway(listOf(gone))
+        api.batchReply = { SignInBatchResult(failure = SignInFailure(SignInFailureKind.NO_RESPONSE)) }
+        api.crashOnSingle = true
+        var saved = ""
+        try {
+            task(api, save = { saved = AutoSignInStateCodec.encode(it); true })
+                .run(SignInDayState("20260912"), false)
+            fail("Expected simulated process death during the first single sign")
+        } catch (_: SimulatedDeath) { }
+
+        val restored = AutoSignInStateCodec.decode(saved)
+        assertEquals(1, restored.forums.getValue(gone.key).attempts)
+        api.crashOnSingle = false
+        val report = task(api).run(restored, false)!!
+        assertEquals(3, api.singleCalls.size)
+        assertEquals(listOf(SignInFailedForum(gone, denied, 3)), report.failures)
+    }
+
     @Test fun manualRetryResetsFailedBudgetButDoesNotResendSuccessfulForums() {
         val api = FakeGateway(listOf(alive, gone))
         val state = SignInDayState("20260912")
@@ -145,9 +215,13 @@ class AutoSignInTaskTest {
 
     private inner class FakeGateway(private val forums: List<SignInForum>, private val batchSize: Int = 50) : SignInGateway {
         val calls = mutableListOf<String>()
+        val batches = mutableListOf<List<String>>()
+        val singleCalls = mutableListOf<String>()
         var fetches = 0
         var recovered = false
         var crashOnBatch = false
+        var crashOnSingle = false
+        var batchReply: ((List<SignInForum>) -> SignInBatchResult)? = null
         var finalForums: List<SignInForum>? = null
         var fetchFailure: SignInFailure? = null
         var notice: SignInFailure? = null
@@ -159,11 +233,15 @@ class AutoSignInTaskTest {
         }
         override fun signBatch(forums: List<SignInForum>): SignInBatchResult {
             calls.addAll(forums.map { it.key })
+            batches.add(forums.map { it.key })
             if (crashOnBatch) throw SimulatedDeath()
+            batchReply?.let { return it(forums) }
             return SignInBatchResult(forums.associate { it.key to result(it) })
         }
         override fun signSingle(forum: SignInForum): SignInAttempt {
             calls.add(forum.key)
+            singleCalls.add(forum.key)
+            if (crashOnSingle) throw SimulatedDeath()
             return result(forum)
         }
         private fun result(forum: SignInForum) =
