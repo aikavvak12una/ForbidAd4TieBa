@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.feature.signin
 
 import android.content.SharedPreferences
 import java.lang.reflect.Proxy
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -9,14 +10,14 @@ class AutoSignInReportingTest {
     private val forum = SignInForum("42", "失效吧")
     private val failure = SignInFailure(SignInFailureKind.API, "fixture_error", "贴吧不存在")
     private fun report(day: String = "20260912") = SignInReport(day, 1000L, 4, 1, 2,
-        listOf(SignInFailedForum(forum, failure, 3)))
+        listOf(SignInFailedForum(forum, failure, 4)))
 
     @Test fun persistedBudgetsAndReportsAreIsolatedBetweenAccounts() {
         val prefs = preferences()
         val first = AutoSignInStateStore(prefs, AutoSignInNoticePolicy.accountKey("user-1"))
         val second = AutoSignInStateStore(prefs, AutoSignInNoticePolicy.accountKey("user-2"))
-        val day = SignInDayState("20260912", automaticDone = true, report = report())
-        day.forums[forum.key] = SignInForumState(forum, 3, false, failure)
+        val day = SignInDayState("20260912", report = report())
+        day.forums[forum.key] = SignInForumState(forum, 4, false, failure)
         assertTrue(first.save(day))
         assertEquals(day, AutoSignInStateStore(prefs, AutoSignInNoticePolicy.accountKey("user-1")).load("20260912"))
         assertFalse(second.load("20260912").automaticDone)
@@ -28,8 +29,7 @@ class AutoSignInReportingTest {
 
     @Test fun identicalDailyFailuresDoNotNotifyAgainAfterManualRetry() {
         val original = report()
-        val retried = original.copy(finishedAt = 9000L, signed = 0, alreadySigned = 3,
-            failures = listOf(original.failures.single().copy(attempts = 1)))
+        val retried = original.copy(finishedAt = 9000L, signed = 0, alreadySigned = 3)
         assertFalse(AutoSignInNoticePolicy.shouldNotify(retried, AutoSignInNoticePolicy.fingerprint(original)))
         assertTrue(AutoSignInNoticePolicy.shouldNotify(report("20260913"), AutoSignInNoticePolicy.fingerprint(original)))
     }
@@ -68,10 +68,48 @@ class AutoSignInReportingTest {
     }
 
     @Test fun roundTripPreservesAttemptsResultsAndNotificationDeduplication() {
-        val state = SignInDayState("20260912", automaticDone = true, report = report(),
+        val state = SignInDayState("20260912", report = report(),
             notifiedFingerprint = AutoSignInNoticePolicy.fingerprint(report()))
-        state.forums[forum.key] = SignInForumState(forum, 3, false, failure)
+        state.forums[forum.key] = SignInForumState(forum, 4, false, failure)
         assertEquals(state, AutoSignInStateCodec.decode(AutoSignInStateCodec.encode(state)))
+    }
+
+    @Test fun legacyMixedAttemptBudgetsReopenOnlyUnsuccessfulForums() {
+        val signed = SignInForum("1", "已成功吧")
+        val state = SignInDayState("20260912", automaticDone = true, fetchAttempts = 3,
+            report = report().copy(failures = listOf(SignInFailedForum(forum, failure, 3))))
+        state.forums[signed.key] = SignInForumState(signed, 1, true)
+        state.forums[forum.key] = SignInForumState(forum, 3, false, failure)
+        val restored = AutoSignInStateCodec.decode(legacyJson(state))
+
+        assertFalse(restored.automaticDone)
+        assertTrue(restored.forums.getValue(signed.key).signed)
+        assertEquals(1, restored.forums.getValue(signed.key).attempts)
+        assertEquals(0, restored.forums.getValue(forum.key).attempts)
+        assertEquals(2, JSONObject(AutoSignInStateCodec.encode(restored)).getInt("version"))
+    }
+
+    @Test fun legacySuccessfulDayAndNotificationFingerprintRemainComplete() {
+        val success = SignInReport("20260912", 1000L, 1, 1, 0, emptyList())
+        val state = SignInDayState("20260912", automaticDone = true, report = success,
+            notifiedFingerprint = AutoSignInNoticePolicy.fingerprint(success))
+        state.forums[forum.key] = SignInForumState(forum, 1, true)
+        val restored = AutoSignInStateCodec.decode(legacyJson(state))
+
+        assertTrue(restored.automaticDone)
+        assertEquals(state.forums, restored.forums)
+        assertEquals(success, restored.report)
+        assertFalse(AutoSignInNoticePolicy.shouldNotify(success, restored.notifiedFingerprint))
+    }
+
+    @Test fun legacyTaskErrorDoesNotKeepTheDayCompleted() {
+        val state = SignInDayState("20260912", automaticDone = true, fetchAttempts = 3,
+            nextAutomaticAt = 5000L, report = SignInReport("20260912", 1000L, 0, 0, 0,
+                emptyList(), SignInFailure(SignInFailureKind.TIMEOUT)))
+        val restored = AutoSignInStateCodec.decode(legacyJson(state))
+        assertFalse(restored.automaticDone)
+        assertEquals(0L, restored.nextAutomaticAt)
+        assertFalse(AutoSignInNoticePolicy.shouldNotify(restored.report!!, null))
     }
 
     @Test fun nullErrorCodeSurvivesPersistenceWithoutBecomingStringNull() {
@@ -86,7 +124,7 @@ class AutoSignInReportingTest {
     }
 
     @Test fun corruptOrUnsupportedStateDoesNotResetRetryCounters() {
-        for (raw in listOf("{}", """{"version":2}""", "not-json")) {
+        for (raw in listOf("{}", """{"version":3}""", "not-json")) {
             try { AutoSignInStateCodec.decode(raw); fail("Invalid state must be rejected") }
             catch (_: Exception) { }
         }
@@ -110,6 +148,23 @@ class AutoSignInReportingTest {
         assertTrue(AutoSignInReportText.summary(stopped).contains("待处理 8 个"))
         assertEquals("自动签到暂未完成", AutoSignInReportText.summary(stopped.copy(total = 0, alreadySigned = 0)))
     }
+
+    @Test fun taskErrorsPendingForumsAndUnfinishedRetriesNeverNotify() {
+        for (kind in SignInFailureKind.entries) {
+            val paused = SignInReport("20260925", 1000L, 0, 0, 0, emptyList(), SignInFailure(kind))
+            assertFalse(kind.name, AutoSignInNoticePolicy.shouldNotify(paused, null))
+        }
+        assertFalse(AutoSignInNoticePolicy.shouldNotify(report().copy(total = 5), null))
+        val retrying = report().copy(failures = listOf(SignInFailedForum(forum, failure, 3)))
+        assertFalse(AutoSignInNoticePolicy.shouldNotify(retrying, null))
+        assertTrue(AutoSignInNoticePolicy.shouldNotify(report(), null))
+    }
+
+    private fun legacyJson(state: SignInDayState): String =
+        JSONObject(AutoSignInStateCodec.encode(state)).apply {
+            put("version", 1)
+            remove("batchAttempted")
+        }.toString()
 
     private fun preferences(): SharedPreferences {
         val values = hashMapOf<String, String?>()

@@ -57,6 +57,23 @@ class AutoSignInResponsesTest {
         assertEquals("batch_denied", result.attempts.getValue(one.key).failure!!.code)
     }
 
+    @Test fun batchNoticeWithoutApiErrorTriggersFallbackAndKeepsExplicitSuccesses() {
+        val result = AutoSignInResponses.batch(JSONObject("""{"errno":0,"data":{"show_dialog":1,
+            "sign_notice":"零点到一点为签到高峰期，一键签到失败机率较大，请错开高峰期再来签到！",
+            "info":[{"forum_id":"1","signed":1}]}}"""), listOf(one, two))
+        assertEquals(SignInFailureKind.SERVER_NOTICE, result.failure?.kind)
+        assertTrue(result.attempts.getValue(one.key).success)
+        assertEquals(result.failure, result.attempts.getValue(two.key).failure)
+    }
+
+    @Test fun batchNoticeDoesNotHideApiFailureOrMakeAnInvalidListUsable() {
+        val json = JSONObject("""{"errno":"fixture_login_required","show_dialog":1,"sign_notice":"批签提示","forum_info":[]}""")
+        assertEquals("fixture_login_required", AutoSignInResponses.snapshot(json, 0).failure?.code)
+        assertEquals("fixture_login_required", AutoSignInResponses.batch(json, listOf(one)).failure?.code)
+        json.put("errno", 0).remove("forum_info")
+        assertEquals(SignInFailureKind.INVALID_RESPONSE, AutoSignInResponses.snapshot(json, 0).failure?.kind)
+    }
+
     @Test fun snapshotRejectsMalformedListInsteadOfClaimingEverythingIsSigned() {
         assertNull(AutoSignInResponses.snapshot(JSONObject("""{"errno":0}"""), 0).snapshot)
         assertNull(AutoSignInResponses.snapshot(JSONObject("""{"errno":0,"forum_info":[{}]}"""), 0).snapshot)

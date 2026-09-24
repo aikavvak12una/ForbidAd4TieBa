@@ -23,11 +23,12 @@ internal class AutoSignInStateStore(private val prefs: SharedPreferences, accoun
 
 internal object AutoSignInStateCodec {
     fun encode(state: SignInDayState): String = JSONObject().apply {
-        put("version", 1)
+        put("version", 2)
         put("day", state.day)
         put("automaticDone", state.automaticDone)
         put("fetchAttempts", state.fetchAttempts)
         put("nextAutomaticAt", state.nextAutomaticAt)
+        put("batchAttempted", state.batchAttempted)
         put("notifiedFingerprint", state.notifiedFingerprint)
         put("forums", JSONArray().apply {
             state.forums.values.forEach { entry -> put(JSONObject().apply {
@@ -42,24 +43,40 @@ internal object AutoSignInStateCodec {
 
     fun decode(raw: String): SignInDayState {
         val json = JSONObject(raw)
-        require(json.getInt("version") == 1) { "Unsupported sign-in state version" }
+        val version = json.getInt("version")
+        require(version in 1..2) { "Unsupported sign-in state version" }
         val day = json.getString("day")
         require(day.matches(Regex("\\d{8}"))) { "Invalid sign-in day" }
         val state = SignInDayState(day, automaticDone = json.getBoolean("automaticDone"),
             fetchAttempts = json.getInt("fetchAttempts"), nextAutomaticAt = json.getLong("nextAutomaticAt"),
-            notifiedFingerprint = json.optString("notifiedFingerprint").takeIf { it.isNotEmpty() })
+            notifiedFingerprint = json.optString("notifiedFingerprint").takeIf { it.isNotEmpty() },
+            batchAttempted = version == 2 && json.getBoolean("batchAttempted"))
         require(state.fetchAttempts >= 0 && state.nextAutomaticAt >= 0)
         val forums = json.getJSONArray("forums")
         for (index in 0 until forums.length()) {
             val item = forums.getJSONObject(index)
             val forum = forum(item.getJSONObject("forum"))
             val attempts = item.getInt("attempts")
-            require(attempts in 0..AutoSignInTask.MAX_ATTEMPTS && forum.key !in state.forums)
+            val maxAttempts = if (version == 1) 3 else AutoSignInTask.MAX_ATTEMPTS
+            require(attempts in 0..maxAttempts && forum.key !in state.forums)
             state.forums[forum.key] = SignInForumState(forum, attempts, item.getBoolean("signed"),
                 item.optJSONObject("failure")?.let(::failure))
         }
         state.report = json.optJSONObject("report")?.let(::report)
         require(state.report == null || state.report?.day == day)
+        if (version == 1) {
+            // v1 mixed batch and individual reservations. Start one fresh budget for
+            // unsigned forums on upgrade; preserve every confirmed success.
+            state.forums.values.filterNot { it.signed }.forEach {
+                it.attempts = 0
+                it.failure = null
+            }
+            if (state.automaticDone && (state.report?.allSucceeded != true ||
+                    state.forums.values.any { !it.signed })) {
+                state.automaticDone = false
+                state.nextAutomaticAt = 0L
+            }
+        }
         return state
     }
 
@@ -114,7 +131,7 @@ internal object AutoSignInNoticePolicy {
     }.toString())
 
     fun shouldNotify(report: SignInReport, lastFingerprint: String?): Boolean =
-        fingerprint(report) != lastFingerprint
+        report.isFinal && fingerprint(report) != lastFingerprint
 
     private fun digest(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
