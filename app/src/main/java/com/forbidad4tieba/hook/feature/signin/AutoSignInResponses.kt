@@ -35,8 +35,7 @@ internal object AutoSignInResponses {
             forums, text(body, "valid") == "1",
             body.optInt("sign_max_num_new", 50).takeIf { it > 0 } ?: 50,
             body.optInt("level", 7).takeIf { it > 0 } ?: 7, allLevels,
-            if (text(body, "show_dialog") == "1") SignInFailure(SignInFailureKind.SERVER_NOTICE,
-                message = text(body, "sign_notice")) else null,
+            batchNotice(body),
         ))
     }
 
@@ -50,8 +49,8 @@ internal object AutoSignInResponses {
     }
 
     fun batch(json: JSONObject, requested: List<SignInForum>): SignInBatchResult {
-        val failure = apiFailure(json)
         val body = payload(json)
+        val failure = apiFailure(json) ?: batchNotice(body)
         val info = body.optJSONArray("info") ?: json.optJSONArray("info")
         val items = linkedMapOf<String, JSONObject>()
         val duplicates = hashSetOf<String>()
@@ -76,6 +75,10 @@ internal object AutoSignInResponses {
         }
         return SignInBatchResult(outcomes, failure)
     }
+
+    private fun batchNotice(json: JSONObject): SignInFailure? =
+        if (text(json, "show_dialog") == "1") SignInFailure(SignInFailureKind.SERVER_NOTICE,
+            message = text(json, "sign_notice")) else null
 
     fun apiFailure(json: JSONObject): SignInFailure? {
         val objects = listOfNotNull(json.optJSONObject("error"), json,

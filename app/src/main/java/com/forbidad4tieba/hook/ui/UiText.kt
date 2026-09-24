@@ -252,7 +252,7 @@ object UiText {
         const val DEFAULT_NOTIFY_TAB_DESC = "进入消息页时默认显示通知"
         const val CLEAN_SHARE_TRACKING_LABEL = "安全分享"
         const val CLEAN_SHARE_TRACKING_DESC = "移除分享链接中的追踪参数"
-        const val PRIVACY_IDENTIFIER_BLOCK_LABEL = "阻断 CUID / UUID 历史标识"
+        const val PRIVACY_IDENTIFIER_BLOCK_LABEL = "阻止设备标识文件读写（CUID / UUID）"
         const val CRASH_REPORT_BLOCK_LABEL = "阻断崩溃与异常上报"
         const val BLOCK_FIRST_LIKE_POPUP_LABEL = "屏蔽首赞弹窗"
         const val BLOCK_NOTIFICATION_GUIDE_LABEL = "屏蔽开启通知引导"
@@ -270,6 +270,7 @@ object UiText {
             DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL,
             DEFAULT_NOTIFY_TAB_LABEL,
             CLEAN_SHARE_TRACKING_LABEL,
+            PRIVACY_IDENTIFIER_BLOCK_LABEL,
             CRASH_REPORT_BLOCK_LABEL,
         ).joinToString("\n")
         const val AUTO_SIGN_IN_LABEL = "自动签到"
@@ -311,7 +312,7 @@ object UiText {
         const val PB_SCROLL_COALESCE_LABEL = "合并帖子页滚动回调"
         const val PB_SCROLL_COALESCE_DESC = "在评论列表滚动回调中合并过密的刷新请求，降低帖子页滑动时的主线程压力。\n* 极快滚动时「加载更多」可能略微滞后，近底部 20 条不合并"
         const val DETAILED_LOGGING_LABEL = "输出详细日志"
-        const val DETAILED_LOGGING_DESC = "从最近一次冷启动开始记录，需重启生效"
+        const val DETAILED_LOGGING_DESC = "从最近一次冷启动开始记录，需重启生效\n* 包含账号数据等敏感信息，勿随意分享"
         const val DETAILED_LOG_SAVE_ACTION_DESC = "正在保存日志"
         const val DETAILED_LOG_SAVE_STARTED = "正在保存日志"
         const val DETAILED_LOG_SAVE_ALREADY_RUNNING = "日志正在保存，请稍候"
@@ -549,7 +550,7 @@ object UiText {
         const val CHANNEL_DESCRIPTION = "静默汇总签到成功或失败的结果"
         const val SUCCESS_TITLE = "自动签到成功"
         const val TASK_FAILED_TITLE = "自动签到暂未完成"
-        const val VIEW_RESULT_HINT = "完整结果：模块设置 → 自动签到"
+        const val VIEW_RESULT_HINT = "FA4TB"
         const val NOTIFICATIONS_OFF_HINT = "系统通知或此通知渠道已关闭；签到结果仍保存在这里。"
         const val NO_ERROR_CODE = "无业务错误码"
         const val FAILURE_API = "接口返回失败"

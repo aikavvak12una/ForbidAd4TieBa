@@ -66,6 +66,10 @@ internal data class SignInReport(
     val taskFailure: SignInFailure? = null,
 ) {
     val hasFailures: Boolean get() = failures.isNotEmpty() || taskFailure != null
+    val isFinal: Boolean get() = taskFailure == null &&
+        total == signed + alreadySigned + failures.size &&
+        failures.all { it.attempts == AutoSignInTask.MAX_ATTEMPTS }
+    val allSucceeded: Boolean get() = isFinal && !hasFailures
 }
 
 internal data class SignInDayState(
@@ -76,4 +80,5 @@ internal data class SignInDayState(
     var nextAutomaticAt: Long = 0L,
     var report: SignInReport? = null,
     var notifiedFingerprint: String? = null,
+    var batchAttempted: Boolean = false,
 )
