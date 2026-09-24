@@ -58,7 +58,7 @@ internal object PbLikeAutoReplySymbolScanner {
 
         val inputContainerClass = safeFindClass(StableTiebaHookPoints.PB_NEW_INPUT_CONTAINER_CLASS, cl)
         if (inputContainerClass == null) {
-            log(logger, "pbLikeAutoReply: PbNewInputContainer class not found")
+            log(logger, "pbLikeAutoReply: ${StableTiebaHookPoints.PB_NEW_INPUT_CONTAINER_CLASS} class not found")
             return PbLikeAutoReplyScanSymbols(
                 agreeViewClass = agreeViewClass.name,
                 agreeClickMethod = agreeClickMethod,
@@ -70,7 +70,7 @@ internal object PbLikeAutoReplySymbolScanner {
             )
         }
 
-        val inputMethods = instanceMethods("PbNewInputContainer", inputContainerClass, logger).orEmpty()
+        val inputMethods = instanceMethods("PbNewInputContainerV2", inputContainerClass, logger).orEmpty()
         val getInputViewMethod = inputMethods.firstOrNull { method ->
             method.name == StableTiebaHookPoints.METHOD_GET_INPUT_VIEW &&
                 method.parameterTypes.isEmpty() &&
@@ -85,7 +85,7 @@ internal object PbLikeAutoReplySymbolScanner {
         if (getInputViewMethod == null || getSendViewMethod == null) {
             log(
                 logger,
-                "pbLikeAutoReply: PbNewInputContainer methods missing, " +
+                "pbLikeAutoReply: PbNewInputContainerV2 methods missing, " +
                     "input=${getInputViewMethod?.name}, send=${getSendViewMethod?.name}",
             )
         }
@@ -101,6 +101,7 @@ internal object PbLikeAutoReplySymbolScanner {
             inputContainerClass = inputContainerClass.name,
             inputContainerGetInputViewMethod = getInputViewMethod?.name,
             inputContainerGetSendViewMethod = getSendViewMethod?.name,
+            flow = PbAutoReplyFlowSymbolScanner.scan(context, cl, logger),
         )
         log(
             logger,

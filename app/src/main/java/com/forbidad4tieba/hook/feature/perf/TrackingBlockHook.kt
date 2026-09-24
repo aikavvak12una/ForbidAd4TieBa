@@ -6,7 +6,7 @@ import com.forbidad4tieba.hook.symbol.model.TrackingTarget
 import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Stops automatic mobstat collection, shared page tracing and Loki service work. */
+/** Stops shared page tracing and Loki service work. */
 object TrackingBlockHook {
     private const val TAG = "[TrackingBlockHook]"
     private val installed = AtomicBoolean(false)
@@ -26,7 +26,6 @@ object TrackingBlockHook {
                 continue
             }
             val blockedResult: Any? = when (target) {
-                TrackingTarget.CLOSE_TRACE -> true
                 TrackingTarget.LOKI_SERVICE -> 0
                 TrackingTarget.PAGE_TRACE -> null
             }

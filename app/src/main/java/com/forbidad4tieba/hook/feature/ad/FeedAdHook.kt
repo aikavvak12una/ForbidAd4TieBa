@@ -41,38 +41,9 @@ object FeedAdHook {
             mod.hook(method).intercept { chain ->
                 val list = chain.args.firstOrNull() as? List<*>
                 if (list != null) {
-                    var current = list
-                    var changed = false
-                    if (customPostFilter != null) {
-                        val filtered = CustomPostCardBlockHook.filterList(
-                            list = current,
-                            runtimeFilter = customPostFilter,
-                            methodName = methodName,
-                            templateKeyBlockReason = if (ConfigManager.isFeedAdBlockEnabled) {
-                                ::adBlockReason
-                            } else {
-                                null
-                            },
-                        )
-                        if (filtered !== current) {
-                            current = filtered
-                            changed = true
-                        }
-                    } else if (ConfigManager.isFeedAdBlockEnabled) {
-                        val filtered = filterItems(
-                            list = current,
-                            templateKeyMethodName = templateKeyMethodName,
-                        )
-                        if (filtered !== current) {
-                            XposedCompat.logD {
-                                "[FeedAdHook] > $methodName filtered: ${current.size} -> ${filtered.size}"
-                            }
-                            current = filtered
-                            changed = true
-                        }
-                    }
-                    if (changed) {
-                        return@intercept chain.proceed(arrayOf<Any?>(current))
+                    val filtered = filterList(list, templateKeyMethodName, customPostFilter, methodName)
+                    if (filtered !== list) {
+                        return@intercept chain.proceed(arrayOf<Any?>(filtered))
                     }
                 }
                 chain.proceed()
@@ -84,9 +55,41 @@ object FeedAdHook {
         targets.loadMoreMethod?.let(::hookListMethod)
     }
 
+    internal fun filterList(
+        list: List<*>,
+        templateKeyMethodName: String,
+        customPostFilter: CustomPostCardBlockHook.RuntimeFilter?,
+        methodName: String,
+    ): List<*> {
+        val blockFeedAds = ConfigManager.isFeedAdBlockEnabled
+        val blockRecommendBanner = ConfigManager.isStrategyAdBlockEnabled
+        if (customPostFilter != null) {
+            return CustomPostCardBlockHook.filterList(
+                list = list,
+                runtimeFilter = customPostFilter,
+                methodName = methodName,
+                templateKeyBlockReason = if (blockFeedAds || blockRecommendBanner) {
+                    { key -> adBlockReason(key, blockFeedAds, blockRecommendBanner) }
+                } else {
+                    null
+                },
+            )
+        }
+        if (!blockFeedAds && !blockRecommendBanner) return list
+        val filtered = filterItems(list, templateKeyMethodName, blockFeedAds, blockRecommendBanner)
+        if (filtered !== list) {
+            XposedCompat.logD {
+                "[FeedAdHook] > $methodName filtered: ${list.size} -> ${filtered.size}"
+            }
+        }
+        return filtered
+    }
+
     private fun filterItems(
         list: List<*>,
         templateKeyMethodName: String,
+        blockFeedAds: Boolean,
+        blockRecommendBanner: Boolean,
     ): List<*> {
         val size = list.size
         var out: ArrayList<Any?>? = null
@@ -99,7 +102,7 @@ object FeedAdHook {
 
             if (item != null) {
                 val key = getTemplateKey(item, templateKeyMethodName)
-                if (key != null && shouldBlock(key)) {
+                if (key != null && shouldBlock(key, blockFeedAds, blockRecommendBanner)) {
                     block = true
                     blockReason = "template_key:$key"
                 }
@@ -122,10 +125,16 @@ object FeedAdHook {
         return out ?: list
     }
 
-    private fun shouldBlock(key: String): Boolean = isAdKey(key)
+    private fun shouldBlock(key: String, blockFeedAds: Boolean, blockRecommendBanner: Boolean): Boolean {
+        return (blockRecommendBanner && key == "recommend_banner") || (blockFeedAds && isAdKey(key))
+    }
 
-    private fun adBlockReason(key: String?): String? {
-        return key?.takeIf(::shouldBlock)?.let { "ad:template_key:$it" }
+    private fun adBlockReason(key: String?, blockFeedAds: Boolean, blockRecommendBanner: Boolean): String? {
+        return if (key != null && shouldBlock(key, blockFeedAds, blockRecommendBanner)) {
+            "ad:template_key:$key"
+        } else {
+            null
+        }
     }
 
     private fun isAdKey(key: String): Boolean {

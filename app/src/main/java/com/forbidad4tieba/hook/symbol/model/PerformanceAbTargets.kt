@@ -20,7 +20,6 @@ enum class PerformanceAbTarget(val methodName: String) {
     IMAGE_PERF_LOG("imagePerfLog"),
     PB_COMMENT_AD("isPbCommentFunAdABTest"),
     PB_BANNER_AD("isPbPageBannerFunAdSdkTest"),
-    PB_ARCH("isPbArchTest"),
 }
 
 internal object PerformanceAbTargets {
@@ -35,7 +34,7 @@ internal object PerformanceAbTargets {
             PerformanceAbTarget.HYBRID_PB, PerformanceAbTarget.IMAGE_PERF_LOG,
             PerformanceAbTarget.PB_COMMENT_AD, PerformanceAbTarget.PB_BANNER_AD,
         ),
-        HookFeatureKey.FORCE_PB_PRELOAD to listOf(PerformanceAbTarget.HYBRID_PB, PerformanceAbTarget.PB_ARCH),
+        HookFeatureKey.FORCE_PB_PRELOAD to listOf(PerformanceAbTarget.HYBRID_PB),
         HookFeatureKey.FORCE_HOST_FEED_COLD_OPT to listOf(PerformanceAbTarget.FEED_UI, PerformanceAbTarget.COLD_NET_DATA),
         HookFeatureKey.DISABLE_APSARAS_SCHEDULE to listOf(PerformanceAbTarget.APSARAS_SCHEDULE),
     )

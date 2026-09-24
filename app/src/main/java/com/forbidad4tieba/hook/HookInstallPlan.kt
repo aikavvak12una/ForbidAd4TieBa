@@ -256,7 +256,7 @@ internal object HookInstallPlanner {
             return HookInstallPlan(processName, "symbol", emptyList())
         }
 
-        val feedAdBlockHook = context.canInstallFeedAdBlock(settings)
+        val feedListAdBlockHook = context.canInstallFeedListAdBlock(settings)
         val postAdBlockHook = context.canInstallPostAdBlock(settings)
         val forumPageAdBlockHook = context.canInstallForumPageAdBlock(settings)
         val strategyAdBlockHook = context.canInstallStrategyAdBlock(settings)
@@ -270,7 +270,7 @@ internal object HookInstallPlanner {
         val homeTopBarAdBlockHook = context.canInstallHomeTopBarAdBlock(settings)
         val customPostFilterHook = context.canInstallCustomPostFilter(settings)
         val homeNativeGlassHook = context.canInstallHomeNativeGlass(settings)
-        val feedListHook = feedAdBlockHook || customPostFilterHook
+        val feedListHook = feedListAdBlockHook || customPostFilterHook
 
         entries += HookInstallEntry("SettingsMenuHook") { cl -> SettingsMenuHook.hook(cl, symbols) }
         entries += HookInstallEntry("HomeSideBarSettingsEntryHook") { cl -> HomeSideBarSettingsEntryHook.hook(cl) }
@@ -574,7 +574,9 @@ internal object HookInstallPlanner {
         }
         if (settings.isPbPreloadForced) {
             entries += HookInstallEntry("PbForcePreloadHook") { cl ->
-                PbForcePreloadHook.hook(cl, symbols.pbPreloadRenderGateMethod, abSymbols(cl))
+                HookSymbolResolver.resolvePbPreloadTargets(cl, symbols)?.let { targets ->
+                    PbForcePreloadHook.hook(targets, abSymbols(cl))
+                }
             }
         }
         if (settings.isAdSdkComponentsDisabled) {

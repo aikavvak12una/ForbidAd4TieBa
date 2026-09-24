@@ -150,7 +150,10 @@ internal class HookSymbolsBuilder {
     var autoRefreshCacheRestoreMethod: String? = null
     var autoLoadMoreConfigClass: String? = null
     var autoLoadMoreConfigMethod: String? = null
-    var pbPreloadRenderGateMethod: String? = null
+    var pbPreloadProviderMethodSpec: String? = null
+    var pbPreloadCardGetterMethodSpec: String? = null
+    var pbPreloadPageStateMutableField: String? = null
+    var pbPreloadPageStateFlowField: String? = null
     var performanceAbMethods: List<String>? = null
     var trackingMethods: List<String>? = null
     var defaultPopups: DefaultPopupSymbols = DefaultPopupSymbols()
@@ -180,6 +183,7 @@ internal class HookSymbolsBuilder {
     var pbLikeAutoReplyInputContainerClass: String? = null
     var pbLikeAutoReplyInputContainerGetInputViewMethod: String? = null
     var pbLikeAutoReplyInputContainerGetSendViewMethod: String? = null
+    var pbAutoReplyFlow: PbAutoReplyFlowSymbols = PbAutoReplyFlowSymbols()
     var inputMemeBarControllerClass: String? = null
     var inputMemeBarEnableMethod: String? = null
     var collectionPresenterField: String? = null
@@ -617,7 +621,10 @@ internal class HookSymbolsBuilder {
                     autoRefreshCacheRestoreMethod,
                     autoLoadMoreConfigClass,
                     autoLoadMoreConfigMethod,
-                    pbPreloadRenderGateMethod,
+                    pbPreloadProviderMethodSpec,
+                    pbPreloadCardGetterMethodSpec,
+                    pbPreloadPageStateMutableField,
+                    pbPreloadPageStateFlowField,
                 ),
                 scroll = PbCommentScrollSymbolsGroup(
                     pbCommentScrollListenerClass,
@@ -645,6 +652,7 @@ internal class HookSymbolsBuilder {
                 pbGestureScaleListenerOnScaleMethod,
             ),
             likeAutoReply = PbLikeAutoReplySymbolsGroup(
+                flow = pbAutoReplyFlow,
                 agreeView = PbLikeAutoReplyAgreeViewSymbolsGroup(
                     pbLikeAutoReplyAgreeViewClass,
                     pbLikeAutoReplyAgreeClickMethod,

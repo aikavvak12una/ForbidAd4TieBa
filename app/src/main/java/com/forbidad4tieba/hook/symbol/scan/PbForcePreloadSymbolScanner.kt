@@ -2,99 +2,114 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
-import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
-import com.forbidad4tieba.hook.symbol.dexkit.DexKitSemanticScanner
+import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
+import com.forbidad4tieba.hook.symbol.model.PbPreloadSymbols
+import com.forbidad4tieba.hook.symbol.model.PbPreloadTargets
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
+import org.luckypray.dexkit.DexKitBridge
+import org.luckypray.dexkit.query.FindMethod
+import org.luckypray.dexkit.query.matchers.MethodMatcher
+import org.luckypray.dexkit.result.MethodData
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
-/**
- * Resolves the symbols the force-PB-preload feature needs.
- *
- * Currently one hook point: the boolean gate that opens the native
- * preload-render branch inside the host's abstract PB activity. The gate is
- * renamed on every host build (`A1` on 22.9.1.0, `B1` on 22.10.1.0), so it is
- * located through the unobfuscated `PbPreloadHelperKt` anchor rather than by
- * name, then re-checked against the concrete activity's method shape.
- */
+/** Resolve the provider consumed by the current PB request manager and the native clicked-card cache. */
 internal object PbForcePreloadSymbolScanner {
+    private const val DATA_RES = "tbclient.PbPage.DataRes"
+    private const val FLOOR_MODEL = "com.baidu.tieba.pb.pb.main.model.PbFloorModel"
+    private const val CARD_UTILS = "com.baidu.tbadk.core.util.ThreadCardUtils"
+    private const val THREAD_DATA = StableTiebaHookPoints.THREAD_DATA_CLASS
 
-    fun scanRenderGate(context: Context, cl: ClassLoader, logger: ScanLogger?): String? {
-        val sourcePaths = appSourcePaths(context)
-        if (sourcePaths.isEmpty()) {
-            log(logger, "pbPreloadRenderGate: apk source path unavailable")
-            return null
+    fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): PbPreloadSymbols =
+        scanSubStep("PbForcePreloadHook", logger, PbPreloadSymbols()) {
+            val paths = listOfNotNull(context.applicationInfo?.sourceDir) +
+                context.applicationInfo?.splitSourceDirs.orEmpty()
+            val cached = HookSymbolScanSession.get()?.dexKitBridge(paths, logger)
+            val opened = cached ?: DexKitBridgeProvider.openFirstAvailable(paths, logger)
+                ?: return@scanSubStep PbPreloadSymbols()
+            if (cached != null) scan(opened.bridge, cl, logger)
+            else opened.use { scan(it.bridge, cl, logger) }
         }
-        val gateName = DexKitSemanticScanner.scanPbPreloadRenderGate(
-            sourcePaths = sourcePaths,
-            absActivityClassName = StableTiebaHookPoints.PB_ABS_ACTIVITY_CLASS,
-            logger = logger,
-        ) ?: run {
-            log(logger, "pbPreloadRenderGate: no semantic match")
-            return null
+
+    private fun scan(bridge: DexKitBridge, cl: ClassLoader, logger: ScanLogger?): PbPreloadSymbols {
+        val publisher = unique("ResultPublisher", bridge.findMethod(
+            FindMethod.create().searchPackages("com.baidu")
+                .matcher(MethodMatcher.create().addEqString("PbRequestModelManager notifyNewResult mState:")),
+        ).filter {
+            !Modifier.isStatic(it.modifiers) && it.paramTypeNames.isEmpty() && it.returnTypeName == "void"
+        }, logger) ?: return PbPreloadSymbols()
+        val request = unique("InitialRequest", bridge.getClassData(publisher.declaredClassName)?.methods.orEmpty().filter {
+            !Modifier.isStatic(it.modifiers) && it.returnTypeName == "boolean" &&
+                it.paramTypeNames.size == 2 && it.paramTypeNames.first() == "android.content.Intent" &&
+                "cdnCallback" in it.usingStrings && it.invokes.any { call ->
+                    call.declaredClassName == FLOOR_MODEL && call.methodName == "<init>"
+                } && it.invokes.any { call -> call.descriptor == publisher.descriptor }
+        }, logger) ?: return PbPreloadSymbols()
+        val dispatcherCompanion = Class.forName("com.baidu.tieba.pb.preload.PbPreloadDispatcher", false, cl)
+            .getField("Companion").type.name
+        val provider = unique("Provider", request.invokes.filter {
+            !Modifier.isStatic(it.modifiers) && it.returnTypeName == DATA_RES &&
+                it.paramTypeNames == listOf("java.lang.String") && "tid" in it.usingStrings &&
+                it.invokes.any { call -> call.declaredClassName == dispatcherCompanion &&
+                    call.paramTypeNames.isEmpty() && call.returnTypeName == "java.util.Map" }
+        }, logger) ?: return PbPreloadSymbols()
+        val eligibility = unique("CardEligibility", bridge.getClassData(CARD_UTILS)?.methods.orEmpty()
+            .filter { it.methodName == "isPreloadType" && it.paramTypeNames == listOf(THREAD_DATA) }
+            .flatMap { it.callers }.filter {
+                Modifier.isStatic(it.modifiers) && it.returnTypeName == "boolean" && it.paramTypeNames.isEmpty() &&
+                    it.invokes.any { call ->
+                        call.declaredClassName == StableTiebaHookPoints.TB_SINGLETON_CLASS &&
+                            call.methodName == "isPbPreloadSwitchOn"
+                    }
+            }, logger) ?: return PbPreloadSymbols()
+        val card = unique("CardGetter", eligibility.invokes.filter {
+            it.declaredClassName == eligibility.declaredClassName && Modifier.isStatic(it.modifiers) &&
+                it.paramTypeNames.isEmpty() && it.returnTypeName == THREAD_DATA
+        }, logger) ?: return PbPreloadSymbols()
+        val pageState = PbPreloadPageStateResolver.scan(bridge, logger) ?: return PbPreloadSymbols()
+        val symbols = PbPreloadSymbols(spec(provider), spec(card), pageState.first, pageState.second)
+        check(restore(cl, symbols.providerMethodSpec, symbols.cardGetterMethodSpec, symbols.pageStateMutableField, symbols.pageStateFlowField) != null) {
+            "preload provider/card protocol failed reflection validation"
         }
-        // The gate is invoked on the abstract base but overridden on the concrete
-        // activity, which is where the hook installs. Require that override to
-        // exist with the exact boolean()/no-arg shape, else fail closed.
-        val activityClass = ScanReflection.safeFindClass(StableTiebaHookPoints.PB_ACTIVITY_CLASS, cl)
-        if (activityClass == null) {
-            log(logger, "pbPreloadRenderGate: class not found: ${StableTiebaHookPoints.PB_ACTIVITY_CLASS}")
-            return null
-        }
-        val methods = scanDeclaredMethods("PbForcePreloadHook.RenderGate", activityClass, logger)
-            ?: return null
-        val shapeOk = methods.any { method ->
-            method.name == gateName &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.returnType == Boolean::class.javaPrimitiveType &&
-                method.parameterTypes.isEmpty()
-        }
-        if (!shapeOk) {
-            log(
-                logger,
-                "pbPreloadRenderGate: method shape mismatch: " +
-                    "${StableTiebaHookPoints.PB_ACTIVITY_CLASS}.$gateName():boolean",
+        return symbols
+    }
+
+    private fun unique(tag: String, candidates: List<MethodData>, logger: ScanLogger?): MethodData? =
+        selectUniqueScanCandidate("PbForcePreloadHook.$tag", candidates.distinctBy { it.descriptor }, logger) { it.descriptor }
+
+    private fun spec(method: MethodData): String = "${method.declaredClassName}#${method.methodName}"
+
+    fun restore(cl: ClassLoader, providerSpec: String?, cardGetterSpec: String?, mutableField: String?, flowField: String?): PbPreloadTargets? {
+        if (providerSpec.isNullOrBlank() || cardGetterSpec.isNullOrBlank() || mutableField.isNullOrBlank() || flowField.isNullOrBlank()) return null
+        return scanSubStep("PbForcePreloadHook.Restore", null, null as PbPreloadTargets?) {
+            val singleton = Class.forName(StableTiebaHookPoints.TB_SINGLETON_CLASS, false, cl)
+            val switch = singleton.getDeclaredMethod("isPbPreloadSwitchOn")
+            validate(switch, Boolean::class.javaPrimitiveType!!, false)
+            PbPreloadTargets(
+                switch,
+                restoreSpec(cl, providerSpec, DATA_RES, false, String::class.java),
+                restoreSpec(cl, cardGetterSpec, THREAD_DATA, true),
+                PbPreloadProtocolResolver.resolve(cl),
+                PbPreloadPageStateResolver.restore(cl, mutableField, flowField),
             )
-            return null
-        }
-        if (!isPreloadSwitchValid(cl)) {
-            log(logger, "pbPreloadRenderGate: isPbPreloadSwitchOn signature invalid or missing")
-            return null
-        }
-        log(
-            logger,
-            "pbPreloadRenderGate matched: ${StableTiebaHookPoints.PB_ACTIVITY_CLASS}.$gateName",
-        )
-        return gateName
-    }
-
-    fun isCacheValid(cl: ClassLoader, gateName: String?): Boolean {
-        if (gateName == null) return true
-        if (!isPreloadSwitchValid(cl)) return false
-        val clazz = ScanReflection.safeFindClass(StableTiebaHookPoints.PB_ACTIVITY_CLASS, cl) ?: return false
-        return scanSubStep("PbForcePreloadHook.RenderGate.Restore", null, false) {
-            val method = clazz.getDeclaredMethod(gateName)
-            !Modifier.isStatic(method.modifiers) && method.returnType == Boolean::class.javaPrimitiveType
         }
     }
 
-    private fun isPreloadSwitchValid(cl: ClassLoader): Boolean {
-        val clazz = ScanReflection.safeFindClass(StableTiebaHookPoints.TB_SINGLETON_CLASS, cl) ?: return false
-        return scanSubStep("PbForcePreloadHook.Switch", null, false) {
-            val method = clazz.getDeclaredMethod("isPbPreloadSwitchOn")
-            !Modifier.isStatic(method.modifiers) && method.returnType == Boolean::class.javaPrimitiveType
-        }
+    fun isCacheValid(cl: ClassLoader, providerSpec: String?, cardGetterSpec: String?, mutableField: String?, flowField: String?): Boolean =
+        (providerSpec == null && cardGetterSpec == null && mutableField == null && flowField == null) ||
+            restore(cl, providerSpec, cardGetterSpec, mutableField, flowField) != null
+
+    private fun restoreSpec(cl: ClassLoader, spec: String, result: String, static: Boolean, vararg params: Class<*>): Method {
+        val parts = spec.split('#')
+        check(parts.size == 2 && parts.all { it.isNotBlank() }) { "invalid preload method spec" }
+        val method = Class.forName(parts[0], false, cl).getDeclaredMethod(parts[1], *params)
+        validate(method, Class.forName(result, false, cl), static)
+        return method
     }
 
-    private fun appSourcePaths(context: Context): List<String> {
-        return buildList {
-            context.applicationInfo?.sourceDir?.takeIf { it.isNotBlank() }?.let(::add)
-            context.applicationInfo?.splitSourceDirs?.forEach { path ->
-                if (!path.isNullOrBlank()) add(path)
-            }
-        }.distinct()
-    }
-
-    private fun log(logger: ScanLogger?, line: String) {
-        HookSymbolScanDiagnostics.log(logger, line)
+    private fun validate(method: Method, result: Class<*>, static: Boolean) {
+        check(Modifier.isPublic(method.modifiers) && Modifier.isStatic(method.modifiers) == static &&
+            !Modifier.isAbstract(method.modifiers) && method.returnType == result) { "invalid preload signature: $method" }
+        method.isAccessible = true
     }
 }

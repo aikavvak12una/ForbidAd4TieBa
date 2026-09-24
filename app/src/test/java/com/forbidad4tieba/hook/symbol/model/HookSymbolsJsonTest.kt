@@ -77,6 +77,15 @@ class HookSymbolsJsonTest {
         index: Int,
     ): Any {
         return when (type) {
+            PbAutoReplyFlowSymbols::class.java -> PbAutoReplyFlowSymbols(
+                sendMethodSpec = "host.Editor#submit",
+                writeModelField = "writeModel",
+                writeDataField = "request",
+                uploadMethod = "upload",
+                callbackMethodSpec = "host.Callback#callback",
+                transientMethod = "showNewPost",
+                transientParamsClass = "host.TransientPostParams",
+            )
             DefaultPopupSymbols::class.java -> DefaultPopupSymbols(
                 firstLikeResponseClass = "host.LikeResponse",
                 firstLikeToastMethod = "parseToast",

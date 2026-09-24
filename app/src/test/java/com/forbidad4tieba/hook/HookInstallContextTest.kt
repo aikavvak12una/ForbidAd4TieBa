@@ -2,13 +2,72 @@ package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.core.Constants
+import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
+import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookSymbolsBuilder
 import com.forbidad4tieba.hook.symbol.model.buildHookSymbols
+import com.forbidad4tieba.hook.symbol.status.HookFeatureStatusDeriver
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HookInstallContextTest {
+    @Test
+    fun feedListHookIsSharedByStrategyAndFeedSettingsOnlyInMainProcess() {
+        val symbols = buildHookSymbols {
+            feedTemplateKeyMethod = "templateKey"
+            feedTemplateLoadMoreMethod = "loadMore"
+        }
+        val enabledSettings = listOf(
+            SettingsSnapshot(isStrategyAdBlockEnabled = true),
+            SettingsSnapshot(isFeedAdBlockEnabled = true),
+            SettingsSnapshot(isStrategyAdBlockEnabled = true, isFeedAdBlockEnabled = true),
+        )
+        enabledSettings.forEach { settings ->
+            assertEquals(
+                1,
+                HookInstallPlanner.symbolPlan(Constants.TARGET_PACKAGE, symbols, settings)
+                    .entries.count { it.id == "FeedAdHook" },
+            )
+            assertFalse(
+                HookInstallPlanner.symbolPlan(Constants.TARGET_PACKAGE + ":remote", symbols, settings)
+                    .entries.any { it.id == "FeedAdHook" },
+            )
+        }
+        assertFalse(
+            HookInstallPlanner.symbolPlan(Constants.TARGET_PACKAGE, symbols, SettingsSnapshot())
+                .entries.any { it.id == "FeedAdHook" },
+        )
+    }
+
+    @Test
+    fun missingFeedSymbolsLeaveOtherStrategyPathsAvailableAndReportPartialStatus() {
+        val settings = SettingsSnapshot(isStrategyAdBlockEnabled = true)
+        val symbols = buildHookSymbols {
+            splashAdHelperClass = "com.tieba.SplashAdHelper"
+            splashAdHelperMethod = "showSplash"
+        }
+        val entries = HookInstallPlanner.symbolPlan(Constants.TARGET_PACKAGE, symbols, settings).entries
+        val status = HookFeatureStatusDeriver.derive(symbols).getValue(HookFeatureKey.BLOCK_AD_STRATEGY)
+
+        assertFalse(entries.any { it.id == "FeedAdHook" })
+        assertTrue(entries.any { it.id == "StrategyAdHook.symbols" })
+        assertEquals(HookFeatureState.PARTIAL, status.state)
+        assertTrue(status.missingOptional.contains("feedTemplateKeyMethod"))
+        assertTrue(status.missingOptional.contains("feedTemplateLoadMoreMethod"))
+
+        val initialListOnly = buildHookSymbols { feedTemplateKeyMethod = "templateKey" }
+        assertTrue(
+            HookInstallPlanner.symbolPlan(Constants.TARGET_PACKAGE, initialListOnly, settings)
+                .entries.any { it.id == "FeedAdHook" },
+        )
+        assertTrue(
+            HookFeatureStatusDeriver.derive(initialListOnly).getValue(HookFeatureKey.BLOCK_AD_STRATEGY)
+                .missingOptional.contains("feedTemplateLoadMoreMethod"),
+        )
+    }
+
     @Test
     fun tiebaHostLoggingInstallsOnlyForEnabledMainProcess() {
         val symbols = buildHookSymbols {}

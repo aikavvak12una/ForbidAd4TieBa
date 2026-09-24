@@ -26,8 +26,17 @@ internal object PerformanceAbStatus {
         return PerformanceAbTargets.featureRequirements.mapValues { (key, required) ->
             val missing = required.filter { it.methodName !in found }
                 .map { "PerformanceAB.${it.methodName}" }.toMutableList()
-            if (key == HookFeatureKey.FORCE_PB_PRELOAD && symbols.pbPreloadRenderGateMethod.isNullOrBlank()) {
-                missing += "pbPreloadRenderGateMethod"
+            if (key == HookFeatureKey.FORCE_PB_PRELOAD && symbols.pbPreloadProviderMethodSpec.isNullOrBlank()) {
+                missing += "pbPreloadProviderMethodSpec"
+            }
+            if (key == HookFeatureKey.FORCE_PB_PRELOAD && symbols.pbPreloadCardGetterMethodSpec.isNullOrBlank()) {
+                missing += "pbPreloadCardGetterMethodSpec"
+            }
+            if (key == HookFeatureKey.FORCE_PB_PRELOAD && symbols.pbPreloadPageStateMutableField.isNullOrBlank()) {
+                missing += "pbPreloadPageStateMutableField"
+            }
+            if (key == HookFeatureKey.FORCE_PB_PRELOAD && symbols.pbPreloadPageStateFlowField.isNullOrBlank()) {
+                missing += "pbPreloadPageStateFlowField"
             }
             HookFeatureStatus(
                 state = if (missing.isEmpty()) HookFeatureState.FULL else HookFeatureState.DISABLED,

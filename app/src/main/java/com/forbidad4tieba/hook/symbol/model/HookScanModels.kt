@@ -493,6 +493,7 @@ internal data class PbLikeAutoReplyScanSymbols(
     val inputContainerClass: String? = null,
     val inputContainerGetInputViewMethod: String? = null,
     val inputContainerGetSendViewMethod: String? = null,
+    val flow: PbAutoReplyFlowSymbols = PbAutoReplyFlowSymbols(),
 )
 
 internal data class ShareIconOwnerCandidate(

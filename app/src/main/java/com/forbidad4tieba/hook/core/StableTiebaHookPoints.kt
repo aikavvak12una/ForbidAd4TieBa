@@ -82,7 +82,7 @@ object StableTiebaHookPoints {
     // tbadk core widgets and utilities that are referenced by public package/class names.
     const val AGREE_VIEW_CLASS = "com.baidu.tbadk.core.view.AgreeView"
     const val AGREE_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.AgreeData"
-    const val PB_NEW_INPUT_CONTAINER_CLASS = "com.baidu.tbadk.editortools.pb.PbNewInputContainer"
+    const val PB_NEW_INPUT_CONTAINER_CLASS = "com.baidu.tbadk.editortools.pb.PbNewInputContainerV2"
     const val MESSAGE_RED_DOT_VIEW_CLASS = "com.baidu.tbadk.core.view.MessageRedDotView"
     const val SUB_PB_REPLY_ADAPTER_CLASS =
         "com.baidu.tieba.pb.pb.sub.adapter.SubPbReplyAdapter"
