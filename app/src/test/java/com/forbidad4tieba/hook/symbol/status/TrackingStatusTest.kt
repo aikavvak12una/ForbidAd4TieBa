@@ -11,14 +11,14 @@ import org.junit.Test
 
 class TrackingStatusTest {
     @Test
-    fun lokiAndRetainedManualApisCannotStandInForAutoTraceGate() {
+    fun currentHostTrackingEntriesEnableMonitoringBlockWithoutRemovedSdk() {
         val symbols = buildHookSymbols {
             trackingMethods = listOf(TrackingTarget.LOKI_SERVICE.name, TrackingTarget.PAGE_TRACE.name, "onEvent", "start")
         }
         val status = HookFeatureStatusDeriver.derive(symbols)
             .getValue(HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS)
-        assertEquals(HookFeatureState.DISABLED, status.state)
-        assertEquals(listOf("Tracking.isCloseTrace"), status.missingCritical)
+        assertEquals(HookFeatureState.FULL, status.state)
+        assertTrue(status.missingCritical.isEmpty())
     }
 
     @Test
@@ -33,7 +33,7 @@ class TrackingStatusTest {
     @Test
     fun legacyAutoTraceAndLokiCacheCannotStandInForPageTraceGate() {
         val symbols = buildHookSymbols {
-            trackingMethods = listOf(TrackingTarget.CLOSE_TRACE.name, TrackingTarget.LOKI_SERVICE.name)
+            trackingMethods = listOf("CLOSE_TRACE", TrackingTarget.LOKI_SERVICE.name)
         }
         val restored = requireNotNull(HookSymbols.fromJson(symbols.toJson()))
         val status = HookFeatureStatusDeriver.derive(restored)
@@ -46,6 +46,14 @@ class TrackingStatusTest {
     fun absentTrackingScanFailsClosed() {
         val status = TrackingStatus.feature(buildHookSymbols {})
         assertEquals(HookFeatureState.DISABLED, status.state)
-        assertEquals(3, status.missingCritical.size)
+        assertEquals(2, status.missingCritical.size)
+    }
+
+    @Test
+    fun pageTraceCannotStandInForLokiService() {
+        val symbols = buildHookSymbols { trackingMethods = listOf(TrackingTarget.PAGE_TRACE.name) }
+        val status = TrackingStatus.feature(symbols)
+        assertEquals(HookFeatureState.DISABLED, status.state)
+        assertEquals(listOf("Tracking.onStartCommand"), status.missingCritical)
     }
 }

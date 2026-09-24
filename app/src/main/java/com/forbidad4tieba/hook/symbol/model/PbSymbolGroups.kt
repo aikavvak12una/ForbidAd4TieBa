@@ -79,7 +79,10 @@ data class AutoLoadSymbolsGroup(
     val autoRefreshCacheRestoreMethod: String? = null,
     val autoLoadMoreConfigClass: String? = null,
     val autoLoadMoreConfigMethod: String? = null,
-    val pbPreloadRenderGateMethod: String? = null,
+    val pbPreloadProviderMethodSpec: String? = null,
+    val pbPreloadCardGetterMethodSpec: String? = null,
+    val pbPreloadPageStateMutableField: String? = null,
+    val pbPreloadPageStateFlowField: String? = null,
 )
 
 data class PbCommentScrollSymbolsGroup(
@@ -113,6 +116,7 @@ data class PbLikeAutoReplySymbolsGroup(
     val agreeView: PbLikeAutoReplyAgreeViewSymbolsGroup = PbLikeAutoReplyAgreeViewSymbolsGroup(),
     val agreeData: PbLikeAutoReplyAgreeDataSymbolsGroup = PbLikeAutoReplyAgreeDataSymbolsGroup(),
     val inputContainer: PbLikeAutoReplyInputContainerSymbolsGroup = PbLikeAutoReplyInputContainerSymbolsGroup(),
+    val flow: PbAutoReplyFlowSymbols = PbAutoReplyFlowSymbols(),
 )
 
 data class PbLikeAutoReplyAgreeViewSymbolsGroup(

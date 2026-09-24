@@ -332,8 +332,14 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.comment.autoLoad.autoRefreshNetRequestMethodSpec
     val autoRefreshCacheRestoreMethod: String?
         get() = hookPoints.primary.pb.comment.autoLoad.autoRefreshCacheRestoreMethod
-    val pbPreloadRenderGateMethod: String?
-        get() = hookPoints.primary.pb.comment.autoLoad.pbPreloadRenderGateMethod
+    val pbPreloadProviderMethodSpec: String?
+        get() = hookPoints.primary.pb.comment.autoLoad.pbPreloadProviderMethodSpec
+    val pbPreloadCardGetterMethodSpec: String?
+        get() = hookPoints.primary.pb.comment.autoLoad.pbPreloadCardGetterMethodSpec
+    val pbPreloadPageStateMutableField: String?
+        get() = hookPoints.primary.pb.comment.autoLoad.pbPreloadPageStateMutableField
+    val pbPreloadPageStateFlowField: String?
+        get() = hookPoints.primary.pb.comment.autoLoad.pbPreloadPageStateFlowField
     val autoLoadMoreConfigClass: String?
         get() = hookPoints.primary.pb.comment.autoLoad.autoLoadMoreConfigClass
     val autoLoadMoreConfigMethod: String?
@@ -390,6 +396,8 @@ data class HookSymbols(
         get() = hookPoints.primary.pb.likeAutoReply.inputContainer.pbLikeAutoReplyInputContainerGetInputViewMethod
     val pbLikeAutoReplyInputContainerGetSendViewMethod: String?
         get() = hookPoints.primary.pb.likeAutoReply.inputContainer.pbLikeAutoReplyInputContainerGetSendViewMethod
+    val pbAutoReplyFlow: PbAutoReplyFlowSymbols
+        get() = hookPoints.primary.pb.likeAutoReply.flow
     val collectionPresenterField: String?
         get() = hookPoints.collectionHistory.collection.presenter.collectionPresenterField
     val collectionPresenterListSetterMethod: String?
@@ -1016,7 +1024,10 @@ data class HookSymbols(
             put("autoRefreshNetRequestMethod", autoRefreshNetRequestMethod)
             put("autoRefreshNetRequestMethodSpec", autoRefreshNetRequestMethodSpec)
             put("autoRefreshCacheRestoreMethod", autoRefreshCacheRestoreMethod)
-            put("pbPreloadRenderGateMethod", pbPreloadRenderGateMethod)
+            put("pbPreloadProviderMethodSpec", pbPreloadProviderMethodSpec)
+            put("pbPreloadCardGetterMethodSpec", pbPreloadCardGetterMethodSpec)
+            put("pbPreloadPageStateMutableField", pbPreloadPageStateMutableField)
+            put("pbPreloadPageStateFlowField", pbPreloadPageStateFlowField)
             put("autoLoadMoreConfigClass", autoLoadMoreConfigClass)
             put("autoLoadMoreConfigMethod", autoLoadMoreConfigMethod)
             put("pbCommentScrollListenerClass", pbCommentScrollListenerClass)
@@ -1045,6 +1056,7 @@ data class HookSymbols(
             put("pbLikeAutoReplyInputContainerClass", pbLikeAutoReplyInputContainerClass)
             put("pbLikeAutoReplyInputContainerGetInputViewMethod", pbLikeAutoReplyInputContainerGetInputViewMethod)
             put("pbLikeAutoReplyInputContainerGetSendViewMethod", pbLikeAutoReplyInputContainerGetSendViewMethod)
+            put("pbAutoReplyFlow", pbAutoReplyFlow.toJson())
             put("collectionPresenterField", collectionPresenterField)
             put("collectionPresenterListSetterMethod", collectionPresenterListSetterMethod)
             put("collectionPresenterListSetterMethodSpec", collectionPresenterListSetterMethodSpec)
@@ -1358,8 +1370,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 48
-        const val DEXKIT_RULE_VERSION = 38
+        const val CACHE_SCHEMA_VERSION = 53
+        const val DEXKIT_RULE_VERSION = 43
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1576,7 +1588,10 @@ data class HookSymbols(
                     autoRefreshNetRequestMethodSpec =
                         obj.optStringOrNull("autoRefreshNetRequestMethodSpec")
                     autoRefreshCacheRestoreMethod = obj.optStringOrNull("autoRefreshCacheRestoreMethod")
-                    pbPreloadRenderGateMethod = obj.optStringOrNull("pbPreloadRenderGateMethod")
+                    pbPreloadProviderMethodSpec = obj.optStringOrNull("pbPreloadProviderMethodSpec")
+                    pbPreloadCardGetterMethodSpec = obj.optStringOrNull("pbPreloadCardGetterMethodSpec")
+                    pbPreloadPageStateMutableField = obj.optStringOrNull("pbPreloadPageStateMutableField")
+                    pbPreloadPageStateFlowField = obj.optStringOrNull("pbPreloadPageStateFlowField")
                     performanceAbMethods = obj.optStringArray("performanceAbMethods").takeIf { it.isNotEmpty() }
                     trackingMethods = obj.optStringArray("trackingMethods").takeIf { it.isNotEmpty() }
                     defaultPopups = DefaultPopupSymbols.fromJson(obj.optJSONObject("defaultPopups"))
@@ -1611,6 +1626,7 @@ data class HookSymbols(
                         obj.optStringOrNull("pbLikeAutoReplyInputContainerGetInputViewMethod")
                     pbLikeAutoReplyInputContainerGetSendViewMethod =
                         obj.optStringOrNull("pbLikeAutoReplyInputContainerGetSendViewMethod")
+                    pbAutoReplyFlow = PbAutoReplyFlowSymbols.fromJson(obj.optJSONObject("pbAutoReplyFlow"))
                     collectionPresenterField = obj.optStringOrNull("collectionPresenterField")
                     collectionPresenterListSetterMethod = obj.optStringOrNull("collectionPresenterListSetterMethod")
                     collectionPresenterListSetterMethodSpec =

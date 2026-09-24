@@ -814,10 +814,23 @@ internal object HookSymbolStatusFormatter {
             ),
         )
         add(
-            "PbForcePreloadHook.RenderGate",
-            "${StableTiebaHookPoints.PB_ACTIVITY_CLASS}.${symbols.pbPreloadRenderGateMethod}",
+            "PbForcePreloadHook.Provider",
+            symbols.pbPreloadProviderMethodSpec ?: "",
             listOf(
-                "pbPreloadRenderGateMethod" to has(symbols.pbPreloadRenderGateMethod),
+                "pbPreloadProviderMethodSpec" to has(symbols.pbPreloadProviderMethodSpec),
+            ),
+        )
+        add(
+            "PbForcePreloadHook.CardGetter",
+            symbols.pbPreloadCardGetterMethodSpec ?: "",
+            listOf("pbPreloadCardGetterMethodSpec" to has(symbols.pbPreloadCardGetterMethodSpec)),
+        )
+        add(
+            "PbForcePreloadHook.PageState",
+            "PageBrowserViewModel.${symbols.pbPreloadPageStateMutableField}/${symbols.pbPreloadPageStateFlowField}",
+            listOf(
+                "pbPreloadPageStateMutableField" to has(symbols.pbPreloadPageStateMutableField),
+                "pbPreloadPageStateFlowField" to has(symbols.pbPreloadPageStateFlowField),
             ),
         )
         add(
@@ -917,7 +930,13 @@ internal object HookSymbolStatusFormatter {
                     has(symbols.pbLikeAutoReplyInputContainerGetInputViewMethod),
                 "pbLikeAutoReplyInputContainerGetSendViewMethod" to
                     has(symbols.pbLikeAutoReplyInputContainerGetSendViewMethod),
+                "pbAutoReplyFlow" to symbols.pbAutoReplyFlow.missing().isEmpty(),
             ),
+        )
+        add(
+            "PbLikeAutoReplyHook.Flow",
+            symbols.pbAutoReplyFlow.fields().joinToString { "${it.first}=${it.second}" },
+            symbols.pbAutoReplyFlow.fields().map { (name, value) -> "pbAutoReplyFlow.$name" to has(value) },
         )
         add(
             "InputMemeBarBlockHook",

@@ -47,9 +47,9 @@ internal object HookSymbolResolver {
     private const val KEY_CACHE_MODULE_VERSION = HookSymbolCacheKeys.MODULE_VERSION
     private const val KEY_SYMBOL_VERIFIED_FP = HookSymbolCacheKeys.VERIFIED_FP
     // Update these target version bounds when adapting a new Tieba release.
-    private const val TARGET_TIEBA_VERSION_NAME = "22.11.1.0"
-    private const val MIN_TIEBA_VERSION_CODE = 369819904L
-    private const val MAX_TIEBA_VERSION_CODE = 369819904L
+    private const val TARGET_TIEBA_VERSION_NAME = "22.12.1.0"
+    private const val MIN_TIEBA_VERSION_CODE = 369885440L
+    private const val MAX_TIEBA_VERSION_CODE = 369885440L
     private const val VERSION_TYPE_META_NAME = "versionType"
     private const val OFFICIAL_VERSION_TYPE = "3"
 
@@ -264,6 +264,12 @@ internal object HookSymbolResolver {
 
     fun resolveTrackingSymbols(cl: ClassLoader, symbols: HookSymbols): Map<TrackingTarget, Method> =
         TrackingSymbolScanner.restore(cl, symbols.trackingMethods)
+
+    fun resolvePbPreloadTargets(cl: ClassLoader, symbols: HookSymbols): PbPreloadTargets? =
+        PbForcePreloadSymbolScanner.restore(
+            cl, symbols.pbPreloadProviderMethodSpec, symbols.pbPreloadCardGetterMethodSpec,
+            symbols.pbPreloadPageStateMutableField, symbols.pbPreloadPageStateFlowField,
+        )
 
     fun resolveFirstLikePopupSymbols(cl: ClassLoader, symbols: HookSymbols): FirstLikePopupTargets? =
         DefaultPopupSymbolScanner.restoreFirstLike(cl, symbols.defaultPopups)
@@ -4289,6 +4295,8 @@ internal object HookSymbolResolver {
                 isInThreadField = isInThreadField,
                 getInputViewMethod = getInputViewMethod,
                 getSendViewMethod = getSendViewMethod,
+                flow = PbAutoReplyFlowSymbolScanner.restore(cl, resolvedSymbols.pbAutoReplyFlow)
+                    ?: error("native ordinary reply flow unavailable"),
             )
         } catch (t: Throwable) {
             XposedCompat.log("[PbLikeAutoReplyHook] symbol resolve FAILED: ${t.message}")
@@ -5991,7 +5999,6 @@ internal object HookSymbolResolver {
         var autoRefreshNetRequestMethodSpec: String? = null
         var autoLoadMoreConfigClass: String? = null
         var autoLoadMoreConfigMethod: String? = null
-        var pbPreloadRenderGateMethod: String? = null
         var pbCommentScrollListenerClass: String? = null
         var pbCommentScrollMethod: String? = null
         var pbCommentScrollFragmentField: String? = null
@@ -6580,13 +6587,13 @@ internal object HookSymbolResolver {
             AutoRefreshSymbolScanner.scanHomeCacheRestore(context, cl, logger)?.ownerMethodName
         }
 
-        pbPreloadRenderGateMethod = runScanStep(
-            "PbForcePreloadHook.RenderGate",
+        val pbPreload = runScanStep(
+            "PbForcePreloadHook",
             logger,
             scanErrors,
-            null as String?,
+            PbPreloadSymbols(),
         ) {
-            PbForcePreloadSymbolScanner.scanRenderGate(context, cl, logger)
+            PbForcePreloadSymbolScanner.scan(context, cl, logger)
         }
 
         val performanceAbMethods = runScanStep(
@@ -7217,7 +7224,10 @@ internal object HookSymbolResolver {
             this.autoRefreshCacheRestoreMethod = autoRefreshCacheRestoreMethod
             this.autoLoadMoreConfigClass = autoLoadMoreConfigClass
             this.autoLoadMoreConfigMethod = autoLoadMoreConfigMethod
-            this.pbPreloadRenderGateMethod = pbPreloadRenderGateMethod
+            this.pbPreloadProviderMethodSpec = pbPreload.providerMethodSpec
+            this.pbPreloadCardGetterMethodSpec = pbPreload.cardGetterMethodSpec
+            this.pbPreloadPageStateMutableField = pbPreload.pageStateMutableField
+            this.pbPreloadPageStateFlowField = pbPreload.pageStateFlowField
             this.performanceAbMethods = performanceAbMethods
             this.trackingMethods = trackingMethods
             this.defaultPopups = defaultPopups
@@ -7247,6 +7257,7 @@ internal object HookSymbolResolver {
             this.pbLikeAutoReplyInputContainerClass = pbLikeAutoReplyInputContainerClass
             this.pbLikeAutoReplyInputContainerGetInputViewMethod = pbLikeAutoReplyInputContainerGetInputViewMethod
             this.pbLikeAutoReplyInputContainerGetSendViewMethod = pbLikeAutoReplyInputContainerGetSendViewMethod
+            this.pbAutoReplyFlow = pbLikeAutoReplyScan.flow
             this.collectionPresenterField = collectionPresenterField
             this.collectionPresenterListSetterMethod = collectionPresenterListSetterMethod
             this.collectionPresenterListSetterMethodSpec = collectionPresenterListSetterMethodSpec

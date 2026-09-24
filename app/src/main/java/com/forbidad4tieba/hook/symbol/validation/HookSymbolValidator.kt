@@ -63,7 +63,10 @@ internal object HookSymbolValidator {
     if (!PerformanceAbSymbolScanner.isCacheValid(cl, symbols.performanceAbMethods)) return false
     if (!TrackingSymbolScanner.isCacheValid(cl, symbols.trackingMethods)) return false
     if (!DefaultPopupSymbolScanner.isCacheValid(cl, symbols.defaultPopups)) return false
-    if (!PbForcePreloadSymbolScanner.isCacheValid(cl, symbols.pbPreloadRenderGateMethod)) return false
+    if (!PbForcePreloadSymbolScanner.isCacheValid(
+            cl, symbols.pbPreloadProviderMethodSpec, symbols.pbPreloadCardGetterMethodSpec,
+            symbols.pbPreloadPageStateMutableField, symbols.pbPreloadPageStateFlowField,
+        )) return false
     if (!isSettingsValid(symbols, cl)) return false
     val hasHomeSymbols =
         symbols.homeTabClass != null ||
@@ -2095,6 +2098,7 @@ private fun isPbGestureScaleValid(symbols: HookSymbols, cl: ClassLoader): Boolea
 }
 
 private fun isPbLikeAutoReplyValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    if (com.forbidad4tieba.hook.symbol.scan.PbAutoReplyFlowSymbolScanner.restore(cl, symbols.pbAutoReplyFlow) == null) return false
     val agreeViewClassName = symbols.pbLikeAutoReplyAgreeViewClass ?: return false
     val agreeClickMethodName = symbols.pbLikeAutoReplyAgreeClickMethod ?: return false
     val getDataMethodName = symbols.pbLikeAutoReplyAgreeViewGetDataMethod ?: return false

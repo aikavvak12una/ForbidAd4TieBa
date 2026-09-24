@@ -64,9 +64,9 @@ internal class HookInstallContext(
         return enabled && available(featureKey)
     }
 
-    fun canInstallFeedAdBlock(settings: SettingsSnapshot): Boolean {
+    fun canInstallFeedListAdBlock(settings: SettingsSnapshot): Boolean {
         return canInstallAdBlockSubFeature(
-            settings.isFeedAdBlockEnabled,
+            settings.isFeedAdBlockEnabled || settings.isStrategyAdBlockEnabled,
             HookFeatureKey.BLOCK_AD_FEED,
         )
     }

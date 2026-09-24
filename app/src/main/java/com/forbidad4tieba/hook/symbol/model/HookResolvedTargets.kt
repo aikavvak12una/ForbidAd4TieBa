@@ -374,6 +374,7 @@ internal data class PbLikeAutoReplySymbols(
     val isInThreadField: Field,
     val getInputViewMethod: Method,
     val getSendViewMethod: Method,
+    val flow: PbAutoReplyFlowTargets,
 )
 
 internal data class GlobalDirectProfileSymbols(

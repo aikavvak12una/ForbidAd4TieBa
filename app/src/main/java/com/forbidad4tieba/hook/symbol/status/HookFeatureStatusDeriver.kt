@@ -675,6 +675,7 @@ internal object HookFeatureStatusDeriver {
         }
 
         val pbLikeAutoReplyCritical = ArrayList<String>(8)
+        pbLikeAutoReplyCritical.addAll(symbols.pbAutoReplyFlow.missing())
         if (symbols.pbLikeAutoReplyAgreeViewClass.isNullOrBlank()) {
             pbLikeAutoReplyCritical.add("pbLikeAutoReplyAgreeViewClass")
         }
@@ -1203,7 +1204,9 @@ internal object HookFeatureStatusDeriver {
             )
         }
 
-        val strategyOptional = ArrayList<String>(8)
+        val strategyOptional = ArrayList<String>(9)
+        strategyOptional.addAll(feedAdCritical)
+        strategyOptional.addAll(feedAdOptional)
         if (symbols.splashAdHelperClass.isNullOrBlank()) strategyOptional.add("splashAdHelperClass")
         if (symbols.splashAdHelperMethod.isNullOrBlank()) strategyOptional.add("splashAdHelperMethod")
         if (symbols.closeAdDataClass.isNullOrBlank()) strategyOptional.add("closeAdDataClass")

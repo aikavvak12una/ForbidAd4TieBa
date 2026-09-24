@@ -29,6 +29,7 @@ object PbLikeAutoReplyHook {
 
     @Volatile private var hooked = false
     @Volatile private var runtimeDisabled = false
+    private var replyFlow: PbAutoReplyFlow? = null
 
     internal fun hook(symbols: PbLikeAutoReplySymbols, replyText: String) {
         val mod = XposedCompat.module ?: return
@@ -40,6 +41,7 @@ object PbLikeAutoReplyHook {
         if (!tryMarkHooked()) return
 
         try {
+            replyFlow = PbAutoReplyFlow(symbols.flow).also { it.install() }
             mod.hook(symbols.agreeClickMethod).intercept { chain ->
                 val agreeView = chain.thisObject
                 val clicked = chain.args.getOrNull(0) as? View
@@ -101,6 +103,8 @@ object PbLikeAutoReplyHook {
             }
             XposedCompat.log("$TAG hook INSTALLED: ${symbols.agreeViewClass.name}.${symbols.agreeClickMethod.name}(View)")
         } catch (t: Throwable) {
+            replyFlow?.close()
+            replyFlow = null
             resetHooked()
             XposedCompat.log("$TAG install FAILED: ${t.message}")
             XposedCompat.log(t)
@@ -138,7 +142,8 @@ object PbLikeAutoReplyHook {
         getInputViewMethod: Method,
         getSendViewMethod: Method,
     ) {
-        if (runtimeDisabled || replyText.isBlank()) return
+        if (runtimeDisabled || replyText.isBlank() || !clicked.isAttachedToWindow) return
+        val flow = replyFlow ?: return
         val activity = ReflectionUtils.findActivityFromContext(clicked.context) ?: return
         val inputContainer = findInputContainer(
             activity = activity,
@@ -147,17 +152,20 @@ object PbLikeAutoReplyHook {
             getSendViewMethod = getSendViewMethod,
         ) ?: return
         val inputView = getInputViewMethod.invoke(inputContainer) as? EditText ?: return
-        if (inputView.text?.toString() != replyText) {
-            inputView.setText(replyText)
-            inputView.setSelection(inputView.text?.length ?: 0)
-        }
+        if (!inputView.text.isNullOrEmpty()) return
+        inputView.setText(replyText)
+        inputView.setSelection(inputView.text?.length ?: 0)
         val sendView = getSendViewMethod.invoke(inputContainer) as? View ?: return
         inputView.postDelayed({
             try {
                 if (runtimeDisabled) return@postDelayed
-                if (!sendView.isEnabled) return@postDelayed
-                sendView.performClick()
-                XposedCompat.logD { "$TAG sent preset reply after thread like" }
+                if (!sendView.isEnabled || !sendView.isAttachedToWindow || !inputView.isAttachedToWindow ||
+                    activity.isFinishing || activity.isDestroyed || inputView.text?.toString() != replyText) return@postDelayed
+                if (flow.send(sendView)) {
+                    XposedCompat.logD { "$TAG submitted ordinary preset reply after thread like" }
+                } else if (inputView.text?.toString() == replyText) {
+                    inputView.text?.clear()
+                }
             } catch (t: Throwable) {
                 runtimeDisabled = true
                 XposedCompat.log("$TAG send click FAILED, disabled for this process: ${t.message}")

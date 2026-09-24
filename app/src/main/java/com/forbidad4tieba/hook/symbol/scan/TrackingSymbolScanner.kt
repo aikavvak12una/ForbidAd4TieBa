@@ -11,7 +11,6 @@ import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 internal object TrackingSymbolScanner {
-    private const val STAT_SERVICE = "com.baidu.mobstat.StatService"
     private const val TRACE_MANAGER = "com.baidu.searchbox.track.ui.TraceManager"
 
     fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): List<String> {
@@ -22,31 +21,6 @@ internal object TrackingSymbolScanner {
             TrackingTarget.entries.mapNotNull { target ->
                 scanSubStep("Tracking.${target.methodName}", logger, null as String?) {
                     restoreMethod(cl, target)
-                    if (target == TrackingTarget.CLOSE_TRACE) {
-                        val gates = source.bridge.getClassData(target.className)?.methods.orEmpty().filter {
-                            it.methodName == target.methodName && !Modifier.isStatic(it.modifiers) &&
-                                it.paramTypeNames.isEmpty() && it.returnTypeName == "boolean"
-                        }
-                        val body = gates.singleOrNull()?.callers.orEmpty().filter {
-                            it.declaredClassName == STAT_SERVICE && it.methodName == "autoTrace" &&
-                                Modifier.isStatic(it.modifiers) && it.returnTypeName == "void" &&
-                                it.paramTypeNames == listOf("android.content.Context", "boolean", "boolean")
-                        }.singleOrNull()
-                        val entry = body?.callers.orEmpty().filter {
-                            it.declaredClassName == STAT_SERVICE && it.methodName == "autoTrace" &&
-                                Modifier.isStatic(it.modifiers) && it.returnTypeName == "void" &&
-                                it.paramTypeNames == listOf("android.content.Context")
-                        }.singleOrNull()
-                        val hasHostConsumer = entry?.callers.orEmpty().any {
-                            !it.declaredClassName.startsWith("com.baidu.mobstat.")
-                        }
-                        if (!hasHostConsumer) {
-                            HookSymbolScanDiagnostics.log(
-                                logger, "Tracking.${target.methodName}: unavailable autoTrace consumer chain",
-                            )
-                            return@scanSubStep null
-                        }
-                    }
                     if (target == TrackingTarget.PAGE_TRACE) {
                         val registration = source.bridge.getClassData(TRACE_MANAGER)?.methods.orEmpty().filter {
                             it.methodName == "register" && Modifier.isPublic(it.modifiers) &&
@@ -89,7 +63,6 @@ internal object TrackingSymbolScanner {
     private fun restoreMethod(cl: ClassLoader, target: TrackingTarget): Method {
         val owner = Class.forName(target.className, false, cl)
         val method = when (target) {
-            TrackingTarget.CLOSE_TRACE -> owner.getDeclaredMethod(target.methodName)
             TrackingTarget.PAGE_TRACE -> owner.getDeclaredMethod(target.methodName, Context::class.java)
             TrackingTarget.LOKI_SERVICE -> {
                 check(Service::class.java.isAssignableFrom(owner)) { "Loki owner is not a Service" }
@@ -99,7 +72,6 @@ internal object TrackingSymbolScanner {
             }
         }
         val expectedReturn = when (target) {
-            TrackingTarget.CLOSE_TRACE -> Boolean::class.javaPrimitiveType
             TrackingTarget.LOKI_SERVICE -> Int::class.javaPrimitiveType
             TrackingTarget.PAGE_TRACE -> Void.TYPE
         }

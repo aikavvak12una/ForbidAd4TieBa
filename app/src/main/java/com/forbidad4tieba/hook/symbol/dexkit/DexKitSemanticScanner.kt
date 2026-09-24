@@ -57,8 +57,6 @@ internal object DexKitSemanticScanner {
      * feed refresh entry point; see [scanRecPersonalizeRequestMethods].
      */
     private const val HOME_NET_START_ANCHOR = "onHomepageNetStart"
-    /** Unobfuscated Kotlin file class gating PB preload; anchor for [scanPbPreloadRenderGate]. */
-    private const val PB_PRELOAD_HELPER_CLASS = "com.baidu.tieba.pb.pb.preload.PbPreloadHelperKt"
     private const val LOW_SCORE_SCHEDULER_CLASS = "com.baidu.tieba.parser.LowScoreScheduler"
     private const val COLD_START_DELAY_SCHEDULE_CLASS = "com.baidu.searchbox.launch.ColdStartDelaySchedule"
 
@@ -436,65 +434,6 @@ internal object DexKitSemanticScanner {
             if (score < 120) return@mapNotNull null
             DexAutoRefreshMatch(method.methodName, score, evidence.joinToString(","))
         }
-    }
-
-    /**
-     * Finds the boolean gate that opens the PB native preload-render branch.
-     *
-     * The host's PB activity base class decides between "render from preloaded
-     * card data" and "normal full load" inside the method that also consults
-     * [PB_PRELOAD_HELPER_CLASS] — an unobfuscated Kotlin file class, and the
-     * anchor here. Inside that method the branch is driven by a single
-     * `invoke-virtual` on the activity class itself returning boolean with no
-     * parameters; that method is the gate.
-     *
-     * Anchoring on the helper class instead of the gate's own name matters
-     * because the gate is renamed on every host build (it was `A1` on 22.9.1.0
-     * and is `B1` on 22.10.1.0), while the helper class name is stable.
-     * Requires the gate to be unique, so an ambiguous shape fails closed.
-     */
-    fun scanPbPreloadRenderGate(
-        sourcePaths: List<String>,
-        absActivityClassName: String,
-        logger: ScanLogger? = null,
-    ): String? = withBridge(sourcePaths, logger, "PbForcePreloadHook.RenderGateDex") { bridge ->
-        val branchMethods = exactMethods(bridge, absActivityClassName, logger).filter { method ->
-            method.invokes.any { invoked ->
-                invoked.declaredClassName == PB_PRELOAD_HELPER_CLASS
-            }
-        }
-        if (branchMethods.isEmpty()) {
-            recordIssue(
-                logger,
-                "$TAG.PbPreloadRenderGate",
-                "no $absActivityClassName method invokes $PB_PRELOAD_HELPER_CLASS",
-            )
-            return@withBridge null
-        }
-        val gates = branchMethods
-            .flatMap { method -> method.invokes.toList() }
-            .filter { invoked ->
-                invoked.declaredClassName == absActivityClassName &&
-                    invoked.returnTypeName == "boolean" &&
-                    invoked.paramTypeNames.isEmpty()
-            }
-            .map { it.methodName }
-            .distinct()
-        return@withBridge selectUniqueGate(gates, logger)
-    }
-
-    private fun selectUniqueGate(gates: List<String>, logger: ScanLogger?): String? {
-        if (gates.size == 1) return gates.single()
-        recordIssue(
-            logger,
-            "$TAG.PbPreloadRenderGate",
-            if (gates.isEmpty()) {
-                "no boolean no-arg gate found in preload branch"
-            } else {
-                "ambiguous gate candidates=" + gates.joinToString(",")
-            },
-        )
-        return null
     }
 
     /**
