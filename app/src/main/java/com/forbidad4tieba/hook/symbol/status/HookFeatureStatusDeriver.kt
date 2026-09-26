@@ -353,18 +353,19 @@ internal object HookFeatureStatusDeriver {
             )
         }
 
-        val enterForumInitInfoReady =
-            !symbols.enterForumInitInfoDataClass.isNullOrBlank() &&
-                !symbols.enterForumInitInfoGetUrlMethod.isNullOrBlank()
-        val enterForumWebLoadReady =
-            !symbols.enterForumWebControllerClass.isNullOrBlank() &&
-                !symbols.enterForumWebLoadMethod.isNullOrBlank()
-        out[HookFeatureKey.FILTER_ENTER_FORUM_WEB] = if (enterForumInitInfoReady || enterForumWebLoadReady) {
+        val enterForumCritical = listOf(
+            "enterForumWebControllerClass" to symbols.enterForumWebControllerClass,
+            "enterForumWebLoadMethod" to symbols.enterForumWebLoadMethod,
+            "enterForumWebViewFieldOwnerClass" to symbols.enterForumWebViewFieldOwnerClass,
+            "enterForumWebViewField" to symbols.enterForumWebViewField,
+            "enterForumWebSetForceCommonMethod" to symbols.enterForumWebSetForceCommonMethod,
+        ).filter { it.second.isNullOrBlank() }.map { it.first }
+        out[HookFeatureKey.FILTER_ENTER_FORUM_WEB] = if (enterForumCritical.isEmpty()) {
             HookFeatureStatus(state = HookFeatureState.FULL)
         } else {
             HookFeatureStatus(
                 state = HookFeatureState.DISABLED,
-                missingCritical = listOf("enterForumInitInfoData", "enterForumWebLoadTarget"),
+                missingCritical = enterForumCritical,
             )
         }
 

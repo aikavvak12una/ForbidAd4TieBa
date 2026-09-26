@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigSymbols
 import com.forbidad4tieba.hook.symbol.resolve.PbAdRequestTargetResolver
+import com.forbidad4tieba.hook.symbol.resolve.EnterForumWebTargetResolver
 
 import com.forbidad4tieba.hook.symbol.validation.*
 
@@ -1164,66 +1165,7 @@ internal object HookSymbolResolver {
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
     ): EnterForumWebSymbols? {
-        return try {
-            val resolvedSymbols = symbols ?: run {
-                XposedCompat.log("[EnterForumWebHook] skipped: scan symbols unavailable")
-                return null
-            }
-            val sourceMethod = resolveEnterForumInitInfoUrlMethod(cl, resolvedSymbols)
-            val webLoadMethod = resolveEnterForumWebLoadMethod(cl, resolvedSymbols)
-            if (sourceMethod == null && webLoadMethod == null) {
-                XposedCompat.log("[EnterForumWebHook] skipped: no resolved install targets")
-                null
-            } else {
-                EnterForumWebSymbols(
-                    sourceGetUrlMethod = sourceMethod,
-                    webLoadMethod = webLoadMethod,
-                )
-            }
-        } catch (t: Throwable) {
-            XposedCompat.log("[EnterForumWebHook] symbol resolve FAILED: ${t.message}")
-            XposedCompat.log(t)
-            null
-        }
-    }
-
-    private fun resolveEnterForumInitInfoUrlMethod(cl: ClassLoader, symbols: HookSymbols): Method? {
-        val dataClassName = symbols.enterForumInitInfoDataClass?.takeIf { it.isNotBlank() } ?: return null
-        val methodName = symbols.enterForumInitInfoGetUrlMethod?.takeIf { it.isNotBlank() } ?: return null
-        val dataClass = safeFindClass(dataClassName, cl) ?: run {
-            XposedCompat.log("[EnterForumWebHook] source skipped: class not found: $dataClassName")
-            return null
-        }
-        val method = collectInstanceMethods(dataClass).singleOrNull { candidate ->
-            candidate.name == methodName &&
-                candidate.returnType == String::class.java &&
-                candidate.parameterTypes.isEmpty()
-        } ?: run {
-            XposedCompat.log("[EnterForumWebHook] source skipped: method mismatch: $dataClassName.$methodName()")
-            return null
-        }
-        method.isAccessible = true
-        return method
-    }
-
-    private fun resolveEnterForumWebLoadMethod(cl: ClassLoader, symbols: HookSymbols): Method? {
-        val controllerClassName = symbols.enterForumWebControllerClass?.takeIf { it.isNotBlank() } ?: return null
-        val methodName = symbols.enterForumWebLoadMethod?.takeIf { it.isNotBlank() } ?: return null
-        val controllerClass = safeFindClass(controllerClassName, cl) ?: run {
-            XposedCompat.log("[EnterForumWebHook] skipped: class not found: $controllerClassName")
-            return null
-        }
-        val method = collectInstanceMethods(controllerClass).singleOrNull { candidate ->
-            candidate.name == methodName &&
-                candidate.returnType == Void.TYPE &&
-                candidate.parameterTypes.size == 1 &&
-                candidate.parameterTypes[0] == String::class.java
-        } ?: run {
-            XposedCompat.log("[EnterForumWebHook] skipped: method mismatch: $controllerClassName.$methodName(String)")
-            return null
-        }
-        method.isAccessible = true
-        return method
+        return EnterForumWebTargetResolver.resolve(cl, symbols)
     }
 
     fun resolveForumNativeTopShiftSymbols(
@@ -5457,6 +5399,9 @@ internal object HookSymbolResolver {
         var enterForumWebLoadMethod: String? = null
         var enterForumInitInfoDataClass: String? = null
         var enterForumInitInfoGetUrlMethod: String? = null
+        var enterForumWebViewFieldOwnerClass: String? = null
+        var enterForumWebViewField: String? = null
+        var enterForumWebSetForceCommonMethod: String? = null
         var plainUrlClickableSpanClass: String? = null
         var plainUrlClickableSpanOnClickMethod: String? = null
         var plainUrlClickableSpanOnClickOwnerClasses: List<String>? = null
@@ -5905,12 +5850,15 @@ internal object HookSymbolResolver {
             scanErrors,
             EnterForumWebScanSymbols(),
         ) {
-            EnterForumWebSymbolScanner.scan(obfuscatedWithWhitelist, cl, logger)
+            EnterForumWebSymbolScanner.scan(context, cl, logger)
         }
         enterForumWebControllerClass = enterForumWebScan.controllerClass
         enterForumWebLoadMethod = enterForumWebScan.webLoadMethod
         enterForumInitInfoDataClass = enterForumWebScan.initInfoDataClass
         enterForumInitInfoGetUrlMethod = enterForumWebScan.initInfoGetUrlMethod
+        enterForumWebViewFieldOwnerClass = enterForumWebScan.webViewFieldOwnerClass
+        enterForumWebViewField = enterForumWebScan.webViewField
+        enterForumWebSetForceCommonMethod = enterForumWebScan.setForceCommonMethod
 
         val mineTabWebBlockScan = runScanStep(
             "MineTabWebBlockHook",
@@ -6659,6 +6607,9 @@ internal object HookSymbolResolver {
             this.enterForumWebLoadMethod = enterForumWebLoadMethod
             this.enterForumInitInfoDataClass = enterForumInitInfoDataClass
             this.enterForumInitInfoGetUrlMethod = enterForumInitInfoGetUrlMethod
+            this.enterForumWebViewFieldOwnerClass = enterForumWebViewFieldOwnerClass
+            this.enterForumWebViewField = enterForumWebViewField
+            this.enterForumWebSetForceCommonMethod = enterForumWebSetForceCommonMethod
             this.plainUrlClickableSpanClass = plainUrlClickableSpanClass
             this.plainUrlClickableSpanOnClickMethod = plainUrlClickableSpanOnClickMethod
             this.plainUrlClickableSpanOnClickOwnerClasses = plainUrlClickableSpanOnClickOwnerClasses

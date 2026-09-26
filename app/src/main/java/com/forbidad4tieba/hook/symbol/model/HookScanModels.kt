@@ -110,6 +110,9 @@ internal data class EnterForumWebScanSymbols(
     val webLoadMethod: String? = null,
     val initInfoDataClass: String? = null,
     val initInfoGetUrlMethod: String? = null,
+    val webViewFieldOwnerClass: String? = null,
+    val webViewField: String? = null,
+    val setForceCommonMethod: String? = null,
 )
 
 internal data class MineTabWebBlockScanSymbols(
