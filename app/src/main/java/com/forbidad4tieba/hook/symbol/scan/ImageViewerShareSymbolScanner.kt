@@ -26,7 +26,7 @@ internal object ImageViewerShareSymbolScanner {
             scanItemView(candidates, cl, logger)
         }
         val icon = scanSubStep("ImageViewerNativeShareHook.Icon", logger, ImageViewerShareScanSymbols()) {
-            scanIcon(context, candidates, cl, logger)
+            scanIcon(context, cl, logger)
         }
 
         return ImageViewerShareScanSymbols(
@@ -146,17 +146,11 @@ internal object ImageViewerShareSymbolScanner {
 
     private fun scanIcon(
         context: Context,
-        candidates: List<String>,
         cl: ClassLoader,
         logger: ScanLogger?,
     ): ImageViewerShareScanSymbols {
         val iconResId = ImageViewerShareIconSymbolScanner.scanHostButtonResource(
             context = context,
-            cl = cl,
-            logger = logger,
-        ) ?: ImageViewerShareIconSymbolScanner.scanFromDex(
-            context = context,
-            candidates = candidates,
             cl = cl,
             logger = logger,
         )

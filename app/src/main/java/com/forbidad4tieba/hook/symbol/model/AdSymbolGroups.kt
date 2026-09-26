@@ -52,6 +52,7 @@ data class FeedCardSymbolsGroup(
     val feedHeadParamsField: String? = null,
     val feedRecommendCardNestedDataMethod: String? = null,
     val feedRecommendCardNestedDataListField: String? = null,
+    val feedCardSchemaGetterSpec: String? = null,
 )
 
 data class ForumPageAdSymbolsGroup(
@@ -72,7 +73,6 @@ data class ForumPageAdSymbolsGroup(
     val forumRainSetterMethod: String? = null,
     val forumDialogControllerClass: String? = null,
     val forumBusinessPromotShowMethod: String? = null,
-    val forumAnimationShowMethod: String? = null,
     val forumGameFloatingBarControllerClass: String? = null,
     val forumGameFloatingBarShowMethod: String? = null,
     val forumGameFloatingBarField: String? = null,

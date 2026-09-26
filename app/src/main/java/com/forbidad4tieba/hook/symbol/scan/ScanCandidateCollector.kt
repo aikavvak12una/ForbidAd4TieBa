@@ -2,7 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
-import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
 import com.forbidad4tieba.hook.symbol.model.ScanCandidateSet
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import dalvik.system.DexFile
@@ -81,15 +80,8 @@ internal object ScanCandidateCollector {
         }
 
         val sourcePaths = appSourcePaths(context)
-        val cachedBridge = HookSymbolScanSession.get()?.dexKitBridge(sourcePaths, logger)
-        val bridge = cachedBridge ?: DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger)
         var dexKitPackageFailures = 0
-        if (bridge == null) {
-            log(logger, "list classes by DexKit failed: apk source path unavailable or bridge open failed")
-            collectClassNamesFromDexFiles(sourcePaths, logger, ::collectClassName)
-            return buildResult(obfuscated, expanded, logger)
-        }
-        fun collectWithBridge(scanBridge: com.forbidad4tieba.hook.symbol.dexkit.DexKitScanBridge) {
+        val collected = HookSymbolScanSession.withDexKitBridge(sourcePaths, logger) { scanBridge ->
             for (packagePrefix in TARGET_SCAN_PACKAGE_PREFIXES) {
                 try {
                     val classes = scanBridge.bridge.findClass(
@@ -117,11 +109,11 @@ internal object ScanCandidateCollector {
                     )
                 }
             }
-        }
-        if (cachedBridge != null) {
-            collectWithBridge(bridge)
-        } else {
-            bridge.use(::collectWithBridge)
+        } != null
+        if (!collected) {
+            log(logger, "list classes by DexKit failed: apk source path unavailable or bridge open failed")
+            collectClassNamesFromDexFiles(sourcePaths, logger, ::collectClassName)
+            return buildResult(obfuscated, expanded, logger)
         }
         if (dexKitPackageFailures > 0 || obfuscated.isEmpty() || expanded.isEmpty()) {
             log(

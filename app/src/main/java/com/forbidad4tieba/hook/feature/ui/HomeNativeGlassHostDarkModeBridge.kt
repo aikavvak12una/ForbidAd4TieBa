@@ -94,6 +94,10 @@ internal object HomeNativeGlassHostDarkModeBridge {
         }
     }
 
+    fun removeDarkModeChangeListener(listener: (Boolean) -> Unit) {
+        darkModeChangeListeners.remove(listener)
+    }
+
     fun currentKnownDarkMode(): Boolean? = lastKnownDarkMode
 
     fun onHostSkinTypeChanged(skinType: Int?) {

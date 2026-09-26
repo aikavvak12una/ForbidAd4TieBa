@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.symbol.model
 
+import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigSymbols
+
 internal class HookSymbolsBuilder {
     var homeTabClass: String? = null
     var homeTabRebuildMethod: String? = null
@@ -79,10 +81,6 @@ internal class HookSymbolsBuilder {
     var plainUrlApplicationGetInstMethod: String? = null
     var plainUrlBrowserHelperClass: String? = null
     var plainUrlBrowserHelperStartWebActivityMethod: String? = null
-    var plainUrlWebContainerActivityClass: String? = null
-    var plainUrlWebContainerInitDataMethod: String? = null
-    var plainUrlWebContainerWebViewClientClass: String? = null
-    var plainUrlWebContainerShouldOverrideUrlLoadingMethod: String? = null
     var privateReadReceiptModelClass: String? = null
     var privateReadReceiptModelReadDispatchMethod: String? = null
     var privateReadReceiptMessageManagerClass: String? = null
@@ -105,9 +103,6 @@ internal class HookSymbolsBuilder {
     var privateReadReceiptChatMessageClass: String? = null
     var privateReadReceiptChatMessageMsgIdMethod: String? = null
     var privateReadReceiptChatMessageUserIdMethod: String? = null
-    var privateReadReceiptChatMessageLocalDataMethod: String? = null
-    var privateReadReceiptLocalDataClass: String? = null
-    var privateReadReceiptLocalDataStatusMethod: String? = null
     var privateReadReceiptAccountClass: String? = null
     var privateReadReceiptCurrentAccountMethod: String? = null
     var mountCardLinkLayoutClass: String? = null
@@ -157,6 +152,7 @@ internal class HookSymbolsBuilder {
     var performanceAbMethods: List<String>? = null
     var trackingMethods: List<String>? = null
     var defaultPopups: DefaultPopupSymbols = DefaultPopupSymbols()
+    var lowEndConfig: LowEndConfigSymbols = LowEndConfigSymbols()
     var pbCommentScrollListenerClass: String? = null
     var pbCommentScrollMethod: String? = null
     var pbCommentScrollFragmentField: String? = null
@@ -218,8 +214,6 @@ internal class HookSymbolsBuilder {
     var historyPostIdMethod: String? = null
     var historyLiveIdMethod: String? = null
     var msgTabLocateToTabMethod: String? = null
-    var msgTabContainerSelectMethod: String? = null
-    var msgTabContainerExtDataField: String? = null
     var freeCopyPopupMenuClass: String? = null
     var freeCopyPopupContentViewMethod: String? = null
     var freeCopyPopupTextField: String? = null
@@ -311,6 +305,7 @@ internal class HookSymbolsBuilder {
     var feedCardBindMethod: String? = null
     var feedCardBindMethodSpec: String? = null
     var feedCardDataListField: String? = null
+    var feedCardSchemaGetterSpec: String? = null
     var feedHeadParamsField: String? = null
     var feedRecommendCardNestedDataMethod: String? = null
     var feedRecommendCardNestedDataListField: String? = null
@@ -331,7 +326,6 @@ internal class HookSymbolsBuilder {
     var forumRainSetterMethod: String? = null
     var forumDialogControllerClass: String? = null
     var forumBusinessPromotShowMethod: String? = null
-    var forumAnimationShowMethod: String? = null
     var forumGameFloatingBarControllerClass: String? = null
     var forumGameFloatingBarShowMethod: String? = null
     var forumGameFloatingBarField: String? = null
@@ -415,6 +409,7 @@ internal class HookSymbolsBuilder {
                 performanceAbMethods = performanceAbMethods,
                 trackingMethods = trackingMethods,
                 defaultPopups = defaultPopups,
+                lowEndConfig = lowEndConfig,
             ),
             resources = buildResourceSymbols(),
             meta = buildScanMeta(),
@@ -515,6 +510,7 @@ internal class HookSymbolsBuilder {
                 feedHeadParamsField,
                 feedRecommendCardNestedDataMethod,
                 feedRecommendCardNestedDataListField,
+                feedCardSchemaGetterSpec,
             ),
             forumPage = ForumPageAdSymbolsGroup(
                 forumResponseDataClass,
@@ -534,7 +530,6 @@ internal class HookSymbolsBuilder {
                 forumRainSetterMethod,
                 forumDialogControllerClass,
                 forumBusinessPromotShowMethod,
-                forumAnimationShowMethod,
                 forumGameFloatingBarControllerClass,
                 forumGameFloatingBarShowMethod,
                 forumGameFloatingBarField,
@@ -760,12 +755,6 @@ internal class HookSymbolsBuilder {
                     plainUrlBrowserHelperClass,
                     plainUrlBrowserHelperStartWebActivityMethod,
                 ),
-                webContainer = PlainUrlWebContainerSymbolsGroup(
-                    plainUrlWebContainerActivityClass,
-                    plainUrlWebContainerInitDataMethod,
-                    plainUrlWebContainerWebViewClientClass,
-                    plainUrlWebContainerShouldOverrideUrlLoadingMethod,
-                ),
             ),
             mountCard = MountCardLinkSymbolsGroup(
                 mountCardLinkLayoutClass,
@@ -827,19 +816,14 @@ internal class HookSymbolsBuilder {
                     privateReadReceiptChatMessageClass,
                     privateReadReceiptChatMessageMsgIdMethod,
                     privateReadReceiptChatMessageUserIdMethod,
-                    privateReadReceiptChatMessageLocalDataMethod,
                 ),
-                localAccount = PrivateReadReceiptLocalAccountSymbolsGroup(
-                    privateReadReceiptLocalDataClass,
-                    privateReadReceiptLocalDataStatusMethod,
+                account = PrivateReadReceiptAccountSymbolsGroup(
                     privateReadReceiptAccountClass,
                     privateReadReceiptCurrentAccountMethod,
                 ),
             ),
             tab = MessageTabSymbolsGroup(
                 msgTabLocateToTabMethod,
-                msgTabContainerSelectMethod,
-                msgTabContainerExtDataField,
             ),
         )
     }

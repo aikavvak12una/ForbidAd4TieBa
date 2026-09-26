@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.symbol.model
 
 import org.json.JSONObject
+import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigSymbols
 
 data class HookSymbols(
     val hookPoints: HookPointSymbols = HookPointSymbols(),
@@ -13,6 +14,8 @@ data class HookSymbols(
         get() = hookPoints.trackingMethods
     val defaultPopups: DefaultPopupSymbols
         get() = hookPoints.defaultPopups
+    val lowEndConfig: LowEndConfigSymbols
+        get() = hookPoints.lowEndConfig
     val settings: SettingsSymbols
         get() = hookPoints.primary.settings
     val home: HomeSymbols
@@ -194,14 +197,6 @@ data class HookSymbols(
         get() = hookPoints.web.plainUrl.browserHelper.plainUrlBrowserHelperClass
     val plainUrlBrowserHelperStartWebActivityMethod: String?
         get() = hookPoints.web.plainUrl.browserHelper.plainUrlBrowserHelperStartWebActivityMethod
-    val plainUrlWebContainerActivityClass: String?
-        get() = hookPoints.web.plainUrl.webContainer.plainUrlWebContainerActivityClass
-    val plainUrlWebContainerInitDataMethod: String?
-        get() = hookPoints.web.plainUrl.webContainer.plainUrlWebContainerInitDataMethod
-    val plainUrlWebContainerWebViewClientClass: String?
-        get() = hookPoints.web.plainUrl.webContainer.plainUrlWebContainerWebViewClientClass
-    val plainUrlWebContainerShouldOverrideUrlLoadingMethod: String?
-        get() = hookPoints.web.plainUrl.webContainer.plainUrlWebContainerShouldOverrideUrlLoadingMethod
     val privateReadReceiptModelClass: String?
         get() = hookPoints.privateMessage.readReceipt.model.privateReadReceiptModelClass
     val privateReadReceiptModelReadDispatchMethod: String?
@@ -246,16 +241,10 @@ data class HookSymbols(
         get() = hookPoints.privateMessage.readReceipt.page.privateReadReceiptChatMessageMsgIdMethod
     val privateReadReceiptChatMessageUserIdMethod: String?
         get() = hookPoints.privateMessage.readReceipt.page.privateReadReceiptChatMessageUserIdMethod
-    val privateReadReceiptChatMessageLocalDataMethod: String?
-        get() = hookPoints.privateMessage.readReceipt.page.privateReadReceiptChatMessageLocalDataMethod
-    val privateReadReceiptLocalDataClass: String?
-        get() = hookPoints.privateMessage.readReceipt.localAccount.privateReadReceiptLocalDataClass
-    val privateReadReceiptLocalDataStatusMethod: String?
-        get() = hookPoints.privateMessage.readReceipt.localAccount.privateReadReceiptLocalDataStatusMethod
     val privateReadReceiptAccountClass: String?
-        get() = hookPoints.privateMessage.readReceipt.localAccount.privateReadReceiptAccountClass
+        get() = hookPoints.privateMessage.readReceipt.account.privateReadReceiptAccountClass
     val privateReadReceiptCurrentAccountMethod: String?
-        get() = hookPoints.privateMessage.readReceipt.localAccount.privateReadReceiptCurrentAccountMethod
+        get() = hookPoints.privateMessage.readReceipt.account.privateReadReceiptCurrentAccountMethod
     val mountCardLinkLayoutClass: String?
         get() = hookPoints.web.mountCard.mountCardLinkLayoutClass
     val mountCardLinkLayoutOnClickMethod: String?
@@ -462,10 +451,6 @@ data class HookSymbols(
         get() = hookPoints.collectionHistory.history.threadData.historyLiveIdMethod
     val msgTabLocateToTabMethod: String?
         get() = hookPoints.privateMessage.tab.msgTabLocateToTabMethod
-    val msgTabContainerSelectMethod: String?
-        get() = hookPoints.privateMessage.tab.msgTabContainerSelectMethod
-    val msgTabContainerExtDataField: String?
-        get() = hookPoints.privateMessage.tab.msgTabContainerExtDataField
     val freeCopyPopupMenuClass: String?
         get() = hookPoints.collectionHistory.freeCopy.freeCopyPopupMenuClass
     val freeCopyPopupContentViewMethod: String?
@@ -655,6 +640,8 @@ data class HookSymbols(
         get() = hookPoints.primary.ad.feedCard.feedCardBindMethodSpec
     val feedCardDataListField: String?
         get() = hookPoints.primary.ad.feedCard.feedCardDataListField
+    val feedCardSchemaGetterSpec: String?
+        get() = hookPoints.primary.ad.feedCard.feedCardSchemaGetterSpec
     val feedHeadParamsField: String?
         get() = hookPoints.primary.ad.feedCard.feedHeadParamsField
     val feedRecommendCardNestedDataMethod: String?
@@ -695,8 +682,6 @@ data class HookSymbols(
         get() = hookPoints.primary.ad.forumPage.forumDialogControllerClass
     val forumBusinessPromotShowMethod: String?
         get() = hookPoints.primary.ad.forumPage.forumBusinessPromotShowMethod
-    val forumAnimationShowMethod: String?
-        get() = hookPoints.primary.ad.forumPage.forumAnimationShowMethod
     val forumGameFloatingBarControllerClass: String?
         get() = hookPoints.primary.ad.forumPage.forumGameFloatingBarControllerClass
     val forumGameFloatingBarShowMethod: String?
@@ -871,6 +856,7 @@ data class HookSymbols(
             putStringArray("performanceAbMethods", performanceAbMethods)
             putStringArray("trackingMethods", trackingMethods)
             put("defaultPopups", defaultPopups.toJson())
+            put("lowEndConfig", lowEndConfig.toJson())
             put("homeTabClass", homeTabClass)
             put("homeTabRebuildMethod", homeTabRebuildMethod)
             put("homeTabListField", homeTabListField)
@@ -952,13 +938,6 @@ data class HookSymbols(
             put("plainUrlApplicationGetInstMethod", plainUrlApplicationGetInstMethod)
             put("plainUrlBrowserHelperClass", plainUrlBrowserHelperClass)
             put("plainUrlBrowserHelperStartWebActivityMethod", plainUrlBrowserHelperStartWebActivityMethod)
-            put("plainUrlWebContainerActivityClass", plainUrlWebContainerActivityClass)
-            put("plainUrlWebContainerInitDataMethod", plainUrlWebContainerInitDataMethod)
-            put("plainUrlWebContainerWebViewClientClass", plainUrlWebContainerWebViewClientClass)
-            put(
-                "plainUrlWebContainerShouldOverrideUrlLoadingMethod",
-                plainUrlWebContainerShouldOverrideUrlLoadingMethod,
-            )
             put("privateReadReceiptModelClass", privateReadReceiptModelClass)
             put("privateReadReceiptModelReadDispatchMethod", privateReadReceiptModelReadDispatchMethod)
             put("privateReadReceiptMessageManagerClass", privateReadReceiptMessageManagerClass)
@@ -981,9 +960,6 @@ data class HookSymbols(
             put("privateReadReceiptChatMessageClass", privateReadReceiptChatMessageClass)
             put("privateReadReceiptChatMessageMsgIdMethod", privateReadReceiptChatMessageMsgIdMethod)
             put("privateReadReceiptChatMessageUserIdMethod", privateReadReceiptChatMessageUserIdMethod)
-            put("privateReadReceiptChatMessageLocalDataMethod", privateReadReceiptChatMessageLocalDataMethod)
-            put("privateReadReceiptLocalDataClass", privateReadReceiptLocalDataClass)
-            put("privateReadReceiptLocalDataStatusMethod", privateReadReceiptLocalDataStatusMethod)
             put("privateReadReceiptAccountClass", privateReadReceiptAccountClass)
             put("privateReadReceiptCurrentAccountMethod", privateReadReceiptCurrentAccountMethod)
             put("mountCardLinkLayoutClass", mountCardLinkLayoutClass)
@@ -1091,8 +1067,6 @@ data class HookSymbols(
             put("historyLiveIdMethod", historyLiveIdMethod)
 
             put("msgTabLocateToTabMethod", msgTabLocateToTabMethod)
-            put("msgTabContainerSelectMethod", msgTabContainerSelectMethod)
-            put("msgTabContainerExtDataField", msgTabContainerExtDataField)
             put("freeCopyPopupMenuClass", freeCopyPopupMenuClass)
             put("freeCopyPopupContentViewMethod", freeCopyPopupContentViewMethod)
             put("freeCopyPopupTextField", freeCopyPopupTextField)
@@ -1256,6 +1230,7 @@ data class HookSymbols(
             put("feedCardBindMethod", feedCardBindMethod)
             put("feedCardBindMethodSpec", feedCardBindMethodSpec)
             put("feedCardDataListField", feedCardDataListField)
+            put("feedCardSchemaGetterSpec", feedCardSchemaGetterSpec)
             put("feedHeadParamsField", feedHeadParamsField)
             put("feedRecommendCardNestedDataMethod", feedRecommendCardNestedDataMethod)
             put("feedRecommendCardNestedDataListField", feedRecommendCardNestedDataListField)
@@ -1276,7 +1251,6 @@ data class HookSymbols(
             put("forumRainSetterMethod", forumRainSetterMethod)
             put("forumDialogControllerClass", forumDialogControllerClass)
             put("forumBusinessPromotShowMethod", forumBusinessPromotShowMethod)
-            put("forumAnimationShowMethod", forumAnimationShowMethod)
             put("forumGameFloatingBarControllerClass", forumGameFloatingBarControllerClass)
             put("forumGameFloatingBarShowMethod", forumGameFloatingBarShowMethod)
             put("forumGameFloatingBarField", forumGameFloatingBarField)
@@ -1370,8 +1344,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 53
-        const val DEXKIT_RULE_VERSION = 43
+        const val CACHE_SCHEMA_VERSION = 59
+        const val DEXKIT_RULE_VERSION = 58
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1502,12 +1476,6 @@ data class HookSymbols(
                     plainUrlBrowserHelperClass = obj.optStringOrNull("plainUrlBrowserHelperClass")
                     plainUrlBrowserHelperStartWebActivityMethod =
                         obj.optStringOrNull("plainUrlBrowserHelperStartWebActivityMethod")
-                    plainUrlWebContainerActivityClass = obj.optStringOrNull("plainUrlWebContainerActivityClass")
-                    plainUrlWebContainerInitDataMethod = obj.optStringOrNull("plainUrlWebContainerInitDataMethod")
-                    plainUrlWebContainerWebViewClientClass =
-                        obj.optStringOrNull("plainUrlWebContainerWebViewClientClass")
-                    plainUrlWebContainerShouldOverrideUrlLoadingMethod =
-                        obj.optStringOrNull("plainUrlWebContainerShouldOverrideUrlLoadingMethod")
                     privateReadReceiptModelClass = obj.optStringOrNull("privateReadReceiptModelClass")
                     privateReadReceiptModelReadDispatchMethod = obj.optStringOrNull("privateReadReceiptModelReadDispatchMethod")
                     privateReadReceiptMessageManagerClass = obj.optStringOrNull("privateReadReceiptMessageManagerClass")
@@ -1530,9 +1498,6 @@ data class HookSymbols(
                     privateReadReceiptChatMessageClass = obj.optStringOrNull("privateReadReceiptChatMessageClass")
                     privateReadReceiptChatMessageMsgIdMethod = obj.optStringOrNull("privateReadReceiptChatMessageMsgIdMethod")
                     privateReadReceiptChatMessageUserIdMethod = obj.optStringOrNull("privateReadReceiptChatMessageUserIdMethod")
-                    privateReadReceiptChatMessageLocalDataMethod = obj.optStringOrNull("privateReadReceiptChatMessageLocalDataMethod")
-                    privateReadReceiptLocalDataClass = obj.optStringOrNull("privateReadReceiptLocalDataClass")
-                    privateReadReceiptLocalDataStatusMethod = obj.optStringOrNull("privateReadReceiptLocalDataStatusMethod")
                     privateReadReceiptAccountClass = obj.optStringOrNull("privateReadReceiptAccountClass")
                     privateReadReceiptCurrentAccountMethod = obj.optStringOrNull("privateReadReceiptCurrentAccountMethod")
                     mountCardLinkLayoutClass = obj.optStringOrNull("mountCardLinkLayoutClass")
@@ -1595,6 +1560,7 @@ data class HookSymbols(
                     performanceAbMethods = obj.optStringArray("performanceAbMethods").takeIf { it.isNotEmpty() }
                     trackingMethods = obj.optStringArray("trackingMethods").takeIf { it.isNotEmpty() }
                     defaultPopups = DefaultPopupSymbols.fromJson(obj.optJSONObject("defaultPopups"))
+                    lowEndConfig = LowEndConfigSymbols.fromJson(obj.optJSONObject("lowEndConfig"))
                     autoLoadMoreConfigClass = obj.optStringOrNull("autoLoadMoreConfigClass")
                     autoLoadMoreConfigMethod = obj.optStringOrNull("autoLoadMoreConfigMethod")
                     pbCommentScrollListenerClass = obj.optStringOrNull("pbCommentScrollListenerClass")
@@ -1664,8 +1630,6 @@ data class HookSymbols(
                     historyLiveIdMethod = obj.optStringOrNull("historyLiveIdMethod")
 
                     msgTabLocateToTabMethod = obj.optStringOrNull("msgTabLocateToTabMethod")
-                    msgTabContainerSelectMethod = obj.optStringOrNull("msgTabContainerSelectMethod")
-                    msgTabContainerExtDataField = obj.optStringOrNull("msgTabContainerExtDataField")
                     freeCopyPopupMenuClass = obj.optStringOrNull("freeCopyPopupMenuClass")
                     freeCopyPopupContentViewMethod = obj.optStringOrNull("freeCopyPopupContentViewMethod")
                     freeCopyPopupTextField = obj.optStringOrNull("freeCopyPopupTextField")
@@ -1792,6 +1756,7 @@ data class HookSymbols(
                     feedCardBindMethod = obj.optStringOrNull("feedCardBindMethod")
                     feedCardBindMethodSpec = obj.optStringOrNull("feedCardBindMethodSpec")
                     feedCardDataListField = obj.optStringOrNull("feedCardDataListField")
+                    feedCardSchemaGetterSpec = obj.optStringOrNull("feedCardSchemaGetterSpec")
                     feedHeadParamsField = obj.optStringOrNull("feedHeadParamsField")
                     feedRecommendCardNestedDataMethod = obj.optStringOrNull("feedRecommendCardNestedDataMethod")
                     feedRecommendCardNestedDataListField = obj.optStringOrNull("feedRecommendCardNestedDataListField")
@@ -1813,7 +1778,6 @@ data class HookSymbols(
                     forumRainSetterMethod = obj.optStringOrNull("forumRainSetterMethod")
                     forumDialogControllerClass = obj.optStringOrNull("forumDialogControllerClass")
                     forumBusinessPromotShowMethod = obj.optStringOrNull("forumBusinessPromotShowMethod")
-                    forumAnimationShowMethod = obj.optStringOrNull("forumAnimationShowMethod")
                     forumGameFloatingBarControllerClass =
                         obj.optStringOrNull("forumGameFloatingBarControllerClass")
                     forumGameFloatingBarShowMethod = obj.optStringOrNull("forumGameFloatingBarShowMethod")

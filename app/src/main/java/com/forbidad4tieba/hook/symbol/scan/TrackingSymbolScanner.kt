@@ -4,7 +4,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
-import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import com.forbidad4tieba.hook.symbol.model.TrackingTarget
 import java.lang.reflect.Method
@@ -16,8 +15,7 @@ internal object TrackingSymbolScanner {
     fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): List<String> {
         val paths = listOfNotNull(context.applicationInfo?.sourceDir) +
             context.applicationInfo?.splitSourceDirs.orEmpty()
-        val opened = DexKitBridgeProvider.openFirstAvailable(paths, logger) ?: return emptyList()
-        return opened.use { source ->
+        return HookSymbolScanSession.withDexKitBridge(paths, logger) { source ->
             TrackingTarget.entries.mapNotNull { target ->
                 scanSubStep("Tracking.${target.methodName}", logger, null as String?) {
                     restoreMethod(cl, target)
@@ -46,7 +44,7 @@ internal object TrackingSymbolScanner {
                     target.name
                 }
             }
-        }
+        } ?: emptyList()
     }
 
     fun restore(cl: ClassLoader, names: List<String>?): Map<TrackingTarget, Method> =

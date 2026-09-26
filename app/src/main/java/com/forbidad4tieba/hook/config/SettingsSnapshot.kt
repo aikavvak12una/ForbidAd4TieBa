@@ -92,6 +92,8 @@ data class SettingsSnapshot(
     val postModelScoreStatsPostLimit: Int = ConfigManager.DEFAULT_MODEL_SCORE_STATS_POST_LIMIT,
     val isDetailedLoggingEnabled: Boolean = false,
 ) {
+    internal val customPostRules: CustomPostFilterRules? = CustomPostFilterRules.from(this)
+
     fun isHomeNativeGlassRuntimeActive(): Boolean {
         return isHomeNativeGlassEnabled && hasAnyHomeNativeGlassBackgroundImage()
     }

@@ -451,9 +451,7 @@ internal object PbEarlyAdInsertSymbolScanner {
         val metadata = targetClass.getAnnotation(kotlin.Metadata::class.java) ?: return emptyList()
         return (
             readMetadataStringArray(targetClass, metadata, "d1", logger) +
-                readMetadataStringArray(targetClass, metadata, "d2", logger) +
-                readMetadataStringArray(targetClass, metadata, "data1", logger) +
-                readMetadataStringArray(targetClass, metadata, "data2", logger)
+                readMetadataStringArray(targetClass, metadata, "d2", logger)
             )
             .filter { it.isNotBlank() }
             .distinct()

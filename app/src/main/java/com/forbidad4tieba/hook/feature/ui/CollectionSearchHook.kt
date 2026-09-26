@@ -48,6 +48,7 @@ import org.json.JSONObject
 object CollectionSearchHook {
     private const val FULL_CACHE_MAX_ACCOUNTS = 3
     private const val PAGE_SIZE = 20
+    private val MULTI_SPACE_REGEX = Regex("\\s+")
 
     private data class FilterState(
         var query: String = "",
@@ -120,7 +121,6 @@ object CollectionSearchHook {
         val postNetDataMethod: Method,
         val serverAddressField: Field,
         val markGetStoreField: Field,
-        val getCurrentAccountMethod: Method,
     )
 
     private data class CachedMethodSpec(
@@ -387,6 +387,13 @@ object CollectionSearchHook {
                 if (entry.value == fragment) iterator.remove()
             }
         }
+        // A weak Adapter key stays reachable through its strong Fragment value.
+        synchronized(sAdapterOwners) {
+            val iterator = sAdapterOwners.entries.iterator()
+            while (iterator.hasNext()) {
+                if (iterator.next().value === fragment) iterator.remove()
+            }
+        }
         updateSearchButtonVisual(findHostActivity(fragment))
     }
 
@@ -472,19 +479,23 @@ object CollectionSearchHook {
         val state = ensureFragmentState(fragment)
         if (state.syncingFirstPage && !force) return
         if (!force && state.fetchingAll) return
+        val userId = readCurrentAccount(fragment.javaClass.classLoader)
+        val accountKey = toAccountKey(userId)
         state.syncingFirstPage = true
         dbg { "syncFirstPageEveryEntry start force=$force fetchingAll=${state.fetchingAll}" }
         sNetExecutor.execute {
-            val result = fetchFirstPage(fragment)
+            val result = fetchFirstPage(fragment, state, userId, accountKey)
             val host = findHostActivity(fragment)
             host?.runOnUiThread {
                 val current = sFragmentStates[fragment] ?: return@runOnUiThread
+                if (current !== state) return@runOnUiThread
                 current.syncingFirstPage = false
+                if (resolveCurrentAccount(fragment.javaClass.classLoader) != accountKey) return@runOnUiThread
                 val firstPage = result?.items.orEmpty()
                 dbg { "syncFirstPageEveryEntry done size=${firstPage.size} rawLen=${result?.rawPage?.length ?: 0}" }
-                if (result != null && result.rawPage.isNotBlank()) {
-                    mergeFirstPageIntoCache(fragment, firstPage)
-                    persistFirstPageSnapshot(fragment, result.rawPage)
+                if (result != null && accountKey != null && result.rawPage.isNotBlank()) {
+                    mergeFirstPageIntoCache(fragment, accountKey, firstPage)
+                    persistFirstPageSnapshot(fragment, accountKey, result.rawPage)
                     if (current.active) {
                         applyFilter(fragment, current.query, fromUser = false)
                     } else if (current.fullDataReady) {
@@ -493,23 +504,30 @@ object CollectionSearchHook {
                 }
             }
             if (host == null) {
-                sFragmentStates[fragment]?.syncingFirstPage = false
+                if (sFragmentStates[fragment] === state) state.syncingFirstPage = false
             }
         }
     }
 
-    private fun fetchFirstPage(fragment: Any): FirstPageSyncResult? {
+    private fun fetchFirstPage(
+        fragment: Any,
+        state: FilterState,
+        userId: String?,
+        accountKey: String?,
+    ): FirstPageSyncResult? {
+        if (sFragmentStates[fragment] !== state) return null
         val model = resolveModel(fragment) ?: return null
         val parseMethod = resolveModelParseMethod(model.javaClass) ?: return null
         val bridge = resolveNetworkBridge(model.javaClass.classLoader) ?: return null
 
         val server = runCatching { bridge.serverAddressField.get(null)?.toString().orEmpty() }.getOrDefault("")
         val path = runCatching { bridge.markGetStoreField.get(null)?.toString().orEmpty() }.getOrDefault("")
-        val userId = runCatching { bridge.getCurrentAccountMethod.invoke(null)?.toString().orEmpty() }.getOrDefault("")
-        if (server.isBlank() || path.isBlank() || userId.isBlank()) {
+        if (server.isBlank() || path.isBlank() || userId.isNullOrBlank()) {
             dbg("fetchFirstPage abort invalid params server/path/userId")
             return null
         }
+        if (sFragmentStates[fragment] !== state) return null
+        if (resolveCurrentAccount(fragment.javaClass.classLoader) != accountKey) return null
 
         val raw = postCollectionPage(
             bridge = bridge,
@@ -531,13 +549,13 @@ object CollectionSearchHook {
         return FirstPageSyncResult(items = page, rawPage = raw)
     }
 
-    private fun mergeFirstPageIntoCache(fragment: Any, firstPage: List<Any>) {
+    private fun mergeFirstPageIntoCache(fragment: Any, accountKey: String, firstPage: List<Any>) {
         val state = ensureFragmentState(fragment)
         invalidateDiskRestore(state)
         if (!state.fullDataReady) {
             replaceModelDataset(fragment, firstPage)
             val fullReadyNow = firstPage.isEmpty()
-            putFullDataCache(fragment, firstPage, fullReady = fullReadyNow)
+            putFullDataCache(accountKey, firstPage, fullReady = fullReadyNow)
             state.fullDataReady = fullReadyNow
             return
         }
@@ -545,12 +563,12 @@ object CollectionSearchHook {
         if (firstPage.isEmpty()) {
             dbg { "mergeFirstPageIntoCache clear all by empty first page" }
             replaceModelDataset(fragment, emptyList())
-            putFullDataCache(fragment, emptyList(), fullReady = true)
+            putFullDataCache(accountKey, emptyList(), fullReady = true)
             state.fullDataReady = true
             return
         }
 
-        val trustedCache = getTrustedFullCacheItems(fragment)
+        val trustedCache = getFullDataCache(accountKey)?.takeIf(::isMemoryCacheTrustedFull)?.items
         val fullList = if (trustedCache != null && trustedCache.size >= firstPage.size) {
             trustedCache
         } else {
@@ -562,7 +580,7 @@ object CollectionSearchHook {
         }
         if (fullList.isEmpty()) {
             replaceModelDataset(fragment, firstPage)
-            putFullDataCache(fragment, firstPage, fullReady = state.fullDataReady)
+            putFullDataCache(accountKey, firstPage, fullReady = state.fullDataReady)
             state.fullDataReady = true
             return
         }
@@ -585,7 +603,7 @@ object CollectionSearchHook {
         }
 
         replaceModelDataset(fragment, merged)
-        putFullDataCache(fragment, merged, fullReady = state.fullDataReady)
+        putFullDataCache(accountKey, merged, fullReady = state.fullDataReady)
         state.fullDataReady = true
     }
 
@@ -604,6 +622,8 @@ object CollectionSearchHook {
     private fun startFetchAllCollections(fragment: Any, userVisible: Boolean = true) {
         val state = ensureFragmentState(fragment)
         if (state.fetchingAll) return
+        val userId = readCurrentAccount(fragment.javaClass.classLoader)
+        val accountKey = toAccountKey(userId)
         invalidateDiskRestore(state)
         state.fetchingAll = true
         val token = state.fetchToken + 1
@@ -611,29 +631,37 @@ object CollectionSearchHook {
         dbg { "startFetchAllCollections token=$token userVisible=$userVisible" }
 
         sNetExecutor.execute {
-            val allResult = loadAllCollections(fragment, token)
-            persistFullSnapshot(fragment, allResult)
+            val allResult = loadAllCollections(fragment, state, token, userId, accountKey)
+            // A completed final page may still be cached for its source account after leaving.
+            persistFullSnapshot(fragment, accountKey, allResult)
             val host = findHostActivity(fragment)
             if (host == null) {
                 val current = sFragmentStates[fragment] ?: return@execute
-                if (current.fetchToken != token) return@execute
+                if (current !== state || current.fetchToken != token) return@execute
                 current.fetchingAll = false
+                if (resolveCurrentAccount(fragment.javaClass.classLoader) != accountKey) {
+                    current.fullLoadRequested = false
+                }
                 return@execute
             }
             host.runOnUiThread {
                 val current = sFragmentStates[fragment] ?: return@runOnUiThread
-                if (current.fetchToken != token) return@runOnUiThread
+                if (current !== state || current.fetchToken != token) return@runOnUiThread
                 current.fetchingAll = false
+                if (resolveCurrentAccount(fragment.javaClass.classLoader) != accountKey) {
+                    current.fullLoadRequested = false
+                    return@runOnUiThread
+                }
                 val allItems = allResult?.items.orEmpty()
                 dbg {
                     "startFetchAllCollections finish token=$token items=${allItems.size} " +
                         "complete=${allResult?.complete} pages=${allResult?.rawPages?.size ?: 0}"
                 }
-                if (allResult != null) {
+                if (allResult != null && accountKey != null) {
                     val complete = allResult.complete
                     current.fullDataReady = complete
                     replaceModelDataset(fragment, allItems)
-                    putFullDataCache(fragment, allItems, fullReady = complete)
+                    putFullDataCache(accountKey, allItems, fullReady = complete)
                     if (current.active) {
                         updateSyncActionFooter(fragment, true)
                     } else {
@@ -657,15 +685,21 @@ object CollectionSearchHook {
         }
     }
 
-    private fun loadAllCollections(fragment: Any, token: Int): LoadAllResult? {
+    private fun loadAllCollections(
+        fragment: Any,
+        state: FilterState,
+        token: Int,
+        userId: String?,
+        accountKey: String?,
+    ): LoadAllResult? {
+        if (!isFetchTokenValid(fragment, state, token)) return null
         val model = resolveModel(fragment) ?: return null
         val parseMethod = resolveModelParseMethod(model.javaClass) ?: return null
         val bridge = resolveNetworkBridge(model.javaClass.classLoader) ?: return null
 
         val server = runCatching { bridge.serverAddressField.get(null)?.toString().orEmpty() }.getOrDefault("")
         val path = runCatching { bridge.markGetStoreField.get(null)?.toString().orEmpty() }.getOrDefault("")
-        val userId = runCatching { bridge.getCurrentAccountMethod.invoke(null)?.toString().orEmpty() }.getOrDefault("")
-        if (server.isBlank() || path.isBlank() || userId.isBlank()) {
+        if (server.isBlank() || path.isBlank() || userId.isNullOrBlank()) {
             dbg { "loadAllCollections abort invalid params server/path/userId" }
             return null
         }
@@ -679,7 +713,8 @@ object CollectionSearchHook {
         dbg { "loadAllCollections begin rn=$rn maxPages=$maxPages" }
 
         repeat(maxPages) { pageIndex ->
-            if (!isFetchTokenValid(fragment, token)) return null
+            if (!isFetchTokenValid(fragment, state, token)) return null
+            if (resolveCurrentAccount(fragment.javaClass.classLoader) != accountKey) return null
             val raw = postCollectionPage(bridge, url, userId, offset, rn)
                 ?: run {
                     dbg { "loadAllCollections stop: network null at page=$pageIndex offset=$offset" }
@@ -718,8 +753,8 @@ object CollectionSearchHook {
         return dedupe.values.takeIf { it.isNotEmpty() }?.let { LoadAllResult(ArrayList(it), rawPages, false) }
     }
 
-    private fun isFetchTokenValid(fragment: Any, token: Int): Boolean {
-        return sFragmentStates[fragment]?.fetchToken == token
+    private fun isFetchTokenValid(fragment: Any, state: FilterState, token: Int): Boolean {
+        return sFragmentStates[fragment] === state && state.fetchToken == token
     }
 
     private fun postCollectionPage(
@@ -908,6 +943,10 @@ object CollectionSearchHook {
 
     private fun getFullDataCache(fragment: Any): FullDataCache? {
         val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return null
+        return getFullDataCache(accountKey)
+    }
+
+    private fun getFullDataCache(accountKey: String): FullDataCache? {
         synchronized(sFullDataCacheByAccount) {
             val cache = sFullDataCacheByAccount[accountKey] ?: return null
             if (cache.items.isEmpty() && !cache.fullReady) {
@@ -920,11 +959,6 @@ object CollectionSearchHook {
                 fullReady = cache.fullReady,
             )
         }
-    }
-
-    private fun putFullDataCache(fragment: Any, items: List<Any>, fullReady: Boolean = true) {
-        val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
-        putFullDataCache(accountKey, items, fullReady)
     }
 
     private fun putFullDataCache(accountKey: String, items: List<Any>, fullReady: Boolean) {
@@ -948,7 +982,7 @@ object CollectionSearchHook {
         }
     }
 
-    private fun persistFullSnapshot(fragment: Any, result: LoadAllResult?) {
+    private fun persistFullSnapshot(fragment: Any, accountKey: String?, result: LoadAllResult?) {
         val data = result ?: return
         if (!data.complete || data.rawPages.isEmpty()) {
             dbg {
@@ -958,7 +992,7 @@ object CollectionSearchHook {
             return
         }
         val context = resolveAppContext(fragment) ?: return
-        val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
+        if (accountKey == null) return
         sDiskIoExecutor.execute {
             dbg { "persistFullSnapshot write pages=${data.rawPages.size} account=$accountKey" }
             CollectionSearchCacheStore.write(
@@ -971,10 +1005,9 @@ object CollectionSearchHook {
         }
     }
 
-    private fun persistFirstPageSnapshot(fragment: Any, rawPage: String?) {
+    private fun persistFirstPageSnapshot(fragment: Any, accountKey: String, rawPage: String?) {
         if (rawPage.isNullOrBlank()) return
         val context = resolveAppContext(fragment) ?: return
-        val accountKey = resolveCurrentAccount(fragment.javaClass.classLoader) ?: return
         sDiskIoExecutor.execute {
             dbg { "persistFirstPageSnapshot write rawLen=${rawPage.length} account=$accountKey" }
             CollectionSearchCacheStore.updateFirstPage(
@@ -991,6 +1024,14 @@ object CollectionSearchHook {
     }
 
     private fun resolveCurrentAccount(cl: ClassLoader?): String? {
+        return toAccountKey(readCurrentAccount(cl))
+    }
+
+    private fun toAccountKey(userId: String?): String? {
+        return userId?.trim()?.ifBlank { "__default__" }
+    }
+
+    private fun readCurrentAccount(cl: ClassLoader?): String? {
         val loader = cl ?: return null
         val method = synchronized(sCurrentAccountMethodCache) {
             sCurrentAccountMethodCache[loader] ?: runCatching {
@@ -999,10 +1040,9 @@ object CollectionSearchHook {
                     .apply { isAccessible = true }
             }.getOrNull()?.also { sCurrentAccountMethodCache[loader] = it }
         } ?: return null
-        val account = runCatching {
-            method.invoke(null)?.toString()?.trim().orEmpty()
+        return runCatching {
+            method.invoke(null)?.toString().orEmpty()
         }.getOrDefault("")
-        return account.ifBlank { "__default__" }
     }
 
     private fun installAdapterFooterHook(adapterClass: Class<*>) {
@@ -1206,7 +1246,6 @@ object CollectionSearchHook {
         return try {
             val netClass = Class.forName(StableTiebaHookPoints.NETWORK_CLASS, false, loader)
             val tbConfigClass = Class.forName(StableTiebaHookPoints.TB_CONFIG_CLASS, false, loader)
-            val coreAppClass = Class.forName(StableTiebaHookPoints.TBADK_CORE_APPLICATION_CLASS, false, loader)
 
             val ctor = netClass.getDeclaredConstructor(String::class.java).apply { isAccessible = true }
             val addPostData = netClass.getDeclaredMethod(
@@ -1220,8 +1259,6 @@ object CollectionSearchHook {
                 .apply { isAccessible = true }
             val markField = tbConfigClass.getDeclaredField(StableTiebaHookPoints.FIELD_MARK_GET_STORE)
                 .apply { isAccessible = true }
-            val accountMethod = coreAppClass.getDeclaredMethod(StableTiebaHookPoints.METHOD_GET_CURRENT_ACCOUNT)
-                .apply { isAccessible = true }
 
             NetworkBridge(
                 netCtor = ctor,
@@ -1229,7 +1266,6 @@ object CollectionSearchHook {
                 postNetDataMethod = postNetData,
                 serverAddressField = serverField,
                 markGetStoreField = markField,
-                getCurrentAccountMethod = accountMethod,
             ).also { sNetworkBridgeCache[loader] = it }
         } catch (_: Throwable) {
             null
@@ -1810,7 +1846,7 @@ object CollectionSearchHook {
     private fun normalizeQuery(input: String): String {
         return input
             .lowercase(Locale.ROOT)
-            .replace(Regex("\\s+"), " ")
+            .replace(MULTI_SPACE_REGEX, " ")
             .trim()
     }
 

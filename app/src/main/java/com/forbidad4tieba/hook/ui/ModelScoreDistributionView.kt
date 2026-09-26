@@ -57,8 +57,8 @@ internal class ModelScoreDistributionView(
     private val cardRect = RectF()
     private val plotRect = RectF()
     private val barRect = RectF()
-    private val barRects = ArrayList<RectF>()
     private val cumulativePath = Path()
+    private var drawnBucketCount = 0
     private var selectedBucketIndex = -1
 
     init {
@@ -88,12 +88,12 @@ internal class ModelScoreDistributionView(
         drawAxisLabels(canvas, density, maxCount)
         val gap = (if (buckets.size > 32) 1f else 2f) * density
         val barWidth = ((plotRect.width() - gap * (buckets.size - 1)) / buckets.size).coerceAtLeast(1f)
-        barRects.clear()
+        drawnBucketCount = 0
         buckets.forEachIndexed { index, bucket ->
             val left = plotRect.left + index * (barWidth + gap)
             val top = plotRect.bottom - plotRect.height() * (bucket.count.toFloat() / maxCount)
             barRect.set(left, top, left + barWidth, plotRect.bottom)
-            barRects.add(RectF(barRect))
+            drawnBucketCount++
             canvas.drawRoundRect(
                 barRect,
                 2f * density,
@@ -101,7 +101,7 @@ internal class ModelScoreDistributionView(
                 if (index == selectedBucketIndex) highlightBarPaint else barPaint
             )
         }
-        drawCumulativeCurve(canvas, buckets)
+        drawCumulativeCurve(canvas, buckets, barWidth, gap)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -165,12 +165,15 @@ internal class ModelScoreDistributionView(
     private fun drawCumulativeCurve(
         canvas: Canvas,
         buckets: List<CustomPostModelScoreStats.Bucket>,
+        barWidth: Float,
+        gap: Float,
     ) {
-        if (buckets.isEmpty() || barRects.size != buckets.size) return
+        if (buckets.isEmpty() || drawnBucketCount != buckets.size) return
         cumulativePath.reset()
         buckets.forEachIndexed { index, bucket ->
-            val rect = barRects[index]
-            val x = rect.centerX()
+            val left = plotRect.left + index * (barWidth + gap)
+            val right = left + barWidth
+            val x = (left + right) * 0.5f
             val y = plotRect.bottom - plotRect.height() * bucket.cumulativeRatio.coerceIn(0.0, 1.0).toFloat()
             if (index == 0) {
                 cumulativePath.moveTo(x, y)
@@ -183,9 +186,9 @@ internal class ModelScoreDistributionView(
 
     private fun findBucketIndex(x: Float, y: Float): Int {
         if (y < plotRect.top || y > plotRect.bottom) return -1
-        if (barRects.isEmpty() || x < plotRect.left || x > plotRect.right) return -1
+        if (drawnBucketCount == 0 || x < plotRect.left || x > plotRect.right) return -1
         val ratio = ((x - plotRect.left) / plotRect.width()).coerceIn(0f, 0.999999f)
-        return (ratio * barRects.size).toInt().coerceIn(0, barRects.lastIndex)
+        return (ratio * drawnBucketCount).toInt().coerceIn(0, drawnBucketCount - 1)
     }
 
     private fun formatAxisValue(value: Double): String {

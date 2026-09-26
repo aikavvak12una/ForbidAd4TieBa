@@ -10,22 +10,40 @@ internal object HookSymbolCacheKeys {
 }
 
 internal class HookSymbolMemoryCache {
-    @Volatile private var fingerprint: String? = null
-    @Volatile private var symbols: HookSymbols? = null
+    private class Entry(val fingerprint: String, val symbols: HookSymbols)
+    @Volatile private var entry: Entry? = null
 
-    fun currentSymbols(): HookSymbols? = symbols
+    fun currentSymbols(): HookSymbols? = entry?.symbols
 
     fun getIfFingerprint(currentFingerprint: String): HookSymbols? {
-        return symbols?.takeIf { fingerprint == currentFingerprint }
+        val snapshot = entry ?: return null
+        return snapshot.symbols.takeIf { snapshot.fingerprint == currentFingerprint }
     }
 
     fun put(currentFingerprint: String, currentSymbols: HookSymbols) {
-        fingerprint = currentFingerprint
-        symbols = currentSymbols
+        entry = Entry(currentFingerprint, currentSymbols)
     }
 
     fun clear() {
-        fingerprint = null
-        symbols = null
+        entry = null
+    }
+}
+
+internal object HookSymbolCachePolicy {
+    /** The payload supplier is never touched when the host/module fingerprint has changed. */
+    inline fun decodeIfFingerprint(stored: String?, current: String, readPayload: () -> String?): HookSymbols? {
+        if (stored != current) return null
+        return HookSymbols.fromJson(readPayload())
+    }
+
+    fun isUsable(symbols: HookSymbols): Boolean {
+        if (symbols.cacheSchemaVersion != HookSymbols.CACHE_SCHEMA_VERSION ||
+            symbols.dexKitRuleVersion != HookSymbols.DEXKIT_RULE_VERSION
+        ) return false
+        return when (symbols.source) {
+            "unsupported" -> true
+            "scan", "partial" -> symbols.createdAt > 0L
+            else -> false
+        }
     }
 }

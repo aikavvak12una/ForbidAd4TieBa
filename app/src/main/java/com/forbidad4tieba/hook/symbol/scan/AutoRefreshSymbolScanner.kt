@@ -155,27 +155,11 @@ internal object AutoRefreshSymbolScanner {
             logger = logger,
         )
             .filter { isMethodNameValid(it.ownerMethodName, cl, logger) }
-            .groupBy { it.ownerMethodName }
-            .mapNotNull { (_, methodMatches) -> methodMatches.maxByOrNull { it.score } }
-            .sortedWith(
-                compareByDescending<DexAutoRefreshMatch> { it.score }
-                    .thenBy { it.ownerMethodName.length }
-                    .thenBy { it.ownerMethodName },
-            )
+            .distinctBy { it.ownerMethodName }
 
-        val best = matches.firstOrNull() ?: run {
-            log(logger, "autoRefreshDex: no semantic match")
-            return null
-        }
-        val second = matches.getOrNull(1)
-        if (second != null && best.score - second.score < 8) {
-            log(
-                logger,
-                "autoRefreshDex ambiguous: best=${best.ownerMethodName}:${best.score}[${best.evidence}], " +
-                    "second=${second.ownerMethodName}:${second.score}[${second.evidence}]",
-            )
-            return null
-        }
+        val best = selectUniqueScoredCandidate(
+            "AutoRefreshHook.Trigger", matches, 8, logger, { it.score }, { it.ownerMethodName },
+        ) ?: return null
 
         log(
             logger,

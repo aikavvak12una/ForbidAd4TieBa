@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.feature.ad
 
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.config.CustomPostFilterRules
 import org.json.JSONObject
 
 internal object CustomPostFilterMatcher {
@@ -12,6 +13,7 @@ internal object CustomPostFilterMatcher {
     private const val CARD_TYPE_NORMAL = "normal"
     private const val CARD_TYPE_QUESTION = "question"
     private const val CARD_TYPE_QUESTION_GOOD = "question_good"
+    private const val CARD_TYPE_QUESTION_FEELYOU = "question_feelyou"
     private const val CARD_TYPE_COMMENT_FORWARD = "commentForwardCard"
     private const val CARD_TYPE_NORMAL_SCORE = "normalScore"
     private const val CARD_TYPE_BRAND_LOTTERY_AD = "brandLotteryAd"
@@ -31,69 +33,18 @@ internal object CustomPostFilterMatcher {
     internal data class Decision(
         val blocked: Boolean,
         val reason: String? = null,
+        val modelScores: Map<String, Double>? = null,
     )
 
-    internal data class RuntimeRules(
-        val vote: Boolean,
-        val video: Boolean,
-        val reply: Boolean,
-        val hot: Boolean,
-        val goods: Boolean,
-        val gameBooking: Boolean,
-        val help: Boolean,
-        val score: Boolean,
-        val lottery: Boolean,
-        val live: Boolean,
-        val recommendForum: Boolean,
-        val unfollowedForum: Boolean,
-        val forumKeyword: Boolean,
-        val forumKeywords: List<String>,
-        val modelScore: Boolean,
-        val modelScoreThresholds: List<ConfigManager.ModelScoreThreshold>,
-    ) {
-        val needsFeedHeadParamsCheck: Boolean =
-            reply ||
-                gameBooking ||
-                help ||
-                score ||
-                lottery ||
-                live ||
-                unfollowedForum ||
-                forumKeyword ||
-                modelScore
-    }
+    val KEEP = Decision(blocked = false)
 
-    fun runtimeRules(): RuntimeRules? {
-        val settings = ConfigManager.snapshot()
-        if (!settings.isCustomPostFilterEnabled) return null
-        val forumKeyword =
-            settings.isPostForumKeywordFilterEnabled && settings.postForumKeywordList.isNotEmpty()
-        val rules = RuntimeRules(
-            vote = settings.isPostVoteFilterEnabled,
-            video = settings.isPostVideoFilterEnabled,
-            reply = settings.isPostReplyFilterEnabled,
-            hot = settings.isPostHotFilterEnabled,
-            goods = settings.isPostGoodsFilterEnabled,
-            gameBooking = settings.isPostGameBookingFilterEnabled,
-            help = settings.isPostHelpFilterEnabled,
-            score = settings.isPostScoreFilterEnabled,
-            lottery = settings.isPostLotteryFilterEnabled,
-            live = settings.isPostLiveFilterEnabled,
-            recommendForum = settings.isPostRecommendForumFilterEnabled,
-            unfollowedForum = settings.isPostUnfollowedForumFilterEnabled,
-            forumKeyword = forumKeyword,
-            forumKeywords = settings.postForumKeywordList,
-            modelScore = settings.isPostModelScoreFilterEnabled,
-            modelScoreThresholds = settings.postModelScoreThresholds,
-        )
-        return if (rules.hasAnyRule()) rules else null
-    }
+    fun runtimeRules(): CustomPostFilterRules? = ConfigManager.snapshot().customPostRules
 
-    fun decideByTemplateKey(templateKey: String?, rules: RuntimeRules): Decision {
+    fun decideByTemplateKey(templateKey: String?, rules: CustomPostFilterRules): Decision {
         if (templateKey.isNullOrBlank()) {
-            return Decision(blocked = false)
+            return KEEP
         }
-        val type = classifyByTemplateKey(templateKey) ?: return Decision(blocked = false)
+        val type = classifyByTemplateKey(templateKey) ?: return KEEP
         val enabled = when (type) {
             PostType.VOTE -> rules.vote
             PostType.VIDEO -> rules.video
@@ -111,7 +62,7 @@ internal object CustomPostFilterMatcher {
                 reason = "custom_post_type:${type.key}:template_key=$templateKey",
             )
         } else {
-            Decision(blocked = false)
+            KEEP
         }
     }
 
@@ -119,12 +70,19 @@ internal object CustomPostFilterMatcher {
         return runtimeRules() != null
     }
 
-    fun decideByRecommendCardTemplateKey(templateKey: String?, rules: RuntimeRules): Decision {
+    fun decideByCardSchema(schema: String?, rules: CustomPostFilterRules): Decision =
+        if (rules.hot && HotTopicRoute.matches(schema)) {
+            Decision(blocked = true, reason = "custom_post_type:hot:card_schema=topic_detail")
+        } else {
+            KEEP
+        }
+
+    fun decideByRecommendCardTemplateKey(templateKey: String?, rules: CustomPostFilterRules): Decision {
         if (!rules.recommendForum || templateKey.isNullOrBlank()) {
-            return Decision(blocked = false)
+            return KEEP
         }
         if (templateKey !in RECOMMEND_FORUM_TEMPLATE_KEYS) {
-            return Decision(blocked = false)
+            return KEEP
         }
         return Decision(
             blocked = true,
@@ -132,9 +90,9 @@ internal object CustomPostFilterMatcher {
         )
     }
 
-    fun decideByFeedHeadParams(params: Map<*, *>?, rules: RuntimeRules): Decision {
+    fun decideByFeedHeadParams(params: Map<*, *>?, rules: CustomPostFilterRules): Decision {
         if (!rules.needsFeedHeadParamsCheck || params == null) {
-            return Decision(blocked = false)
+            return KEEP
         }
         val cardType = params.stringValue("card_type")
         if (rules.reply && cardType == CARD_TYPE_COMMENT_FORWARD) {
@@ -219,15 +177,14 @@ internal object CustomPostFilterMatcher {
                 )
             }
         }
-        val modelScoreDecision = decideByModelScoreThreshold(params, rules)
-        if (modelScoreDecision.blocked) return modelScoreDecision
-        return Decision(blocked = false)
+        return decideByModelScoreThreshold(params, rules)
     }
 
     private fun isHelpCardType(cardType: String?): Boolean {
         return cardType == CARD_TYPE_NORMAL ||
             cardType == CARD_TYPE_QUESTION ||
-            cardType == CARD_TYPE_QUESTION_GOOD
+            cardType == CARD_TYPE_QUESTION_GOOD ||
+            cardType == CARD_TYPE_QUESTION_FEELYOU
     }
 
     private fun findPromotionButtonName(params: Map<*, *>): String? {
@@ -238,41 +195,24 @@ internal object CustomPostFilterMatcher {
         }.getOrNull()
     }
 
-    private fun decideByModelScoreThreshold(params: Map<*, *>, rules: RuntimeRules): Decision {
-        if (!rules.modelScore) return Decision(blocked = false)
-        val rawExtra = params.stringValue("extra") ?: return Decision(blocked = false)
+    private fun decideByModelScoreThreshold(params: Map<*, *>, rules: CustomPostFilterRules): Decision {
+        if (!rules.modelScore) return KEEP
+        val rawExtra = params.stringValue("extra") ?: return KEEP
         val scores = CustomPostModelScoreCatalog.extractScores(rawExtra)
-        if (scores.isEmpty()) return Decision(blocked = false)
-        CustomPostModelScoreStats.record(scores)
+        if (scores.isEmpty()) return KEEP
         val thresholds = rules.modelScoreThresholds
-        if (thresholds.isEmpty()) return Decision(blocked = false)
+        if (thresholds.isEmpty()) return Decision(false, modelScores = scores)
         for (threshold in thresholds) {
             val score = scores[threshold.key] ?: continue
             if (score < threshold.threshold) {
                 return Decision(
                     blocked = true,
                     reason = "custom_post_model_score:${threshold.key}=$score<threshold=${threshold.threshold}",
+                    modelScores = scores,
                 )
             }
         }
-        return Decision(blocked = false)
-    }
-
-    private fun RuntimeRules.hasAnyRule(): Boolean {
-        return vote ||
-            video ||
-            reply ||
-            hot ||
-            goods ||
-            gameBooking ||
-            help ||
-            score ||
-            lottery ||
-            live ||
-            recommendForum ||
-            unfollowedForum ||
-            forumKeyword ||
-            modelScore
+        return Decision(false, modelScores = scores)
     }
 
     private fun classifyByTemplateKey(templateKey: String): PostType? {

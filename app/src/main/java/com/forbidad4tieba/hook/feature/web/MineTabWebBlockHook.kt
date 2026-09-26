@@ -1,25 +1,20 @@
 package com.forbidad4tieba.hook.feature.web
 
-import android.content.Context
-import android.os.Build
 import android.os.SystemClock
 import android.view.View
 import android.webkit.WebView
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
-import com.forbidad4tieba.hook.symbol.model.WebAdBlockConstraints
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Hides ad and promotion blocks in the Mine tab WebView for supported host versions.
+ * Hides ad and promotion blocks in the verified Mine tab WebView.
  *
  * This hooks TbWebView.loadUrl rather than android.webkit.WebView.loadUrl because the host can show
  * an internal MonitorWebView or cached page directly, bypassing the inner WebView load callbacks.
@@ -77,13 +72,9 @@ object MineTabWebBlockHook {
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
     private val scheduledStamp = Collections.synchronizedMap(WeakHashMap<Any, ScheduleStamp>())
     private val lastLoggedUrl = Collections.synchronizedMap(WeakHashMap<Any, String>())
-    private val versionWarningLogged = AtomicBoolean(false)
 
     @Volatile
     private var runtimeTargets: RuntimeTargets? = null
-
-    @Volatile
-    private var versionEligible: Boolean? = null
 
     fun hook(classLoader: ClassLoader, symbols: HookSymbols) {
         val mod = XposedCompat.module ?: return
@@ -155,7 +146,7 @@ object MineTabWebBlockHook {
                 val result = chain.proceed()
 
                 val view = target as? View
-                if (view != null && isMineTabUrl(url) && isFeatureEnabledFor(view.context)) {
+                if (view != null && isMineTabUrl(url) && ConfigManager.isMineTabWebAdBlockEnabled) {
                     scheduleInjection(target, view, url.orEmpty())
                 }
                 result
@@ -166,11 +157,6 @@ object MineTabWebBlockHook {
             XposedCompat.log("[MineTabWebBlockHook] FAILED: ${t.message}")
             XposedCompat.log(t)
         }
-    }
-
-    fun onAppContextReady(context: Context) {
-        if (versionEligible != null) return
-        versionEligible = resolveVersionEligible(context)
     }
 
     private fun scheduleInjection(target: Any, hostView: View, triggerUrl: String) {
@@ -191,7 +177,7 @@ object MineTabWebBlockHook {
 
         for (delay in INJECT_DELAYS_MS) {
             hostView.postDelayed({
-                if (!isFeatureEnabledFor(hostView.context)) {
+                if (!ConfigManager.isMineTabWebAdBlockEnabled) {
                     clearState(target)
                     return@postDelayed
                 }
@@ -246,36 +232,6 @@ object MineTabWebBlockHook {
     private fun clearState(target: Any) {
         scheduledStamp.remove(target)
         lastLoggedUrl.remove(target)
-    }
-
-    private fun isFeatureEnabledFor(context: Context?): Boolean {
-        return ConfigManager.isMineTabWebAdBlockEnabled && isTargetVersionEligible(context)
-    }
-
-    private fun isTargetVersionEligible(context: Context?): Boolean {
-        val cached = versionEligible
-        if (cached != null) return cached
-        if (context == null) return false
-        return resolveVersionEligible(context).also { versionEligible = it }
-    }
-
-    private fun resolveVersionEligible(context: Context): Boolean {
-        return try {
-            val appContext = context.applicationContext ?: context
-            val info = appContext.packageManager.getPackageInfo(Constants.TARGET_PACKAGE, 0)
-            @Suppress("DEPRECATION")
-            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                info.longVersionCode
-            } else {
-                info.versionCode.toLong()
-            }
-            versionCode >= WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE
-        } catch (t: Throwable) {
-            if (versionWarningLogged.compareAndSet(false, true)) {
-                XposedCompat.logW("[MineTabWebBlockHook] target version unavailable: ${t.message}")
-            }
-            false
-        }
     }
 
     private fun isMineTabUrl(url: String?): Boolean {

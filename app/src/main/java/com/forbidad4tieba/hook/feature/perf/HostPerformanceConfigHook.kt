@@ -1,254 +1,143 @@
 package com.forbidad4tieba.hook.feature.perf
 
+import com.forbidad4tieba.hook.InstallOutcome
+import com.forbidad4tieba.hook.InstallState
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.config.SettingsSnapshot
+import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.core.XposedCompat
-import org.json.JSONArray
-import org.json.JSONObject
-import java.util.concurrent.atomic.AtomicBoolean
+import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigTarget
+import io.github.libxposed.api.XposedInterface
+import java.lang.reflect.Method
 
-/**
- * Overrides stable host performance configuration reads.
- *
- * This hook only touches stable helper/config classes. More complex policy is precomputed into
- * boolean values in ConfigManager.
- *
- * 低端机精简（isLowEndDeviceConfigForced）适配 22.9.1.0 的实际读取点：
- * - ScheduleStrategy.getDeviceScore() -> -1.0（设备分压到低端）
- * - MultiSharedPrefHelper.b("sp_mid_score_device_config") -> 100.0f（低端阈值，sjc.a.b() 恒 true）
- * - MultiSharedPrefHelper.e("low_score_block_list") -> 注入 JSONArray 禁用列表
- *   （disable_preload_feed_image / disable_webview_proxy，被 LowScoreScheduler.C() 消费）
- * - MultiSharedPrefHelper.e("low_score_kv_config") -> 注入 {"disable_re_run_idle":"true"}
- *   （被 LowScoreScheduler.k() 消费）
- * 旧实现 hook 的 sp_low_score_device_config / low_dev_forbid_list / a(Float) / c(String,String)
- * 在 22.9.1.0 无消费点，已修正。
- */
+/** Applies host configuration overrides. Obfuscated targets are restored by the symbol domain. */
 object HostPerformanceConfigHook {
-    private const val TAG = "[HostPerformanceConfigHook]"
     private const val SHARED_PREF_HELPER_CLASS = "com.baidu.tbadk.core.sharedPref.SharedPrefHelper"
-    // 注意：宿主实际类是 com.baidu.adp.baes.sharedperf.MultiSharedPrefHelper（sjc/LowScoreScheduler 均引用它），
-    // 不是 com.baidu.tbadk.core.sharedPref.MultiSharedPrefHelper（旧常量导致 findClassOrNull 永远失败）
-    private const val MULTI_SHARED_PREF_HELPER_CLASS = "com.baidu.adp.baes.sharedperf.MultiSharedPrefHelper"
     private const val INIT_FLUTTER_NPS_PLUGIN_TASK_CLASS =
         "com.baidu.searchbox.task.sync.appcreate.InitFlutterNpsPluginTask"
-    private const val SCHEDULE_STRATEGY_CLASS = "com.baidu.searchbox.launch.ScheduleStrategy"
 
     private const val PREF_FUN_AD_SDK_ENABLE = "pref_key_fun_ad_sdk_enable"
     private const val PREF_SPLASH_PLG_ENABLE = "key_splash_new_policy_plg_enable"
     private const val PREF_SPLASH_PLG_CPC_ENABLE = "key_splash_new_policy_plg_cpc_enable"
     private const val PREF_SPLASH_SHAKE_AD_OPEN = "key_splash_shake_ad_open"
     private const val PREF_LOW_SCORE_THRESHOLD = "sp_mid_score_device_config"
-    private const val PREF_LOW_DEV_BLOCK_LIST = "low_score_block_list"
-    private const val PREF_LOW_DEV_KV_CONFIG = "low_score_kv_config"
     private const val FORCED_LOW_DEVICE_SCORE = -1.0
     private const val FORCED_LOW_SCORE_THRESHOLD = 100.0f
 
-    // 22.9.1.0 中被 LowScoreScheduler 实际消费的 key
-    private const val LOW_DEV_DISABLE_RE_RUN_IDLE = "disable_re_run_idle"
-    private const val LOW_DEV_DISABLE_PRELOAD_FEED_IMAGE = "disable_preload_feed_image"
-    private const val LOW_DEV_DISABLE_WEBVIEW_PROXY = "disable_webview_proxy"
-    private const val LOW_DEV_DEFER_VIDEO_AUTOPLAY_MS = "defer_video_autoplay_ms"
-    private const val DEFER_VIDEO_AUTOPLAY_MS = "5000"
-
-    private val installed = AtomicBoolean(false)
-
-    fun hook(cl: ClassLoader) {
-        val settings = ConfigManager.snapshot()
-        if (!isAnyConfigOverrideEnabled(settings)) {
-            XposedCompat.logD("$TAG skipped: config disabled")
-            return
-        }
-        if (!installed.compareAndSet(false, true)) return
-
-        val mod = XposedCompat.module ?: run {
-            installed.set(false)
-            return
-        }
-
-        var totalInstalled = 0
-        if (settings.isAdSdkComponentsDisabled) {
-            totalInstalled += hookSharedPrefHelper(mod, cl)
-        }
-        if (settings.isLowEndDeviceConfigForced) {
-            totalInstalled += hookMultiSharedPrefHelper(mod, cl)
-            totalInstalled += hookScheduleStrategy(mod, cl)
-        }
-        if (settings.isFlutterPreinitDisabled) {
-            totalInstalled += hookFlutterPreinitTask(mod, cl)
-        }
-
-        if (totalInstalled > 0) {
-            XposedCompat.log("$TAG hooks INSTALLED: count=$totalInstalled")
-        } else {
-            installed.set(false)
-            XposedCompat.logD("$TAG no host config methods found")
-        }
+    private val installedMethods by lazy {
+        OwnedHookSet<Method, XposedInterface.HookHandle> { it.unhook() }
     }
 
-    private fun hookSharedPrefHelper(
-        mod: io.github.libxposed.api.XposedModule,
-        cl: ClassLoader,
-    ): Int {
-        val clazz = XposedCompat.findClassOrNull(SHARED_PREF_HELPER_CLASS, cl) ?: return 0
-        var installedCount = 0
+    @Synchronized
+    internal fun hook(cl: ClassLoader, lowEndTargets: Map<LowEndConfigTarget, Method>): InstallOutcome {
+        val settings = ConfigManager.snapshot()
+        if (!isAnyConfigOverrideEnabled(settings)) {
+            return InstallOutcome.skipped("config disabled")
+        }
+        val mod = XposedCompat.module ?: return InstallOutcome.skipped("module unavailable")
+        val before = installedMethods.size()
+        var count = 0
+        var missing = 0
+        val failures = ArrayList<String>()
 
-        XposedCompat.findMethodOrNull(
-            clazz,
-            "getInt",
-            String::class.java,
-            Int::class.javaPrimitiveType!!,
-        )?.let { method ->
-            runCatching {
-                method.isAccessible = true
+        // Each override is useful independently. Keep successes and retry only missing/failed points.
+        fun install(
+            label: String,
+            resolve: () -> Method?,
+            create: (Method) -> XposedInterface.HookHandle,
+        ) {
+            try {
+                val method = resolve()
+                if (method == null) {
+                    missing++
+                    failures += "$label missing"
+                    return
+                }
+                installedMethods.install(method) {
+                    method.isAccessible = true
+                    create(method)
+                }
+                count++
+            } catch (failure: Throwable) {
+                failures += "$label: ${failure.javaClass.simpleName}: ${failure.message}"
+            }
+        }
+
+        if (settings.isAdSdkComponentsDisabled) {
+            install("ad.getInt", {
+                XposedCompat.findMethodOrNull(
+                    SHARED_PREF_HELPER_CLASS, cl, "getInt", String::class.java, Int::class.javaPrimitiveType!!,
+                )
+            }) { method ->
                 mod.hook(method).intercept { chain ->
+                    if (!ConfigManager.isAdSdkComponentsDisabled) return@intercept chain.proceed()
                     val key = chain.args.firstOrNull() as? String
-                    when {
-                        key == PREF_FUN_AD_SDK_ENABLE && ConfigManager.isAdSdkComponentsDisabled -> 0
-                        // splash 新策略 plg 开关走 getInt（ad7 读 getInt(key,0)==1），非 getBoolean
-                        (key == PREF_SPLASH_PLG_ENABLE || key == PREF_SPLASH_PLG_CPC_ENABLE) &&
-                            ConfigManager.isAdSdkComponentsDisabled -> 0
+                    when (key) {
+                        PREF_FUN_AD_SDK_ENABLE, PREF_SPLASH_PLG_ENABLE, PREF_SPLASH_PLG_CPC_ENABLE -> 0
                         else -> chain.proceed()
                     }
                 }
-                installedCount++
-            }.onFailure { XposedCompat.logD { "$TAG getInt skipped: ${it.message}" } }
-        }
-
-        XposedCompat.findMethodOrNull(
-            clazz,
-            "getBoolean",
-            String::class.java,
-            Boolean::class.javaPrimitiveType!!,
-        )?.let { method ->
-            runCatching {
-                method.isAccessible = true
-                mod.hook(method).intercept { chain ->
-                    val key = chain.args.firstOrNull() as? String
-                    if (
-                        key == PREF_SPLASH_SHAKE_AD_OPEN &&
-                        ConfigManager.isAdSdkComponentsDisabled
-                    ) {
-                        return@intercept false
-                    }
-                    chain.proceed()
-                }
-                installedCount++
-            }.onFailure { XposedCompat.logD { "$TAG getBoolean skipped: ${it.message}" } }
-        }
-
-        return installedCount
-    }
-
-    private fun hookMultiSharedPrefHelper(
-        mod: io.github.libxposed.api.XposedModule,
-        cl: ClassLoader,
-    ): Int {
-        val clazz = XposedCompat.findClassOrNull(MULTI_SHARED_PREF_HELPER_CLASS, cl) ?: return 0
-        var installedCount = 0
-
-        // 低端阈值：sjc.a.a() 读 MultiSharedPrefHelper.b("sp_mid_score_device_config", 0.8f)
-        XposedCompat.findMethodOrNull(
-            clazz,
-            "b",
-            String::class.java,
-            Float::class.javaPrimitiveType!!,
-        )?.let { method ->
-            runCatching {
-                method.isAccessible = true
-                mod.hook(method).intercept { chain ->
-                    val key = chain.args.firstOrNull() as? String
-                    if (key == PREF_LOW_SCORE_THRESHOLD && ConfigManager.isLowEndDeviceConfigForced) {
-                        return@intercept FORCED_LOW_SCORE_THRESHOLD
-                    }
-                    chain.proceed()
-                }
-                installedCount++
-            }.onFailure { XposedCompat.logD { "$TAG low score threshold skipped: ${it.message}" } }
-        }
-
-        // 低端禁用列表：LowScoreScheduler.u() 读 MultiSharedPrefHelper.e("low_score_block_list", "")
-        // 合并策略：保留服务端已下发的列表，再追加模块项（避免覆盖宿主自身的低端优化）
-        XposedCompat.findMethodOrNull(
-            clazz,
-            "e",
-            String::class.java,
-            String::class.java,
-        )?.let { method ->
-            runCatching {
-                method.isAccessible = true
-                mod.hook(method).intercept { chain ->
-                    val key = chain.args.firstOrNull() as? String
-                    if (key == PREF_LOW_DEV_BLOCK_LIST && ConfigManager.isLowEndDeviceConfigForced) {
-                        val original = chain.proceed() as? String ?: ""
-                        return@intercept mergeLowDevBlockList(original)
-                    }
-                    chain.proceed()
-                }
-                installedCount++
-            }.onFailure { XposedCompat.logD { "$TAG low score block list skipped: ${it.message}" } }
-        }
-
-        // 低端 KV 配置：LowScoreScheduler.w() 读 MultiSharedPrefHelper.e("low_score_kv_config", "")
-        // 合并策略：保留服务端 KV，再写入模块项（disable_re_run_idle 恒 true）
-        // （JSON object，供 k("disable_re_run_idle", true) 等读取）
-        XposedCompat.findMethodOrNull(
-            clazz,
-            "e",
-            String::class.java,
-            String::class.java,
-        )?.let { method ->
-            runCatching {
-                method.isAccessible = true
-                mod.hook(method).intercept { chain ->
-                    val key = chain.args.firstOrNull() as? String
-                    if (key == PREF_LOW_DEV_KV_CONFIG && ConfigManager.isLowEndDeviceConfigForced) {
-                        val original = chain.proceed() as? String ?: ""
-                        return@intercept mergeLowDevKvConfig(original)
-                    }
-                    chain.proceed()
-                }
-                installedCount++
-            }.onFailure { XposedCompat.logD { "$TAG low score kv config skipped: ${it.message}" } }
-        }
-
-        return installedCount
-    }
-
-    private fun hookScheduleStrategy(
-        mod: io.github.libxposed.api.XposedModule,
-        cl: ClassLoader,
-    ): Int {
-        val clazz = XposedCompat.findClassOrNull(SCHEDULE_STRATEGY_CLASS, cl) ?: return 0
-        val method = XposedCompat.findMethodOrNull(clazz, "getDeviceScore") ?: return 0
-        return runCatching {
-            method.isAccessible = true
-            mod.hook(method).intercept { chain ->
-                if (ConfigManager.isLowEndDeviceConfigForced) return@intercept FORCED_LOW_DEVICE_SCORE
-                chain.proceed()
             }
-            1
-        }.onFailure { XposedCompat.logD { "$TAG getDeviceScore skipped: ${it.message}" } }
-            .getOrDefault(0)
-    }
-
-    private fun hookFlutterPreinitTask(
-        mod: io.github.libxposed.api.XposedModule,
-        cl: ClassLoader,
-    ): Int {
-        val clazz = XposedCompat.findClassOrNull(INIT_FLUTTER_NPS_PLUGIN_TASK_CLASS, cl) ?: return 0
-        var installedCount = 0
-        for (methodName in arrayOf("execute", "initFlutterPlugin")) {
-            val method = XposedCompat.findMethodOrNull(clazz, methodName) ?: continue
-            runCatching {
-                method.isAccessible = true
+            install("ad.getBoolean", {
+                XposedCompat.findMethodOrNull(
+                    SHARED_PREF_HELPER_CLASS, cl, "getBoolean", String::class.java, Boolean::class.javaPrimitiveType!!,
+                )
+            }) { method ->
                 mod.hook(method).intercept { chain ->
-                    if (ConfigManager.isFlutterPreinitDisabled) return@intercept null
+                    if (!ConfigManager.isAdSdkComponentsDisabled) return@intercept chain.proceed()
+                    val key = chain.args.firstOrNull() as? String
+                    if (key == PREF_SPLASH_SHAKE_AD_OPEN) return@intercept false
                     chain.proceed()
                 }
-                installedCount++
-            }.onFailure { XposedCompat.logD { "$TAG $methodName skipped: ${it.message}" } }
+            }
         }
-        return installedCount
+
+        if (settings.isLowEndDeviceConfigForced) {
+            for (target in LowEndConfigTarget.entries) {
+                install(target.name, { lowEndTargets[target] }) { method ->
+                    // Created once for the string callback, only after checking for an existing handle.
+                    val policies = if (target == LowEndConfigTarget.STRING_CONFIG) LowEndConfigPolicyCache() else null
+                    mod.hook(method).intercept { chain ->
+                        val current = ConfigManager.snapshot()
+                        if (!current.isLowEndDeviceConfigForced) return@intercept chain.proceed()
+                        when (target) {
+                            LowEndConfigTarget.THRESHOLD ->
+                                if (chain.args[0] == PREF_LOW_SCORE_THRESHOLD) FORCED_LOW_SCORE_THRESHOLD else chain.proceed()
+                            LowEndConfigTarget.DEVICE_SCORE -> FORCED_LOW_DEVICE_SCORE
+                            LowEndConfigTarget.STRING_CONFIG -> {
+                                val key = chain.args[0] as? String
+                                if (key == LowEndConfigPolicy.BLOCK_LIST || key == LowEndConfigPolicy.KV_CONFIG) {
+                                    val original = chain.proceed() as? String ?: ""
+                                    policies!!.apply(key, original, current.isPbPreloadForced)
+                                } else chain.proceed()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (settings.isFlutterPreinitDisabled) {
+            for (methodName in arrayOf("execute", "initFlutterPlugin")) {
+                install("flutter.$methodName", {
+                    XposedCompat.findMethodOrNull(INIT_FLUTTER_NPS_PLUGIN_TASK_CLASS, cl, methodName)
+                }) { method ->
+                    mod.hook(method).intercept { chain ->
+                        if (ConfigManager.isFlutterPreinitDisabled) return@intercept null
+                        chain.proceed()
+                    }
+                }
+            }
+        }
+
+        val state = when {
+            count == 0 && missing == failures.size -> InstallState.SKIPPED
+            count == 0 -> InstallState.FAILED
+            failures.isNotEmpty() -> InstallState.PARTIAL
+            installedMethods.size() == before -> InstallState.ALREADY_INSTALLED
+            else -> InstallState.INSTALLED
+        }
+        return InstallOutcome(state, count, failures.takeIf { it.isNotEmpty() }?.joinToString("; "))
     }
 
     private fun isAnyConfigOverrideEnabled(settings: SettingsSnapshot): Boolean {
@@ -257,51 +146,4 @@ object HostPerformanceConfigHook {
             settings.isLowEndDeviceConfigForced
     }
 
-    private fun moduleLowDevBlockItems(forcePbPreload: Boolean): List<String> {
-        val items = ArrayList<String>(2)
-        items.add(LOW_DEV_DISABLE_PRELOAD_FEED_IMAGE)
-        // disable_webview_proxy 会断开 WebViewDiskLoader 的下游代理。
-        // 强制帖子预加载开启时保留该代理，包括撤销服务端列表中的同名禁用项。
-        if (!forcePbPreload) {
-            items.add(LOW_DEV_DISABLE_WEBVIEW_PROXY)
-        }
-        return items
-    }
-
-    internal fun mergeLowDevBlockList(
-        original: String,
-        forcePbPreload: Boolean = ConfigManager.isPbPreloadForced,
-    ): String {
-        val originalItems = try {
-            JSONArray(original)
-        } catch (t: Throwable) {
-            JSONArray()
-        }
-        val json = JSONArray()
-        val existing = HashSet<String>()
-        for (i in 0 until originalItems.length()) {
-            val item = originalItems.opt(i)
-            if (forcePbPreload && item == LOW_DEV_DISABLE_WEBVIEW_PROXY) continue
-            json.put(item)
-            if (item is String) existing.add(item)
-        }
-        for (item in moduleLowDevBlockItems(forcePbPreload)) {
-            if (existing.add(item)) json.put(item)
-        }
-        return json.toString()
-    }
-
-    private fun mergeLowDevKvConfig(original: String): String {
-        val json = try {
-            JSONObject(original)
-        } catch (t: Throwable) {
-            JSONObject()
-        }
-        // 覆盖为 true：保证 disable_re_run_idle 恒生效，不受服务端 KV 影响
-        json.put(LOW_DEV_DISABLE_RE_RUN_IDLE, "true")
-        // 视频自动播放延迟（毫秒）：v1e 经 LowScoreScheduler.m("defer_video_autoplay_ms", 0)
-        // 读取，>0 时延迟自动播放，降低低端机滑动时视频解码压力
-        json.put(LOW_DEV_DEFER_VIDEO_AUTOPLAY_MS, DEFER_VIDEO_AUTOPLAY_MS)
-        return json.toString()
-    }
 }

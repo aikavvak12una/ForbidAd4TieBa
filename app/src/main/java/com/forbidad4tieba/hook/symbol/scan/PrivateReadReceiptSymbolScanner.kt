@@ -3,6 +3,8 @@ package com.forbidad4tieba.hook.symbol.scan
 import com.forbidad4tieba.hook.symbol.model.*
 
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import android.content.Context
+import org.luckypray.dexkit.DexKitBridge
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -11,7 +13,6 @@ import java.lang.reflect.Modifier
 internal object PrivateReadReceiptSymbolScanner {
     private const val MODEL_CLASS =
         "com.baidu.tieba.immessagecenter.im.model.PersonalMsglistModel"
-    private val MODEL_READ_DISPATCH_CANDIDATES = arrayOf("h1", "K2")
     private const val MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
     private const val MESSAGE_MANAGER_GET_INSTANCE_METHOD = "getInstance"
     private const val MESSAGE_MANAGER_GET_SOCKET_CLIENT_METHOD = "getSocketClient"
@@ -31,13 +32,10 @@ internal object PrivateReadReceiptSymbolScanner {
     private const val CHAT_MESSAGE_CLASS = "com.baidu.tieba.im.message.chat.ChatMessage"
     private const val CHAT_MESSAGE_MSG_ID_METHOD = "getMsgId"
     private const val CHAT_MESSAGE_USER_ID_METHOD = "getUserId"
-    private const val CHAT_MESSAGE_LOCAL_DATA_METHOD = "getLocalData"
-    private const val LOCAL_DATA_CLASS = "com.baidu.tieba.im.data.MsgLocalData"
-    private const val LOCAL_DATA_STATUS_METHOD = "getStatus"
     private const val ACCOUNT_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
     private const val CURRENT_ACCOUNT_METHOD = "getCurrentAccount"
 
-    fun scan(cl: ClassLoader, logger: ScanLogger?): PrivateReadReceiptScanSymbols {
+    fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): PrivateReadReceiptScanSymbols {
         fun declaredConstructors(label: String, clazz: Class<*>): List<Constructor<*>>? {
             return scanSubStep("PrivateReadReceiptBlockHook.$label.Constructors", logger, null) {
                 clazz.declaredConstructors.toList()
@@ -104,10 +102,6 @@ internal object PrivateReadReceiptSymbolScanner {
             log(logger, "privateReadReceipt: class not found: $CHAT_MESSAGE_CLASS")
             return PrivateReadReceiptScanSymbols()
         }
-        val localDataClass = safeFindClass(LOCAL_DATA_CLASS, cl) ?: run {
-            log(logger, "privateReadReceipt: class not found: $LOCAL_DATA_CLASS")
-            return PrivateReadReceiptScanSymbols()
-        }
         val accountClass = safeFindClass(ACCOUNT_CLASS, cl) ?: run {
             log(logger, "privateReadReceipt: class not found: $ACCOUNT_CLASS")
             return PrivateReadReceiptScanSymbols()
@@ -117,21 +111,6 @@ internal object PrivateReadReceiptSymbolScanner {
             return PrivateReadReceiptScanSymbols()
         }
 
-        val modelMethods = declaredMethods("PersonalMsglistModel", modelClass)
-            ?: return PrivateReadReceiptScanSymbols()
-        val modelAncestorMethods = scanSubStep(
-            "PrivateReadReceiptBlockHook.PersonalMsglistModel.AncestorMethods",
-            logger,
-            null,
-        ) {
-            val firstSuperclass: Class<*>? = modelClass.superclass
-            val methods = ArrayList<Method>()
-            for (ancestor in generateSequence(firstSuperclass) { clazz -> clazz.superclass }) {
-                methods += declaredMethods("PersonalMsglistModel.Ancestor.${ancestor.name}", ancestor)
-                    ?: return@scanSubStep null
-            }
-            methods
-        } ?: return PrivateReadReceiptScanSymbols()
         val messageManagerMethods = declaredMethods("MessageManager", messageManagerClass)
             ?: return PrivateReadReceiptScanSymbols()
         val modelBaseMethods = declaredMethods("MsglistModel", modelBaseClass)
@@ -146,38 +125,19 @@ internal object PrivateReadReceiptSymbolScanner {
             ?: return PrivateReadReceiptScanSymbols()
         val chatMessageMethods = declaredMethods("ChatMessage", chatMessageClass)
             ?: return PrivateReadReceiptScanSymbols()
-        val localDataMethods = declaredMethods("MsgLocalData", localDataClass)
-            ?: return PrivateReadReceiptScanSymbols()
         val accountMethods = declaredMethods("TbadkCoreApplication", accountClass)
             ?: return PrivateReadReceiptScanSymbols()
 
-        val modelReadDispatchMethod = run {
-            val byName = MODEL_READ_DISPATCH_CANDIDATES.firstNotNullOfOrNull { name ->
-                modelMethods.singleOrNull { method ->
-                    method.name == name &&
-                        !Modifier.isStatic(method.modifiers) &&
-                        method.returnType == Void.TYPE &&
-                        method.parameterTypes.isEmpty()
-                }
-            }
-            if (byName != null) {
-                byName
-            } else {
-                val ancestorMethodNames = modelAncestorMethods
-                    .asSequence()
-                    .filter { !Modifier.isStatic(it.modifiers) && it.returnType == Void.TYPE && it.parameterTypes.isEmpty() }
-                    .map { it.name }
-                    .toSet()
-                modelMethods.singleOrNull { method ->
-                    !Modifier.isStatic(method.modifiers) &&
-                        Modifier.isFinal(method.modifiers) &&
-                        method.returnType == Void.TYPE &&
-                        method.parameterTypes.isEmpty() &&
-                        method.name !in ancestorMethodNames
-                }
+        val modelReadDispatchMethod = scanSubStep(
+            "PrivateReadReceiptBlockHook.ReadDispatch", logger, null,
+        ) {
+            val paths = listOfNotNull(context.applicationInfo?.sourceDir) +
+                context.applicationInfo?.splitSourceDirs.orEmpty()
+            HookSymbolScanSession.withDexKitBridge(paths, logger) {
+                resolveReadDispatch(it.bridge, cl, logger)
             }
         } ?: run {
-            log(logger, "privateReadReceipt: PersonalMsglistModel read dispatch method not found")
+            log(logger, "privateReadReceipt: semantic read dispatch missing or ambiguous")
             return PrivateReadReceiptScanSymbols()
         }
         val messageSendMethod = messageManagerMethods.singleOrNull { method ->
@@ -287,24 +247,6 @@ internal object PrivateReadReceiptSymbolScanner {
             log(logger, "privateReadReceipt: ChatMessage.getUserId() not found")
             return PrivateReadReceiptScanSymbols()
         }
-        val chatLocalDataMethod = chatMessageMethods.singleOrNull { method ->
-            method.name == CHAT_MESSAGE_LOCAL_DATA_METHOD &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                method.returnType == localDataClass
-        } ?: run {
-            log(logger, "privateReadReceipt: ChatMessage.getLocalData() not found")
-            return PrivateReadReceiptScanSymbols()
-        }
-        val localStatusMethod = localDataMethods.singleOrNull { method ->
-            method.name == LOCAL_DATA_STATUS_METHOD &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                method.returnType == Short::class.javaObjectType
-        } ?: run {
-            log(logger, "privateReadReceipt: MsgLocalData.getStatus() not found")
-            return PrivateReadReceiptScanSymbols()
-        }
         val currentAccountMethod = accountMethods.singleOrNull { method ->
             method.name == CURRENT_ACCOUNT_METHOD &&
                 Modifier.isStatic(method.modifiers) &&
@@ -343,12 +285,31 @@ internal object PrivateReadReceiptSymbolScanner {
             chatMessageClass = chatMessageClass.name,
             chatMessageMsgIdMethod = chatMsgIdMethod.name,
             chatMessageUserIdMethod = chatUserIdMethod.name,
-            chatMessageLocalDataMethod = chatLocalDataMethod.name,
-            localDataClass = localDataClass.name,
-            localDataStatusMethod = localStatusMethod.name,
             accountClass = accountClass.name,
             currentAccountMethod = currentAccountMethod.name,
         )
+    }
+
+    private fun resolveReadDispatch(bridge: DexKitBridge, cl: ClassLoader, logger: ScanLogger?): Method? {
+        val candidates = bridge.getClassData(MODEL_CLASS)?.methods.orEmpty().filter { method ->
+            !Modifier.isStatic(method.modifiers) && method.returnTypeName == "void" &&
+                method.paramCount == 0 && method.methodName != "<init>" && method.invokes.let { calls ->
+                    calls.any {
+                        it.declaredClassName == REQUEST_CLASS && it.methodName == "<init>" &&
+                            it.paramTypeNames == listOf("long", "long")
+                    } && calls.any {
+                        it.declaredClassName == MESSAGE_MANAGER_CLASS && it.methodName == MESSAGE_SEND_METHOD &&
+                            it.paramTypeNames == listOf(MESSAGE_BASE_CLASS) && it.returnTypeName == "boolean"
+                    } && calls.any {
+                        it.declaredClassName == MESSAGE_MANAGER_CLASS &&
+                            it.methodName == MESSAGE_MANAGER_GET_SOCKET_CLIENT_METHOD && it.paramCount == 0
+                    }
+                }
+        }.distinctBy { it.descriptor }
+        val method = selectUniqueScanCandidate("PrivateReadReceiptBlockHook.ReadDispatch", candidates, logger) {
+            it.descriptor
+        } ?: return null
+        return method.getMethodInstance(cl)
     }
 
     private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =

@@ -98,7 +98,6 @@ internal data class ForumPageAdScanSymbols(
     val rainSetterMethod: String? = null,
     val dialogControllerClass: String? = null,
     val businessPromotShowMethod: String? = null,
-    val animationShowMethod: String? = null,
     val gameFloatingBarControllerClass: String? = null,
     val gameFloatingBarShowMethod: String? = null,
     val gameFloatingBarField: String? = null,
@@ -214,13 +213,6 @@ internal data class PlainUrlClickableSpanScanSymbols(
     val textField: String? = null,
 )
 
-internal data class PlainUrlClickableSpanFieldSymbols(
-    val typeField: Field,
-    val urlField: Field,
-    val textField: Field,
-    val evidence: String,
-)
-
 internal data class PlainUrlMessageDispatchScanSymbols(
     val messageManagerClass: String? = null,
     val dispatchMethod: String? = null,
@@ -235,13 +227,6 @@ internal data class PlainUrlMessageDispatchScanSymbols(
 internal data class PlainUrlBrowserHelperScanSymbols(
     val browserHelperClass: String? = null,
     val startWebActivityMethod: String? = null,
-)
-
-internal data class PlainUrlWebContainerScanSymbols(
-    val webContainerActivityClass: String? = null,
-    val initDataMethod: String? = null,
-    val webViewClientClass: String? = null,
-    val shouldOverrideUrlLoadingMethod: String? = null,
 )
 
 internal data class PrivateReadReceiptScanSymbols(
@@ -267,16 +252,8 @@ internal data class PrivateReadReceiptScanSymbols(
     val chatMessageClass: String? = null,
     val chatMessageMsgIdMethod: String? = null,
     val chatMessageUserIdMethod: String? = null,
-    val chatMessageLocalDataMethod: String? = null,
-    val localDataClass: String? = null,
-    val localDataStatusMethod: String? = null,
     val accountClass: String? = null,
     val currentAccountMethod: String? = null,
-)
-
-internal data class PlainUrlClickableSpanClassMatch(
-    val clazz: Class<*>,
-    val score: Int,
 )
 
 internal data class MountCardLinkLayoutScanSymbols(
@@ -460,14 +437,6 @@ internal data class HomeNativeGlassHostDarkModeSwitchSymbols(
     val switchCallbackMethod: String? = null,
 )
 
-internal data class DexHostDarkModeSwitchMatch(
-    val controllerFieldName: String,
-    val getterMethodName: String,
-    val score: Int,
-    val evidence: String,
-    val callbackMethodName: String? = null,
-)
-
 internal data class HomeNativeGlassEnterForumCapsuleClassCandidate(
     val clazz: Class<*>,
     val fields: List<Field>,
@@ -494,18 +463,6 @@ internal data class PbLikeAutoReplyScanSymbols(
     val inputContainerGetInputViewMethod: String? = null,
     val inputContainerGetSendViewMethod: String? = null,
     val flow: PbAutoReplyFlowSymbols = PbAutoReplyFlowSymbols(),
-)
-
-internal data class ShareIconOwnerCandidate(
-    val className: String,
-    val score: Int,
-)
-
-internal data class DexShareIconMatch(
-    val ownerClassName: String,
-    val ownerMethodName: String,
-    val resId: Int,
-    val score: Int,
 )
 
 internal data class DexAutoRefreshMatch(
@@ -544,25 +501,6 @@ internal data class DexPbLikeAgreeClickMatch(
     val ownerMethodName: String,
     val score: Int,
     val evidence: String,
-)
-
-internal data class DexPbAdBidModelMatch(
-    val className: String,
-    val requestImplMethodName: String,
-    val kind: String,
-    val score: Int,
-    val evidence: String,
-)
-
-internal data class DexPbAdBidScanSymbols(
-    val commonModelClassName: String? = null,
-    val pageBrowserModelClassName: String? = null,
-    val pageBrowserRequestDataMethodName: String? = null,
-)
-
-internal data class DexPbAdBidRawScan(
-    val modelMatches: List<DexPbAdBidModelMatch> = emptyList(),
-    val pageBrowserRequestDataMethodName: String? = null,
 )
 
 internal data class DexGameFloatingBarMatch(
@@ -633,8 +571,6 @@ internal data class HistorySearchScanSymbols(
 
 internal data class MsgTabScanSymbols(
     val locateToTabMethod: String? = null,
-    val containerSelectMethod: String? = null,
-    val containerExtDataField: String? = null,
 )
 
 internal data class MainTabBottomScanSymbols(
@@ -687,40 +623,6 @@ internal data class AutoSignInScanSymbols(
     val hybridTaskClass: String? = null,
     val hybridTaskConstructorSpec: String? = null,
     val hybridTaskDoInBackgroundMethod: String? = null,
-)
-
-internal data class CollectionPresenterCandidate(
-    val fieldName: String,
-    val setterMethod: String,
-    val setterMethodSpec: String,
-    val presenterClass: Class<*>,
-)
-
-internal data class CollectionModelCandidate(
-    val fieldName: String,
-    val getterMethod: String,
-    val getterMethodSpec: String,
-    val parseMethod: String,
-    val parseMethodSpec: String,
-    val listFieldName: String?,
-)
-
-internal data class CollectionAdapterSymbols(
-    val presenterAdapterField: String? = null,
-    val showFooterMethod: String? = null,
-    val loadingMethod: String? = null,
-    val hasMoreMethod: String? = null,
-)
-
-internal data class CollectionNavigationSymbols(
-    val activityNavControllerField: String? = null,
-    val navBarField: String? = null,
-)
-
-internal data class HistoryAdapterCandidate(
-    val fieldName: String,
-    val setterMethod: String,
-    val setterMethodSpec: String,
 )
 
 internal data class HomeTabItemScanSymbols(

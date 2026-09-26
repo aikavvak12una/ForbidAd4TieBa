@@ -18,7 +18,6 @@ internal object CustomPostModelScoreStats {
 
     // 持久化失败退避：连续写盘失败达到这个次数后，
     // Disable persistence for this process after repeated write failures.
-    private const val PERSISTENCE_FAILURE_LIMIT = 3
     // Trim only after enough new posts accumulate.
     private const val TRIM_POST_THRESHOLD_RATIO = 0.1
     private val lock = Any()
@@ -28,12 +27,11 @@ internal object CustomPostModelScoreStats {
     private val postIdGenerator = AtomicLong(System.currentTimeMillis())
     private var statsGeneration = 0L
     // Guarded by fileLock.
-    private var persistenceFailureCount = 0
-    private var persistenceDisabled = false
+    private val persistence = StatsPersistenceState()
     private var postsSinceLastTrim = 0
-    private val executor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->
-        Thread(runnable, "tbhook-model-score-stats").apply {
-            isDaemon = true
+    private val executor: ScheduledExecutorService by lazy {
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "tbhook-model-score-stats").apply { isDaemon = true }
         }
     }
 
@@ -61,8 +59,7 @@ internal object CustomPostModelScoreStats {
         }
         val context = ConfigManager.getAppContext() ?: return
         synchronized(fileLock) {
-            persistenceFailureCount = 0
-            persistenceDisabled = false
+            persistence.reset()
             postsSinceLastTrim = 0
             runCatching {
                 File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME).delete()
@@ -146,7 +143,7 @@ internal object CustomPostModelScoreStats {
         }
         val file = File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME)
         synchronized(fileLock) {
-            if (persistenceDisabled) {
+            if (persistence.disabled) {
                 // Drop buffered records after persistence is disabled.
                 synchronized(lock) { pendingRecords.clear() }
                 return false
@@ -163,15 +160,12 @@ internal object CustomPostModelScoreStats {
                 )
             }
             appended.onFailure { t ->
-                persistenceFailureCount += 1
-                if (persistenceFailureCount >= PERSISTENCE_FAILURE_LIMIT) {
-                    if (!persistenceDisabled) {
-                        persistenceDisabled = true
-                        XposedCompat.logW(
-                            "[CustomPostModelScoreStats] persistence disabled after " +
-                                "$persistenceFailureCount consecutive failures: ${t.message}"
-                        )
-                    }
+                persistence.failed()
+                if (persistence.disabled) {
+                    XposedCompat.logW(
+                        "[CustomPostModelScoreStats] persistence disabled after " +
+                            "${persistence.failureCount} consecutive failures: ${t.message}"
+                    )
                     // Drop buffered records after persistence is disabled.
                     synchronized(lock) { pendingRecords.clear() }
                     return false
@@ -181,12 +175,12 @@ internal object CustomPostModelScoreStats {
                 }
                 XposedCompat.logW(
                     "[CustomPostModelScoreStats] flush failed " +
-                        "($persistenceFailureCount/$PERSISTENCE_FAILURE_LIMIT): ${t.message}"
+                        "(${persistence.failureCount}/${persistence.failureLimit}): ${t.message}"
                 )
                 return true
             }
             // Reset failure count after a successful write.
-            persistenceFailureCount = 0
+            persistence.succeeded()
             val newPostCount = activeRecords.map { it.postId }.distinct().size
             postsSinceLastTrim += newPostCount
             val trimThreshold = (ConfigManager.postModelScoreStatsPostLimit * TRIM_POST_THRESHOLD_RATIO).toInt()
@@ -280,7 +274,7 @@ internal object CustomPostModelScoreStats {
     }
 
     private fun isPersistenceDisabled(): Boolean {
-        return synchronized(fileLock) { persistenceDisabled }
+        return persistence.disabled
     }
 
     /**

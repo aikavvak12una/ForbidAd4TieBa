@@ -48,10 +48,7 @@ internal object ForumPageAdSymbolReadiness {
                 has(symbols.forumRainDataClass) &&
                 has(symbols.forumRainSetterMethod),
             dialog = has(symbols.forumDialogControllerClass) &&
-                (
-                    has(symbols.forumBusinessPromotShowMethod) ||
-                        has(symbols.forumAnimationShowMethod)
-                    ),
+                has(symbols.forumBusinessPromotShowMethod),
             floating = has(symbols.forumGameFloatingBarControllerClass) &&
                 has(symbols.forumGameFloatingBarShowMethod),
             biz = has(symbols.forumBusinessPromotBizClass) &&

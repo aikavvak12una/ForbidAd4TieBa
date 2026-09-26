@@ -23,14 +23,12 @@ internal object HookSymbolStatusFormatter {
         aiPbAiEmojiCreationViewClass: String,
         aiPbAiEmojiCreationPageBrowserViewClass: String,
         msgTabViewModelClass: String,
-        msgTabContainerViewClass: String,
     ): List<String> {
         return collectHookPointStatuses(
             symbols = symbols,
             aiPbAiEmojiCreationViewClass = aiPbAiEmojiCreationViewClass,
             aiPbAiEmojiCreationPageBrowserViewClass = aiPbAiEmojiCreationPageBrowserViewClass,
             msgTabViewModelClass = msgTabViewModelClass,
-            msgTabContainerViewClass = msgTabContainerViewClass,
         ).map(HookPointStatus::formatLine)
     }
 
@@ -39,7 +37,6 @@ internal object HookSymbolStatusFormatter {
         aiPbAiEmojiCreationViewClass: String,
         aiPbAiEmojiCreationPageBrowserViewClass: String,
         msgTabViewModelClass: String,
-        msgTabContainerViewClass: String,
     ): List<HookPointStatus> {
         if (symbols == null) {
             return listOf(
@@ -169,6 +166,11 @@ internal object HookSymbolStatusFormatter {
             "CustomPostCardBlockHook.HeadParams",
             "Feed head params.${symbols.feedHeadParamsField}",
             listOf("feedHeadParamsField" to has(symbols.feedHeadParamsField)),
+        )
+        add(
+            "CustomPostCardBlockHook.TopicSchema",
+            "Card schema getter ${symbols.feedCardSchemaGetterSpec}",
+            listOf("feedCardSchemaGetterSpec" to has(symbols.feedCardSchemaGetterSpec)),
         )
         add(
             "CustomPostCardBlockHook.RecommendCard",
@@ -588,25 +590,15 @@ internal object HookSymbolStatusFormatter {
             "ForumPageAdBlockHook.Dialog",
             if (
                 has(symbols.forumDialogControllerClass) &&
-                (has(symbols.forumBusinessPromotShowMethod) || has(symbols.forumAnimationShowMethod))
+                has(symbols.forumBusinessPromotShowMethod)
             ) {
-                "${symbols.forumDialogControllerClass}.{" +
-                    listTarget(
-                        listOfNotNull(
-                            symbols.forumBusinessPromotShowMethod,
-                            symbols.forumAnimationShowMethod,
-                        ),
-                    ) +
-                    "}"
+                "${symbols.forumDialogControllerClass}.{${symbols.forumBusinessPromotShowMethod}}"
             } else {
                 "optional-absent"
             },
             listOf(
                 "forumDialogControllerClass" to has(symbols.forumDialogControllerClass),
-                "forumDialogDisplayMethod" to (
-                    has(symbols.forumBusinessPromotShowMethod) ||
-                        has(symbols.forumAnimationShowMethod)
-                    ),
+                "forumDialogDisplayMethod" to has(symbols.forumBusinessPromotShowMethod),
             ),
         )
         addOptional(
@@ -698,56 +690,6 @@ internal object HookSymbolStatusFormatter {
                     has(symbols.plainUrlBrowserHelperStartWebActivityMethod),
             ),
         )
-        run {
-            val initChecks = listOf(
-                "plainUrlWebContainerActivityClass" to has(symbols.plainUrlWebContainerActivityClass),
-                "plainUrlWebContainerInitDataMethod" to has(symbols.plainUrlWebContainerInitDataMethod),
-            )
-            val navigationChecks = listOf(
-                "plainUrlWebContainerWebViewClientClass" to
-                    has(symbols.plainUrlWebContainerWebViewClientClass),
-                "plainUrlWebContainerShouldOverrideUrlLoadingMethod" to
-                    has(symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod),
-            )
-            val initReady = initChecks.all { it.second }
-            val navigationReady = navigationChecks.all { it.second }
-            val missing = buildList {
-                if (!initReady) addAll(initChecks.filter { !it.second }.map { it.first })
-                if (!navigationReady) addAll(navigationChecks.filter { !it.second }.map { it.first })
-            }.distinct()
-            val state = when {
-                initReady && navigationReady -> HookPointState.FOUND
-                initReady || navigationReady -> HookPointState.PARTIAL
-                else -> HookPointState.MISSING
-            }
-            val target = buildList {
-                if (has(symbols.plainUrlWebContainerActivityClass) ||
-                    has(symbols.plainUrlWebContainerInitDataMethod)
-                ) {
-                    add(
-                        "${symbols.plainUrlWebContainerActivityClass ?: "-"}." +
-                            "${symbols.plainUrlWebContainerInitDataMethod ?: "-"}()",
-                    )
-                }
-                if (has(symbols.plainUrlWebContainerWebViewClientClass) ||
-                    has(symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod)
-                ) {
-                    add(
-                        "${symbols.plainUrlWebContainerWebViewClientClass ?: "-"}." +
-                            "${symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod ?: "-"}" +
-                            "(WebView,String)",
-                    )
-                }
-            }.joinToString(" / ").ifBlank { "-" }
-            out.add(
-                HookPointStatus(
-                    name = "PlainUrlDirectBrowserHook.WebContainer",
-                    state = state,
-                    missing = missing,
-                    target = target,
-                ),
-            )
-        }
         add(
             "PlainUrlDirectBrowserHook.MountCard",
             "${symbols.mountCardLinkLayoutClass}.${symbols.mountCardLinkLayoutOnClickMethod}(View)[${symbols.mountCardLinkLayoutDataField}->${symbols.mountCardLinkInfoDataClass}.${symbols.mountCardLinkInfoGetUrlMethod}]",
@@ -763,13 +705,8 @@ internal object HookSymbolStatusFormatter {
             "MineTabWebBlockHook",
             "${symbols.mineTabWebViewClass}.${symbols.mineTabWebLoadUrlMethod}(String) " +
                 "getUrl=${symbols.mineTabWebGetUrlMethod} " +
-                "inner=${symbols.mineTabWebGetInnerWebViewMethod} " +
-                "version=${symbols.scanTargetVersionCode ?: "-"} " +
-                "minVersion=${WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE}",
+                "inner=${symbols.mineTabWebGetInnerWebViewMethod}",
             listOf(
-                "scanTargetVersionCode>=${WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE}" to (
-                    (symbols.scanTargetVersionCode ?: 0L) >= WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE
-                    ),
                 "mineTabWebViewClass" to has(symbols.mineTabWebViewClass),
                 "mineTabWebLoadUrlMethod" to has(symbols.mineTabWebLoadUrlMethod),
                 "mineTabWebGetUrlMethod" to has(symbols.mineTabWebGetUrlMethod),
@@ -1002,14 +939,6 @@ internal object HookSymbolStatusFormatter {
             listOf("msgTabLocateToTabMethod" to has(symbols.msgTabLocateToTabMethod)),
         )
         add(
-            "MsgTabDefaultNotifyHook.Container",
-            "${msgTabContainerViewClass}.${symbols.msgTabContainerSelectMethod}[${symbols.msgTabContainerExtDataField}]",
-            listOf(
-                "msgTabContainerSelectMethod" to has(symbols.msgTabContainerSelectMethod),
-                "msgTabContainerExtDataField" to has(symbols.msgTabContainerExtDataField),
-            ),
-        )
-        add(
             "PrivateReadReceiptBlockHook",
             "${symbols.privateReadReceiptModelClass}.${symbols.privateReadReceiptModelReadDispatchMethod} / " +
                 "${symbols.privateReadReceiptMessageManagerClass}.${symbols.privateReadReceiptMessageSendMethod}" +
@@ -1039,9 +968,6 @@ internal object HookSymbolStatusFormatter {
                 "privateReadReceiptChatMessageClass" to has(symbols.privateReadReceiptChatMessageClass),
                 "privateReadReceiptChatMessageMsgIdMethod" to has(symbols.privateReadReceiptChatMessageMsgIdMethod),
                 "privateReadReceiptChatMessageUserIdMethod" to has(symbols.privateReadReceiptChatMessageUserIdMethod),
-                "privateReadReceiptChatMessageLocalDataMethod" to has(symbols.privateReadReceiptChatMessageLocalDataMethod),
-                "privateReadReceiptLocalDataClass" to has(symbols.privateReadReceiptLocalDataClass),
-                "privateReadReceiptLocalDataStatusMethod" to has(symbols.privateReadReceiptLocalDataStatusMethod),
                 "privateReadReceiptAccountClass" to has(symbols.privateReadReceiptAccountClass),
                 "privateReadReceiptCurrentAccountMethod" to has(symbols.privateReadReceiptCurrentAccountMethod),
             ),
@@ -1307,6 +1233,7 @@ internal object HookSymbolStatusFormatter {
         out.addAll(PerformanceAbStatus.hookPoints(symbols))
         out.addAll(TrackingStatus.hookPoints(symbols))
         out.addAll(DefaultPopupStatus.hookPoints(symbols.defaultPopups))
+        out.addAll(symbols.lowEndConfig.hookPoints())
         return out
     }
 

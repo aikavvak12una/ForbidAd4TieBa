@@ -2,24 +2,30 @@ package com.forbidad4tieba.hook.feature.ad
 
 import com.forbidad4tieba.hook.symbol.model.FeedAdSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.InstallOutcome
+import com.forbidad4tieba.hook.InstallState
+import com.forbidad4tieba.hook.core.OwnedHookSet
+import io.github.libxposed.api.XposedInterface
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
 
 object FeedAdHook {
     private val sKeyMethodCache = ConcurrentHashMap<Class<*>, Any>(32)
-    private val sInstalledMethodKeys = ConcurrentHashMap.newKeySet<String>()
+    private val installedMethods by lazy {
+        OwnedHookSet<Method, XposedInterface.HookHandle> { it.unhook() }
+    }
     @Volatile private var sTemplateKeyMethodName: String? = null
 
     private val NO_METHOD = Any()
 
-    internal fun hook(targets: FeedAdSymbols) {
+    internal fun hook(targets: FeedAdSymbols): InstallOutcome {
         val templateKeyMethodName = targets.templateKeyMethodName
         if (sTemplateKeyMethodName != templateKeyMethodName) {
             sKeyMethodCache.clear()
             sTemplateKeyMethodName = templateKeyMethodName
         }
-        hookTemplateAdapterSetList(
+        return hookTemplateAdapterSetList(
             targets = targets,
             templateKeyMethodName = templateKeyMethodName,
             customPostFilter = targets.customPostFilter?.let(CustomPostCardBlockHook::createRuntimeFilter),
@@ -30,29 +36,35 @@ object FeedAdHook {
         targets: FeedAdSymbols,
         templateKeyMethodName: String,
         customPostFilter: CustomPostCardBlockHook.RuntimeFilter?,
-    ) {
-        val mod = XposedCompat.module ?: return
-
-        fun hookListMethod(method: Method) {
-            val methodKey = method.toGenericString()
-            if (!sInstalledMethodKeys.add(methodKey)) return
-            val methodName = method.name
-
-            mod.hook(method).intercept { chain ->
-                val list = chain.args.firstOrNull() as? List<*>
-                if (list != null) {
-                    val filtered = filterList(list, templateKeyMethodName, customPostFilter, methodName)
-                    if (filtered !== list) {
-                        return@intercept chain.proceed(arrayOf<Any?>(filtered))
+    ): InstallOutcome {
+        val mod = XposedCompat.module ?: return InstallOutcome.skipped("module unavailable")
+        val methods = listOfNotNull(targets.setListMethod, targets.loadMoreMethod).distinct()
+        val before = installedMethods.size()
+        val failures = ArrayList<String>()
+        for (method in methods) {
+            try {
+                installedMethods.install(method) {
+                    mod.hook(method).intercept { chain ->
+                        val list = chain.args.firstOrNull() as? List<*>
+                        if (list != null) {
+                            val filtered = filterList(list, templateKeyMethodName, customPostFilter, method.name)
+                            if (filtered !== list) return@intercept chain.proceed(arrayOf<Any?>(filtered))
+                        }
+                        chain.proceed()
                     }
                 }
-                chain.proceed()
+            } catch (failure: Throwable) {
+                failures += "${method.declaringClass.name}.${method.name}: ${failure.message}"
             }
-            XposedCompat.log("[FeedAdHook] hook INSTALLED: ${method.declaringClass.name}.$methodName")
         }
-
-        hookListMethod(targets.setListMethod)
-        targets.loadMoreMethod?.let(::hookListMethod)
+        val count = methods.count(installedMethods::contains)
+        val state = when {
+            count == 0 -> InstallState.FAILED
+            failures.isNotEmpty() -> InstallState.PARTIAL
+            installedMethods.size() == before -> InstallState.ALREADY_INSTALLED
+            else -> InstallState.INSTALLED
+        }
+        return InstallOutcome(state, count, failures.takeIf { it.isNotEmpty() }?.joinToString("; "))
     }
 
     internal fun filterList(
@@ -61,13 +73,16 @@ object FeedAdHook {
         customPostFilter: CustomPostCardBlockHook.RuntimeFilter?,
         methodName: String,
     ): List<*> {
-        val blockFeedAds = ConfigManager.isFeedAdBlockEnabled
-        val blockRecommendBanner = ConfigManager.isStrategyAdBlockEnabled
-        if (customPostFilter != null) {
+        val settings = ConfigManager.snapshot()
+        val blockFeedAds = settings.isFeedAdBlockEnabled
+        val blockRecommendBanner = settings.isStrategyAdBlockEnabled
+        val rules = settings.customPostRules
+        if (customPostFilter != null && rules != null) {
             return CustomPostCardBlockHook.filterList(
                 list = list,
                 runtimeFilter = customPostFilter,
                 methodName = methodName,
+                rules = rules,
                 templateKeyBlockReason = if (blockFeedAds || blockRecommendBanner) {
                     { key -> adBlockReason(key, blockFeedAds, blockRecommendBanner) }
                 } else {

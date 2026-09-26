@@ -64,12 +64,6 @@ internal data class PlainUrlBrowserHelperSymbols(
     val startWebActivityMethods: List<Method>,
 )
 
-internal data class PlainUrlWebContainerSymbols(
-    val webContainerActivityClass: Class<*>,
-    val initDataMethod: Method?,
-    val shouldOverrideUrlLoadingMethod: Method?,
-)
-
 internal data class PrivateReadReceiptSymbols(
     val modelClass: Class<*>,
     val modelReadDispatchMethod: Method,
@@ -87,8 +81,6 @@ internal data class PrivateReadReceiptSymbols(
     val pageDataChatListMethod: Method,
     val chatMessageMsgIdMethod: Method,
     val chatMessageUserIdMethod: Method,
-    val chatMessageLocalDataMethod: Method,
-    val localDataStatusMethod: Method,
     val currentAccountMethod: Method,
 )
 
@@ -239,6 +231,7 @@ internal data class CustomPostCardFilterSymbols(
     val headParamsFieldName: String?,
     val recommendNestedDataMethodName: String?,
     val recommendNestedDataListFieldName: String?,
+    val schemaGetter: Method? = null,
 )
 
 internal data class FeedAdSymbols(
@@ -262,7 +255,6 @@ internal data class ForumPageAdBlockSymbols(
     val headerDataMapperMethod: Method?,
     val rainSetterMethod: Method?,
     val businessPromotShowMethod: Method?,
-    val animationShowMethod: Method?,
     val gameFloatingBarShowMethod: Method?,
     val gameFloatingBarField: Field?,
     val businessPromotJumpMethod: Method?,

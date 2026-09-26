@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook
 
+import android.annotation.TargetApi
 import android.app.Application
 import android.content.Context
 import android.os.Handler
@@ -15,7 +16,6 @@ import com.forbidad4tieba.hook.feature.perf.ComponentDisableHook
 import com.forbidad4tieba.hook.feature.perf.TitanPatchBlockHook
 import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
 import com.forbidad4tieba.hook.feature.ui.AutoRefreshHook
-import com.forbidad4tieba.hook.feature.web.MineTabWebBlockHook
 import com.forbidad4tieba.hook.ui.AboutInfoManager
 import com.forbidad4tieba.hook.ui.ModuleForegroundActivityTracker
 import com.forbidad4tieba.hook.ui.SettingsMenuHook
@@ -46,6 +46,7 @@ class MainHook : XposedModule() {
         XposedCompat.log("[MainHook] onModuleLoaded: process=${param.processName}")
     }
 
+    @TargetApi(android.os.Build.VERSION_CODES.Q)
     override fun onPackageLoaded(param: PackageLoadedParam) {
         super.onPackageLoaded(param)
         XposedCompat.log("[MainHook] onPackageLoaded: pkg=${param.packageName}, cl=${param.defaultClassLoader}")
@@ -176,9 +177,6 @@ class MainHook : XposedModule() {
             XposedCompat.log("[MainHook] > ConfigManager initialized, app=${app.packageName}")
             if (isMainProcess) {
                 ModuleForegroundActivityTracker.register(app)
-                if (startupSettings.isMineTabWebAdBlockEnabled) {
-                    MineTabWebBlockHook.onAppContextReady(app)
-                }
                 runStartupTask("apply cached runtime controls") {
                     AboutInfoManager.applyCachedRuntimeControlsIfNeeded(app)
                 }
@@ -242,7 +240,7 @@ class MainHook : XposedModule() {
                 scheduleAutoSignIn(app)
             }
         }
-        if (isMainProcess) {
+        if (isMainProcess && ConfigManager.shouldOutputDetailedLogs()) {
             ConfigManager.formatPerformanceStatusLines(settingsSnapshot).forEach { line ->
                 XposedCompat.log("[MainHook] > $line")
             }
@@ -302,11 +300,15 @@ class MainHook : XposedModule() {
                 if (symbolLoadResult.pendingScan) {
                     XposedCompat.log("[MainHook] > Scan availability skipped: no cached symbols yet")
                 }
-                HookSymbolResolver.formatFeatureStatusLines(symbols).forEach { line ->
-                    XposedCompat.log("[MainHook] > $line")
-                }
-                HookSymbolResolver.formatHookPointStatusLines(symbols).forEach { line ->
-                    XposedCompat.log("[MainHook] > $line")
+                if (ConfigManager.shouldOutputDetailedLogs()) {
+                    HookSymbolResolver.formatFeatureStatusLines(symbols).forEach { line ->
+                        XposedCompat.log("[MainHook] > $line")
+                    }
+                    HookSymbolResolver.formatHookPointStatusLines(symbols).forEach { line ->
+                        XposedCompat.log("[MainHook] > $line")
+                    }
+                } else {
+                    symbols.scanErrors.forEach { error -> XposedCompat.logW("[MainHook] scan error: $error") }
                 }
             }
 

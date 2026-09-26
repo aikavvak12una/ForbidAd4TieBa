@@ -2,23 +2,23 @@ package com.forbidad4tieba.hook.feature.ad
 
 import com.forbidad4tieba.hook.symbol.model.CustomPostCardFilterSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.config.CustomPostFilterRules
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
-import java.util.Collections
 import java.util.IdentityHashMap
-import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 object CustomPostCardBlockHook {
     private const val FEED_HEAD_TEMPLATE_KEY = "feed_head"
     private val NO_METHOD = Any()
+    private val NO_VALUE = Any()
     private val sTemplateKeyMethodCache = ConcurrentHashMap<Class<*>, Any>(64)
     private val sTemplatePayloadMethodCache = ConcurrentHashMap<Class<*>, Any>(64)
-    private val sDataListFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
-    private val sHeadParamsFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
+    private val sDataListFieldCache = ConcurrentHashMap<Class<*>, Any>(32)
+    private val sHeadParamsFieldCache = ConcurrentHashMap<Class<*>, Any>(32)
     private val sRecommendNestedDataMethodCache = ConcurrentHashMap<Class<*>, Any>(16)
-    private val sRecommendNestedDataListFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field?>())
+    private val sRecommendNestedDataListFieldCache = ConcurrentHashMap<Class<*>, Any>(32)
 
     private data class FilterSignature(
         val templateKeyMethodName: String,
@@ -36,6 +36,7 @@ object CustomPostCardBlockHook {
         val headParamsFieldName: String?,
         val recommendNestedDataMethodName: String?,
         val recommendNestedDataListFieldName: String?,
+        val schemaGetter: Method? = null,
     )
 
     @Volatile private var sFilterSignature: FilterSignature? = null
@@ -72,6 +73,7 @@ object CustomPostCardBlockHook {
             headParamsFieldName = headParamsFieldName,
             recommendNestedDataMethodName = recommendNestedDataMethodName,
             recommendNestedDataListFieldName = recommendNestedDataListFieldName,
+            schemaGetter = symbols.schemaGetter,
         )
     }
 
@@ -80,8 +82,9 @@ object CustomPostCardBlockHook {
         runtimeFilter: RuntimeFilter,
         methodName: String,
         templateKeyBlockReason: ((String?) -> String?)? = null,
+        rules: CustomPostFilterRules? = CustomPostFilterMatcher.runtimeRules(),
+        recordModelScores: (Map<String, Double>) -> Unit = { CustomPostModelScoreStats.record(it) },
     ): List<*> {
-        val rules = CustomPostFilterMatcher.runtimeRules()
         if (rules == null && templateKeyBlockReason == null) return list
         val filtered = filterItems(
             list = list,
@@ -91,8 +94,10 @@ object CustomPostCardBlockHook {
             headParamsFieldName = runtimeFilter.headParamsFieldName,
             recommendNestedDataMethodName = runtimeFilter.recommendNestedDataMethodName,
             recommendNestedDataListFieldName = runtimeFilter.recommendNestedDataListFieldName,
+            schemaGetter = runtimeFilter.schemaGetter,
             rules = rules,
             templateKeyBlockReason = templateKeyBlockReason,
+            recordModelScores = recordModelScores,
         )
         if (filtered !== list) {
             XposedCompat.logD {
@@ -110,37 +115,40 @@ object CustomPostCardBlockHook {
         headParamsFieldName: String?,
         recommendNestedDataMethodName: String?,
         recommendNestedDataListFieldName: String?,
-        rules: CustomPostFilterMatcher.RuntimeRules?,
+        schemaGetter: Method?,
+        rules: CustomPostFilterRules?,
         templateKeyBlockReason: ((String?) -> String?)?,
+        recordModelScores: (Map<String, Double>) -> Unit,
     ): List<*> {
         val size = list.size
         var out: ArrayList<Any?>? = null
-        val noPayload = Any()
-        val noKey = Any()
-        val payloadCache = IdentityHashMap<Any, Any?>(size.coerceAtLeast(8))
+        var payloadCache: IdentityHashMap<Any, Any>? = null
         val keyCache = IdentityHashMap<Any, Any?>(size.coerceAtLeast(8))
         var adBlockedCount = 0
         var customPostBlockedCount = 0
 
         fun getPayloadCached(target: Any?): Any? {
             if (target == null) return null
-            val cached = payloadCache[target]
-            if (cached != null || payloadCache.containsKey(target)) {
-                return if (cached === noPayload) null else cached
+            val cache = payloadCache ?: IdentityHashMap<Any, Any>(size.coerceAtLeast(8)).also {
+                payloadCache = it
+            }
+            val cached = cache[target]
+            if (cached != null) {
+                return if (cached === NO_VALUE) null else cached
             }
             val resolved = getTemplatePayload(target, templatePayloadMethodName)
-            payloadCache[target] = resolved ?: noPayload
+            cache[target] = resolved ?: NO_VALUE
             return resolved
         }
 
         fun getKeyCached(target: Any?): String? {
             if (target == null) return null
             val cached = keyCache[target]
-            if (cached != null || keyCache.containsKey(target)) {
-                return if (cached === noKey) null else cached as String
+            if (cached != null) {
+                return if (cached === NO_VALUE) null else cached as String
             }
             val resolved = getTemplateKey(target, templateKeyMethodName)
-            keyCache[target] = resolved ?: noKey
+            keyCache[target] = resolved ?: NO_VALUE
             return resolved
         }
 
@@ -156,7 +164,7 @@ object CustomPostCardBlockHook {
             } else if (rules != null) {
                 CustomPostFilterMatcher.decideByTemplateKey(key, rules)
             } else {
-                CustomPostFilterMatcher.Decision(false)
+                CustomPostFilterMatcher.KEEP
             }
             val recommendKeyDecision = if (
                 !templateKeyDecision.blocked &&
@@ -164,7 +172,7 @@ object CustomPostCardBlockHook {
             ) {
                 CustomPostFilterMatcher.decideByRecommendCardTemplateKey(key, rules)
             } else {
-                CustomPostFilterMatcher.Decision(false)
+                CustomPostFilterMatcher.KEEP
             }
             val decision = if (templateKeyDecision.blocked) {
                 templateKeyDecision
@@ -180,15 +188,17 @@ object CustomPostCardBlockHook {
                         headParamsFieldName = headParamsFieldName,
                         recommendNestedDataMethodName = recommendNestedDataMethodName,
                         recommendNestedDataListFieldName = recommendNestedDataListFieldName,
+                        schemaGetter = schemaGetter,
                         rules = rules,
                     )
                 } else {
-                    CustomPostFilterMatcher.Decision(false)
+                    CustomPostFilterMatcher.KEEP
                 }
             } else {
-                CustomPostFilterMatcher.Decision(false)
+                CustomPostFilterMatcher.KEEP
             }
 
+            decision.modelScores?.let(recordModelScores)
             if (decision.blocked) {
                 if (isAdBlockDecision(decision)) {
                     adBlockedCount += 1
@@ -222,7 +232,8 @@ object CustomPostCardBlockHook {
         headParamsFieldName: String?,
         recommendNestedDataMethodName: String?,
         recommendNestedDataListFieldName: String?,
-        rules: CustomPostFilterMatcher.RuntimeRules,
+        schemaGetter: Method?,
+        rules: CustomPostFilterRules,
     ): CustomPostFilterMatcher.Decision {
         val list = extractCardDataList(cardData, dataListFieldName)
             ?: extractRecommendNestedDataList(
@@ -231,21 +242,20 @@ object CustomPostCardBlockHook {
                 fieldName = recommendNestedDataListFieldName,
                 enabled = rules.recommendForum,
             )
-            ?: return CustomPostFilterMatcher.Decision(false)
-        if (list.isEmpty()) return CustomPostFilterMatcher.Decision(false)
+            ?: return CustomPostFilterMatcher.KEEP
+        if (list.isEmpty()) return CustomPostFilterMatcher.KEEP
 
         val headRuleEnabled = rules.needsFeedHeadParamsCheck
         var headParams: Map<*, *>? = null
         val keyCache = IdentityHashMap<Any, Any?>(list.size.coerceAtLeast(8))
-        val noKey = Any()
         for (item in list) {
             if (item == null) continue
             val cached = keyCache[item]
-            val key = if (cached != null || keyCache.containsKey(item)) {
-                if (cached === noKey) null else cached as String
+            val key = if (cached != null) {
+                if (cached === NO_VALUE) null else cached as String
             } else {
                 val resolved = getTemplateKey(item, templateKeyMethodName)
-                keyCache[item] = resolved ?: noKey
+                keyCache[item] = resolved ?: NO_VALUE
                 resolved
             }
             if (
@@ -259,11 +269,21 @@ object CustomPostCardBlockHook {
             val decision = CustomPostFilterMatcher.decideByTemplateKey(key, rules)
             if (decision.blocked) return decision
         }
-        if (headRuleEnabled) {
-            val headDecision = CustomPostFilterMatcher.decideByFeedHeadParams(headParams, rules)
-            if (headDecision.blocked) return headDecision
+        val headDecision = if (headRuleEnabled) {
+            CustomPostFilterMatcher.decideByFeedHeadParams(headParams, rules)
+        } else {
+            CustomPostFilterMatcher.KEEP
         }
-        return CustomPostFilterMatcher.Decision(false)
+        if (headDecision.blocked) return headDecision
+        if (rules.hot && schemaGetter != null && schemaGetter.declaringClass.isInstance(cardData)) {
+            val schema = runCatching { schemaGetter.invoke(cardData) as? String }.getOrNull()
+            val topicDecision = CustomPostFilterMatcher.decideByCardSchema(schema, rules)
+            if (topicDecision.blocked) {
+                return if (headDecision.modelScores == null) topicDecision
+                else topicDecision.copy(modelScores = headDecision.modelScores)
+            }
+        }
+        return headDecision
     }
 
     private fun extractCardDataList(cardData: Any, dataListFieldName: String): List<Any?>? {
@@ -275,9 +295,8 @@ object CustomPostCardBlockHook {
     }
 
     private fun resolveDataListField(clazz: Class<*>, fieldName: String): Field? {
-        val cached = sDataListFieldCache[clazz]
-        if (cached != null || sDataListFieldCache.containsKey(clazz)) {
-            return cached
+        sDataListFieldCache[clazz]?.let { cached ->
+            return if (cached === NO_VALUE) null else cached as Field
         }
         var current: Class<*>? = clazz
         var field: Field? = null
@@ -291,7 +310,7 @@ object CustomPostCardBlockHook {
                 field = null
             }
         }
-        sDataListFieldCache[clazz] = field
+        sDataListFieldCache[clazz] = field ?: NO_VALUE
         return field
     }
 
@@ -340,9 +359,8 @@ object CustomPostCardBlockHook {
     }
 
     private fun resolveRecommendNestedDataListField(clazz: Class<*>, fieldName: String): Field? {
-        val cached = sRecommendNestedDataListFieldCache[clazz]
-        if (cached != null || sRecommendNestedDataListFieldCache.containsKey(clazz)) {
-            return cached
+        sRecommendNestedDataListFieldCache[clazz]?.let { cached ->
+            return if (cached === NO_VALUE) null else cached as Field
         }
         var current: Class<*>? = clazz
         var field: Field? = null
@@ -357,7 +375,7 @@ object CustomPostCardBlockHook {
                 field.isAccessible = true
             }
         }
-        sRecommendNestedDataListFieldCache[clazz] = field
+        sRecommendNestedDataListFieldCache[clazz] = field ?: NO_VALUE
         return field
     }
 
@@ -412,7 +430,7 @@ object CustomPostCardBlockHook {
     private fun extractFeedHeadParams(
         item: Any,
         fieldName: String,
-        rules: CustomPostFilterMatcher.RuntimeRules,
+        rules: CustomPostFilterRules,
     ): Map<*, *>? {
         val field = resolveFeedHeadParamsField(item.javaClass, fieldName) ?: return null
         val value = runCatching { field.get(item) as? Map<*, *> }.getOrNull() ?: return null
@@ -420,9 +438,8 @@ object CustomPostCardBlockHook {
     }
 
     private fun resolveFeedHeadParamsField(clazz: Class<*>, fieldName: String): Field? {
-        val cached = sHeadParamsFieldCache[clazz]
-        if (cached != null || sHeadParamsFieldCache.containsKey(clazz)) {
-            return cached
+        sHeadParamsFieldCache[clazz]?.let { cached ->
+            return if (cached === NO_VALUE) null else cached as Field
         }
         var current: Class<*>? = clazz
         var field: Field? = null
@@ -440,20 +457,20 @@ object CustomPostCardBlockHook {
                 field.isAccessible = true
             }
         }
-        sHeadParamsFieldCache[clazz] = field
+        sHeadParamsFieldCache[clazz] = field ?: NO_VALUE
         return field
     }
 
     private fun looksLikeFeedHeadParams(
         map: Map<*, *>,
-        rules: CustomPostFilterMatcher.RuntimeRules,
+        rules: CustomPostFilterRules,
     ): Boolean {
         return feedHeadParamsScore(map, rules) > 0
     }
 
     private fun feedHeadParamsScore(
         map: Map<*, *>,
-        rules: CustomPostFilterMatcher.RuntimeRules,
+        rules: CustomPostFilterRules,
     ): Int {
         var score = 0
         if (rules.reply) {

@@ -17,7 +17,6 @@ import com.forbidad4tieba.hook.symbol.model.PlainUrlBrowserHelperSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlClickableSpanSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDataSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDispatchSymbols
-import com.forbidad4tieba.hook.symbol.model.PlainUrlWebContainerSymbols
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.Locale
@@ -33,8 +32,6 @@ object PlainUrlDirectBrowserHook {
         "com.baidu.tieba://",
         "tiebaapp://",
     )
-    private const val WEB_VIEW_TAG_URL = "tag_url"
-    private const val INTENT_KEY_URI = "key_uri"
     private const val MAX_NESTED_WEB_URL_DEPTH = 3
     private val installed = AtomicBoolean(false)
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
@@ -51,7 +48,6 @@ object PlainUrlDirectBrowserHook {
         val spanTargets: PlainUrlClickableSpanSymbols?,
         val messageTarget: PlainUrlMessageDispatchSymbols?,
         val browserHelperTargets: PlainUrlBrowserHelperSymbols?,
-        val webContainerTargets: PlainUrlWebContainerSymbols?,
         val mountCardTargets: MountCardLinkLayoutSymbols?,
         val clickSpanMarkerField: Field?,
         val isClickMessageCmd: (Int) -> Boolean,
@@ -153,39 +149,6 @@ object PlainUrlDirectBrowserHook {
                             ?: return@intercept chain.proceed()
                         val context = resolveBrowserHelperContext(chain.args)
                         if (openSystemBrowser(context, normalizedUrl)) null else chain.proceed()
-                    }
-                    installedCount++
-                }
-            }
-            val webContainerTargets = targets.webContainerTargets
-            if (webContainerTargets != null) {
-                val initDataMethod = webContainerTargets.initDataMethod
-                if (initDataMethod != null && installedMethodKeys.add(methodKey(initDataMethod))) {
-                    mod.hook(initDataMethod).intercept { chain ->
-                        val result = chain.proceed()
-                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept result
-                        val activity = chain.thisObject as? Activity ?: return@intercept result
-                        val normalizedUrl = resolveWebContainerWebUrl(activity.intent)
-                            ?: return@intercept result
-                        if (openSystemBrowser(activity, normalizedUrl)) {
-                            activity.finish()
-                        }
-                        result
-                    }
-                    installedCount++
-                }
-                val shouldOverrideUrlLoadingMethod = webContainerTargets.shouldOverrideUrlLoadingMethod
-                if (
-                    shouldOverrideUrlLoadingMethod != null &&
-                    installedMethodKeys.add(methodKey(shouldOverrideUrlLoadingMethod))
-                ) {
-                    mod.hook(shouldOverrideUrlLoadingMethod).intercept { chain ->
-                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
-                        val view = chain.args.getOrNull(0) as? View
-                        val rawUrl = chain.args.getOrNull(1) as? String
-                        val normalizedUrl = normalizeWebUrl(rawUrl)
-                            ?: return@intercept chain.proceed()
-                        if (openSystemBrowser(view, normalizedUrl)) true else chain.proceed()
                     }
                     installedCount++
                 }
@@ -304,13 +267,6 @@ object PlainUrlDirectBrowserHook {
 
     private fun resolveBrowserHelperContext(args: List<*>): Context? {
         return args.firstOrNull { it is Context } as? Context
-    }
-
-    private fun resolveWebContainerWebUrl(intent: Intent?): String? {
-        if (intent == null) return null
-        normalizeWebUrl(runCatching { intent.getStringExtra(WEB_VIEW_TAG_URL) }.getOrNull())?.let { return it }
-        val rawUri = runCatching { intent.getParcelableExtra(INTENT_KEY_URI) as? Uri }.getOrNull()?.toString()
-        return normalizeWebUrl(rawUri)
     }
 
     private fun normalizeWebUrl(rawUrl: String?): String? {

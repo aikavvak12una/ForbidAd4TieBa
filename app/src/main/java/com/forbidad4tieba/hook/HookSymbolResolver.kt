@@ -1,5 +1,8 @@
 package com.forbidad4tieba.hook
 
+import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigSymbols
+import com.forbidad4tieba.hook.symbol.resolve.PbAdRequestTargetResolver
+
 import com.forbidad4tieba.hook.symbol.validation.*
 
 import com.forbidad4tieba.hook.symbol.status.*
@@ -74,18 +77,7 @@ internal object HookSymbolResolver {
         val firstFloorPostGetterMethod: Method? = null,
     )
 
-    private const val PLAIN_URL_CLICKABLE_SPAN_CLASS = "com.baidu.tieba.ui7"
-    private const val PLAIN_URL_CLICKABLE_SPAN_TYPE_FIELD = "d"
-    private const val PLAIN_URL_CLICKABLE_SPAN_URL_FIELD = "e"
-    private const val PLAIN_URL_CLICKABLE_SPAN_TEXT_FIELD = "i"
     private const val PLAIN_URL_CLICK_MESSAGE_CMD = 2001332
-    private const val PLAIN_URL_MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
-    private const val PLAIN_URL_RESPONSED_MESSAGE_CLASS = "com.baidu.adp.framework.message.ResponsedMessage"
-    private const val PLAIN_URL_CUSTOM_RESPONSED_MESSAGE_CLASS = "com.baidu.adp.framework.message.CustomResponsedMessage"
-    private const val PLAIN_URL_APPLICATION_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
-    private const val PLAIN_URL_GET_CMD_METHOD = "getCmd"
-    private const val PLAIN_URL_GET_DATA_METHOD = "getData"
-    private const val PLAIN_URL_GET_INST_METHOD = "getInst"
     private const val SEARCH_BOX_HEADER_CONTAINER_CLASS = "androidx.coordinatorlayout.widget.CoordinatorLayout"
     private const val AI_SPRITE_MEME_PAN_CONTROLLER_CLASS =
         "com.baidu.tbadk.editortools.meme.pan.SpriteMemePanController"
@@ -101,130 +93,17 @@ internal object HookSymbolResolver {
         "com.baidu.tieba.pb.view.PbAiEmojiCreationView"
     private const val AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS =
         "com.baidu.tieba.pb.pagebrowser.comment.floor.meme.CommentFloorAiEmojiCreationView"
-    private const val REPLY_SERVER_RESPONSE_CLASS = "com.baidu.tieba.write.message.AddPostHttpResponse"
-    private const val REPLY_SERVER_RESPONSE_DECODE_METHOD = "decodeInBackGround"
-    private const val REPLY_SERVER_RESPONSE_RESULT_JSON_FIELD = "resultJSON"
-    private const val JSON_HTTP_RESPONSED_MESSAGE_CLASS = "com.baidu.tbadk.message.http.JsonHttpResponsedMessage"
-    private const val AGREE_SERVER_RESPONSE_CLASS = "com.baidu.tieba.pb.data.PbFloorAgreeResponseMessage"
-    private const val AGREE_SERVER_RESPONSE_DECODE_LOGIC_METHOD = "decodeLogicInBackGround"
-    private const val ADD_POST_REQUEST_CLASS = "com.baidu.tieba.write.message.AddPostRequest"
-    private const val ADD_POST_REQUEST_DATA_FIELD = "requestData"
-    private const val RESPONSED_MESSAGE_CLASS = "com.baidu.adp.framework.message.ResponsedMessage"
-    private const val RESPONSED_MESSAGE_GET_ORIGINAL_METHOD = "getOrginalMessage"
     private const val MESSAGE_CLASS = "com.baidu.adp.framework.message.Message"
-    private const val MESSAGE_GET_EXTRA_METHOD = "getExtra"
-    private const val MESSAGE_GET_TAG_METHOD = "getTag"
-    private const val MESSAGE_SET_TAG_METHOD = "setTag"
-    private const val HTTP_MESSAGE_CLASS = "com.baidu.adp.framework.message.HttpMessage"
-    private const val HTTP_MESSAGE_ADD_PARAM_METHOD = "addParam"
-    private const val HTTP_MESSAGE_ADD_HEADER_METHOD = "addHeader"
     private const val MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
-    private const val MESSAGE_MANAGER_GET_INSTANCE_METHOD = "getInstance"
-    private const val MESSAGE_MANAGER_FIND_TASK_METHOD = "findTask"
-    private const val MESSAGE_MANAGER_REGISTER_TASK_METHOD = "registerTask"
-    private const val MESSAGE_MANAGER_SEND_MESSAGE_METHOD = "sendMessage"
     private const val MESSAGE_TASK_CLASS = "com.baidu.adp.framework.task.MessageTask"
     private const val HTTP_MESSAGE_TASK_CLASS = "com.baidu.adp.framework.task.HttpMessageTask"
     private const val HTTP_RESPONSED_MESSAGE_CLASS = "com.baidu.adp.framework.message.HttpResponsedMessage"
-    private const val HTTP_MESSAGE_TASK_SET_RESPONSE_CLASS_METHOD = "setResponsedClass"
-    private const val TB_HTTP_MESSAGE_TASK_CLASS = "com.baidu.tbadk.task.TbHttpMessageTask"
-    private const val TB_HTTP_MESSAGE_TASK_SET_NEED_TBS_METHOD = "setIsNeedTbs"
-    private const val BD_UNIQUE_ID_CLASS = "com.baidu.adp.BdUniqueId"
-    private const val BD_UNIQUE_ID_GEN_METHOD = "gen"
     private const val TBADK_CORE_APPLICATION_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
-    private const val TBADK_CORE_APPLICATION_GET_INST_METHOD = "getInst"
-    private const val TBADK_CORE_APPLICATION_GET_ZID_METHOD = "getZid"
-    private const val TB_CONFIG_CLASS = "com.baidu.tbadk.TbConfig"
-    private const val TB_CONFIG_SERVER_ADDRESS_FIELD = "SERVER_ADDRESS"
-    private const val TB_CONFIG_PB_FLOOR_AGREE_URL_FIELD = "PB_FLOOR_AGREE_URL"
-    private const val CMD_CONFIG_HTTP_CLASS = "com.baidu.tbadk.core.frameworkData.CmdConfigHttp"
-    private const val CMD_CONFIG_HTTP_PB_FLOOR_AGREE_FIELD = "CMD_PB_FLOOR_AGREE"
-    private const val HOME_NATIVE_GLASS_SUB_PB_NEXT_PAGE_MORE_VIEW_RES_NAME = "pb_more_view"
-    private const val HOME_NATIVE_GLASS_PB_REPLY_TITLE_DIVIDER_VIEW_RES_NAME = "divider_bottom"
-    private const val HOME_NATIVE_GLASS_SORT_SWITCH_BACKGROUND_PAINT_FIELD = "o"
-    private const val HOME_NATIVE_GLASS_SORT_SWITCH_SLIDE_DRAW_METHOD = "y"
-    private const val HOME_NATIVE_GLASS_SORT_SWITCH_SLIDE_PATH_FIELD = "z"
-    private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_CONTROLLER_CLASS = "com.baidu.tieba.gcd"
-    private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_INIT_METHOD = "r"
-    private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_REFRESH_METHOD = "D"
-    private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_VIEW_FIELD = "l"
-    private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_TITLE_FIELD = "q"
-    private const val HOME_NATIVE_GLASS_MORE_ACTIVITY_CLASS = "com.baidu.tieba.setting.more.MoreActivity"
     private const val HOME_NATIVE_GLASS_BD_SWITCH_VIEW_CLASS =
         "com.baidu.adp.widget.BdSwitchView.BdSwitchView"
-    private const val HOME_NATIVE_GLASS_BASE_FRAGMENT_CLASS = "com.baidu.tbadk.core.BaseFragment"
-    private const val HOME_NATIVE_GLASS_PB_BAR_IMAGE_VIEW_CLASS = "com.baidu.tbadk.core.view.PbBarImageView"
-    private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_CLASS_SCAN_LIMIT = 24
-    private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_MIN_CLASS_SCORE = 170
-    private const val HOME_NATIVE_GLASS_ENTER_FORUM_CAPSULE_MIN_SCORE_GAP = 24
-    private val HOME_NATIVE_GLASS_DYNAMIC_BACKGROUND_COLOR_RES_NAMES = arrayOf(
-        "CAM_X0110",
-        "CAM_X0112",
-        "CAM_X0201",
-        "CAM_X0202",
-        "CAM_X0203",
-        "CAM_X0204",
-        "CAM_X0205",
-        "CAM_X0206",
-        "CAM_X0207",
-        "CAM_X0208",
-        "CAM_X0209",
-        "CAM_X0210",
-        "CAM_X0211",
-        "CAM_X0212",
-        "color_bg_page",
-        "color_bg_primary_tiny",
-    )
-    private val TARGET_APP_R_ID_CLASSES = listOf(
-        "com.baidu.tieba.R\$id",
-        "com.baidu.searchbox.livenps.R\$id",
-    )
-    private val TARGET_APP_R_COLOR_CLASSES = listOf(
-        "com.baidu.tieba.R\$color",
-        "com.baidu.searchbox.livenps.R\$color",
-    )
-    private const val PRIVATE_READ_RECEIPT_MODEL_CLASS =
-        "com.baidu.tieba.immessagecenter.im.model.PersonalMsglistModel"
-    private val PRIVATE_READ_RECEIPT_MODEL_READ_DISPATCH_CANDIDATES = arrayOf("h1", "K2")
-    private const val PRIVATE_READ_RECEIPT_MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
-    private const val PRIVATE_READ_RECEIPT_MESSAGE_MANAGER_GET_INSTANCE_METHOD = "getInstance"
-    private const val PRIVATE_READ_RECEIPT_MESSAGE_BASE_CLASS = "com.baidu.adp.framework.message.Message"
-    private const val PRIVATE_READ_RECEIPT_MESSAGE_SEND_METHOD = "sendMessage"
-    private const val PRIVATE_READ_RECEIPT_REQUEST_CLASS =
-        "com.baidu.tieba.im.message.RequestPersonalMsgReadMessage"
-    private const val PRIVATE_READ_RECEIPT_MODEL_BASE_CLASS = "com.baidu.tieba.im.model.MsglistModel"
-    private const val PRIVATE_READ_RECEIPT_COMMIT_RESPONSE_CLASS = "com.baidu.tieba.im.message.ResponseCommitMessage"
-    private const val PRIVATE_READ_RECEIPT_PROCESS_ACK_METHOD = "processMsgACK"
-    private const val PRIVATE_READ_RECEIPT_RESPONSE_ERROR_METHOD = "getError"
-    private const val PRIVATE_READ_RECEIPT_REQUEST_MSG_ID_FIELD = "hasSentMsgId"
-    private const val PRIVATE_READ_RECEIPT_REQUEST_TO_UID_FIELD = "toUid"
-    private const val PRIVATE_READ_RECEIPT_MODEL_DATA_FIELD = "mDatas"
-    private const val PRIVATE_READ_RECEIPT_PAGE_DATA_CLASS = "com.baidu.tieba.im.data.MsgPageData"
-    private const val PRIVATE_READ_RECEIPT_PAGE_DATA_CHAT_LIST_METHOD = "getChatMessages"
-    private const val PRIVATE_READ_RECEIPT_CHAT_MESSAGE_CLASS = "com.baidu.tieba.im.message.chat.ChatMessage"
-    private const val PRIVATE_READ_RECEIPT_CHAT_MESSAGE_MSG_ID_METHOD = "getMsgId"
-    private const val PRIVATE_READ_RECEIPT_CHAT_MESSAGE_USER_ID_METHOD = "getUserId"
-    private const val PRIVATE_READ_RECEIPT_CHAT_MESSAGE_LOCAL_DATA_METHOD = "getLocalData"
-    private const val PRIVATE_READ_RECEIPT_LOCAL_DATA_CLASS = "com.baidu.tieba.im.data.MsgLocalData"
-    private const val PRIVATE_READ_RECEIPT_LOCAL_DATA_STATUS_METHOD = "getStatus"
-    private const val PRIVATE_READ_RECEIPT_ACCOUNT_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
-    private const val PRIVATE_READ_RECEIPT_CURRENT_ACCOUNT_METHOD = "getCurrentAccount"
-    private const val MOUNT_CARD_LINK_LAYOUT_CLASS =
-        "com.baidu.tbadk.core.view.commonMountCard.TbMountCardLinkLayout"
-    private const val MOUNT_CARD_LINK_INFO_DATA_CLASS = "com.baidu.tbadk.data.CardLinkInfoData"
-    private const val MOUNT_CARD_LINK_LAYOUT_ON_CLICK_METHOD = "onClick"
-    private const val MOUNT_CARD_LINK_INFO_GET_URL_METHOD = "getUrl"
-    private val PLAIN_URL_CLICKABLE_SPAN_CONTAINER_CLASSES = listOf(
-        "com.baidu.tieba.si7",
-        "com.baidu.tieba.qi7",
-        "com.baidu.tbadk.widget.richText.TbRichTextItem",
-    )
     private val plainUrlMessageDataSymbolsCache = ConcurrentHashMap<Class<*>, PlainUrlMessageDataSymbols>()
 
     private val SCAN_WHITELIST_CLASSES = listOf(
-        "com.baidu.tieba.zj9",
-        "com.baidu.tieba.cke",
-        "com.baidu.tieba.k1a",
         "com.baidu.tieba.feed.list.FeedTemplateAdapter",
         "com.baidu.tieba.forum.controller.ForumDialogController",
         "com.baidu.tieba.forum.controller.GameFloatingBarController",
@@ -237,9 +116,7 @@ internal object HookSymbolResolver {
         StableTiebaHookPoints.HOME_TAB_BAR_RIGHT_SLOT_CLASS,
         StableTiebaHookPoints.PB_FALLING_VIEW_CLASS,
         PB_AD_INSERT_CLASS,
-        PLAIN_URL_CLICKABLE_SPAN_CLASS,
         "com.baidu.tbadk.mainTab.MaintabAddResponedData",
-        "com.baidu.tieba.no6",
         "com.baidu.tbadk.core.atomData.ShareDialogConfig",
         "com.baidu.tbadk.coreExtra.share.ShareItem",
         "com.baidu.tieba.sharesdk.view.ShareDialogItemView",
@@ -445,7 +322,6 @@ internal object HookSymbolResolver {
                 symbols?.aiPbPageBrowserAiEmojiCreationViewClass
                     ?: AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS,
             msgTabViewModelClass = MSG_TAB_VIEW_MODEL_CLASS,
-            msgTabContainerViewClass = MSG_TAB_CONTAINER_VIEW_CLASS,
         )
     }
 
@@ -691,85 +567,6 @@ internal object HookSymbolResolver {
         }
     }
 
-    fun resolvePlainUrlWebContainerSymbols(
-        cl: ClassLoader,
-        symbols: HookSymbols? = getMemorySymbols(),
-    ): PlainUrlWebContainerSymbols? {
-        return try {
-            val resolvedSymbols = symbols ?: run {
-                XposedCompat.log("[PlainUrlDirectBrowserHook] web container skipped: scan symbols unavailable")
-                return null
-            }
-            val activityClassName =
-                resolvedSymbols.plainUrlWebContainerActivityClass?.takeIf { it.isNotBlank() } ?: run {
-                    XposedCompat.log("[PlainUrlDirectBrowserHook] web container skipped: missing activity class")
-                    return null
-                }
-            val activityClass = safeFindClass(activityClassName, cl) ?: run {
-                XposedCompat.log("[PlainUrlDirectBrowserHook] web container skipped: class not found: $activityClassName")
-                return null
-            }
-            val initDataMethod = resolvedSymbols.plainUrlWebContainerInitDataMethod
-                ?.takeIf { it.isNotBlank() }
-                ?.let { methodName ->
-                    val method = try {
-                        activityClass.getDeclaredMethod(methodName)
-                    } catch (_: NoSuchMethodException) {
-                        null
-                    }
-                    method?.takeIf { candidate ->
-                        PlainUrlWebContainerSymbolScanner.isInitDataMethod(candidate, methodName)
-                    } ?: run {
-                        XposedCompat.log("[PlainUrlDirectBrowserHook] web container initData skipped: method mismatch")
-                        null
-                    }
-                }
-            val shouldOverrideUrlLoadingMethod = resolvePlainUrlWebContainerNavigationMethod(resolvedSymbols, cl)
-            if (initDataMethod == null && shouldOverrideUrlLoadingMethod == null) {
-                XposedCompat.log("[PlainUrlDirectBrowserHook] web container skipped: no valid methods")
-                return null
-            }
-            initDataMethod?.isAccessible = true
-            shouldOverrideUrlLoadingMethod?.isAccessible = true
-            PlainUrlWebContainerSymbols(
-                webContainerActivityClass = activityClass,
-                initDataMethod = initDataMethod,
-                shouldOverrideUrlLoadingMethod = shouldOverrideUrlLoadingMethod,
-            )
-        } catch (t: Throwable) {
-            XposedCompat.log("[PlainUrlDirectBrowserHook] web container symbol resolve FAILED: ${t.message}")
-            XposedCompat.log(t)
-            null
-        }
-    }
-
-    private fun resolvePlainUrlWebContainerNavigationMethod(
-        symbols: HookSymbols,
-        cl: ClassLoader,
-    ): Method? {
-        val webViewClientClassName = symbols.plainUrlWebContainerWebViewClientClass?.takeIf { it.isNotBlank() }
-            ?: return null
-        val methodName = symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod?.takeIf { it.isNotBlank() }
-            ?: return null
-        val webViewClientClass = safeFindClass(webViewClientClassName, cl) ?: run {
-            XposedCompat.log(
-                "[PlainUrlDirectBrowserHook] web container navigation skipped: class not found: $webViewClientClassName",
-            )
-            return null
-        }
-        val method = try {
-            webViewClientClass.getDeclaredMethod(methodName, WebView::class.java, String::class.java)
-        } catch (_: NoSuchMethodException) {
-            null
-        }
-        return method?.takeIf { candidate ->
-            PlainUrlWebContainerSymbolScanner.isShouldOverrideUrlLoadingMethod(candidate, methodName)
-        } ?: run {
-            XposedCompat.log("[PlainUrlDirectBrowserHook] web container navigation skipped: method mismatch")
-            null
-        }
-    }
-
     fun resolvePrivateReadReceiptSymbols(
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
@@ -872,18 +669,6 @@ internal object HookSymbolResolver {
                 "privateReadReceiptChatMessageUserIdMethod",
                 resolvedSymbols.privateReadReceiptChatMessageUserIdMethod,
             ) ?: return null
-            val chatLocalDataMethodName = required(
-                "privateReadReceiptChatMessageLocalDataMethod",
-                resolvedSymbols.privateReadReceiptChatMessageLocalDataMethod,
-            ) ?: return null
-            val localDataClassName = required(
-                "privateReadReceiptLocalDataClass",
-                resolvedSymbols.privateReadReceiptLocalDataClass,
-            ) ?: return null
-            val localDataStatusMethodName = required(
-                "privateReadReceiptLocalDataStatusMethod",
-                resolvedSymbols.privateReadReceiptLocalDataStatusMethod,
-            ) ?: return null
             val accountClassName = required(
                 "privateReadReceiptAccountClass",
                 resolvedSymbols.privateReadReceiptAccountClass,
@@ -902,7 +687,6 @@ internal object HookSymbolResolver {
             val commitResponseClass = safeFindClass(commitResponseClassName, cl) ?: return null
             val pageDataClass = safeFindClass(pageDataClassName, cl) ?: return null
             val chatMessageClass = safeFindClass(chatMessageClassName, cl) ?: return null
-            val localDataClass = safeFindClass(localDataClassName, cl) ?: return null
             val accountClass = safeFindClass(accountClassName, cl) ?: return null
             if (!messageBaseClass.isAssignableFrom(requestClass)) return null
 
@@ -983,18 +767,6 @@ internal object HookSymbolResolver {
                     method.parameterTypes.isEmpty() &&
                     method.returnType == Long::class.javaPrimitiveType
             } ?: return null
-            val chatMessageLocalDataMethod = chatMessageClass.declaredMethods.singleOrNull { method ->
-                method.name == chatLocalDataMethodName &&
-                    !Modifier.isStatic(method.modifiers) &&
-                    method.parameterTypes.isEmpty() &&
-                    method.returnType == localDataClass
-            } ?: return null
-            val localDataStatusMethod = localDataClass.declaredMethods.singleOrNull { method ->
-                method.name == localDataStatusMethodName &&
-                    !Modifier.isStatic(method.modifiers) &&
-                    method.parameterTypes.isEmpty() &&
-                    method.returnType == Short::class.javaObjectType
-            } ?: return null
             val currentAccountMethod = accountClass.declaredMethods.singleOrNull { method ->
                 method.name == currentAccountMethodName &&
                     Modifier.isStatic(method.modifiers) &&
@@ -1013,8 +785,6 @@ internal object HookSymbolResolver {
                 pageDataChatListMethod,
                 chatMessageMsgIdMethod,
                 chatMessageUserIdMethod,
-                chatMessageLocalDataMethod,
-                localDataStatusMethod,
                 currentAccountMethod,
             ).forEach { it.isAccessible = true }
             listOf(requestMsgIdField, requestToUidField, modelDataField).forEach { it.isAccessible = true }
@@ -1037,8 +807,6 @@ internal object HookSymbolResolver {
                 pageDataChatListMethod = pageDataChatListMethod,
                 chatMessageMsgIdMethod = chatMessageMsgIdMethod,
                 chatMessageUserIdMethod = chatMessageUserIdMethod,
-                chatMessageLocalDataMethod = chatMessageLocalDataMethod,
-                localDataStatusMethod = localDataStatusMethod,
                 currentAccountMethod = currentAccountMethod,
             )
         } catch (t: Throwable) {
@@ -2501,217 +2269,7 @@ internal object HookSymbolResolver {
     fun resolvePbAdRequestBlockSymbols(
         cl: ClassLoader,
         symbols: HookSymbols? = getMemorySymbols(),
-    ): PbAdRequestBlockSymbols? {
-        return try {
-            val pbPage = resolvePbPageRequestMessageTargets(cl)
-            val pageBrowser = resolvePageBrowserRequestMessageTarget(cl)
-            val commonAdBid = resolveCommonAdBidTargets(cl, symbols)
-            val pageBrowserAdBid = resolvePageBrowserAdBidTarget(cl, symbols)
-            if (
-                pbPage == null &&
-                pageBrowser == null &&
-                commonAdBid == null &&
-                pageBrowserAdBid == null
-            ) {
-                XposedCompat.log("[PbAdRequestBlockHook] skipped: no resolved install targets")
-                return null
-            }
-            PbAdRequestBlockSymbols(
-                pbPageEncodeMethod = pbPage?.first,
-                pbPageFieldPatches = pbPage?.second.orEmpty(),
-                pageBrowserAddAdMethod = pageBrowser,
-                commonAdBidTargetClass = commonAdBid?.targetClass,
-                commonAdBidStartMethods = commonAdBid?.startMethods.orEmpty(),
-                commonAdBidNotifyMethod = commonAdBid?.notifyMethod,
-                pageBrowserAdBidTargetClass = pageBrowserAdBid?.first,
-                pageBrowserAdBidRequestDataMethod = pageBrowserAdBid?.second,
-            )
-        } catch (t: Throwable) {
-            XposedCompat.log("[PbAdRequestBlockHook] symbol resolve FAILED: ${t.message}")
-            XposedCompat.log(t)
-            null
-        }
-    }
-
-    private data class CommonAdBidTargets(
-        val targetClass: Class<*>,
-        val startMethods: List<Method>,
-        val notifyMethod: Method,
-    )
-
-    private fun resolvePbPageRequestMessageTargets(cl: ClassLoader): Pair<Method, List<PbAdRequestFieldPatchSymbols>>? {
-        val requestClass = safeFindClass(PB_PAGE_REQUEST_MESSAGE_CLASS, cl) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] class NOT FOUND: $PB_PAGE_REQUEST_MESSAGE_CLASS")
-            return null
-        }
-        val encodeMethod = XposedCompat.findMethodOrNull(
-            requestClass,
-            "encode",
-            Boolean::class.javaPrimitiveType!!,
-        ) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] method NOT FOUND: $PB_PAGE_REQUEST_MESSAGE_CLASS.encode(boolean)")
-            return null
-        }
-        val patches = resolvePbPageRequestFieldPatches(requestClass)
-        if (patches.isEmpty()) {
-            XposedCompat.log("[PbAdRequestBlockHook] skipped PbPageRequestMessage: ad fields not resolved")
-            return null
-        }
-        encodeMethod.isAccessible = true
-        return encodeMethod to patches
-    }
-
-    private fun resolvePageBrowserRequestMessageTarget(cl: ClassLoader): Method? {
-        val requestClass = safeFindClass(PAGE_BROWSER_REQUEST_MESSAGE_CLASS, cl) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] class NOT FOUND: $PAGE_BROWSER_REQUEST_MESSAGE_CLASS")
-            return null
-        }
-        val builderClass = safeFindClass(PB_LIST_DATA_REQ_BUILDER_CLASS, cl) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] class NOT FOUND: $PB_LIST_DATA_REQ_BUILDER_CLASS")
-            return null
-        }
-        return XposedCompat.findMethodOrNull(
-            requestClass,
-            "addAdRequestMessage",
-            Int::class.javaPrimitiveType!!,
-            Int::class.javaPrimitiveType!!,
-            builderClass,
-        )?.apply { isAccessible = true } ?: run {
-            XposedCompat.log(
-                "[PbAdRequestBlockHook] method NOT FOUND: " +
-                    "$PAGE_BROWSER_REQUEST_MESSAGE_CLASS.addAdRequestMessage(int,int,DataReq.Builder)",
-            )
-            null
-        }
-    }
-
-    private fun resolveCommonAdBidTargets(cl: ClassLoader, symbols: HookSymbols?): CommonAdBidTargets? {
-        val resolvedSymbols = symbols ?: return null
-        val modelClassName = resolvedSymbols.pbAdBidCommonRequestModelClass?.takeIf { it.isNotBlank() } ?: return null
-        val startMethodNames = resolvedSymbols.pbAdBidCommonRequestStartMethods.orEmpty()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
-        val notifyMethodName = resolvedSymbols.pbAdBidCommonRequestNotifyMethod?.takeIf { it.isNotBlank() }
-        if (startMethodNames.isEmpty() || notifyMethodName == null) return null
-
-        val commonBaseClass = safeFindClass(PB_COMMON_REQUEST_MODEL_CLASS, cl) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] class NOT FOUND: $PB_COMMON_REQUEST_MODEL_CLASS")
-            return null
-        }
-        val targetModelClass = safeFindClass(modelClassName, cl) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] class NOT FOUND: $modelClassName")
-            return null
-        }
-        if (!commonBaseClass.isAssignableFrom(targetModelClass)) {
-            XposedCompat.log("[PbAdRequestBlockHook] skipped common AdBid: target is not CommonRequestModel")
-            return null
-        }
-
-        val notifyMethod = findPbAdRequestInstanceMethod(
-            commonBaseClass,
-            notifyMethodName,
-            Void.TYPE,
-            Int::class.javaPrimitiveType!!,
-        ) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] method NOT FOUND: $PB_COMMON_REQUEST_MODEL_CLASS.$notifyMethodName(int)")
-            return null
-        }
-
-        val startMethods = startMethodNames.mapNotNull { methodName ->
-            findPbAdRequestInstanceMethod(commonBaseClass, methodName, Void.TYPE) ?: run {
-                XposedCompat.logD("[PbAdRequestBlockHook] common AdBid start method not resolved: $methodName")
-                null
-            }
-        }
-        if (startMethods.isEmpty()) return null
-        return CommonAdBidTargets(
-            targetClass = targetModelClass,
-            startMethods = startMethods,
-            notifyMethod = notifyMethod,
-        )
-    }
-
-    private fun resolvePageBrowserAdBidTarget(cl: ClassLoader, symbols: HookSymbols?): Pair<Class<*>, Method>? {
-        val resolvedSymbols = symbols ?: return null
-        val modelClassName = resolvedSymbols.pbAdBidPageBrowserRequestModelClass?.takeIf { it.isNotBlank() }
-            ?: return null
-        val requestDataMethodName = resolvedSymbols.pbAdBidPageBrowserRequestDataMethod?.takeIf { it.isNotBlank() }
-            ?: return null
-        val targetModelClass = safeFindClass(modelClassName, cl) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] class NOT FOUND: $modelClassName")
-            return null
-        }
-        val continuationClass = safeFindClass(KOTLIN_CONTINUATION_CLASS, cl) ?: run {
-            XposedCompat.log("[PbAdRequestBlockHook] class NOT FOUND: $KOTLIN_CONTINUATION_CLASS")
-            return null
-        }
-        safeFindClass(PB_PAGE_BROWSER_REQUEST_MODEL_CLASS, cl)
-            ?.takeIf { !it.isAssignableFrom(targetModelClass) }
-            ?.let { XposedCompat.logD("[PbAdRequestBlockHook] pagebrowser AdBid target is outside legacy BaseRequestModel") }
-
-        val requestDataMethod = findPbAdRequestInstanceMethodInHierarchy(
-            targetModelClass,
-            requestDataMethodName,
-            Any::class.java,
-            continuationClass,
-        ) ?: run {
-            XposedCompat.log(
-                "[PbAdRequestBlockHook] method NOT FOUND: " +
-                    "$modelClassName.$requestDataMethodName(Continuation)",
-            )
-            return null
-        }
-        return targetModelClass to requestDataMethod
-    }
-
-    private fun resolvePbPageRequestFieldPatches(requestClass: Class<*>): List<PbAdRequestFieldPatchSymbols> {
-        val patches = ArrayList<PbAdRequestFieldPatchSymbols>(5)
-        fun add(name: String, value: Any?) {
-            val field = try {
-                XposedCompat.findField(requestClass, name)
-            } catch (_: Throwable) {
-                null
-            } ?: return
-            field.isAccessible = true
-            patches.add(PbAdRequestFieldPatchSymbols(field, value))
-        }
-        add("adxBearBannerStr", "")
-        add("adxBearCommentStr", "")
-        add("adExternalBannerStr", "")
-        add("adExternalCommentStr", "")
-        add("isReqAd", 0)
-        return patches
-    }
-
-    private fun findPbAdRequestInstanceMethod(
-        clazz: Class<*>,
-        name: String,
-        returnType: Class<*>,
-        vararg paramTypes: Class<*>,
-    ): Method? {
-        return try {
-            clazz.getDeclaredMethod(name, *paramTypes).takeIf { method ->
-                !Modifier.isStatic(method.modifiers) && method.returnType == returnType
-            }?.apply { isAccessible = true }
-        } catch (_: NoSuchMethodException) {
-            null
-        }
-    }
-
-    private fun findPbAdRequestInstanceMethodInHierarchy(
-        clazz: Class<*>,
-        name: String,
-        returnType: Class<*>,
-        vararg paramTypes: Class<*>,
-    ): Method? {
-        var current: Class<*>? = clazz
-        while (current != null && current != Any::class.java) {
-            findPbAdRequestInstanceMethod(current, name, returnType, *paramTypes)?.let { return it }
-            current = current.superclass
-        }
-        return null
-    }
+    ): PbAdRequestBlockSymbols? = PbAdRequestTargetResolver.resolve(cl, symbols)
 
     fun resolvePostAdDataFilterSymbols(
         cl: ClassLoader,
@@ -2891,7 +2449,7 @@ internal object HookSymbolResolver {
                 label = "bottom game bar mapper",
             )
             val headerTargets = resolveForumPageHeaderTargets(cl, resolvedSymbols)
-            val dialogTargets = resolveForumPageDialogTargets(cl, resolvedSymbols)
+            val businessPromotShowMethod = resolveForumPageBusinessDialogMethod(cl, resolvedSymbols)
             val floatingTargets = resolveForumPageFloatingTargets(cl, resolvedSymbols)
             val businessPromotJumpMethod = resolveForumPageBusinessPromotJumpMethod(cl, resolvedSymbols)
 
@@ -2900,8 +2458,7 @@ internal object HookSymbolResolver {
                 bottomTargets == null &&
                 bottomGameBarMapper == null &&
                 headerTargets == null &&
-                dialogTargets.first == null &&
-                dialogTargets.second == null &&
+                businessPromotShowMethod == null &&
                 floatingTargets.first == null &&
                 businessPromotJumpMethod == null
             ) {
@@ -2917,8 +2474,7 @@ internal object HookSymbolResolver {
                 bottomGameBarMapperMethod = bottomGameBarMapper,
                 headerDataMapperMethod = headerTargets?.first,
                 rainSetterMethod = headerTargets?.second,
-                businessPromotShowMethod = dialogTargets.first,
-                animationShowMethod = dialogTargets.second,
+                businessPromotShowMethod = businessPromotShowMethod,
                 gameFloatingBarShowMethod = floatingTargets.first,
                 gameFloatingBarField = floatingTargets.second,
                 businessPromotJumpMethod = businessPromotJumpMethod,
@@ -3079,34 +2635,23 @@ internal object HookSymbolResolver {
         }?.apply { isAccessible = true }
     }
 
-    private fun resolveForumPageDialogTargets(
+    private fun resolveForumPageBusinessDialogMethod(
         cl: ClassLoader,
         symbols: HookSymbols,
-    ): Pair<Method?, Method?> {
-        val className = symbols.forumDialogControllerClass?.takeIf { it.isNotBlank() } ?: return null to null
+    ): Method? {
+        val className = symbols.forumDialogControllerClass?.takeIf { it.isNotBlank() } ?: return null
         val controllerClass = safeFindClass(className, cl) ?: run {
             XposedCompat.log("[ForumPageAdBlockHook] dialog controller class NOT FOUND: $className")
-            return null to null
+            return null
         }
-        val businessShowName = symbols.forumBusinessPromotShowMethod?.takeIf { it.isNotBlank() }
-        val businessShow = businessShowName?.let { methodName ->
-            collectInstanceMethods(controllerClass).singleOrNull { method ->
-                method.name == methodName &&
-                    method.returnType == Boolean::class.javaPrimitiveType &&
-                    method.parameterTypes.size == 2 &&
-                    method.parameterTypes[0] == String::class.java &&
-                    !method.parameterTypes[1].isPrimitive
-            }?.apply { isAccessible = true }
-        }
-        val animationName = symbols.forumAnimationShowMethod?.takeIf { it.isNotBlank() }
-        val animationShow = animationName?.let { methodName ->
-            collectInstanceMethods(controllerClass).singleOrNull { method ->
-                method.name == methodName &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.isEmpty()
-            }?.apply { isAccessible = true }
-        }
-        return businessShow to animationShow
+        val businessShowName = symbols.forumBusinessPromotShowMethod?.takeIf { it.isNotBlank() } ?: return null
+        return collectInstanceMethods(controllerClass).singleOrNull { method ->
+            method.name == businessShowName &&
+                method.returnType == Boolean::class.javaPrimitiveType &&
+                method.parameterTypes.size == 2 &&
+                method.parameterTypes[0] == String::class.java &&
+                !method.parameterTypes[1].isPrimitive
+        }?.apply { isAccessible = true }
     }
 
     private fun resolveForumPageFloatingTargets(
@@ -3213,7 +2758,7 @@ internal object HookSymbolResolver {
 
             val loadMoreMethod = resolveFeedLoadMoreMethod(cl, resolvedSymbols)
             val customPostFilter = if (includeCustomPostFilter) {
-                resolveCustomPostCardFilterSymbols(resolvedSymbols) ?: return null
+                resolveCustomPostCardFilterSymbols(cl, resolvedSymbols) ?: return null
             } else {
                 null
             }
@@ -3776,7 +3321,7 @@ internal object HookSymbolResolver {
         }
     }
 
-    private fun resolveCustomPostCardFilterSymbols(symbols: HookSymbols): CustomPostCardFilterSymbols? {
+    private fun resolveCustomPostCardFilterSymbols(cl: ClassLoader, symbols: HookSymbols): CustomPostCardFilterSymbols? {
         val templateKeyMethodName = symbols.feedTemplateKeyMethod?.takeIf { it.isNotBlank() } ?: run {
             XposedCompat.log("[CustomPostCardBlockHook] SKIP: feedTemplateKeyMethod missing")
             return null
@@ -3796,6 +3341,7 @@ internal object HookSymbolResolver {
             headParamsFieldName = symbols.feedHeadParamsField?.takeIf { it.isNotBlank() },
             recommendNestedDataMethodName = symbols.feedRecommendCardNestedDataMethod?.takeIf { it.isNotBlank() },
             recommendNestedDataListFieldName = symbols.feedRecommendCardNestedDataListField?.takeIf { it.isNotBlank() },
+            schemaGetter = FeedCardSchemaSymbolScanner.restore(cl, symbols.feedCardBindMethodSpec, symbols.feedCardSchemaGetterSpec),
         )
     }
 
@@ -5573,7 +5119,7 @@ internal object HookSymbolResolver {
         val memorySymbols = memoryCache.getIfFingerprint(fingerprint)
         if (!forceRescan && memorySymbols != null) {
             log(logger, "memory cache hit: source=${memorySymbols.source}")
-            if (isLightweightUsable(memorySymbols)) {
+            if (HookSymbolCachePolicy.isUsable(memorySymbols)) {
                 return memorySymbols
             }
             log(logger, "memory cache unusable, rescan required")
@@ -5581,13 +5127,17 @@ internal object HookSymbolResolver {
 
         if (!forceRescan) {
             val cacheFp = prefs.getString(KEY_SYMBOL_FP, null)
-            val cached = HookSymbols.fromJson(prefs.getString(KEY_SYMBOL_JSON, null))
+            val cached = HookSymbolCachePolicy.decodeIfFingerprint(cacheFp, fingerprint) {
+                prefs.getString(KEY_SYMBOL_JSON, null)
+            }
             log(logger, "disk cache fp match=${cacheFp == fingerprint}, cached=${cached != null}")
             if (cacheFp == fingerprint && cached != null) {
                 val accepted = acceptCachedSymbolsIfUsable(cached, cl, fingerprint, prefs, logger, "disk cache")
                 if (accepted != null) {
                     log(logger, "disk cache usable: source=${accepted.source}")
-                    log(logger, "cache symbols: \n${describeSymbols(appCtx, accepted)}")
+                    if (logger != null || ConfigManager.shouldOutputDetailedLogs()) {
+                        log(logger, "cache symbols: \n${describeSymbols(appCtx, accepted)}")
+                    }
                     memoryCache.put(fingerprint, accepted)
                     return accepted
                 }
@@ -5662,11 +5212,13 @@ internal object HookSymbolResolver {
         val memorySymbols = memoryCache.getIfFingerprint(fingerprint)
         if (memorySymbols != null) {
             log(logger, "memory cache candidate: source=${memorySymbols.source}")
-            if (isLightweightUsable(memorySymbols)) return memorySymbols
+            if (HookSymbolCachePolicy.isUsable(memorySymbols)) return memorySymbols
         }
 
         val cacheFp = prefs.getString(KEY_SYMBOL_FP, null)
-        val cached = HookSymbols.fromJson(prefs.getString(KEY_SYMBOL_JSON, null))
+        val cached = HookSymbolCachePolicy.decodeIfFingerprint(cacheFp, fingerprint) {
+            prefs.getString(KEY_SYMBOL_JSON, null)
+        }
         log(logger, "disk cache candidate: fpMatch=${cacheFp == fingerprint}, exists=${cached != null}")
         if (cacheFp == fingerprint && cached != null) {
             val accepted = acceptCachedSymbolsIfUsable(
@@ -5751,7 +5303,7 @@ internal object HookSymbolResolver {
         source: String,
         verifyFull: Boolean = true,
     ): HookSymbols? {
-        if (!isLightweightUsable(symbols)) {
+        if (!HookSymbolCachePolicy.isUsable(symbols)) {
             log(logger, "$source rejected: lightweight cache check failed")
             return null
         }
@@ -5776,14 +5328,6 @@ internal object HookSymbolResolver {
             .apply()
         log(logger, "$source full verification completed")
         return symbols
-    }
-
-    private fun isLightweightUsable(symbols: HookSymbols): Boolean {
-        if (symbols.source == "unsupported") return true
-        return (symbols.source == "scan" || symbols.source == "partial") &&
-            symbols.createdAt > 0L &&
-            symbols.cacheSchemaVersion == HookSymbols.CACHE_SCHEMA_VERSION &&
-            symbols.dexKitRuleVersion == HookSymbols.DEXKIT_RULE_VERSION
     }
 
     private inline fun <T> withScanContext(cl: ClassLoader, block: () -> T): T {
@@ -5863,6 +5407,7 @@ internal object HookSymbolResolver {
         var feedCardBindMethod: String? = null
         var feedCardBindMethodSpec: String? = null
         var feedCardDataListField: String? = null
+        var feedCardSchemaGetterSpec: String? = null
         var feedHeadParamsField: String? = null
         var feedRecommendCardNestedDataMethod: String? = null
         var feedRecommendCardNestedDataListField: String? = null
@@ -5928,10 +5473,6 @@ internal object HookSymbolResolver {
         var plainUrlApplicationGetInstMethod: String? = null
         var plainUrlBrowserHelperClass: String? = null
         var plainUrlBrowserHelperStartWebActivityMethod: String? = null
-        var plainUrlWebContainerActivityClass: String? = null
-        var plainUrlWebContainerInitDataMethod: String? = null
-        var plainUrlWebContainerWebViewClientClass: String? = null
-        var plainUrlWebContainerShouldOverrideUrlLoadingMethod: String? = null
         var privateReadReceiptModelClass: String? = null
         var privateReadReceiptModelReadDispatchMethod: String? = null
         var privateReadReceiptMessageManagerClass: String? = null
@@ -5954,9 +5495,6 @@ internal object HookSymbolResolver {
         var privateReadReceiptChatMessageClass: String? = null
         var privateReadReceiptChatMessageMsgIdMethod: String? = null
         var privateReadReceiptChatMessageUserIdMethod: String? = null
-        var privateReadReceiptChatMessageLocalDataMethod: String? = null
-        var privateReadReceiptLocalDataClass: String? = null
-        var privateReadReceiptLocalDataStatusMethod: String? = null
         var privateReadReceiptAccountClass: String? = null
         var privateReadReceiptCurrentAccountMethod: String? = null
         var mountCardLinkLayoutClass: String? = null
@@ -6057,8 +5595,6 @@ internal object HookSymbolResolver {
         var historyPostIdMethod: String? = null
         var historyLiveIdMethod: String? = null
         var msgTabLocateToTabMethod: String? = null
-        var msgTabContainerSelectMethod: String? = null
-        var msgTabContainerExtDataField: String? = null
         var freeCopyPopupMenuClass: String? = null
         var freeCopyPopupContentViewMethod: String? = null
         var freeCopyPopupTextField: String? = null
@@ -6188,6 +5724,9 @@ internal object HookSymbolResolver {
         feedCardBindMethod = feedCardScan.bindMethod
         feedCardBindMethodSpec = feedCardScan.bindMethodSpec
         feedCardDataListField = feedCardScan.dataListField
+        feedCardSchemaGetterSpec = runScanStep("CustomPostCardBlockHook.TopicSchema", logger, scanErrors, null) {
+            FeedCardSchemaSymbolScanner.scan(context, cl, feedCardBindMethodSpec, logger)
+        }
         runScanStep("ReplyServerResponseLogHook", logger, scanErrors, Unit) {
             ReplyVisibilityProbeSymbolScanner.scanReplyServerResponseLog(cl, logger)?.let { scan ->
                 replyServerResponseClass = scan.responseClass
@@ -6329,7 +5868,7 @@ internal object HookSymbolResolver {
             scanErrors,
             PbAdBidScanSymbols(),
         ) {
-            PbAdBidSymbolScanner.scan(context, candidatesWithWhitelist, cl, logger)
+            PbAdBidSymbolScanner.scan(context, cl, logger)
         }
         pbAdBidCommonRequestModelClass = pbAdBidScan.commonRequestModelClass
         pbAdBidCommonRequestStartMethods = pbAdBidScan.commonRequestStartMethods.takeIf { it.isNotEmpty() }
@@ -6433,7 +5972,7 @@ internal object HookSymbolResolver {
             scanErrors,
             PlainUrlClickableSpanScanSymbols(),
         ) {
-            PlainUrlClickableSpanSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
+            PlainUrlClickableSpanSymbolScanner.scan(context, candidatesWithWhitelist, cl, logger)
         }
         plainUrlClickableSpanClass = plainUrlSpanScan.className
         plainUrlClickableSpanOnClickMethod = plainUrlSpanScan.onClickMethod
@@ -6469,27 +6008,13 @@ internal object HookSymbolResolver {
         plainUrlBrowserHelperClass = plainUrlBrowserHelperScan.browserHelperClass
         plainUrlBrowserHelperStartWebActivityMethod = plainUrlBrowserHelperScan.startWebActivityMethod
 
-        val plainUrlWebContainerScan = runScanStep(
-            "PlainUrlDirectBrowserHook.WebContainer",
-            logger,
-            scanErrors,
-            PlainUrlWebContainerScanSymbols(),
-        ) {
-            PlainUrlWebContainerSymbolScanner.scan(cl, logger)
-        }
-        plainUrlWebContainerActivityClass = plainUrlWebContainerScan.webContainerActivityClass
-        plainUrlWebContainerInitDataMethod = plainUrlWebContainerScan.initDataMethod
-        plainUrlWebContainerWebViewClientClass = plainUrlWebContainerScan.webViewClientClass
-        plainUrlWebContainerShouldOverrideUrlLoadingMethod =
-            plainUrlWebContainerScan.shouldOverrideUrlLoadingMethod
-
         val privateReadReceiptScan = runScanStep(
             "PrivateReadReceiptBlockHook",
             logger,
             scanErrors,
             PrivateReadReceiptScanSymbols(),
         ) {
-            PrivateReadReceiptSymbolScanner.scan(cl, logger)
+            PrivateReadReceiptSymbolScanner.scan(context, cl, logger)
         }
         privateReadReceiptModelClass = privateReadReceiptScan.modelClass
         privateReadReceiptModelReadDispatchMethod = privateReadReceiptScan.modelReadDispatchMethod
@@ -6514,9 +6039,6 @@ internal object HookSymbolResolver {
         privateReadReceiptChatMessageClass = privateReadReceiptScan.chatMessageClass
         privateReadReceiptChatMessageMsgIdMethod = privateReadReceiptScan.chatMessageMsgIdMethod
         privateReadReceiptChatMessageUserIdMethod = privateReadReceiptScan.chatMessageUserIdMethod
-        privateReadReceiptChatMessageLocalDataMethod = privateReadReceiptScan.chatMessageLocalDataMethod
-        privateReadReceiptLocalDataClass = privateReadReceiptScan.localDataClass
-        privateReadReceiptLocalDataStatusMethod = privateReadReceiptScan.localDataStatusMethod
         privateReadReceiptAccountClass = privateReadReceiptScan.accountClass
         privateReadReceiptCurrentAccountMethod = privateReadReceiptScan.currentAccountMethod
 
@@ -6608,6 +6130,10 @@ internal object HookSymbolResolver {
 
         val defaultPopups = runScanStep("DefaultPopups", logger, scanErrors, DefaultPopupSymbols()) {
             DefaultPopupSymbolScanner.scan(context, cl, logger)
+        }
+
+        val lowEndConfig = runScanStep("LowEndConfig", logger, scanErrors, LowEndConfigSymbols()) {
+            LowEndConfigSymbolScanner.scan(context, cl, logger)
         }
 
 
@@ -6747,7 +6273,7 @@ internal object HookSymbolResolver {
             scanErrors,
             HomeNativeGlassSortSwitchSymbols(),
         ) {
-            HomeNativeGlassSymbolScanner.scanSortSwitch(cl, logger)
+            HomeNativeGlassSymbolScanner.scanSortSwitch(context, logger)
         }
         homeNativeGlassSortSwitchBackgroundPaintField =
             homeNativeGlassSortSwitchSymbols.backgroundPaintField
@@ -6813,7 +6339,7 @@ internal object HookSymbolResolver {
             scanErrors,
             CollectionSearchScanSymbols(),
         ) {
-            CollectionSearchSymbolScanner.scan(cl, logger)
+            CollectionSearchSymbolScanner.scan(context, cl, logger)
         }
         collectionPresenterField = collectionScan.presenterField
         collectionPresenterListSetterMethod = collectionScan.presenterListSetterMethod
@@ -6839,7 +6365,7 @@ internal object HookSymbolResolver {
             scanErrors,
             HistorySearchScanSymbols(),
         ) {
-            HistorySearchSymbolScanner.scan(cl, logger)
+            HistorySearchSymbolScanner.scan(context, cl, logger)
         }
         historyAdapterField = historyScan.adapterField
         historyAdapterSetListMethod = historyScan.adapterSetListMethod
@@ -6862,11 +6388,9 @@ internal object HookSymbolResolver {
             scanErrors,
             MsgTabScanSymbols(),
         ) {
-            MsgTabSymbolScanner.scan(cl, logger)
+            MsgTabSymbolScanner.scan(context, cl, logger)
         }
         msgTabLocateToTabMethod = msgTabScan.locateToTabMethod
-        msgTabContainerSelectMethod = msgTabScan.containerSelectMethod
-        msgTabContainerExtDataField = msgTabScan.containerExtDataField
 
         val freeCopyPopupScan = runScanStep(
             "FreeCopyHook.Popup",
@@ -7017,6 +6541,7 @@ internal object HookSymbolResolver {
             this.feedCardBindMethod = feedCardBindMethod
             this.feedCardBindMethodSpec = feedCardBindMethodSpec
             this.feedCardDataListField = feedCardDataListField
+            this.feedCardSchemaGetterSpec = feedCardSchemaGetterSpec
             this.feedHeadParamsField = feedHeadParamsField
             this.feedRecommendCardNestedDataMethod = feedRecommendCardNestedDataMethod
             this.feedRecommendCardNestedDataListField = feedRecommendCardNestedDataListField
@@ -7125,7 +6650,6 @@ internal object HookSymbolResolver {
             this.forumRainSetterMethod = forumPageAdScan.rainSetterMethod
             this.forumDialogControllerClass = forumPageAdScan.dialogControllerClass
             this.forumBusinessPromotShowMethod = forumPageAdScan.businessPromotShowMethod
-            this.forumAnimationShowMethod = forumPageAdScan.animationShowMethod
             this.forumGameFloatingBarControllerClass = forumPageAdScan.gameFloatingBarControllerClass
             this.forumGameFloatingBarShowMethod = forumPageAdScan.gameFloatingBarShowMethod
             this.forumGameFloatingBarField = forumPageAdScan.gameFloatingBarField
@@ -7151,11 +6675,6 @@ internal object HookSymbolResolver {
             this.plainUrlApplicationGetInstMethod = plainUrlApplicationGetInstMethod
             this.plainUrlBrowserHelperClass = plainUrlBrowserHelperClass
             this.plainUrlBrowserHelperStartWebActivityMethod = plainUrlBrowserHelperStartWebActivityMethod
-            this.plainUrlWebContainerActivityClass = plainUrlWebContainerActivityClass
-            this.plainUrlWebContainerInitDataMethod = plainUrlWebContainerInitDataMethod
-            this.plainUrlWebContainerWebViewClientClass = plainUrlWebContainerWebViewClientClass
-            this.plainUrlWebContainerShouldOverrideUrlLoadingMethod =
-                plainUrlWebContainerShouldOverrideUrlLoadingMethod
             this.privateReadReceiptModelClass = privateReadReceiptModelClass
             this.privateReadReceiptModelReadDispatchMethod = privateReadReceiptModelReadDispatchMethod
             this.privateReadReceiptMessageManagerClass = privateReadReceiptMessageManagerClass
@@ -7179,9 +6698,6 @@ internal object HookSymbolResolver {
             this.privateReadReceiptChatMessageClass = privateReadReceiptChatMessageClass
             this.privateReadReceiptChatMessageMsgIdMethod = privateReadReceiptChatMessageMsgIdMethod
             this.privateReadReceiptChatMessageUserIdMethod = privateReadReceiptChatMessageUserIdMethod
-            this.privateReadReceiptChatMessageLocalDataMethod = privateReadReceiptChatMessageLocalDataMethod
-            this.privateReadReceiptLocalDataClass = privateReadReceiptLocalDataClass
-            this.privateReadReceiptLocalDataStatusMethod = privateReadReceiptLocalDataStatusMethod
             this.privateReadReceiptAccountClass = privateReadReceiptAccountClass
             this.privateReadReceiptCurrentAccountMethod = privateReadReceiptCurrentAccountMethod
             this.mountCardLinkLayoutClass = mountCardLinkLayoutClass
@@ -7231,6 +6747,7 @@ internal object HookSymbolResolver {
             this.performanceAbMethods = performanceAbMethods
             this.trackingMethods = trackingMethods
             this.defaultPopups = defaultPopups
+            this.lowEndConfig = lowEndConfig
             this.pbCommentScrollListenerClass = pbCommentScrollListenerClass
             this.pbCommentScrollMethod = pbCommentScrollMethod
             this.pbCommentScrollFragmentField = pbCommentScrollFragmentField
@@ -7292,8 +6809,6 @@ internal object HookSymbolResolver {
             this.historyLiveIdMethod = historyLiveIdMethod
 
             this.msgTabLocateToTabMethod = msgTabLocateToTabMethod
-            this.msgTabContainerSelectMethod = msgTabContainerSelectMethod
-            this.msgTabContainerExtDataField = msgTabContainerExtDataField
             this.freeCopyPopupMenuClass = freeCopyPopupMenuClass
             this.freeCopyPopupContentViewMethod = freeCopyPopupContentViewMethod
             this.freeCopyPopupTextField = freeCopyPopupTextField
@@ -7604,14 +7119,7 @@ private const val PB_COMMENT_BOTTOM_LISTENER_FIELD = "mOnScrollToBottomListener"
 private const val PB_COMMENT_BOTTOM_METHOD = "onScrollToBottom"
 private const val PB_AD_INSERT_CLASS = "com.baidu.tieba.pb.pb.main.underlayer.PbAdapterManagerInsertUtilKt"
 private const val PB_EARLY_AD_INSERT_MIN_METHOD_COUNT = 2
-private const val PB_PAGE_REQUEST_MESSAGE_CLASS = "com.baidu.tieba.pb.PbPageRequestMessage"
-private const val PAGE_BROWSER_REQUEST_MESSAGE_CLASS =
-    "com.baidu.tieba.pb.pagebrowser.net.PageBrowserRequestMessage"
-private const val PB_LIST_DATA_REQ_BUILDER_CLASS = "tbclient.PbList.DataReq\$Builder"
 private const val POST_AD_ADVERT_APP_INFO_CLASS = "com.baidu.tbadk.core.data.AdvertAppInfo"
-private const val PB_COMMON_REQUEST_MODEL_CLASS = "com.baidu.tieba.pb.pb.main.newmodel.CommonRequestModel"
-private const val PB_PAGE_BROWSER_REQUEST_MODEL_CLASS = "com.baidu.tieba.pb.pagebrowser.model.BaseRequestModel"
-private const val KOTLIN_CONTINUATION_CLASS = "kotlin.coroutines.Continuation"
 private const val RECOMMEND_CARD_VIEW_CLASS = "com.baidu.tieba.feed.component.RecommendCardView"
 private val POST_AD_ADVERT_APP_TYPE_FIELDS = arrayOf(
     "TYPE_FRS_ADVERT_APP_EMPTY",
@@ -7643,8 +7151,6 @@ private const val FREE_COPY_POPUP_ROUND_LAYOUT_CLASS = "com.baidu.tbadk.core.dia
 private const val FREE_COPY_POPUP_EM_TEXT_VIEW_CLASS =
     "com.baidu.tbadk.core.elementsMaven.view.EMTextView"
 private const val MSG_TAB_VIEW_MODEL_CLASS = StableTiebaHookPoints.MSG_CENTER_CONTAINER_VIEW_MODEL_CLASS
-private const val MSG_TAB_CONTAINER_VIEW_CLASS =
-    "com.baidu.tieba.immessagecenter.msgtab.ui.view.MsgCenterContainerView"
 private const val IMAGE_PAGER_ADAPTER_CLASS = "com.baidu.tbadk.coreExtra.view.ImagePagerAdapter"
 private const val URL_DRAG_IMAGE_VIEW_CLASS = "com.baidu.tbadk.coreExtra.view.UrlDragImageView"
 private const val IMAGE_URL_DATA_CLASS = "com.baidu.tbadk.coreExtra.view.ImageUrlData"
