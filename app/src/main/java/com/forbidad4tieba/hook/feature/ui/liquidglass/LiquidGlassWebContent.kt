@@ -1,11 +1,14 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
+import android.annotation.TargetApi
+import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.widget.RelativeLayout
 
 /** Releases the native bottom-tab margin on the Enter Forum and Retail Store web pages. */
+@TargetApi(Build.VERSION_CODES.TIRAMISU)
 internal object LiquidGlassWebContent {
     /**
      * [webContainer] is a validated host TbWebView found inside the glass-owned [pager].

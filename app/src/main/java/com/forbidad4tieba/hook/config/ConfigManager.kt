@@ -617,7 +617,7 @@ object ConfigManager {
                 "restricted=${onOff(settings.areRestrictedFeaturesUnlocked)} " +
                 "reason=${masterReason(masterConfigured, settings.isPerformanceOptimizationEnabled)}",
             childLine(KEY_FORCE_HOST_PERFORMANCE_FLAGS, settings.isHostPerformanceFlagsForced, true),
-            childLine(KEY_FORCE_LOW_END_DEVICE_CONFIG, settings.isLowEndDeviceConfigForced, true),
+            childLine(KEY_FORCE_LOW_END_DEVICE_CONFIG, settings.isLowEndDeviceConfigForced, isScanFeatureAvailable(KEY_FORCE_LOW_END_DEVICE_CONFIG)),
             childLine(KEY_DISABLE_APSARAS_SCHEDULE, settings.isApsarasScheduleDisabled, true),
             childLine(KEY_ENABLE_PB_PERFORMANCE_MODE, settings.isPbPerformanceModeEnabled, true),
             childLine(KEY_FORCE_PB_PRELOAD, settings.isPbPreloadForced, true),

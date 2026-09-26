@@ -18,6 +18,7 @@ internal object HookFeatureStatusDeriver {
         if (symbols.feedTemplateLoadMoreMethod.isNullOrBlank()) customPostCritical.add("feedTemplateLoadMoreMethod")
         if (symbols.feedCardDataListField.isNullOrBlank()) customPostCritical.add("feedCardDataListField")
         if (symbols.feedHeadParamsField.isNullOrBlank()) customPostOptional.add("feedHeadParamsField")
+        if (symbols.feedCardSchemaGetterSpec.isNullOrBlank()) customPostOptional.add("feedCardSchemaGetterSpec")
         if (symbols.feedRecommendCardNestedDataMethod.isNullOrBlank()) {
             customPostOptional.add("feedRecommendCardNestedDataMethod")
         }
@@ -337,15 +338,6 @@ internal object HookFeatureStatusDeriver {
         if (symbols.privateReadReceiptChatMessageUserIdMethod.isNullOrBlank()) {
             privateReadReceiptCritical.add("privateReadReceiptChatMessageUserIdMethod")
         }
-        if (symbols.privateReadReceiptChatMessageLocalDataMethod.isNullOrBlank()) {
-            privateReadReceiptCritical.add("privateReadReceiptChatMessageLocalDataMethod")
-        }
-        if (symbols.privateReadReceiptLocalDataClass.isNullOrBlank()) {
-            privateReadReceiptCritical.add("privateReadReceiptLocalDataClass")
-        }
-        if (symbols.privateReadReceiptLocalDataStatusMethod.isNullOrBlank()) {
-            privateReadReceiptCritical.add("privateReadReceiptLocalDataStatusMethod")
-        }
         if (symbols.privateReadReceiptAccountClass.isNullOrBlank()) {
             privateReadReceiptCritical.add("privateReadReceiptAccountClass")
         }
@@ -530,44 +522,21 @@ internal object HookFeatureStatusDeriver {
         if (symbols.plainUrlBrowserHelperStartWebActivityMethod.isNullOrBlank()) {
             browserHelperMissing.add("plainUrlBrowserHelperStartWebActivityMethod")
         }
-        val webContainerInitMissing = ArrayList<String>(2)
-        if (symbols.plainUrlWebContainerActivityClass.isNullOrBlank()) {
-            webContainerInitMissing.add("plainUrlWebContainerActivityClass")
-        }
-        if (symbols.plainUrlWebContainerInitDataMethod.isNullOrBlank()) {
-            webContainerInitMissing.add("plainUrlWebContainerInitDataMethod")
-        }
-        val webContainerNavigationMissing = ArrayList<String>(2)
-        if (symbols.plainUrlWebContainerWebViewClientClass.isNullOrBlank()) {
-            webContainerNavigationMissing.add("plainUrlWebContainerWebViewClientClass")
-        }
-        if (symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod.isNullOrBlank()) {
-            webContainerNavigationMissing.add("plainUrlWebContainerShouldOverrideUrlLoadingMethod")
-        }
         val plainUrlDirectReady = plainUrlDirectMissing.isEmpty()
         val plainUrlMessageReady = plainUrlMessageMissing.isEmpty()
         val generalPlainUrlReady = plainUrlMessageReady || plainUrlDirectReady
         val mountCardReady = mountCardMissing.isEmpty()
         val browserHelperReady = browserHelperMissing.isEmpty()
-        val webContainerInitReady = webContainerInitMissing.isEmpty()
-        val webContainerNavigationReady = webContainerNavigationMissing.isEmpty()
-        val webContainerReady = webContainerInitReady || webContainerNavigationReady
-        val webContainerComplete = webContainerInitReady && webContainerNavigationReady
-        val webContainerMissing = buildList {
-            if (!webContainerInitReady) addAll(webContainerInitMissing)
-            if (!webContainerNavigationReady) addAll(webContainerNavigationMissing)
-        }.distinct()
         val plainUrlOptionalMissing = buildList {
             if (!plainUrlMessageReady) addAll(plainUrlMessageMissing)
             if (!mountCardReady) addAll(mountCardMissing)
             if (!browserHelperReady) addAll(browserHelperMissing)
-            if (!webContainerComplete) addAll(webContainerMissing)
         }.distinct()
         out[HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER] = when {
-            browserHelperReady && webContainerComplete && plainUrlMessageReady && mountCardReady -> {
+            browserHelperReady && plainUrlMessageReady && mountCardReady -> {
                 HookFeatureStatus(state = HookFeatureState.FULL)
             }
-            browserHelperReady || webContainerReady || generalPlainUrlReady || mountCardReady -> HookFeatureStatus(
+            browserHelperReady || generalPlainUrlReady || mountCardReady -> HookFeatureStatus(
                 state = HookFeatureState.PARTIAL,
                 missingOptional = plainUrlOptionalMissing,
             )
@@ -575,7 +544,6 @@ internal object HookFeatureStatusDeriver {
                 state = HookFeatureState.DISABLED,
                 missingCritical = (
                     browserHelperMissing +
-                        webContainerMissing +
                         plainUrlMessageMissing +
                         mountCardMissing
                     ).distinct(),
@@ -1248,16 +1216,7 @@ internal object HookFeatureStatusDeriver {
             ),
         )
 
-        val mineTabWebCritical = ArrayList<String>(5)
-        val mineTabTargetVersionCode = symbols.scanTargetVersionCode
-        when {
-            mineTabTargetVersionCode == null -> mineTabWebCritical.add("scanTargetVersionCode")
-            mineTabTargetVersionCode < WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE -> {
-                mineTabWebCritical.add(
-                    "scanTargetVersionCode<${WebAdBlockConstraints.MINE_TAB_MIN_VERSION_CODE}",
-                )
-            }
-        }
+        val mineTabWebCritical = ArrayList<String>(4)
         if (symbols.mineTabWebViewClass.isNullOrBlank()) mineTabWebCritical.add("mineTabWebViewClass")
         if (symbols.mineTabWebLoadUrlMethod.isNullOrBlank()) mineTabWebCritical.add("mineTabWebLoadUrlMethod")
         if (symbols.mineTabWebGetUrlMethod.isNullOrBlank()) mineTabWebCritical.add("mineTabWebGetUrlMethod")
@@ -1297,6 +1256,7 @@ internal object HookFeatureStatusDeriver {
         out.putAll(PerformanceAbStatus.features(symbols))
         out[HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS] = TrackingStatus.feature(symbols)
         out.putAll(DefaultPopupStatus.features(symbols.defaultPopups))
+        out[HookFeatureKey.FORCE_LOW_END_DEVICE_CONFIG] = symbols.lowEndConfig.featureStatus()
         for (key in featureKeys) {
             if (!out.containsKey(key)) out[key] = HookFeatureStatus()
         }
@@ -1340,7 +1300,6 @@ internal object HookFeatureStatusDeriver {
                 symbols.aiPbPageBrowserAiEmojiCreationViewClass
                     ?: AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS,
             msgTabViewModelClass = StableTiebaHookPoints.MSG_CENTER_CONTAINER_VIEW_MODEL_CLASS,
-            msgTabContainerViewClass = MSG_TAB_CONTAINER_VIEW_CLASS,
         ).forEach { status ->
             if (!status.isUnavailable()) return@forEach
             val hookPoint = status.name
@@ -1445,7 +1404,7 @@ internal object HookFeatureStatusDeriver {
                 features(HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE)
             name == "InputMemeBarBlockHook" -> features(HookFeatureKey.HIDE_INPUT_MEME_BAR)
             name.startsWith("AiComponentDisableHook.") -> features(HookFeatureKey.DISABLE_AI_COMPONENTS)
-            name.startsWith("MsgTabDefaultNotifyHook") -> features(HookFeatureKey.DEFAULT_NOTIFY_TAB)
+            name == "MsgTabDefaultNotifyHook" -> features(HookFeatureKey.DEFAULT_NOTIFY_TAB)
             name == "PrivateReadReceiptBlockHook" -> features(HookFeatureKey.PRIVATE_READ_RECEIPT_INVISIBLE)
             name == "FreeCopyHook.Popup" -> features(
                 HookFeatureKey.FREE_COPY,
@@ -1477,7 +1436,5 @@ internal object HookFeatureStatusDeriver {
         "com.baidu.tieba.pb.view.PbAiEmojiCreationView"
     private const val AI_PB_AI_EMOJI_CREATION_PAGE_BROWSER_VIEW_CLASS =
         "com.baidu.tieba.pb.pagebrowser.comment.floor.meme.CommentFloorAiEmojiCreationView"
-    private const val MSG_TAB_CONTAINER_VIEW_CLASS =
-        "com.baidu.tieba.immessagecenter.msgtab.ui.view.MsgCenterContainerView"
 
 }

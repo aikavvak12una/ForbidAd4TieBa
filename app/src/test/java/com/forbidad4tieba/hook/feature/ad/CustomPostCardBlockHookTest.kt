@@ -25,9 +25,37 @@ class CustomPostCardBlockHookTest {
     }
 
     @Test
+    fun helpFilterRemovesReportedQuestionFeelyouCardWithoutInputGuide() {
+        withHelpFilter(master = true, help = true) {
+            val first = card("normal", "0")
+            val help = Card(CardData(listOf(
+                Component("feed_head", mapOf(
+                    "card_type" to "question_feelyou",
+                    "thread_type" to "0",
+                    "is_special_thread" to "1",
+                    "page_from" to "recommend",
+                    "recom_type" to "1",
+                    "title" to "这个怎么说？",
+                )),
+                Component("title", emptyMap()),
+                Component("pic", emptyMap()),
+                Component("social_bar", emptyMap()),
+            )))
+            val last = card("normal", "0")
+            val input = listOf(first, help, last)
+
+            val output = filter(input)
+
+            assertEquals(listOf(first, last), output)
+            assertNotSame(input, output)
+            assertEquals(listOf(first, help, last), input)
+        }
+    }
+
+    @Test
     fun disabledHelpSwitchKeepsOriginalList() {
         withHelpFilter(master = true, help = false) {
-            val input = listOf(card("question_good", "1"))
+            val input = listOf(card("question_good", "1"), card("question_feelyou", "1"))
 
             assertSame(input, filter(input))
         }
@@ -36,7 +64,7 @@ class CustomPostCardBlockHookTest {
     @Test
     fun disabledMasterSwitchKeepsOriginalListEvenWithHelpFlagSet() {
         withHelpFilter(master = false, help = true) {
-            val input = listOf(card("question_good", "1"))
+            val input = listOf(card("question_good", "1"), card("question_feelyou", "1"))
 
             assertSame(input, filter(input))
         }
@@ -45,7 +73,8 @@ class CustomPostCardBlockHookTest {
     @Test
     fun helpFilterKeepsUnmarkedAndUnknownCards() {
         withHelpFilter(master = true, help = true) {
-            val input = listOf(card("normal", "0"), card("question_good", "0"), card("question_unknown", "1"))
+            val input = listOf(card("normal", "0"), card("question_good", "0"),
+                card("question_feelyou", "0"), card("question_unknown", "1"))
 
             assertSame(input, filter(input))
         }

@@ -45,6 +45,7 @@ object HookFeatureKey {
     const val ENABLE_PB_SCROLL_COALESCE = "enable_pb_scroll_coalesce"
     const val ENABLE_PB_PERFORMANCE_MODE = "enable_pb_performance_mode"
     const val FORCE_HOST_PERFORMANCE_FLAGS = "force_host_performance_flags"
+    const val FORCE_LOW_END_DEVICE_CONFIG = "force_low_end_device_config"
     const val FORCE_PB_PRELOAD = "force_pb_preload"
     const val FORCE_HOST_FEED_COLD_OPT = "force_host_feed_cold_opt"
     const val DISABLE_APSARAS_SCHEDULE = "disable_apsaras_schedule"
@@ -93,6 +94,7 @@ object HookFeatureKey {
         ENABLE_PB_SCROLL_COALESCE,
         ENABLE_PB_PERFORMANCE_MODE,
         FORCE_HOST_PERFORMANCE_FLAGS,
+        FORCE_LOW_END_DEVICE_CONFIG,
         FORCE_PB_PRELOAD,
         FORCE_HOST_FEED_COLD_OPT,
         DISABLE_APSARAS_SCHEDULE,

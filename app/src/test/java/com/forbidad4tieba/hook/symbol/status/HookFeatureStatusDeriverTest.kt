@@ -25,7 +25,6 @@ class HookFeatureStatusDeriverTest {
             aiPbAiEmojiCreationViewClass = "unused",
             aiPbAiEmojiCreationPageBrowserViewClass = "unused",
             msgTabViewModelClass = "unused",
-            msgTabContainerViewClass = "unused",
         ).single { it.name == "InputMemeBarBlockHook" }
 
         assertEquals(HookFeatureState.DISABLED, missing.state)
@@ -78,7 +77,6 @@ class HookFeatureStatusDeriverTest {
             aiPbAiEmojiCreationPageBrowserViewClass =
                 "com.baidu.tieba.pb.pagebrowser.CommentFloorAiEmojiCreationView",
             msgTabViewModelClass = StableTiebaHookPoints.MSG_CENTER_CONTAINER_VIEW_MODEL_CLASS,
-            msgTabContainerViewClass = "com.baidu.tieba.msg.TabContainer",
         ).single { it.name == "PbAdRequestBlockHook.AdBid.PageBrowser" }
 
         assertEquals(HookPointState.OPTIONAL, pageBrowserStatus.state)
@@ -96,7 +94,6 @@ class HookFeatureStatusDeriverTest {
             aiPbAiEmojiCreationViewClass = "unused",
             aiPbAiEmojiCreationPageBrowserViewClass = "unused",
             msgTabViewModelClass = "unused",
-            msgTabContainerViewClass = "unused",
         )
 
         assertEquals(
@@ -118,7 +115,6 @@ class HookFeatureStatusDeriverTest {
             aiPbAiEmojiCreationViewClass = "unused",
             aiPbAiEmojiCreationPageBrowserViewClass = "unused",
             msgTabViewModelClass = "unused",
-            msgTabContainerViewClass = "unused",
         )
 
         assertEquals(
@@ -152,7 +148,6 @@ class HookFeatureStatusDeriverTest {
             aiPbAiEmojiCreationViewClass = "unused",
             aiPbAiEmojiCreationPageBrowserViewClass = "unused",
             msgTabViewModelClass = "unused",
-            msgTabContainerViewClass = "unused",
         ).single { it.name == "PostAdHook.DataFilter.RecyclerViewTypeAdapter" }
 
         assertEquals(HookFeatureState.PARTIAL, featureStatus.state)
@@ -173,7 +168,6 @@ class HookFeatureStatusDeriverTest {
             aiPbAiEmojiCreationViewClass = "unused",
             aiPbAiEmojiCreationPageBrowserViewClass = "unused",
             msgTabViewModelClass = "unused",
-            msgTabContainerViewClass = "unused",
         ).single { it.name == "PbFirstFloorRecommendBlockHook" }
 
         assertEquals(HookPointState.FOUND, status.state)

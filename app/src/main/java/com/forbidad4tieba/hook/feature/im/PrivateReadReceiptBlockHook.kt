@@ -3,17 +3,21 @@ package com.forbidad4tieba.hook.feature.im
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import com.forbidad4tieba.hook.InstallOutcome
+import com.forbidad4tieba.hook.InstallState
 import com.forbidad4tieba.hook.symbol.model.PrivateReadReceiptSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
+import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 
 object PrivateReadReceiptBlockHook {
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
-    private val installed = AtomicBoolean(false)
+    private val hooks = OwnedHookSet<Method, XposedInterface.HookHandle> { it.unhook() }
+    @Volatile private var activeInstallation: Any? = null
     private val syncDispatchDepth = ThreadLocal.withInitial { 0 }
     private val submittedReadWireMsgIdByPeer = ConcurrentHashMap<Long, Long>()
 
@@ -22,82 +26,109 @@ object PrivateReadReceiptBlockHook {
         val msgId: Long,
     )
 
-    internal fun hook(targets: PrivateReadReceiptSymbols) {
-        val mod = XposedCompat.module ?: return
-        if (!installed.compareAndSet(false, true)) {
-            XposedCompat.logD("[PrivateReadReceiptBlockHook] already installed, skip")
-            return
+    @Synchronized
+    internal fun hook(targets: PrivateReadReceiptSymbols): InstallOutcome {
+        if (activeInstallation != null) return InstallOutcome(InstallState.ALREADY_INSTALLED, hooks.size())
+        if (hooks.size() != 0) {
+            val cleanup = rollback("retrying incomplete private read receipt installation")
+            if (cleanup.installedCount != 0) return cleanup
         }
+        val mod = XposedCompat.module ?: return InstallOutcome.skipped("module unavailable")
+        // Old in-flight callbacks must stay inactive even after a later attempt succeeds.
+        val installation = Any()
 
         try {
-            mod.hook(targets.processAckMethod).intercept { chain ->
-                val result = chain.proceed()
-                if (!ConfigManager.isPrivateReadReceiptInvisibleEnabled) {
-                    return@intercept result
+            hooks.install(targets.processAckMethod) {
+                mod.hook(targets.processAckMethod).intercept { chain ->
+                    if (activeInstallation !== installation) return@intercept chain.proceed()
+                    val result = chain.proceed()
+                    if (!ConfigManager.isPrivateReadReceiptInvisibleEnabled) {
+                        return@intercept result
+                    }
+                    val model = chain.thisObject
+                    if (!targets.modelClass.isInstance(model)) {
+                        return@intercept result
+                    }
+                    val response = chain.args.firstOrNull() ?: return@intercept result
+                    val error = readIntMethod(targets.responseErrorMethod, response) ?: return@intercept result
+                    if (error == 0) {
+                        syncReadStateAfterSendAck(targets, model)
+                    }
+                    result
                 }
-                val model = chain.thisObject
-                if (!targets.modelClass.isInstance(model)) {
-                    return@intercept result
-                }
-                val response = chain.args.firstOrNull() ?: return@intercept result
-                val error = readIntMethod(targets.responseErrorMethod, response) ?: return@intercept result
-                if (error == 0) {
-                    syncReadStateAfterSendAck(targets, model)
-                }
-                result
             }
 
-            mod.hook(targets.messageManagerSendMethod).intercept { chain ->
-                if (!ConfigManager.isPrivateReadReceiptInvisibleEnabled) {
-                    return@intercept chain.proceed()
-                }
-                val message = chain.args.firstOrNull() ?: return@intercept chain.proceed()
-                if (!targets.requestMessageClass.isInstance(message)) {
-                    return@intercept chain.proceed()
-                }
+            hooks.install(targets.messageManagerSendMethod) {
+                mod.hook(targets.messageManagerSendMethod).intercept { chain ->
+                    if (activeInstallation !== installation || !ConfigManager.isPrivateReadReceiptInvisibleEnabled) {
+                        return@intercept chain.proceed()
+                    }
+                    val message = chain.args.firstOrNull() ?: return@intercept chain.proceed()
+                    if (!targets.requestMessageClass.isInstance(message)) {
+                        return@intercept chain.proceed()
+                    }
 
-                val peerUid = readLongField(targets.requestToUidField, message)
-                val requestedWireMsgId = readLongField(targets.requestMsgIdField, message)
-                if (peerUid == null || requestedWireMsgId == null || requestedWireMsgId <= 0L) {
-                    XposedCompat.logD(
-                        "[PrivateReadReceiptBlockHook] block read receipt: invalid request " +
-                            "peer=$peerUid msg=$requestedWireMsgId",
-                    )
-                    showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
-                    return@intercept true
-                }
+                    val peerUid = readLongField(targets.requestToUidField, message)
+                    val requestedWireMsgId = readLongField(targets.requestMsgIdField, message)
+                    if (peerUid == null || requestedWireMsgId == null || requestedWireMsgId <= 0L) {
+                        XposedCompat.logD(
+                            "[PrivateReadReceiptBlockHook] block read receipt: invalid request " +
+                                "peer=$peerUid msg=$requestedWireMsgId",
+                        )
+                        showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
+                        return@intercept true
+                    }
 
-                if ((syncDispatchDepth.get() ?: 0) > 0) {
+                    if ((syncDispatchDepth.get() ?: 0) > 0) {
+                        XposedCompat.logD(
+                            "[PrivateReadReceiptBlockHook] allow sync read receipt after send: " +
+                                "peer=$peerUid requested=$requestedWireMsgId",
+                        )
+                        val sent = chain.proceed()
+                        if (sent == true) {
+                            submittedReadWireMsgIdByPeer.merge(peerUid, requestedWireMsgId, ::maxOf)
+                            showToast(UiText.PrivateReadReceipt.TOAST_STATE_SYNCED)
+                        }
+                        return@intercept sent
+                    }
+
                     XposedCompat.logD(
-                        "[PrivateReadReceiptBlockHook] allow sync read receipt after send: " +
+                        "[PrivateReadReceiptBlockHook] block read receipt: " +
                             "peer=$peerUid requested=$requestedWireMsgId",
                     )
-                    val sent = chain.proceed()
-                    if (sent == true) {
-                        submittedReadWireMsgIdByPeer.merge(peerUid, requestedWireMsgId, ::maxOf)
-                        showToast(UiText.PrivateReadReceipt.TOAST_STATE_SYNCED)
-                    }
-                    return@intercept sent
+                    showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
+                    true
                 }
-
-                XposedCompat.logD(
-                    "[PrivateReadReceiptBlockHook] block read receipt: " +
-                        "peer=$peerUid requested=$requestedWireMsgId",
-                )
-                showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
-                true
             }
 
+            activeInstallation = installation
             XposedCompat.log(
                 "[PrivateReadReceiptBlockHook] hook INSTALLED: " +
                     "${targets.processAckMethod.declaringClass.name}.${targets.processAckMethod.name} / " +
                     "${targets.messageManagerSendMethod.declaringClass.name}.${targets.messageManagerSendMethod.name}",
             )
+            return InstallOutcome(InstallState.INSTALLED, hooks.size())
         } catch (t: Throwable) {
-            installed.set(false)
+            val outcome = rollback(t.message ?: t.javaClass.simpleName)
             XposedCompat.log("[PrivateReadReceiptBlockHook] FAILED: ${t.message}")
             XposedCompat.log(t)
+            return outcome
         }
+    }
+
+    private fun rollback(reason: String): InstallOutcome {
+        activeInstallation = null
+        val hadHooks = hooks.size() != 0
+        val failures = hooks.rollback()
+        for ((method, failure) in failures) {
+            XposedCompat.logW("[PrivateReadReceiptBlockHook] rollback failed: ${method.name}: ${failure.message}")
+        }
+        val state = when {
+            failures.isNotEmpty() -> InstallState.ROLLBACK_FAILED
+            hadHooks -> InstallState.ROLLED_BACK
+            else -> InstallState.FAILED
+        }
+        return InstallOutcome(state, hooks.size(), reason)
     }
 
     private fun syncReadStateAfterSendAck(targets: PrivateReadReceiptSymbols, model: Any?) {

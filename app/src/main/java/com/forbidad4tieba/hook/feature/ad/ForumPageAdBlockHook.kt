@@ -1,51 +1,68 @@
 package com.forbidad4tieba.hook.feature.ad
 
 import android.view.View
+import com.forbidad4tieba.hook.InstallOutcome
+import com.forbidad4tieba.hook.InstallState
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.ForumPageAdBlockSymbols
+import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicBoolean
 
 object ForumPageAdBlockHook {
-    @Volatile private var hooked = false
+    private val installedMethods by lazy {
+        OwnedHookSet<Method, XposedInterface.HookHandle> { it.unhook() }
+    }
 
     private val responseErrorLogged = AtomicBoolean(false)
     private val bottomErrorLogged = AtomicBoolean(false)
     private val rainErrorLogged = AtomicBoolean(false)
     private val floatingErrorLogged = AtomicBoolean(false)
 
-    internal fun hook(targets: ForumPageAdBlockSymbols) {
+    @Synchronized
+    internal fun hook(targets: ForumPageAdBlockSymbols): InstallOutcome {
         if (!ConfigManager.isForumPageAdBlockEnabled) {
-            XposedCompat.log("[ForumPageAdBlockHook] skipped: config disabled")
-            return
+            return InstallOutcome.skipped("config disabled")
         }
-        if (XposedCompat.module == null) return
-        if (!tryMarkHooked()) return
+        if (XposedCompat.module == null) return InstallOutcome.skipped("module unavailable")
+        val before = installedMethods.size()
+        var count = 0
+        var missing = 0
+        val failures = ArrayList<String>()
 
-        try {
-            var installed = 0
-            installed += installResponseSanitizer(targets)
-            installed += installBottomDataSanitizer(targets)
-            installed += installBottomGameBarBlocker(targets)
-            installed += installHeaderRainSanitizer(targets)
-            installed += installBusinessPromotDialogBlocker(targets)
-            installed += installAnimationShowBlocker(targets)
-            installed += installFloatingBarBlocker(targets)
-            installed += installBusinessPromotBizBlocker(targets)
-
-            if (installed == 0) {
-                resetHooked()
-                XposedCompat.log("[ForumPageAdBlockHook] no hooks installed")
-                return
+        // Each path works independently; retain successful handles while retrying absent points.
+        fun install(label: String, action: () -> Int) {
+            try {
+                val installed = action()
+                if (installed == 0) {
+                    missing++
+                    failures += "$label missing"
+                }
+                count += installed
+            } catch (failure: Throwable) {
+                failures += "$label: ${failure.javaClass.simpleName}: ${failure.message}"
             }
-            XposedCompat.log("[ForumPageAdBlockHook] hooks INSTALLED: count=$installed")
-        } catch (t: Throwable) {
-            resetHooked()
-            XposedCompat.log("[ForumPageAdBlockHook] install FAILED: ${t.message}")
-            XposedCompat.log(t)
         }
+
+        install("response") { installResponseSanitizer(targets) }
+        install("bottom") { installBottomDataSanitizer(targets) }
+        install("game") { installBottomGameBarBlocker(targets) }
+        install("rain") { installHeaderRainSanitizer(targets) }
+        install("dialog") { installBusinessPromotDialogBlocker(targets) }
+        install("floating") { installFloatingBarBlocker(targets) }
+        install("biz") { installBusinessPromotBizBlocker(targets) }
+
+        val state = when {
+            count == 0 && missing == failures.size -> InstallState.SKIPPED
+            count == 0 -> InstallState.FAILED
+            failures.isNotEmpty() -> InstallState.PARTIAL
+            installedMethods.size() == before -> InstallState.ALREADY_INSTALLED
+            else -> InstallState.INSTALLED
+        }
+        return InstallOutcome(state, count, failures.takeIf { it.isNotEmpty() }?.joinToString("; "))
     }
 
     private fun installResponseSanitizer(targets: ForumPageAdBlockSymbols): Int {
@@ -54,12 +71,14 @@ object ForumPageAdBlockHook {
         val fields = targets.responseAdFields
         if (fields.isEmpty()) return 0
 
-        mod.hook(method).intercept { chain ->
-            val result = chain.proceed()
-            if (ConfigManager.isForumPageAdBlockEnabled) {
-                clearFields(chain.thisObject, fields, responseErrorLogged, "response fields")
+        installedMethods.install(method) {
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                if (ConfigManager.isForumPageAdBlockEnabled) {
+                    clearFields(chain.thisObject, fields, responseErrorLogged, "response fields")
+                }
+                result
             }
-            result
         }
         return 1
     }
@@ -70,12 +89,14 @@ object ForumPageAdBlockHook {
         val setters = targets.bottomDataSetterMethods
         if (setters.isEmpty()) return 0
 
-        mod.hook(method).intercept { chain ->
-            val result = chain.proceed()
-            if (ConfigManager.isForumPageAdBlockEnabled) {
-                invokeNullSetters(result, setters, bottomErrorLogged, "bottom data")
+        installedMethods.install(method) {
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                if (ConfigManager.isForumPageAdBlockEnabled) {
+                    invokeNullSetters(result, setters, bottomErrorLogged, "bottom data")
+                }
+                result
             }
-            result
         }
         return 1
     }
@@ -84,11 +105,13 @@ object ForumPageAdBlockHook {
         val mod = XposedCompat.module ?: return 0
         val method = targets.bottomGameBarMapperMethod ?: return 0
 
-        mod.hook(method).intercept { chain ->
-            if (ConfigManager.isForumPageAdBlockEnabled) {
-                null
-            } else {
-                chain.proceed()
+        installedMethods.install(method) {
+            mod.hook(method).intercept { chain ->
+                if (ConfigManager.isForumPageAdBlockEnabled) {
+                    null
+                } else {
+                    chain.proceed()
+                }
             }
         }
         return 1
@@ -99,12 +122,14 @@ object ForumPageAdBlockHook {
         val method = targets.headerDataMapperMethod ?: return 0
         val setter = targets.rainSetterMethod ?: return 0
 
-        mod.hook(method).intercept { chain ->
-            val result = chain.proceed()
-            if (ConfigManager.isForumPageAdBlockEnabled) {
-                invokeNullSetters(result, listOf(setter), rainErrorLogged, "rain data")
+        installedMethods.install(method) {
+            mod.hook(method).intercept { chain ->
+                val result = chain.proceed()
+                if (ConfigManager.isForumPageAdBlockEnabled) {
+                    invokeNullSetters(result, listOf(setter), rainErrorLogged, "rain data")
+                }
+                result
             }
-            result
         }
         return 1
     }
@@ -113,27 +138,14 @@ object ForumPageAdBlockHook {
         val mod = XposedCompat.module ?: return 0
         val method = targets.businessPromotShowMethod ?: return 0
 
-        mod.hook(method).intercept { chain ->
-            if (ConfigManager.isForumPageAdBlockEnabled) {
-                BlockCountStats.recordAd()
-                false
-            } else {
-                chain.proceed()
-            }
-        }
-        return 1
-    }
-
-    private fun installAnimationShowBlocker(targets: ForumPageAdBlockSymbols): Int {
-        val mod = XposedCompat.module ?: return 0
-        val method = targets.animationShowMethod ?: return 0
-
-        mod.hook(method).intercept { chain ->
-            if (ConfigManager.isForumPageAdBlockEnabled) {
-                BlockCountStats.recordAd()
-                null
-            } else {
-                chain.proceed()
+        installedMethods.install(method) {
+            mod.hook(method).intercept { chain ->
+                if (ConfigManager.isForumPageAdBlockEnabled) {
+                    BlockCountStats.recordAd()
+                    false
+                } else {
+                    chain.proceed()
+                }
             }
         }
         return 1
@@ -146,12 +158,14 @@ object ForumPageAdBlockHook {
         if (method == null && field == null) return 0
 
         if (method != null) {
-            mod.hook(method).intercept { chain ->
-                if (!ConfigManager.isForumPageAdBlockEnabled) {
-                    return@intercept chain.proceed()
+            installedMethods.install(method) {
+                mod.hook(method).intercept { chain ->
+                    if (!ConfigManager.isForumPageAdBlockEnabled) {
+                        return@intercept chain.proceed()
+                    }
+                    hideFloatingBar(chain.thisObject, field)
+                    null
                 }
-                hideFloatingBar(chain.thisObject, field)
-                null
             }
             return 1
         }
@@ -162,11 +176,13 @@ object ForumPageAdBlockHook {
         val mod = XposedCompat.module ?: return 0
         val method = targets.businessPromotJumpMethod ?: return 0
 
-        mod.hook(method).intercept { chain ->
-            if (ConfigManager.isForumPageAdBlockEnabled) {
-                null
-            } else {
-                chain.proceed()
+        installedMethods.install(method) {
+            mod.hook(method).intercept { chain ->
+                if (ConfigManager.isForumPageAdBlockEnabled) {
+                    null
+                } else {
+                    chain.proceed()
+                }
             }
         }
         return 1
@@ -238,15 +254,4 @@ object ForumPageAdBlockHook {
         }
     }
 
-    private fun tryMarkHooked(): Boolean {
-        synchronized(this) {
-            if (hooked) return false
-            hooked = true
-            return true
-        }
-    }
-
-    private fun resetHooked() {
-        synchronized(this) { hooked = false }
-    }
 }

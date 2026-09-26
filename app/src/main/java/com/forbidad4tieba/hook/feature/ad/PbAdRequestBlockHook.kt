@@ -1,108 +1,110 @@
 package com.forbidad4tieba.hook.feature.ad
 
+import com.forbidad4tieba.hook.InstallOutcome
+import com.forbidad4tieba.hook.InstallState
 import com.forbidad4tieba.hook.symbol.model.PbAdRequestBlockSymbols
 import com.forbidad4tieba.hook.symbol.model.PbAdRequestFieldPatchSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.core.XposedCompat
+import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicBoolean
 
 object PbAdRequestBlockHook {
-    @Volatile private var hooked = false
+    private val installedMethods by lazy {
+        OwnedHookSet<Method, XposedInterface.HookHandle> { it.unhook() }
+    }
     private val pbPageClearWarned = AtomicBoolean(false)
     private val commonNotifyWarned = AtomicBoolean(false)
 
-    internal fun hook(targets: PbAdRequestBlockSymbols) {
+    @Synchronized
+    internal fun hook(targets: PbAdRequestBlockSymbols): InstallOutcome {
         if (!ConfigManager.isPbAdRequestBlockEnabled) {
-            XposedCompat.log("[PbAdRequestBlockHook] skipped: config disabled")
-            return
+            return InstallOutcome.skipped("config disabled")
         }
-        if (XposedCompat.module == null) return
-        if (!tryMarkHooked()) return
+        val mod = XposedCompat.module ?: return InstallOutcome.skipped("module unavailable")
+        val before = installedMethods.size()
+        var count = 0
+        var missing = 0
+        val failures = ArrayList<String>()
 
-        try {
-            var installed = 0
-            installed += installPbPageRequestMessageHook(targets)
-            installed += installPageBrowserRequestMessageHook(targets)
-            installed += installCommonAdBidShortCircuit(targets)
-            installed += installPageBrowserAdBidShortCircuit(targets)
+        fun skip(label: String) {
+            missing++
+            failures += "$label missing"
+        }
 
-            if (installed == 0) {
-                resetHooked()
-                XposedCompat.log("[PbAdRequestBlockHook] no hooks installed")
+        // These paths work independently. Retain successful handles and retry only absent points.
+        fun install(label: String, method: Method?, create: (Method) -> XposedInterface.HookHandle) {
+            if (method == null) {
+                skip(label)
                 return
             }
-            XposedCompat.log("[PbAdRequestBlockHook] hooks INSTALLED: count=$installed")
-        } catch (t: Throwable) {
-            resetHooked()
-            XposedCompat.log("[PbAdRequestBlockHook] install FAILED: ${t.message}")
-            XposedCompat.log(t)
+            try {
+                installedMethods.install(method) { create(method) }
+                count++
+            } catch (failure: Throwable) {
+                failures += "$label: ${failure.javaClass.simpleName}: ${failure.message}"
+            }
         }
-    }
 
-    private fun installPbPageRequestMessageHook(targets: PbAdRequestBlockSymbols): Int {
-        val mod = XposedCompat.module ?: return 0
-        val encodeMethod = targets.pbPageEncodeMethod ?: return 0
         val patches = targets.pbPageFieldPatches
-        if (patches.isEmpty()) {
-            return 0
-        }
-
-        mod.hook(encodeMethod).intercept { chain ->
-            if (ConfigManager.isPbAdRequestBlockEnabled) {
-                clearPbPageAdRequestFields(chain.thisObject, patches)
-            }
-            chain.proceed()
-        }
-        return 1
-    }
-
-    private fun installPageBrowserRequestMessageHook(targets: PbAdRequestBlockSymbols): Int {
-        val mod = XposedCompat.module ?: return 0
-        val addAdMethod = targets.pageBrowserAddAdMethod ?: return 0
-
-        mod.hook(addAdMethod).intercept { chain ->
-            if (ConfigManager.isPbAdRequestBlockEnabled) {
-                return@intercept null
-            }
-            chain.proceed()
-        }
-        return 1
-    }
-
-    private fun installCommonAdBidShortCircuit(targets: PbAdRequestBlockSymbols): Int {
-        val mod = XposedCompat.module ?: return 0
-        val targetModelClass = targets.commonAdBidTargetClass ?: return 0
-        val notifyMethod = targets.commonAdBidNotifyMethod ?: return 0
-
-        var installed = 0
-        for (startMethod in targets.commonAdBidStartMethods.distinctBy { it.name }) {
-            mod.hook(startMethod).intercept { chain ->
-                val model = chain.thisObject
-                if (!ConfigManager.isPbAdRequestBlockEnabled || model == null || !targetModelClass.isInstance(model)) {
-                    return@intercept chain.proceed()
+        install("pb.encode", targets.pbPageEncodeMethod?.takeIf { patches.isNotEmpty() }) { method ->
+            mod.hook(method).intercept { chain ->
+                if (ConfigManager.isPbAdRequestBlockEnabled) {
+                    clearPbPageAdRequestFields(chain.thisObject, patches)
                 }
-                notifyCommonAdBidFailure(model, notifyMethod)
-                null
+                chain.proceed()
             }
-            installed++
         }
-        return installed
-    }
 
-    private fun installPageBrowserAdBidShortCircuit(targets: PbAdRequestBlockSymbols): Int {
-        val mod = XposedCompat.module ?: return 0
-        val targetModelClass = targets.pageBrowserAdBidTargetClass ?: return 0
-        val requestDataMethod = targets.pageBrowserAdBidRequestDataMethod ?: return 0
-
-        mod.hook(requestDataMethod).intercept { chain ->
-            val model = chain.thisObject
-            if (!ConfigManager.isPbAdRequestBlockEnabled || model == null || !targetModelClass.isInstance(model)) {
-                return@intercept chain.proceed()
+        install("pageBrowser.addAd", targets.pageBrowserAddAdMethod) { method ->
+            mod.hook(method).intercept { chain ->
+                if (ConfigManager.isPbAdRequestBlockEnabled) return@intercept null
+                chain.proceed()
             }
-            null
         }
-        return 1
+
+        val commonModelClass = targets.commonAdBidTargetClass
+        val notifyMethod = targets.commonAdBidNotifyMethod
+        if (commonModelClass != null && notifyMethod != null && targets.commonAdBidStartMethods.isNotEmpty()) {
+            for (startMethod in targets.commonAdBidStartMethods.distinct()) {
+                install("commonAdBid.${startMethod.name}", startMethod) { method ->
+                    mod.hook(method).intercept { chain ->
+                        if (!ConfigManager.isPbAdRequestBlockEnabled) return@intercept chain.proceed()
+                        val model = chain.thisObject
+                        if (model == null || !commonModelClass.isInstance(model)) return@intercept chain.proceed()
+                        notifyCommonAdBidFailure(model, notifyMethod)
+                        null
+                    }
+                }
+            }
+        } else {
+            skip("commonAdBid targets")
+        }
+
+        val pageBrowserModelClass = targets.pageBrowserAdBidTargetClass
+        if (pageBrowserModelClass != null) {
+            install("pageBrowser.adBid", targets.pageBrowserAdBidRequestDataMethod) { method ->
+                mod.hook(method).intercept { chain ->
+                    if (!ConfigManager.isPbAdRequestBlockEnabled) return@intercept chain.proceed()
+                    val model = chain.thisObject
+                    if (model == null || !pageBrowserModelClass.isInstance(model)) return@intercept chain.proceed()
+                    null
+                }
+            }
+        } else {
+            skip("pageBrowser.adBid target")
+        }
+
+        val state = when {
+            count == 0 && missing == failures.size -> InstallState.SKIPPED
+            count == 0 -> InstallState.FAILED
+            failures.isNotEmpty() -> InstallState.PARTIAL
+            installedMethods.size() == before -> InstallState.ALREADY_INSTALLED
+            else -> InstallState.INSTALLED
+        }
+        return InstallOutcome(state, count, failures.takeIf { it.isNotEmpty() }?.joinToString("; "))
     }
 
     private fun clearPbPageAdRequestFields(message: Any?, patches: List<PbAdRequestFieldPatchSymbols>) {
@@ -130,15 +132,4 @@ object PbAdRequestBlockHook {
         }
     }
 
-    private fun tryMarkHooked(): Boolean {
-        synchronized(this) {
-            if (hooked) return false
-            hooked = true
-            return true
-        }
-    }
-
-    private fun resetHooked() {
-        synchronized(this) { hooked = false }
-    }
 }

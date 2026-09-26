@@ -4,6 +4,8 @@
 // iosIndicatorSpecular parameters. View/AGSL port; guards degenerate SDF normals.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
+import android.annotation.TargetApi
+import android.os.Build
 import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -14,6 +16,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** Shared optical model for the outer capsule and the moving selection. */
+@TargetApi(Build.VERSION_CODES.TIRAMISU)
 internal class LiquidGlassLighting(private val density: Float, private val angleOffset: Float) {
     internal companion object {
         const val SHADER = """

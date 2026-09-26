@@ -13,14 +13,12 @@ internal object BlockCountStats {
     private const val KEY_AD_TOTAL = "block_stats_ad_total"
     private const val KEY_CUSTOM_POST_TOTAL = "block_stats_custom_post_total"
     private const val FLUSH_DELAY_MS = 2000L
-    private const val PERSISTENCE_FAILURE_LIMIT = 3
 
     private val pendingAdCount = AtomicLong(0L)
     private val pendingCustomPostCount = AtomicLong(0L)
     private val flushScheduled = AtomicBoolean(false)
     private val fileLock = Any()
-    private var persistenceFailureCount = 0
-    private var persistenceDisabled = false
+    private val persistence = StatsPersistenceState()
 
     private val executor: ScheduledExecutorService by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         Executors.newSingleThreadScheduledExecutor { runnable ->
@@ -76,33 +74,37 @@ internal object BlockCountStats {
         }
 
         synchronized(fileLock) {
-            if (persistenceDisabled) {
+            if (persistence.disabled) {
                 restorePending(adDelta, customPostDelta)
                 return
             }
-            val prefs = ConfigManager.getModuleStatePrefs(context)
-            val persisted = prefs.edit()
-                .putLong(KEY_AD_TOTAL, prefs.getLong(KEY_AD_TOTAL, 0L) + adDelta)
-                .putLong(KEY_CUSTOM_POST_TOTAL, prefs.getLong(KEY_CUSTOM_POST_TOTAL, 0L) + customPostDelta)
-                .commit()
+            val persisted = try {
+                val prefs = ConfigManager.getModuleStatePrefs(context)
+                prefs.edit()
+                    .putLong(KEY_AD_TOTAL, prefs.getLong(KEY_AD_TOTAL, 0L) + adDelta)
+                    .putLong(KEY_CUSTOM_POST_TOTAL, prefs.getLong(KEY_CUSTOM_POST_TOTAL, 0L) + customPostDelta)
+                    .commit()
+            } catch (failure: Exception) {
+                XposedCompat.logW("[BlockCountStats] flush exception: ${failure.message}")
+                false
+            }
             if (persisted) {
-                persistenceFailureCount = 0
+                persistence.succeeded()
                 return
             }
 
-            persistenceFailureCount += 1
-            if (persistenceFailureCount >= PERSISTENCE_FAILURE_LIMIT) {
-                persistenceDisabled = true
+            persistence.failed()
+            if (persistence.failureCount >= persistence.failureLimit) {
                 restorePending(adDelta, customPostDelta)
                 XposedCompat.logW(
                     "[BlockCountStats] persistence disabled after " +
-                        "$persistenceFailureCount consecutive failures"
+                        "${persistence.failureCount} consecutive failures"
                 )
             } else {
                 restorePending(adDelta, customPostDelta)
                 XposedCompat.logW(
                     "[BlockCountStats] flush failed " +
-                        "($persistenceFailureCount/$PERSISTENCE_FAILURE_LIMIT)"
+                        "(${persistence.failureCount}/${persistence.failureLimit})"
                 )
             }
         }
@@ -118,7 +120,7 @@ internal object BlockCountStats {
     }
 
     private fun isPersistenceDisabled(): Boolean {
-        return synchronized(fileLock) { persistenceDisabled }
+        return persistence.disabled
     }
 
     data class Snapshot(

@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ad
 
+import com.forbidad4tieba.hook.config.CustomPostFilterRules
 import com.forbidad4tieba.hook.config.ConfigManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -30,6 +31,27 @@ class CustomPostFilterMatcherTest {
     }
 
     @Test
+    fun helpBlocksQuestionFeelyouCardFromReportedFeedHead() {
+        val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+            mapOf(
+                "card_type" to "question_feelyou",
+                "thread_type" to "0",
+                "is_special_thread" to "1",
+                "page_from" to "recommend",
+                "recom_type" to "1",
+                "title" to "这个怎么说？",
+            ),
+            runtimeRules(help = true),
+        )
+
+        assertTrue(decision.blocked)
+        assertEquals(
+            "custom_post_type:help:thread_type=0,card_type=question_feelyou,is_special_thread=1",
+            decision.reason,
+        )
+    }
+
+    @Test
     fun helpStillBlocksNormalAndQuestionSpecialThreads() {
         for (cardType in listOf("normal", "question")) {
             val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
@@ -43,7 +65,7 @@ class CustomPostFilterMatcherTest {
 
     @Test
     fun helpDisabledKeepsAllRecognizedHelpCardTypes() {
-        for (cardType in listOf("normal", "question", "question_good")) {
+        for (cardType in listOf("normal", "question", "question_good", "question_feelyou")) {
             val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
                 mapOf("card_type" to cardType, "thread_type" to "0", "is_special_thread" to "1"),
                 runtimeRules(help = false),
@@ -55,19 +77,22 @@ class CustomPostFilterMatcherTest {
 
     @Test
     fun helpRequiresAllStructuredMarkers() {
-        val helpParams = mapOf("card_type" to "question_good", "thread_type" to "0", "is_special_thread" to "1")
-        val nonHelpParams = listOf(
-            helpParams - "card_type",
-            helpParams - "thread_type",
-            helpParams - "is_special_thread",
-            helpParams + ("is_special_thread" to "0"),
-            helpParams + ("thread_type" to "81"),
-            helpParams + ("card_type" to "question_unknown"),
-        )
-        for (params in nonHelpParams) {
-            val decision = CustomPostFilterMatcher.decideByFeedHeadParams(params, runtimeRules(help = true))
+        for (cardType in listOf("question_good", "question_feelyou")) {
+            val helpParams = mapOf("card_type" to cardType, "thread_type" to "0", "is_special_thread" to "1")
+            val nonHelpParams = listOf(
+                helpParams - "card_type",
+                helpParams - "thread_type",
+                helpParams - "is_special_thread",
+                helpParams + ("is_special_thread" to "0"),
+                helpParams + ("thread_type" to "81"),
+                helpParams + ("card_type" to "question_unknown"),
+                helpParams + ("card_type" to "question_feelyou_extra"),
+            )
+            for (params in nonHelpParams) {
+                val decision = CustomPostFilterMatcher.decideByFeedHeadParams(params, runtimeRules(help = true))
 
-            assertEquals(params.toString(), false, decision.blocked)
+                assertEquals(params.toString(), false, decision.blocked)
+            }
         }
     }
 
@@ -89,12 +114,14 @@ class CustomPostFilterMatcherTest {
 
     @Test
     fun helpAcceptsNumericProtocolMarkers() {
-        val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
-            mapOf("card_type" to "question_good", "thread_type" to 0, "is_special_thread" to 1),
-            runtimeRules(help = true),
-        )
+        for (cardType in listOf("question_good", "question_feelyou")) {
+            val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
+                mapOf("card_type" to cardType, "thread_type" to 0, "is_special_thread" to 1),
+                runtimeRules(help = true),
+            )
 
-        assertTrue(decision.blocked)
+            assertTrue(cardType, decision.blocked)
+        }
     }
 
     @Test
@@ -308,8 +335,8 @@ class CustomPostFilterMatcherTest {
         reply: Boolean = false,
         vote: Boolean = false,
         help: Boolean = false,
-    ): CustomPostFilterMatcher.RuntimeRules {
-        return CustomPostFilterMatcher.RuntimeRules(
+    ): CustomPostFilterRules {
+        return CustomPostFilterRules(
             vote = vote,
             video = false,
             reply = reply,

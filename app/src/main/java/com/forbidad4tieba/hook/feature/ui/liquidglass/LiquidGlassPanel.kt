@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
+import android.annotation.TargetApi
 import android.content.Context
 import android.graphics.BlendMode
 import android.graphics.Canvas
@@ -45,6 +46,7 @@ import kotlin.math.roundToInt
  *
  * Requires AGSL ([Build.VERSION_CODES.TIRAMISU]); the caller must not instantiate this below 33.
  */
+@TargetApi(Build.VERSION_CODES.TIRAMISU)
 internal class LiquidGlassPanel(
     context: Context,
     backdrop: ViewGroup,

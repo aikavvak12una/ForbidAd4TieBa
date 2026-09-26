@@ -97,7 +97,6 @@ internal val HOME_SEARCH_BOX_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 160L)
 internal val CARD_COMPONENT_BOOTSTRAP_REFRESH_DELAYS_MS = longArrayOf(0L, 160L)
 internal const val HOME_BOTTOM_TAB_BOUNDARY_PARENT_DEPTH = 4
 internal const val HOME_TOP_TAB_RECOMMEND_TYPE = 1
-internal const val HOME_TOP_TAB_RECOMMEND_CODE = "recommend"
 internal const val PB_SUB_PB_SHADOW_ELEVATION_DP = 4.5f
 internal const val PB_SUB_PB_SHADOW_TRANSLATION_Z_DP = 1.5f
 internal const val PB_SUB_PB_SHADOW_PARENT_DEPTH = 3

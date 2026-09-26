@@ -20,6 +20,39 @@ internal fun HomeNativeGlassRuntimeStyle.configuredPbCommentTintColor(): Int? {
     return autoTintColor.takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
 }
 
+internal fun HomeNativeGlassRuntimeStyle.pbSortSwitchTintState(
+    pinnedReplyTitle: Boolean,
+    baseColor: Int?,
+): PbSortSwitchTintState {
+    val backgroundColor = when {
+        pinnedReplyTitle -> baseColor
+        else -> Color.TRANSPARENT
+    }
+    val selectedColor = if (baseColor != null) {
+        if (pinnedReplyTitle) applyPbSortSwitchSelectedTintOverlay(baseColor) else baseColor
+    } else {
+        null
+    }
+    return PbSortSwitchTintState(
+        sourcePath = backgroundImagePath,
+        blurCachePath = blurCacheImagePath,
+        blurPercent = cardBlurPercent,
+        tintColor = tintColor,
+        autoTintColor = autoTintColor,
+        pinnedReplyTitle = pinnedReplyTitle,
+        backgroundColor = backgroundColor,
+        selectedColor = selectedColor,
+    )
+}
+
+internal fun PbSortSwitchTintState.matchesStyle(style: HomeNativeGlassRuntimeStyle): Boolean {
+    return sourcePath == style.backgroundImagePath &&
+        blurCachePath == style.blurCacheImagePath &&
+        blurPercent == style.cardBlurPercent &&
+        tintColor == style.tintColor &&
+        autoTintColor == style.autoTintColor
+}
+
 internal fun offsetSubPbInputCapsuleColor(color: Int): Int {
     return blendOpaqueColorOverlay(
         base = color,

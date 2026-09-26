@@ -7,7 +7,7 @@ import java.lang.reflect.Executable
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Holds the API 101 module lifecycle object and shared Xposed helpers.
+ * Holds the API 102 module lifecycle object and shared Xposed helpers.
  *
  * Feature hooks install through [module]:
  * ```
@@ -224,16 +224,6 @@ object XposedCompat {
     ): java.lang.reflect.Method? {
         return try {
             clazz.getDeclaredMethod(methodName, *paramTypes).apply { isAccessible = true }
-        } catch (_: NoSuchMethodException) { null }
-    }
-
-    fun findConstructorOrNull(
-        className: String, cl: ClassLoader,
-        vararg paramTypes: Class<*>,
-    ): java.lang.reflect.Constructor<*>? {
-        val clazz = findClassOrNull(className, cl) ?: return null
-        return try {
-            clazz.getDeclaredConstructor(*paramTypes).apply { isAccessible = true }
         } catch (_: NoSuchMethodException) { null }
     }
 }

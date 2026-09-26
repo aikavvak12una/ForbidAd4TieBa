@@ -7,10 +7,6 @@ data class WebSymbols(
     val adBlock: WebAdBlockSymbolsGroup = WebAdBlockSymbolsGroup(),
 )
 
-object WebAdBlockConstraints {
-    const val MINE_TAB_MIN_VERSION_CODE = 369491968L
-}
-
 data class EnterForumWebSymbolsGroup(
     val enterForumWebControllerClass: String? = null,
     val enterForumWebLoadMethod: String? = null,
@@ -22,7 +18,6 @@ data class PlainUrlSymbolsGroup(
     val clickableSpan: PlainUrlClickableSpanSymbolsGroup = PlainUrlClickableSpanSymbolsGroup(),
     val message: PlainUrlMessageSymbolsGroup = PlainUrlMessageSymbolsGroup(),
     val browserHelper: PlainUrlBrowserHelperSymbolsGroup = PlainUrlBrowserHelperSymbolsGroup(),
-    val webContainer: PlainUrlWebContainerSymbolsGroup = PlainUrlWebContainerSymbolsGroup(),
 )
 
 data class PlainUrlClickableSpanSymbolsGroup(
@@ -60,13 +55,6 @@ data class PlainUrlApplicationSymbolsGroup(
 data class PlainUrlBrowserHelperSymbolsGroup(
     val plainUrlBrowserHelperClass: String? = null,
     val plainUrlBrowserHelperStartWebActivityMethod: String? = null,
-)
-
-data class PlainUrlWebContainerSymbolsGroup(
-    val plainUrlWebContainerActivityClass: String? = null,
-    val plainUrlWebContainerInitDataMethod: String? = null,
-    val plainUrlWebContainerWebViewClientClass: String? = null,
-    val plainUrlWebContainerShouldOverrideUrlLoadingMethod: String? = null,
 )
 
 data class MountCardLinkSymbolsGroup(

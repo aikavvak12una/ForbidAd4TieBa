@@ -3,7 +3,6 @@ package com.forbidad4tieba.hook.symbol.scan
 import android.content.Context
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
-import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
 import com.forbidad4tieba.hook.symbol.model.PerformanceAbTarget
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import java.lang.reflect.Method
@@ -15,11 +14,9 @@ internal object PerformanceAbSymbolScanner {
     fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): List<String> {
         val paths = listOfNotNull(context.applicationInfo?.sourceDir) +
             context.applicationInfo?.splitSourceDirs.orEmpty()
-        val opened = DexKitBridgeProvider.openFirstAvailable(paths, logger)
-            ?: return emptyList()
-        return opened.use { source ->
+        return HookSymbolScanSession.withDexKitBridge(paths, logger) { source ->
             val methods = source.bridge.getClassData(OWNER)?.methods.orEmpty()
-            val helper = ScanReflection.safeFindClass(OWNER, cl) ?: return@use emptyList()
+            val helper = ScanReflection.safeFindClass(OWNER, cl) ?: return@withDexKitBridge emptyList()
             PerformanceAbTarget.entries.mapNotNull { target ->
                 scanSubStep("PerformanceAB.${target.methodName}", logger, null as String?) {
                     val candidates = methods.filter {
@@ -40,7 +37,7 @@ internal object PerformanceAbSymbolScanner {
                     }
                 }
             }
-        }
+        } ?: emptyList()
     }
 
     fun restore(cl: ClassLoader, names: List<String>?): Map<String, Method> {

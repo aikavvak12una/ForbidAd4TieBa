@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
+import android.annotation.TargetApi
 import android.content.Context
 import android.graphics.BlendMode
 import android.graphics.Canvas
@@ -48,6 +49,7 @@ import kotlin.math.roundToInt
  * droplet read as magnified and bent, and it is why the droplet sits above the real tabs rather than
  * below them.
  */
+@TargetApi(Build.VERSION_CODES.TIRAMISU)
 internal class DropletPanel(
     context: Context,
     backdrop: LiquidGlassPanel,

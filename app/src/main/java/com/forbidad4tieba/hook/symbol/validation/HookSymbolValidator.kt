@@ -15,16 +15,15 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.scan.AiComponentSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.HomeTabItemSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.InputMemeBarSymbolScanner
-import com.forbidad4tieba.hook.symbol.scan.PbAdBidSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbEarlyAdInsertSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbFirstFloorRecommendInsertSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PerformanceAbSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.TrackingSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.FeedCardSchemaSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.DefaultPopupSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbForcePreloadSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlBrowserHelperSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlClickableSpanSymbolScanner
-import com.forbidad4tieba.hook.symbol.scan.PlainUrlWebContainerSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import org.json.JSONObject
 import java.lang.reflect.Field
@@ -38,6 +37,7 @@ internal object HookSymbolValidator {
     private const val NAV_CLASS = StableTiebaHookPoints.NAVIGATION_BAR_CLASS
     private const val PB_COMMON_REQUEST_MODEL_CLASS =
         "com.baidu.tieba.pb.pb.main.newmodel.CommonRequestModel"
+    private const val PB_PAGE_BROWSER_REQUEST_MODEL_CLASS = "com.baidu.tieba.pb.pagebrowser.model.BaseRequestModel"
     private const val KOTLIN_CONTINUATION_CLASS = "kotlin.coroutines.Continuation"
     private const val BD_UNIQUE_ID_CLASS = "com.baidu.adp.BdUniqueId"
     private const val TB_WEB_VIEW_CLASS = "com.baidu.tieba.browser.TbWebView"
@@ -60,9 +60,11 @@ internal object HookSymbolValidator {
         "com.baidu.tieba.pb.pagebrowser.comment.floor.meme.CommentFloorAiEmojiCreationView"
 
     fun isUsable(symbols: HookSymbols, cl: ClassLoader): Boolean {
+    if (!FeedCardSchemaSymbolScanner.isCacheValid(cl, symbols.feedCardBindMethodSpec, symbols.feedCardSchemaGetterSpec)) return false
     if (!PerformanceAbSymbolScanner.isCacheValid(cl, symbols.performanceAbMethods)) return false
     if (!TrackingSymbolScanner.isCacheValid(cl, symbols.trackingMethods)) return false
     if (!DefaultPopupSymbolScanner.isCacheValid(cl, symbols.defaultPopups)) return false
+    if (!symbols.lowEndConfig.isCacheValid(cl)) return false
     if (!PbForcePreloadSymbolScanner.isCacheValid(
             cl, symbols.pbPreloadProviderMethodSpec, symbols.pbPreloadCardGetterMethodSpec,
             symbols.pbPreloadPageStateMutableField, symbols.pbPreloadPageStateFlowField,
@@ -137,7 +139,6 @@ internal object HookSymbolValidator {
             symbols.forumRainSetterMethod != null ||
             symbols.forumDialogControllerClass != null ||
             symbols.forumBusinessPromotShowMethod != null ||
-            symbols.forumAnimationShowMethod != null ||
             symbols.forumGameFloatingBarControllerClass != null ||
             symbols.forumGameFloatingBarShowMethod != null ||
             symbols.forumGameFloatingBarField != null ||
@@ -168,11 +169,7 @@ internal object HookSymbolValidator {
             symbols.plainUrlApplicationClass != null ||
             symbols.plainUrlApplicationGetInstMethod != null ||
             symbols.plainUrlBrowserHelperClass != null ||
-            symbols.plainUrlBrowserHelperStartWebActivityMethod != null ||
-            symbols.plainUrlWebContainerActivityClass != null ||
-            symbols.plainUrlWebContainerInitDataMethod != null ||
-            symbols.plainUrlWebContainerWebViewClientClass != null ||
-            symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod != null
+            symbols.plainUrlBrowserHelperStartWebActivityMethod != null
     if (hasPlainUrlSymbols && !isPlainUrlValid(symbols, cl)) return false
     val hasPrivateReadReceiptSymbols =
             symbols.privateReadReceiptModelClass != null ||
@@ -197,9 +194,6 @@ internal object HookSymbolValidator {
             symbols.privateReadReceiptChatMessageClass != null ||
             symbols.privateReadReceiptChatMessageMsgIdMethod != null ||
             symbols.privateReadReceiptChatMessageUserIdMethod != null ||
-            symbols.privateReadReceiptChatMessageLocalDataMethod != null ||
-            symbols.privateReadReceiptLocalDataClass != null ||
-            symbols.privateReadReceiptLocalDataStatusMethod != null ||
             symbols.privateReadReceiptAccountClass != null ||
             symbols.privateReadReceiptCurrentAccountMethod != null
     if (hasPrivateReadReceiptSymbols && !isPrivateReadReceiptValid(symbols, cl)) return false
@@ -1184,14 +1178,18 @@ private fun isPbAdBidValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
         }
 
         if (hasCompletePageBrowserSymbols) {
+            val pageBrowserBaseClass = safeFindClass(PB_PAGE_BROWSER_REQUEST_MODEL_CLASS, cl) ?: return false
             val pageBrowserModelClass = safeFindClass(symbols.pbAdBidPageBrowserRequestModelClass!!, cl)
                 ?: return false
+            if (!pageBrowserBaseClass.isAssignableFrom(pageBrowserModelClass)) return false
             val continuationClass = safeFindClass(KOTLIN_CONTINUATION_CLASS, cl) ?: return false
-            val method = findPbAdBidPageBrowserRequestDataMethodInHierarchy(
-                pageBrowserModelClass,
+            val method = pageBrowserBaseClass.getDeclaredMethod(
+                symbols.pbAdBidPageBrowserRequestDataMethod!!,
                 continuationClass,
-            ) ?: return false
-            if (method.name != symbols.pbAdBidPageBrowserRequestDataMethod) return false
+            )
+            if (Modifier.isStatic(method.modifiers) || Modifier.isAbstract(method.modifiers) ||
+                method.returnType != Any::class.java ||
+                pageBrowserModelClass.getMethod(method.name, continuationClass) != method) return false
         }
 
         true
@@ -1324,8 +1322,7 @@ private fun isEnterForumInitInfoValid(symbols: HookSymbols, cl: ClassLoader): Bo
 private fun isPlainUrlValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
     return isPlainUrlClickableSpanDirectValid(symbols, cl) ||
         isPlainUrlMessageDispatchValid(symbols, cl) ||
-        isPlainUrlBrowserHelperValid(symbols, cl) ||
-        isPlainUrlWebContainerValid(symbols, cl)
+        isPlainUrlBrowserHelperValid(symbols, cl)
 }
 
 private fun isPlainUrlClickableSpanDirectValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
@@ -1423,30 +1420,6 @@ private fun isPlainUrlBrowserHelperValid(symbols: HookSymbols, cl: ClassLoader):
     }
 }
 
-private fun isPlainUrlWebContainerValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-    return try {
-        val initDataValid = symbols.plainUrlWebContainerActivityClass
-            ?.let { className -> safeFindClass(className, cl) }
-            ?.let { activityClass ->
-                val methodName = symbols.plainUrlWebContainerInitDataMethod ?: return@let false
-                activityClass.declaredMethods.any { method ->
-                    PlainUrlWebContainerSymbolScanner.isInitDataMethod(method, methodName)
-                }
-            } == true
-        val navigationValid = symbols.plainUrlWebContainerWebViewClientClass
-            ?.let { className -> safeFindClass(className, cl) }
-            ?.let { webViewClientClass ->
-                val methodName = symbols.plainUrlWebContainerShouldOverrideUrlLoadingMethod ?: return@let false
-                webViewClientClass.declaredMethods.any { method ->
-                    PlainUrlWebContainerSymbolScanner.isShouldOverrideUrlLoadingMethod(method, methodName)
-                }
-            } == true
-        initDataValid || navigationValid
-    } catch (_: Throwable) {
-        false
-    }
-}
-
 private fun isPrivateReadReceiptValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
     val modelClassName = symbols.privateReadReceiptModelClass ?: return false
     val modelReadMethodName = symbols.privateReadReceiptModelReadDispatchMethod ?: return false
@@ -1471,9 +1444,6 @@ private fun isPrivateReadReceiptValid(symbols: HookSymbols, cl: ClassLoader): Bo
     val chatMessageClassName = symbols.privateReadReceiptChatMessageClass ?: return false
     val chatMsgIdMethodName = symbols.privateReadReceiptChatMessageMsgIdMethod ?: return false
     val chatUserIdMethodName = symbols.privateReadReceiptChatMessageUserIdMethod ?: return false
-    val chatLocalDataMethodName = symbols.privateReadReceiptChatMessageLocalDataMethod ?: return false
-    val localDataClassName = symbols.privateReadReceiptLocalDataClass ?: return false
-    val localDataStatusMethodName = symbols.privateReadReceiptLocalDataStatusMethod ?: return false
     val accountClassName = symbols.privateReadReceiptAccountClass ?: return false
     val currentAccountMethodName = symbols.privateReadReceiptCurrentAccountMethod ?: return false
     return try {
@@ -1491,7 +1461,6 @@ private fun isPrivateReadReceiptValid(symbols: HookSymbols, cl: ClassLoader): Bo
         val commitResponseClass = safeFindClass(commitResponseClassName, cl) ?: return false
         val pageDataClass = safeFindClass(pageDataClassName, cl) ?: return false
         val chatMessageClass = safeFindClass(chatMessageClassName, cl) ?: return false
-        val localDataClass = safeFindClass(localDataClassName, cl) ?: return false
         val accountClass = safeFindClass(accountClassName, cl) ?: return false
         if (!messageBaseClass.isAssignableFrom(requestClass)) return false
         modelClass.declaredMethods.singleOrNull { method ->
@@ -1566,18 +1535,6 @@ private fun isPrivateReadReceiptValid(symbols: HookSymbols, cl: ClassLoader): Bo
                 !Modifier.isStatic(method.modifiers) &&
                 method.parameterTypes.isEmpty() &&
                 method.returnType == Long::class.javaPrimitiveType
-        } ?: return false
-        chatMessageClass.declaredMethods.singleOrNull { method ->
-            method.name == chatLocalDataMethodName &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                method.returnType == localDataClass
-        } ?: return false
-        localDataClass.declaredMethods.singleOrNull { method ->
-            method.name == localDataStatusMethodName &&
-                !Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                method.returnType == Short::class.javaObjectType
         } ?: return false
         accountClass.declaredMethods.singleOrNull { method ->
             method.name == currentAccountMethodName &&
@@ -2415,27 +2372,14 @@ private fun isForumPageStaticMapperValid(
 
 private fun isForumPageDialogPathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
     val controllerClass = safeFindClass(symbols.forumDialogControllerClass ?: return false, cl) ?: return false
-    val businessName = symbols.forumBusinessPromotShowMethod
-    if (!businessName.isNullOrBlank()) {
-        val ok = collectInstanceMethods(controllerClass).any { method ->
-            method.name == businessName &&
-                method.returnType == Boolean::class.javaPrimitiveType &&
-                method.parameterTypes.size == 2 &&
-                method.parameterTypes[0] == String::class.java &&
-                !method.parameterTypes[1].isPrimitive
-        }
-        if (!ok) return false
+    val businessName = symbols.forumBusinessPromotShowMethod?.takeIf { it.isNotBlank() } ?: return false
+    return collectInstanceMethods(controllerClass).any { method ->
+        method.name == businessName &&
+            method.returnType == Boolean::class.javaPrimitiveType &&
+            method.parameterTypes.size == 2 &&
+            method.parameterTypes[0] == String::class.java &&
+            !method.parameterTypes[1].isPrimitive
     }
-    val animationName = symbols.forumAnimationShowMethod
-    if (!animationName.isNullOrBlank()) {
-        val ok = collectInstanceMethods(controllerClass).any { method ->
-            method.name == animationName &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.isEmpty()
-        }
-        if (!ok) return false
-    }
-    return !businessName.isNullOrBlank() || !animationName.isNullOrBlank()
 }
 
 private fun isForumPageFloatingPathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
@@ -2817,11 +2761,6 @@ private fun isGetInnerWebViewMethod(method: Method): Boolean {
 
     private fun resolvePbEarlyAdType(typeName: String, cl: ClassLoader): Class<*>? =
         PbEarlyAdInsertSymbolScanner.resolveType(typeName, cl)
-
-    private fun findPbAdBidPageBrowserRequestDataMethodInHierarchy(
-        cls: Class<*>,
-        continuationClass: Class<*>,
-    ): Method? = PbAdBidSymbolScanner.findPageBrowserRequestDataMethodInHierarchy(cls, continuationClass)
 
     private fun isPlainUrlClickableSpanOnClickMethod(method: Method, methodName: String): Boolean =
         PlainUrlClickableSpanSymbolScanner.isOnClickMethod(method, methodName)

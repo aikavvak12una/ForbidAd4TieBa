@@ -16,7 +16,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
-import android.view.ViewTreeObserver
 import android.widget.AbsListView
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -27,6 +26,7 @@ import com.forbidad4tieba.hook.HookSymbolResolver
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.InstallOutcome
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassHook
 import com.forbidad4tieba.hook.utils.ReflectionUtils
@@ -37,14 +37,14 @@ import java.lang.reflect.Modifier
 import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
 object HomeNativeGlassHook {
     private const val TAG = "[HomeNativeGlassHook]"
     private val installed = AtomicBoolean(false)
+    private val installation = HomeNativeGlassHookInstallation()
+    private val darkModeListener: (Boolean) -> Unit = ::onHostDarkModeChanged
     private val firstPageErrorLogged = AtomicBoolean(false)
     private val firstCardErrorLogged = AtomicBoolean(false)
     private val firstChromeErrorLogged = AtomicBoolean(false)
@@ -57,8 +57,24 @@ object HomeNativeGlassHook {
     private val firstBackgroundImageErrorLogged = AtomicBoolean(false)
     private val homeRecyclerViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val glassBackgroundViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val scrollInvalidationInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val frameInvalidationInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val recyclerObservers = HomeNativeGlassRecyclerObservers(
+        shouldTrackPosition = { ConfigManager.isHomeNativeGlassEnabled && hasPageBackgroundOverride() },
+        isFeedCardView = ::isFeedCardView,
+        onInvalidation = { anchor ->
+            refreshHomeNativeBackgroundLayers(anchor)
+            invalidateGlassBackgroundViews(anchor)
+        },
+        onFailure = { error ->
+            if (firstPageErrorLogged.compareAndSet(false, true)) {
+                XposedCompat.logD { "$TAG recycler observer failed: ${error.message}" }
+            }
+        },
+    )
+    private val preDrawObservers = HomeNativeGlassPreDrawObservers(
+        schedulePbSubPbLayoutRefresh = ::schedulePbSubPbLayoutRefresh,
+        scheduleCardComponentBootstrapRefresh = ::scheduleCardComponentBootstrapRefresh,
+        ensureCardComponentGlassSafely = ::ensureCardComponentGlassSafely,
+    )
     private val homeRecyclerChildAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pageStyleReapplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbCommentActivityApplyScheduled = Collections.synchronizedMap(WeakHashMap<Activity, Boolean>())
@@ -66,17 +82,16 @@ object HomeNativeGlassHook {
     private val pbCommentSurfaceApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbCommentItemFrameAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbCommentItemFrameApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val pbActivityByContext = Collections.synchronizedMap(WeakHashMap<Context, WeakReference<Activity>>())
-    private val pbActivityContentHosts = Collections.synchronizedMap(WeakHashMap<Activity, WeakReference<View>>())
-    private val pbActivityTypes = Collections.synchronizedMap(WeakHashMap<Activity, PbActivityType>())
+    private val pageSessions = HomeNativeGlassPageSessions { host ->
+        rememberPbCommentBackgroundWriteRole(host, PbCommentBackgroundWriteRole.HOST)
+    }
     private val pbCommentListItemApplyScheduled =
         Collections.synchronizedMap(WeakHashMap<View, PendingViewGroupApply>())
     private val pbCommentBackgroundHostStates = Collections.synchronizedMap(WeakHashMap<View, PbCommentBackgroundState>())
     private val pbCommentBackgroundWriteRoles =
         Collections.synchronizedMap(WeakHashMap<View, PbCommentBackgroundWriteRole>())
-    private val pbSubPbLayoutAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val pbSubPbLayoutApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val pbSubPbLayoutCardStates = Collections.synchronizedMap(WeakHashMap<View, PbSubPbLayoutCardState>())
+    private val viewStyleStates = HomeNativeGlassViewStyleStates()
     private val pbSubPbLayoutPaddingStates = Collections.synchronizedMap(WeakHashMap<View, PbSubPbLayoutPaddingState>())
     private val subPbReplyItemApplyScheduled =
         Collections.synchronizedMap(WeakHashMap<View, PendingViewGroupApply>())
@@ -102,67 +117,55 @@ object HomeNativeGlassHook {
     private val homeSearchBoxAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val homeSearchBoxBootstrapScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val homeCardComponentViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val cardComponentAttachRefreshInstalled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val cardComponentBootstrapScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val homeFeedCardGlassTargets = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val homeFeedCardStyleApplyScheduled = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
-    private val homeFeedCardStyleStates = Collections.synchronizedMap(WeakHashMap<View, HomeFeedCardStyleState>())
     private val chromeGlassOriginalStates = Collections.synchronizedMap(WeakHashMap<View, ChromeGlassOriginalState>())
     private val imageContainerRadiusStates = Collections.synchronizedMap(WeakHashMap<View, Float>())
-    private val scrollInvalidateScheduled = AtomicBoolean(false)
     private val homeNativeGlassModeReapplyScheduled = AtomicBoolean(false)
     private val runtimeStyleStore = HomeNativeGlassRuntimeStyleStore(::scheduleHomeNativeGlassModeReapply)
     private val chromeDynamicTintBackgroundWriteDepth = object : ThreadLocal<Int>() {
         override fun initialValue(): Int = 0
     }
-    private val emManagerFromViewFields = ConcurrentHashMap<Class<*>, Field>()
-    private val emManagerFromViewMissingClasses =
-        Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
-    private val emManagerRealBackgroundColorMethods = ConcurrentHashMap<Class<*>, Method>()
-    private val emManagerRealBackgroundColorMissingClasses =
-        Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
-    private val emManagerFromMethods = ConcurrentHashMap<Class<*>, Method>()
-    private val emManagerFromMethodMissingClasses =
-        Collections.newSetFromMap(ConcurrentHashMap<Class<*>, Boolean>())
-    private val chromeNoArgViewMethods = ConcurrentHashMap<RuntimeMethodKey, Method>()
-    private val chromeNoArgViewMissingMethods =
-        Collections.newSetFromMap(ConcurrentHashMap<RuntimeMethodKey, Boolean>())
-    private val chromeBooleanMethods = ConcurrentHashMap<RuntimeMethodKey, Method>()
-    private val chromeBooleanMissingMethods =
-        Collections.newSetFromMap(ConcurrentHashMap<RuntimeMethodKey, Boolean>())
+    private val hostAccessors = HomeNativeGlassHostAccessors { reason, error ->
+        if (firstPbDynamicBackgroundColorErrorLogged.compareAndSet(false, true)) {
+            XposedCompat.logD { "$TAG $reason: ${error.message}" }
+        }
+    }
 
     @Volatile private var recyclerViewClass: Class<*>? = null
     private val backgroundStore = HomeNativeGlassBackgroundStore(
         maxCachedBytes = MAX_CACHED_BACKGROUND_BITMAP_BYTES,
         metadataCheckIntervalMs = BACKGROUND_CACHE_METADATA_CHECK_INTERVAL_MS,
     )
-    private val backgroundDecodeKeys = Collections.synchronizedSet(mutableSetOf<String>())
-    private val backgroundDecodeExecutor by lazy {
-        Executors.newSingleThreadExecutor { runnable ->
-            Thread(runnable, "tbhook-glass-bg-decode").apply {
-                isDaemon = true
+    private val backgroundLoader = HomeNativeGlassBackgroundLoader(
+        store = backgroundStore,
+        isCurrent = ::isBackgroundDecodeRequestCurrent,
+        onChanged = ::reapplyHomeNativeGlassForModeChange,
+        onError = { error ->
+            if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
+                XposedCompat.logD { "$TAG background image decode failed: ${error.message}" }
             }
-        }
-    }
+        },
+    )
     @Volatile private var runtimeTargets: RuntimeTargets? = null
-    @Volatile private var pbCommentDynamicTintState: PbCommentDynamicTintState? = null
     @Volatile private var pbSortSwitchBackgroundPaintField: Field? = null
     @Volatile private var pbSortSwitchSlidePathField: Field? = null
     @Volatile private var pbEnterForumCapsuleViewField: Field? = null
     @Volatile private var pbEnterForumCapsuleTitleField: Field? = null
 
-    fun hook(cl: ClassLoader, symbols: HookSymbols) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !ConfigManager.hasAnyHomeNativeGlassBackgroundImage) return
-        val mod = XposedCompat.module ?: return
+    internal fun hook(cl: ClassLoader, symbols: HookSymbols): InstallOutcome {
+        if (!ConfigManager.isHomeNativeGlassEnabled || !ConfigManager.hasAnyHomeNativeGlassBackgroundImage) {
+            return InstallOutcome.skipped("glass background disabled")
+        }
+        if (XposedCompat.module == null) return InstallOutcome.skipped("module unavailable")
         val feedPlan = resolveHomeNativeGlassFeedInstallPlan(symbols)
-        if (!installed.compareAndSet(false, true)) return
-        HomeNativeGlassHostDarkModeBridge.addDarkModeChangeListener(::onHostDarkModeChanged)
-        refreshHomeNativeGlassRuntimeStyle(forceHostRead = true, scheduleReapply = false)
+        if (!installed.compareAndSet(false, true)) return installation.currentOutcome()
 
         try {
+            runtimeStyleStore.refresh(forceHostRead = true, scheduleReapply = false)
             recyclerViewClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
             runtimeTargets = resolveHomeNativeGlassRuntimeTargets(symbols)
-            prewarmBackgroundCacheIfNeeded()
             if (!feedPlan.hasHomeFeedTargets) {
                 XposedCompat.logD { feedPlan.formatSkipLog(TAG) }
             }
@@ -230,18 +233,25 @@ object HomeNativeGlassHook {
                 bindMethodName = feedPlan.bindMethodName,
             )
             if (!installReport.hasRequiredHooks) {
-                installed.set(false)
-                XposedCompat.log(installReport.formatNoHooksLog(TAG))
-                return
+                val outcome = installation.rollback(installReport.formatNoHooksLog(TAG))
+                installed.set(outcome.installedCount != 0)
+                return outcome
             }
             (ConfigManager.getAppContext() as? android.app.Application)?.let { app ->
                 SystemBarCompatHook.register(app)
+                backgroundLoader.register(app)
             }
+            HomeNativeGlassHostDarkModeBridge.addDarkModeChangeListener(darkModeListener)
+            prewarmBackgroundCacheIfNeeded()
             XposedCompat.log(installReport.formatInstalledLog(TAG))
+            return installation.activate()
         } catch (t: Throwable) {
-            installed.set(false)
-            XposedCompat.log("$TAG install FAILED: ${t.message}")
+            HomeNativeGlassHostDarkModeBridge.removeDarkModeChangeListener(darkModeListener)
+            backgroundLoader.unregister()
+            val outcome = installation.rollback("${t.javaClass.simpleName}: ${t.message}")
+            installed.set(outcome.installedCount != 0)
             XposedCompat.log(t)
+            return outcome
         }
     }
 
@@ -254,7 +264,7 @@ object HomeNativeGlassHook {
             val method = XposedCompat.findMethodOrNull(appClass, methodName, java.lang.Integer.TYPE)
                 ?: continue
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installHostSkinTypeChangeHooks:1") { chain ->
                 val result = chain.proceed()
                 HomeNativeGlassHostDarkModeBridge.onHostSkinTypeChanged(
                     (chain.args.getOrNull(0) as? Number)?.toInt()
@@ -276,7 +286,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (ctor in pageClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installPageConstructors:1") { chain ->
                 val result = chain.proceed()
                 val page = chain.thisObject as? View
                 if (page != null) {
@@ -306,7 +316,7 @@ object HomeNativeGlassHook {
             return 0
         }
         bindMethod.isAccessible = true
-        mod.hook(bindMethod).intercept { chain ->
+        installation.intercept(mod, bindMethod, "installFeedCardBind:1") { chain ->
             val card = chain.thisObject as? View
             if (
                 card != null &&
@@ -335,7 +345,7 @@ object HomeNativeGlassHook {
             val method = XposedCompat.findMethodOrNull(feedCardViewClass, methodName, MotionEvent::class.java)
                 ?: continue
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installFeedCardTouchHooks:1") { chain ->
                 val event = chain.args.getOrNull(0) as? MotionEvent
                 val result = chain.proceed()
                 val card = chain.thisObject as? View
@@ -357,7 +367,7 @@ object HomeNativeGlassHook {
             val shouldBlockComponent = className in HOME_BLOCKED_CARD_COMPONENT_CLASSES
             for (ctor in componentClass.declaredConstructors) {
                 ctor.isAccessible = true
-                mod.hook(ctor).intercept { chain ->
+                installation.intercept(mod, ctor, "installCardComponentHooks:1") { chain ->
                     val result = chain.proceed()
                     (chain.thisObject as? View)?.let { componentView ->
                         if (shouldBlockComponent) {
@@ -395,7 +405,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (method in methods) {
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installPbCommentActivityHooks:1") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? Activity)?.let { activity ->
                     schedulePbCommentActivityBackgroundRefresh(activity)
@@ -414,7 +424,7 @@ object HomeNativeGlassHook {
             val surfaceClass = XposedCompat.findClassOrNull(className, cl) ?: continue
             for (ctor in surfaceClass.declaredConstructors) {
                 ctor.isAccessible = true
-                mod.hook(ctor).intercept { chain ->
+                installation.intercept(mod, ctor, "installPbCommentSurfaceHooks:1") { chain ->
                     val result = chain.proceed()
                     (chain.thisObject as? View)?.let { surface ->
                         rememberPbCommentSurfaceView(surface)
@@ -427,7 +437,7 @@ object HomeNativeGlassHook {
                 ?.takeIf { it.returnType == Void.TYPE }
                 ?.let { method ->
                     method.isAccessible = true
-                    mod.hook(method).intercept { chain ->
+                    installation.intercept(mod, method, "installPbCommentSurfaceHooks:2") { chain ->
                         val result = chain.proceed()
                         (chain.thisObject as? View)?.let { surface ->
                             rememberPbCommentSurfaceView(surface)
@@ -458,7 +468,7 @@ object HomeNativeGlassHook {
             XposedCompat.logD { "$TAG method NOT FOUND: ${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}.getView" }
             return 0
         }
-        mod.hook(method).intercept { chain ->
+        installation.intercept(mod, method, "installPbCommentListItemGetViewHook:1") { chain ->
             val result = chain.proceed()
             val itemView = result as? View ?: return@intercept result
             val parent = chain.args.getOrNull(2) as? ViewGroup
@@ -493,7 +503,7 @@ object HomeNativeGlassHook {
             viewHolderClass,
         )?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installSubPbReplyAdapterHooks:1") { chain ->
                 val result = chain.proceed()
                 val itemView = result as? View ?: chain.args.getOrNull(1) as? View
                 val parent = chain.args.getOrNull(2) as? ViewGroup
@@ -518,7 +528,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (ctor in subPbViewClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installSubPbInputBarHooks:1") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { subPbView ->
                     scheduleSubPbInputBarDynamicTint(subPbView)
@@ -531,7 +541,7 @@ object HomeNativeGlassHook {
             ?.takeIf { it.returnType == Void.TYPE }
             ?.let { method ->
                 method.isAccessible = true
-                mod.hook(method).intercept { chain ->
+                installation.intercept(mod, method, "installSubPbInputBarHooks:2") { chain ->
                     val result = chain.proceed()
                     (chain.thisObject as? View)?.let { subPbView ->
                         scheduleSubPbInputBarDynamicTint(subPbView)
@@ -578,7 +588,7 @@ object HomeNativeGlassHook {
             return 0
         }
         setNextPageMethod.isAccessible = true
-        mod.hook(setNextPageMethod).intercept { chain ->
+        installation.intercept(mod, setNextPageMethod, "installSubPbNextPageGlassHook:1") { chain ->
             val result = chain.proceed()
             val listView = chain.thisObject as? ViewGroup
             val nextPage = chain.args.getOrNull(0)
@@ -614,7 +624,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (ctor in navigationBarClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installSubPbNavigationBarHooks:1") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { navigationBar ->
                     scheduleSubPbNavigationBarTint(navigationBar)
@@ -632,7 +642,7 @@ object HomeNativeGlassHook {
             )
         }?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installSubPbNavigationBarHooks:2") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { navigationBar ->
                     scheduleSubPbNavigationBarTint(navigationBar)
@@ -654,7 +664,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (ctor in itemFrameClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installPbCommentItemFrameHooks:1") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { itemFrame ->
                     rememberPbCommentItemFrame(itemFrame)
@@ -669,7 +679,7 @@ object HomeNativeGlassHook {
             java.lang.Integer.TYPE,
         )?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installPbCommentItemFrameHooks:2") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { itemFrame ->
                     rememberPbCommentItemFrame(itemFrame)
@@ -692,7 +702,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (ctor in subPbLayoutClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installPbSubPbLayoutHooks:1") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { subPbLayout ->
                     rememberPbSubPbLayout(subPbLayout)
@@ -713,7 +723,7 @@ object HomeNativeGlassHook {
             null
         }?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installPbSubPbLayoutHooks:2") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { subPbLayout ->
                     rememberPbSubPbLayout(subPbLayout)
@@ -738,7 +748,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (ctor in holderClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installPbReplyTitleViewHolderHooks:1") { chain ->
                 val result = chain.proceed()
                 val root = chain.args.firstOrNull { it is View } as? View
                 if (root != null) {
@@ -780,7 +790,7 @@ object HomeNativeGlassHook {
             return 0
         }
         method.isAccessible = true
-        mod.hook(method).intercept { chain ->
+        installation.intercept(mod, method, "installPbCommonLayoutPreloaderHook:1") { chain ->
             val result = chain.proceed()
             (result as? View)?.let { view ->
                 applyPbCommonPreloadedLayoutTintSafely(view)
@@ -814,7 +824,7 @@ object HomeNativeGlassHook {
                 java.lang.Integer.TYPE,
             )?.let { method ->
                 method.isAccessible = true
-                mod.hook(method).intercept { chain ->
+                installation.intercept(mod, method, "installPbDynamicBackgroundColorHooks:1") { chain ->
                     val view = chain.args.getOrNull(0) as? View
                         ?: return@intercept chain.proceed()
                     if (applySubPbNavigationBarTintForBackgroundWrite(view)) {
@@ -853,7 +863,7 @@ object HomeNativeGlassHook {
                 java.lang.Integer.TYPE,
             )?.let { method ->
                 method.isAccessible = true
-                mod.hook(method).intercept { chain ->
+                installation.intercept(mod, method, "installPbDynamicBackgroundColorHooks:2") { chain ->
                     val view = chain.args.getOrNull(0) as? View
                         ?: return@intercept chain.proceed()
                     if (applySubPbNavigationBarTintForBackgroundWrite(view)) {
@@ -896,11 +906,11 @@ object HomeNativeGlassHook {
                 java.lang.Integer.TYPE,
             )?.let { method ->
                 method.isAccessible = true
-                mod.hook(method).intercept { chain ->
+                installation.intercept(mod, method, "installPbDynamicBackgroundColorHooks:3") { chain ->
                     val manager = chain.thisObject ?: return@intercept chain.proceed()
                     val colorResId = (chain.args.getOrNull(0) as? Number)?.toInt()
                         ?: return@intercept chain.proceed()
-                    val view = readEmManagerView(manager) ?: return@intercept chain.proceed()
+                    val view = hostAccessors.readEmManagerView(manager) ?: return@intercept chain.proceed()
                     if (interceptHomeFeedCardNativeBackgroundWrite(view)) {
                         return@intercept null
                     }
@@ -910,7 +920,7 @@ object HomeNativeGlassHook {
                     }
                     val shareDialogColor = resolveShareDialogDynamicTintColor(view, colorResId)
                     if (shareDialogColor != null) {
-                        if (!applyEmManagerRealBackgroundColor(manager, shareDialogColor)) {
+                        if (!hostAccessors.applyEmManagerRealBackgroundColor(manager, shareDialogColor)) {
                             setBackgroundColorPreservingPadding(view, shareDialogColor)
                         }
                         afterEmManagerPbBackgroundWrite(view)
@@ -922,7 +932,7 @@ object HomeNativeGlassHook {
                             afterEmManagerPbBackgroundWrite(view)
                             return@intercept result
                         }
-                    if (applyEmManagerRealBackgroundColor(manager, color)) {
+                    if (hostAccessors.applyEmManagerRealBackgroundColor(manager, color)) {
                         afterEmManagerPbBackgroundWrite(view)
                         null
                     } else {
@@ -944,7 +954,7 @@ object HomeNativeGlassHook {
         if (colorResId == 0 || colorResId !in targets.dynamicBackgroundColorIds) return null
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         if (!isShareDialogDynamicTintTarget(view)) return null
-        return resolveCachedPbCommentDynamicTintColorOrNull()
+        return runtimeStyleStore.pbCommentTintColorOrNull()
     }
 
     private fun isShareDialogDynamicTintTarget(view: View): Boolean {
@@ -979,9 +989,9 @@ object HomeNativeGlassHook {
             java.lang.Integer.TYPE,
         )?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installHomeFeedCardEmManagerBackgroundBlock:1") { chain ->
                 val manager = chain.thisObject ?: return@intercept chain.proceed()
-                val view = readEmManagerView(manager) ?: return@intercept chain.proceed()
+                val view = hostAccessors.readEmManagerView(manager) ?: return@intercept chain.proceed()
                 if (interceptHomeFeedCardNativeBackgroundWrite(view)) {
                     return@intercept null
                 }
@@ -996,9 +1006,9 @@ object HomeNativeGlassHook {
             java.lang.Integer.TYPE,
         )?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installHomeFeedCardEmManagerBackgroundBlock:2") { chain ->
                 val manager = chain.thisObject ?: return@intercept chain.proceed()
-                val view = readEmManagerView(manager) ?: return@intercept chain.proceed()
+                val view = hostAccessors.readEmManagerView(manager) ?: return@intercept chain.proceed()
                 if (interceptHomeFeedCardNativeBackgroundWrite(view)) {
                     return@intercept null
                 }
@@ -1019,7 +1029,7 @@ object HomeNativeGlassHook {
                 *parameterTypes,
             ) ?: continue
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installSkinManagerShapeBackgroundBlock:1") { chain ->
                 val view = chain.args.getOrNull(0) as? View
                     ?: return@intercept chain.proceed()
                 if (applySubPbNavigationBarTintForBackgroundWrite(view)) {
@@ -1079,7 +1089,7 @@ object HomeNativeGlassHook {
                 pbSortSwitchBackgroundPaintField = paintField
                 for (ctor in sortSwitchClass.declaredConstructors) {
                     ctor.isAccessible = true
-                    mod.hook(ctor).intercept { chain ->
+                    installation.intercept(mod, ctor, "installPbSortSwitchButtonDynamicTintHooks:1") { chain ->
                         val result = chain.proceed()
                         (chain.thisObject as? View)?.let { button ->
                             applyPbSortSwitchBackgroundDynamicTint(button, invalidateOnChange = true)
@@ -1091,7 +1101,7 @@ object HomeNativeGlassHook {
 
                 XposedCompat.findMethodOrNull(sortSwitchClass, "onDraw", Canvas::class.java)?.let { method ->
                     method.isAccessible = true
-                    mod.hook(method).intercept { chain ->
+                    installation.intercept(mod, method, "installPbSortSwitchButtonDynamicTintHooks:2") { chain ->
                         (chain.thisObject as? View)?.let { button ->
                             applyPbSortSwitchBackgroundDynamicTint(button, invalidateOnChange = false)
                         }
@@ -1128,7 +1138,7 @@ object HomeNativeGlassHook {
                 XposedCompat.findMethodOrNull(sortSwitchClass, slideDrawMethodName, Canvas::class.java)
                     ?.let { method ->
                         method.isAccessible = true
-                        mod.hook(method).intercept { chain ->
+                        installation.intercept(mod, method, "installPbSortSwitchButtonDynamicTintHooks:3") { chain ->
                             val button = chain.thisObject as? View
                             val canvas = chain.args.getOrNull(0) as? Canvas
                             val saveCount = if (
@@ -1232,7 +1242,7 @@ object HomeNativeGlassHook {
                 return
             }
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installPbEnterForumCapsuleDynamicTintHooks:1") { chain ->
                 val result = chain.proceed()
                 chain.thisObject?.let { controller ->
                     applyPbEnterForumCapsuleBackgroundDynamicTint(
@@ -1267,7 +1277,7 @@ object HomeNativeGlassHook {
             }
             for (ctor in clazz.declaredConstructors) {
                 ctor.isAccessible = true
-                mod.hook(ctor).intercept { chain ->
+                installation.intercept(mod, ctor, "installHomeTopTabObservers:1") { chain ->
                     val result = chain.proceed()
                     (chain.thisObject as? View)?.let { topChrome ->
                         scheduleHomeTopChromeRefresh(topChrome)
@@ -1291,7 +1301,7 @@ object HomeNativeGlassHook {
                     continue
                 }
                 method.isAccessible = true
-                mod.hook(method).intercept { chain ->
+                installation.intercept(mod, method, "installHomeTopTabObservers:2") { chain ->
                     val result = chain.proceed()
                     val topChrome = chain.thisObject as? View
                     if (topChrome != null) {
@@ -1320,7 +1330,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         XposedCompat.findMethodOrNull(clazz, "onResume")?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installHomeRecommendFragmentRefreshHooks:1") { chain ->
                 val result = chain.proceed()
                 scheduleHomeTopChromeRefreshFromFragment(chain.thisObject)
                 result
@@ -1329,7 +1339,7 @@ object HomeNativeGlassHook {
         }
         XposedCompat.findMethodOrNull(clazz, "setPrimary", java.lang.Boolean.TYPE)?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installHomeRecommendFragmentRefreshHooks:2") { chain ->
                 val result = chain.proceed()
                 if (chain.args.getOrNull(0) == true) {
                     scheduleHomeTopChromeRefreshFromFragment(chain.thisObject)
@@ -1422,7 +1432,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (ctor in hostClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installHomeBottomTabDynamicTintHooks:1") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { tabHost ->
                     scheduleHomeBottomTabRefresh(tabHost)
@@ -1433,7 +1443,7 @@ object HomeNativeGlassHook {
         }
         for (ctor in widgetClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installHomeBottomTabDynamicTintHooks:2") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { tabWidget ->
                     scheduleHomeBottomTabRefresh(tabWidget)
@@ -1452,7 +1462,7 @@ object HomeNativeGlassHook {
         for (methodName in refreshMethods) {
             XposedCompat.findMethodOrNull(hostClass, methodName, java.lang.Integer.TYPE)?.let { method ->
                 method.isAccessible = true
-                mod.hook(method).intercept { chain ->
+                installation.intercept(mod, method, "installHomeBottomTabDynamicTintHooks:3") { chain ->
                     val result = chain.proceed()
                     (chain.thisObject as? View)?.let { tabHost ->
                         scheduleHomeBottomTabRefresh(tabHost)
@@ -1464,7 +1474,7 @@ object HomeNativeGlassHook {
         }
         XposedCompat.findMethodOrNull(widgetClass, "addView", View::class.java)?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installHomeBottomTabDynamicTintHooks:4") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { tabWidget ->
                     scheduleHomeBottomTabRefresh(tabWidget)
@@ -1495,7 +1505,7 @@ object HomeNativeGlassHook {
             java.lang.Integer.TYPE,
         )?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installHomeBottomTabSkinBackgroundBlock:1") { chain ->
                 val view = chain.args.getOrNull(0) as? View
                 if (
                     view != null &&
@@ -1518,7 +1528,7 @@ object HomeNativeGlassHook {
             java.lang.Integer.TYPE,
         )?.let { method ->
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            installation.intercept(mod, method, "installHomeBottomTabSkinBackgroundBlock:2") { chain ->
                 val view = chain.args.getOrNull(0) as? View
                 if (
                     view != null &&
@@ -1542,7 +1552,7 @@ object HomeNativeGlassHook {
             View::class.java.getDeclaredMethod("setBackgroundColor", java.lang.Integer.TYPE)
         }.getOrNull() ?: return 0
         method.isAccessible = true
-        mod.hook(method).intercept { chain ->
+        installation.intercept(mod, method, "installHomeChromeDirectBackgroundBlock:1") { chain ->
             if (isChromeDynamicTintBackgroundWriteInProgress()) {
                 return@intercept chain.proceed()
             }
@@ -1585,7 +1595,7 @@ object HomeNativeGlassHook {
             return false
         }
         return try {
-            val color = resolveCachedHomeTabDynamicTintColor(view) ?: return false
+            val color = runtimeStyleStore.pbCommentTintColorOrNull() ?: return false
             rememberChromeGlassOriginalState(view)
             if ((view.background as? ColorDrawable)?.color != color) {
                 setChromeDynamicTintBackgroundColor(view, color)
@@ -1614,12 +1624,12 @@ object HomeNativeGlassHook {
             return false
         }
         return try {
-            val color = resolveCachedHomeTabDynamicTintColor(view) ?: return false
+            val color = runtimeStyleStore.pbCommentTintColorOrNull() ?: return false
             rememberChromeGlassOriginalState(view)
             if ((view.background as? ColorDrawable)?.color != color) {
                 setChromeDynamicTintBackgroundColor(view, color)
             }
-            invokeBooleanMethod(view, "setShouldDrawTopLine", false)
+            hostAccessors.invokeBooleanMethod(view, "setShouldDrawTopLine", false)
             true
         } catch (t: Throwable) {
             if (firstChromeErrorLogged.compareAndSet(false, true)) {
@@ -1640,9 +1650,9 @@ object HomeNativeGlassHook {
             return false
         }
         if (!isHomeBottomTabBoundaryLineCandidate(view)) return false
-        val tabHost = findHomeBottomTabHostAncestor(view) ?: return false
+        if (findHomeBottomTabHostAncestor(view) == null) return false
         return try {
-            val color = resolveCachedHomeTabDynamicTintColor(tabHost) ?: return false
+            val color = runtimeStyleStore.pbCommentTintColorOrNull() ?: return false
             rememberChromeGlassOriginalState(view)
             if ((view.background as? ColorDrawable)?.color != color) {
                 setChromeDynamicTintBackgroundColor(view, color)
@@ -1715,7 +1725,7 @@ object HomeNativeGlassHook {
 
         initMethod.isAccessible = true
         getterMethod.isAccessible = true
-        mod.hook(initMethod).intercept { chain ->
+        installation.intercept(mod, initMethod, "installHomeSearchBoxHooks:1") { chain ->
             val result = chain.proceed()
             val searchBox = runCatching { getterMethod.invoke(chain.thisObject) as? View }.getOrNull()
             if (searchBox != null) {
@@ -1734,7 +1744,7 @@ object HomeNativeGlassHook {
         var installedCount = 0
         for (ctor in searchBoxClass.declaredConstructors) {
             ctor.isAccessible = true
-            mod.hook(ctor).intercept { chain ->
+            installation.intercept(mod, ctor, "installHomeSearchBoxViewConstructors:1") { chain ->
                 val result = chain.proceed()
                 (chain.thisObject as? View)?.let { searchBox ->
                     rememberHomeSearchBox(searchBox)
@@ -1748,7 +1758,7 @@ object HomeNativeGlassHook {
 
     private fun applyPageStyleSafely(page: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
-        val style = currentHomeNativeGlassRuntimeStyle()
+        val style = runtimeStyleStore.current()
         try {
             SystemBarCompatHook.applyIfNeeded(ReflectionUtils.findActivityFromContext(page.context))
             val backgroundDrawable = createBackgroundDrawable(
@@ -1786,14 +1796,14 @@ object HomeNativeGlassHook {
             if (page == null && !isInsideHomeNativePage(card)) {
                 return
             }
-            val state = homeFeedCardStyleState(card, page)
-            if (!force && homeFeedCardStyleStates[card] == state && isHomeFeedCardStyleApplied(card, page)) {
+            val state = homeFeedCardStyleState(card)
+            if (!force && viewStyleStates.feedCardMatches(card, page, state) && isHomeFeedCardStyleApplied(card, page)) {
                 return
             }
             applyCardGlass(card, page)
             applyCardComponentGlassToDescendants(card, page)
             applyHomeFeedImageContainerRadius(card)
-            homeFeedCardStyleStates[card] = state
+            viewStyleStates.rememberFeedCard(card, page, state)
             if (page != null) {
                 schedulePageStyleReapply(page)
             }
@@ -1815,8 +1825,8 @@ object HomeNativeGlassHook {
         }
     }
 
-    private fun homeFeedCardStyleState(card: View, page: View?): HomeFeedCardStyleState {
-        val style = currentHomeNativeGlassRuntimeStyle()
+    private fun homeFeedCardStyleState(card: View): HomeFeedCardStyleState {
+        val style = runtimeStyleStore.current()
         val request = backgroundRequestForStyle(
             style,
             BACKGROUND_CACHE_SAMPLE_EDGE,
@@ -1825,7 +1835,6 @@ object HomeNativeGlassHook {
         val cached = request?.let { findCachedBackgroundEntry(it) }
         val group = card as? ViewGroup
         return HomeFeedCardStyleState(
-            page = page,
             width = card.width,
             height = card.height,
             childCount = group?.childCount ?: 0,
@@ -1860,7 +1869,7 @@ object HomeNativeGlassHook {
         if (hasHomeFeedCardGlassState(card)) return true
         if (page == null) return true
         val request = backgroundRequestForStyle(
-            currentHomeNativeGlassRuntimeStyle(),
+            runtimeStyleStore.current(),
             BACKGROUND_CACHE_SAMPLE_EDGE,
             BACKGROUND_CACHE_SAMPLE_EDGE,
         )
@@ -1967,7 +1976,7 @@ object HomeNativeGlassHook {
     private fun markFeedListPath(view: View, clearBackgrounds: Boolean): Boolean {
         if (isRecyclerView(view)) {
             homeRecyclerViews[view] = true
-            installScrollInvalidation(view)
+            recyclerObservers.observe(view)
             installHomeRecyclerChildAttachRefresh(view)
             if (clearBackgrounds) {
                 view.setBackgroundColor(Color.TRANSPARENT)
@@ -1998,7 +2007,7 @@ object HomeNativeGlassHook {
             if (current.javaClass.name == StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS) {
                 nearestRecycler?.let { recycler ->
                     homeRecyclerViews[recycler] = true
-                    installScrollInvalidation(recycler)
+                    recyclerObservers.observe(recycler)
                     installHomeRecyclerChildAttachRefresh(recycler)
                     if (hasPageBackgroundOverride()) {
                         recycler.setBackgroundColor(Color.TRANSPARENT)
@@ -2022,7 +2031,7 @@ object HomeNativeGlassHook {
             if (current.javaClass.name == StableTiebaHookPoints.HOME_PERSONALIZE_PAGE_VIEW_CLASS) {
                 nearestRecycler?.let { recycler ->
                     homeRecyclerViews[recycler] = true
-                    installScrollInvalidation(recycler)
+                    recyclerObservers.observe(recycler)
                     installHomeRecyclerChildAttachRefresh(recycler)
                     if (hasPageBackgroundOverride()) {
                         recycler.setBackgroundColor(Color.TRANSPARENT)
@@ -2252,12 +2261,12 @@ object HomeNativeGlassHook {
     }
 
     private fun schedulePbCommentActivityBackgroundRefresh(activity: Activity) {
-        if (!isPbActivity(activity)) return
+        if (!pageSessions.isPbActivity(activity)) return
         synchronized(pbCommentActivityApplyScheduled) {
             if (pbCommentActivityApplyScheduled.containsKey(activity)) return
             pbCommentActivityApplyScheduled[activity] = true
         }
-        val anchor = findPbActivityContentHost(activity) ?: activity.window?.decorView
+        val anchor = pageSessions.findPbActivityContentHost(activity) ?: activity.window?.decorView
         if (anchor == null) {
             pbCommentActivityApplyScheduled.remove(activity)
             return
@@ -2271,10 +2280,10 @@ object HomeNativeGlassHook {
     private fun applyPbCommentActivityBackgroundSafely(activity: Activity) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        if (!isPbActivity(activity)) return
+        if (!pageSessions.isPbActivity(activity)) return
         try {
             SystemBarCompatHook.applyIfNeeded(activity)
-            val host = findPbActivityContentHost(activity) ?: return
+            val host = pageSessions.findPbActivityContentHost(activity) ?: return
             applyPbCommentBackgroundHost(host)
             clearPbCommentHostBackgroundBlockers(host)
             schedulePbReplyBarInputCapsuleDynamicTint(host)
@@ -2374,8 +2383,8 @@ object HomeNativeGlassHook {
     private fun applyPbCommonPreloadedLayoutTintSafely(view: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = findCachedActivityFromContext(view.context) ?: return
-        if (!isPbActivity(activity)) return
+        val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return
+        if (!pageSessions.isPbActivity(activity)) return
         try {
             if (isPbItemRelativeView(view)) {
                 setTransparentBackgroundIfNeeded(view)
@@ -2385,7 +2394,7 @@ object HomeNativeGlassHook {
                 return
             }
             if (keepPbSortSwitchComponentTransparent(view)) return
-            applyPbCommentDynamicTintColor(view, resolveCachedPbCommentDynamicTintColor(view))
+            applyPbCommentDynamicTintColor(view, runtimeStyleStore.pbCommentTintColor())
         } catch (t: Throwable) {
             if (firstPbCommentErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.logD { "$TAG pb common preloaded layout tint failed: ${t.message}" }
@@ -2396,85 +2405,8 @@ object HomeNativeGlassHook {
     private fun rememberPbSubPbLayout(subPbLayout: View) {
         if (!isPbSubPbLayout(subPbLayout)) return
         rememberPbCommentBackgroundWriteRole(subPbLayout, PbCommentBackgroundWriteRole.SUB_PB_LAYOUT)
-        installPbSubPbLayoutAttachRefresh(subPbLayout)
+        preDrawObservers.installPbSubPbLayoutAttachRefresh(subPbLayout)
         schedulePbSubPbLayoutRefresh(subPbLayout)
-    }
-
-    private fun installPbSubPbLayoutAttachRefresh(subPbLayout: View) {
-        synchronized(pbSubPbLayoutAttachRefreshInstalled) {
-            if (pbSubPbLayoutAttachRefreshInstalled.containsKey(subPbLayout)) return
-            pbSubPbLayoutAttachRefreshInstalled[subPbLayout] = true
-        }
-        val frameState = PbSubPbLayoutFrameState()
-        val preDrawListener = ViewTreeObserver.OnPreDrawListener {
-            if (
-                subPbLayout.isAttachedToWindow &&
-                subPbLayout.background is CardGlassDrawable &&
-                updatePbSubPbLayoutFrameState(subPbLayout, frameState)
-            ) {
-                invalidatePbSubPbLayoutGlassFrame(subPbLayout)
-            }
-            true
-        }
-        val attachListener = object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {
-                runCatching {
-                    v.viewTreeObserver.addOnPreDrawListener(preDrawListener)
-                }
-                schedulePbSubPbLayoutRefresh(v)
-            }
-
-            override fun onViewDetachedFromWindow(v: View) {
-                frameState.initialized = false
-                runCatching {
-                    if (v.viewTreeObserver.isAlive) {
-                        v.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-                    }
-                }
-            }
-        }
-        runCatching {
-            subPbLayout.addOnAttachStateChangeListener(attachListener)
-            if (subPbLayout.isAttachedToWindow) {
-                subPbLayout.viewTreeObserver.addOnPreDrawListener(preDrawListener)
-                schedulePbSubPbLayoutRefresh(subPbLayout)
-            }
-        }.onFailure {
-            pbSubPbLayoutAttachRefreshInstalled.remove(subPbLayout)
-            runCatching { subPbLayout.removeOnAttachStateChangeListener(attachListener) }
-            runCatching {
-                if (subPbLayout.viewTreeObserver.isAlive) {
-                    subPbLayout.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-                }
-            }
-        }
-    }
-
-    private fun updatePbSubPbLayoutFrameState(
-        subPbLayout: View,
-        state: PbSubPbLayoutFrameState,
-    ): Boolean {
-        subPbLayout.getLocationInWindow(state.location)
-        val x = state.location[0]
-        val y = state.location[1]
-        val width = subPbLayout.width
-        val height = subPbLayout.height
-        val changed = state.initialized && (
-            state.x != x ||
-                state.y != y ||
-                state.width != width ||
-                state.height != height
-            )
-        state.initialized = true
-        state.x = x
-        state.y = y
-        state.width = width
-        state.height = height
-        return changed
-    }
-
-    private fun invalidatePbSubPbLayoutGlassFrame(subPbLayout: View) {
-        subPbLayout.invalidate()
     }
 
     private fun schedulePbSubPbLayoutRefresh(subPbLayout: View) {
@@ -2492,10 +2424,10 @@ object HomeNativeGlassHook {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         if (!isPbSubPbLayout(subPbLayout)) return
-        val activity = findCachedActivityFromContext(subPbLayout.context) ?: return
-        if (!isPbActivity(activity)) return
+        val activity = pageSessions.findCachedActivityFromContext(subPbLayout.context) ?: return
+        if (!pageSessions.isPbActivity(activity)) return
         try {
-            val host = findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(subPbLayout) ?: return
+            val host = pageSessions.findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(subPbLayout) ?: return
             applyPbCommentBackgroundHost(host)
             (subPbLayout.parent as? View)?.let { parent ->
                 clearPbCommentBackgroundPath(parent, host)
@@ -2511,8 +2443,8 @@ object HomeNativeGlassHook {
     private fun applyPbCommentUnifiedBackgroundSafely(source: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = findCachedActivityFromContext(source.context) ?: return
-        if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return
+        val activity = pageSessions.findCachedActivityFromContext(source.context) ?: return
+        if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return
         try {
             val host = findPbCommentBackgroundHost(source) ?: return
             applyPbCommentBackgroundHost(host)
@@ -2553,12 +2485,12 @@ object HomeNativeGlassHook {
     private fun applyPbCommentListItemBackgroundSafely(itemView: View, parent: ViewGroup?) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = findCachedActivityFromContext(itemView.context)
-            ?: findCachedActivityFromContext(parent?.context)
+        val activity = pageSessions.findCachedActivityFromContext(itemView.context)
+            ?: pageSessions.findCachedActivityFromContext(parent?.context)
             ?: return
-        if (!isPbActivity(activity)) return
+        if (!pageSessions.isPbActivity(activity)) return
         try {
-            val host = findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(itemView) ?: return
+            val host = pageSessions.findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(itemView) ?: return
             applyPbCommentBackgroundHost(host)
             clearPbCommentBackgroundPath(itemView, host, keepSortSwitchComponent = false)
             removePbCommentReplyTitleDecorationsSafely(itemView, requireKnownDivider = true)
@@ -2595,12 +2527,12 @@ object HomeNativeGlassHook {
     private fun applySubPbReplyItemGlassSafely(itemView: View, parent: ViewGroup?) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = findCachedActivityFromContext(itemView.context)
-            ?: findCachedActivityFromContext(parent?.context)
+        val activity = pageSessions.findCachedActivityFromContext(itemView.context)
+            ?: pageSessions.findCachedActivityFromContext(parent?.context)
             ?: return
-        if (!isSubPbReplyHostActivity(activity)) return
+        if (!pageSessions.isSubPbReplyHostActivity(activity)) return
         try {
-            val host = findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(itemView) ?: return
+            val host = pageSessions.findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(itemView) ?: return
             applyPbCommentBackgroundHost(host)
             setTransparentBackgroundIfNeeded(itemView)
             clearForeground(itemView)
@@ -2629,11 +2561,11 @@ object HomeNativeGlassHook {
     }
 
     private fun applySubPbNextPageGlassToList(listView: ViewGroup): Boolean {
-        val activity = findCachedActivityFromContext(listView.context)
+        val activity = pageSessions.findCachedActivityFromContext(listView.context)
             ?: return false
-        if (!isSubPbReplyHostActivity(activity)) return false
+        if (!pageSessions.isSubPbReplyHostActivity(activity)) return false
         val target = findSubPbNextPageMoreView(listView) ?: return false
-        val host = findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(listView) ?: return false
+        val host = pageSessions.findPbActivityContentHost(activity) ?: findPbCommentBackgroundHost(listView) ?: return false
         applyPbCommentBackgroundHost(host)
         clearSubPbNextPageMoreViewBackground(target)
         listView.invalidate()
@@ -2654,8 +2586,8 @@ object HomeNativeGlassHook {
 
     private fun findSubPbNextPageMoreViewForRuntimeTint(anchor: View): View? {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
-        val activity = findCachedActivityFromContext(anchor.context) ?: return null
-        if (!isSubPbReplyHostActivity(activity)) return null
+        val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return null
+        if (!pageSessions.isSubPbReplyHostActivity(activity)) return null
         val viewId = runtimeTargets?.subPbNextPageMoreViewId ?: return null
         if (viewId <= 0 || viewId == View.NO_ID) return null
         if (anchor.id == viewId) return anchor
@@ -2686,7 +2618,7 @@ object HomeNativeGlassHook {
     }
 
     private fun findPbCommentBackgroundHost(source: View): View? {
-        findPbCommentActivityContentHost(source)?.let { return it }
+        pageSessions.findPbCommentActivityContentHost(source)?.let { return it }
         var current = source.parent
         var firstSizedParent: View? = null
         while (current is View) {
@@ -2701,88 +2633,8 @@ object HomeNativeGlassHook {
         return firstSizedParent ?: source.rootView?.takeIf { it.width > 0 && it.height > 0 }
     }
 
-    private fun findPbCommentActivityContentHost(source: View): View? {
-        val activity = findCachedActivityFromContext(source.context) ?: return null
-        if (!isPbActivity(activity)) return null
-        return findPbActivityContentHost(activity)
-    }
-
-    private fun findPbActivityContentHost(activity: Activity): View? {
-        synchronized(pbActivityContentHosts) {
-            val cached = pbActivityContentHosts[activity]?.get()
-            if (cached != null) return cached
-            pbActivityContentHosts.remove(activity)
-        }
-        val host = runCatching { activity.findViewById<View>(android.R.id.content) }.getOrNull()
-        if (host != null) {
-            rememberPbCommentBackgroundWriteRole(host, PbCommentBackgroundWriteRole.HOST)
-            pbActivityContentHosts[activity] = WeakReference(host)
-        }
-        return host
-    }
-
-    private fun findCachedActivityFromContext(context: Context?): Activity? {
-        context ?: return null
-        synchronized(pbActivityByContext) {
-            val cached = pbActivityByContext[context]?.get()
-            if (cached != null) return cached
-            pbActivityByContext.remove(context)
-        }
-        val activity = ReflectionUtils.findActivityFromContext(context) ?: return null
-        pbActivityByContext[context] = WeakReference(activity)
-        return activity
-    }
-
-    private fun isPbActivity(activity: Activity): Boolean {
-        return pbActivityTypeFor(activity).isPb
-    }
-
-    private fun isSubPbReplyHostActivity(activity: Activity): Boolean {
-        return pbActivityTypeFor(activity).isSubPbReplyHost
-    }
-
-    private fun isForumActivity(activity: Activity): Boolean {
-        return activity.javaClass.name == StableTiebaHookPoints.FORUM_ACTIVITY_CLASS
-    }
-
-    private fun pbActivityTypeFor(activity: Activity): PbActivityType {
-        synchronized(pbActivityTypes) {
-            pbActivityTypes[activity]?.let { return it }
-        }
-        val resolved = resolvePbActivityType(activity)
-        pbActivityTypes[activity] = resolved
-        return resolved
-    }
-
-    private fun resolvePbActivityType(activity: Activity): PbActivityType {
-        if (activity.javaClass.name == StableTiebaHookPoints.PB_COMMENT_FLOAT_ACTIVITY_CLASS) {
-            return PbActivityType(isPb = false, isSubPbReplyHost = false)
-        }
-        var isPb = false
-        var isSubPbReplyHost = false
-        var current: Class<*>? = activity.javaClass
-        while (current != null && current != Any::class.java) {
-            val name = current.name
-            if (
-                name == StableTiebaHookPoints.PB_ACTIVITY_CLASS ||
-                name == StableTiebaHookPoints.PB_ABS_ACTIVITY_CLASS
-            ) {
-                isPb = true
-            }
-            if (
-                name == StableTiebaHookPoints.NEW_SUB_PB_ACTIVITY_CLASS ||
-                name == StableTiebaHookPoints.FOLD_COMMENT_ACTIVITY_CLASS
-            ) {
-                isSubPbReplyHost = true
-            }
-            if (isPb && isSubPbReplyHost) break
-            current = current.superclass
-        }
-        return PbActivityType(isPb = isPb, isSubPbReplyHost = isSubPbReplyHost)
-    }
-
     private fun applyPbCommentBackgroundHost(host: View) {
-        val style = currentHomeNativeGlassRuntimeStyle()
+        val style = runtimeStyleStore.current()
         val state = PbCommentBackgroundState(
             blurCachePath = style.blurCacheImagePath,
             sourcePath = style.backgroundImagePath,
@@ -2825,7 +2677,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbCommentFallbackBackgroundHost(host: View, state: PbCommentBackgroundState) {
-        val color = resolveCachedPbCommentDynamicTintColor(host)
+        val color = runtimeStyleStore.pbCommentTintColor()
         if ((host.background as? ColorDrawable)?.color != color) {
             setBackgroundColorPreservingPadding(host, color)
         }
@@ -2838,10 +2690,9 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbSubPbLayoutCard(subPbLayout: View, host: View) {
-        val style = currentHomeNativeGlassRuntimeStyle()
+        val style = runtimeStyleStore.current()
         val radiusDp = effectiveCardRadiusDp()
         val state = PbSubPbLayoutCardState(
-            host = host,
             blurCachePath = style.blurCacheImagePath,
             sourcePath = style.backgroundImagePath,
             tintAlphaPercent = style.tintAlphaPercent,
@@ -2850,12 +2701,12 @@ object HomeNativeGlassHook {
             strokeEnabled = style.strokeEnabled,
             shadowStrengthPercent = style.shadowStrengthPercent,
         )
-        val shouldUpdateBackground = pbSubPbLayoutCardStates[subPbLayout] != state ||
+        val shouldUpdateBackground = !viewStyleStates.subPbLayoutMatches(subPbLayout, host, state) ||
             subPbLayout.background !is CardGlassDrawable
         val radius = subPbLayout.resources.displayMetrics.density * radiusDp
         if (shouldUpdateBackground) {
             setGlassBackground(subPbLayout, host, radius, childSurfaceEnabled = true)
-            pbSubPbLayoutCardStates[subPbLayout] = state
+            viewStyleStates.rememberSubPbLayout(subPbLayout, host, state)
             disablePbSubPbLayoutScrollCaches(subPbLayout)
             applyPbSubPbLayoutShadow(subPbLayout, radius)
             subPbLayout.invalidate()
@@ -2952,7 +2803,7 @@ object HomeNativeGlassHook {
     private fun applyPbSubPbLayoutShadow(subPbLayout: View, radius: Float) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
         val density = subPbLayout.resources.displayMetrics.density
-        val shadowStrength = currentHomeNativeGlassRuntimeStyle().shadowStrengthPercent.coerceIn(
+        val shadowStrength = runtimeStyleStore.current().shadowStrengthPercent.coerceIn(
             ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
             ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
         )
@@ -2992,10 +2843,10 @@ object HomeNativeGlassHook {
     private fun interceptPbCommentNativeBackgroundWrite(view: View): Boolean {
         if (!ConfigManager.isHomeNativeGlassEnabled) return false
         if (!hasPageBackgroundOverride()) return false
-        val activity = findCachedActivityFromContext(view.context) ?: return false
-        if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return false
+        val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return false
+        if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return false
 
-        val host = findPbActivityContentHost(activity)
+        val host = pageSessions.findPbActivityContentHost(activity)
         if (host === view) {
             applyPbCommentBackgroundHost(view)
             return true
@@ -3240,8 +3091,8 @@ object HomeNativeGlassHook {
     private fun removePbCommentReplyTitleDecorationsSafely(root: View, requireKnownDivider: Boolean) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = findCachedActivityFromContext(root.context) ?: return
-        if (!isPbActivity(activity)) return
+        val activity = pageSessions.findCachedActivityFromContext(root.context) ?: return
+        if (!pageSessions.isPbActivity(activity)) return
         try {
             val knownDecorations = findPbReplyTitleKnownDecorations(root)
             if (knownDecorations.isEmpty() && requireKnownDivider) return
@@ -3285,8 +3136,8 @@ object HomeNativeGlassHook {
     private fun refreshPbReplyTitleDynamicTintSafely(root: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
-        val activity = findCachedActivityFromContext(root.context) ?: return
-        if (!isPbActivity(activity)) return
+        val activity = pageSessions.findCachedActivityFromContext(root.context) ?: return
+        if (!pageSessions.isPbActivity(activity)) return
         try {
             removePbCommentReplyTitleDecorationsSafely(root, requireKnownDivider = false)
             val maxHeightPx = max(
@@ -3426,7 +3277,7 @@ object HomeNativeGlassHook {
         val pinnedReplyTitle = sortButton?.let { isPbSortSwitchPinnedReplyTitle(it) }
             ?: isPbSortSwitchPinnedReplyTitle(view)
         if (pinnedReplyTitle) {
-            applyPbCommentDynamicTintColor(view, resolveCachedPbCommentDynamicTintColor(view))
+            applyPbCommentDynamicTintColor(view, runtimeStyleStore.pbCommentTintColor())
         } else {
             setTransparentBackgroundPreservingPaddingIfNeeded(view)
             clearForeground(view)
@@ -3467,8 +3318,8 @@ object HomeNativeGlassHook {
     private fun scheduleSubPbNavigationBarTint(navigationBar: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         if (!isSubPbNavigationBar(navigationBar)) return
-        val activity = findCachedActivityFromContext(navigationBar.context) ?: return
-        if (!isSubPbReplyHostActivity(activity)) return
+        val activity = pageSessions.findCachedActivityFromContext(navigationBar.context) ?: return
+        if (!pageSessions.isSubPbReplyHostActivity(activity)) return
 
         var shouldPost = false
         synchronized(subPbNavigationBarApplyScheduled) {
@@ -3512,14 +3363,14 @@ object HomeNativeGlassHook {
     private fun applySubPbNavigationBarTint(navigationBar: View): Boolean {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
         if (!isSubPbNavigationBar(navigationBar)) return false
-        val activity = findCachedActivityFromContext(navigationBar.context) ?: return false
-        if (!isSubPbReplyHostActivity(activity)) return false
+        val activity = pageSessions.findCachedActivityFromContext(navigationBar.context) ?: return false
+        if (!pageSessions.isSubPbReplyHostActivity(activity)) return false
 
-        findPbActivityContentHost(activity)?.let { host ->
+        pageSessions.findPbActivityContentHost(activity)?.let { host ->
             applyPbCommentBackgroundHost(host)
             clearPbCommentHostBackgroundBlockers(host)
         }
-        applyPbCommentDynamicTintColor(navigationBar, resolveCachedPbCommentDynamicTintColor(navigationBar))
+        applyPbCommentDynamicTintColor(navigationBar, runtimeStyleStore.pbCommentTintColor())
         clearSubPbNavigationBarChromeBackgrounds(navigationBar)
         navigationBar.invalidate()
         return true
@@ -3548,8 +3399,8 @@ object HomeNativeGlassHook {
         reapplyAfterDelay: Boolean = true,
     ) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
-        val activity = findCachedActivityFromContext(anchor.context) ?: return
-        if (!isSubPbReplyHostActivity(activity)) return
+        val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return
+        if (!pageSessions.isSubPbReplyHostActivity(activity)) return
         val root = findSubPbViewRoot(anchor) ?: return
 
         var shouldPost = false
@@ -3609,8 +3460,8 @@ object HomeNativeGlassHook {
 
     private fun findSubPbInputBarMatch(anchor: View): SubPbInputBarMatch? {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
-        val activity = findCachedActivityFromContext(anchor.context) ?: return null
-        if (!isSubPbReplyHostActivity(activity)) return null
+        val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return null
+        if (!pageSessions.isSubPbReplyHostActivity(activity)) return null
         val root = findSubPbViewRoot(anchor) ?: return null
         val capsule = findSubPbInputCapsule(root) ?: return null
         return SubPbInputBarMatch(
@@ -3845,9 +3696,9 @@ object HomeNativeGlassHook {
         val targets = runtimeTargets ?: return null
         if (colorResId == 0 || colorResId !in targets.dynamicBackgroundColorIds) return null
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
-        val activity = findCachedActivityFromContext(view.context) ?: return null
-        if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return null
-        return resolveCachedPbCommentDynamicTintColorOrNull()
+        val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return null
+        if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return null
+        return runtimeStyleStore.pbCommentTintColorOrNull()
     }
 
     private fun applyPbSortSwitchBackgroundDynamicTint(
@@ -3897,61 +3748,31 @@ object HomeNativeGlassHook {
     }
 
     private fun resolvePbSortSwitchTintState(view: View): PbSortSwitchTintState? {
-        val style = currentHomeNativeGlassRuntimeStyle()
+        val style = runtimeStyleStore.current()
         synchronized(pbSortSwitchTintStates) {
             pbSortSwitchTintStates[view]?.let { cached ->
-                if (cached.matchesPbSortSwitchTintState(view)) return cached
+                if (
+                    cached.matchesStyle(runtimeStyleStore.current()) &&
+                    cached.pinnedReplyTitle == isPbSortSwitchPinnedReplyTitle(view)
+                ) return cached
             }
         }
-        val sourcePath = style.backgroundImagePath
-        val blurCachePath = style.blurCacheImagePath
-        val blurPercent = style.cardBlurPercent
-        val tintColor = style.tintColor
-        val autoTintColor = style.autoTintColor
         val pinnedReplyTitle = isPbSortSwitchPinnedReplyTitle(view)
         val canApply = isPbSortSwitchDynamicTintHost(view)
         if (!canApply) {
             pbSortSwitchTintStates.remove(view)
             return null
         }
-        val baseColor = resolveCachedPbCommentDynamicTintColorOrNull()
-        val backgroundColor = when {
-            pinnedReplyTitle -> baseColor
-            else -> Color.TRANSPARENT
-        }
-        val selectedColor = if (baseColor != null) {
-            if (pinnedReplyTitle) applyPbSortSwitchSelectedTintOverlay(baseColor) else baseColor
-        } else {
-            null
-        }
-        val state = PbSortSwitchTintState(
-            sourcePath = sourcePath,
-            blurCachePath = blurCachePath,
-            blurPercent = blurPercent,
-            tintColor = tintColor,
-            autoTintColor = autoTintColor,
-            pinnedReplyTitle = pinnedReplyTitle,
-            backgroundColor = backgroundColor,
-            selectedColor = selectedColor,
-        )
+        val baseColor = runtimeStyleStore.pbCommentTintColorOrNull()
+        val state = style.pbSortSwitchTintState(pinnedReplyTitle, baseColor)
         pbSortSwitchTintStates[view] = state
         return state
     }
 
-    private fun PbSortSwitchTintState.matchesPbSortSwitchTintState(view: View): Boolean {
-        val style = currentHomeNativeGlassRuntimeStyle()
-        return sourcePath == style.backgroundImagePath &&
-            blurCachePath == style.blurCacheImagePath &&
-            blurPercent == style.cardBlurPercent &&
-            tintColor == style.tintColor &&
-            autoTintColor == style.autoTintColor &&
-            pinnedReplyTitle == isPbSortSwitchPinnedReplyTitle(view)
-    }
-
     private fun isPbSortSwitchDynamicTintHost(view: View): Boolean {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
-        val activity = findCachedActivityFromContext(view.context) ?: return false
-        return isPbActivity(activity) || isSubPbReplyHostActivity(activity)
+        val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return false
+        return pageSessions.isPbActivity(activity) || pageSessions.isSubPbReplyHostActivity(activity)
     }
 
     private fun shouldReplacePbSortSwitchNativeSelectedSlide(view: View): Boolean {
@@ -3975,16 +3796,16 @@ object HomeNativeGlassHook {
 
     private fun resolvePbCachedDynamicTintColor(view: View): Int? {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
-        val activity = findCachedActivityFromContext(view.context) ?: return null
-        if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return null
-        return resolveCachedPbCommentDynamicTintColorOrNull()
+        val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return null
+        if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return null
+        return runtimeStyleStore.pbCommentTintColorOrNull()
     }
 
     private fun schedulePbReplyBarInputCapsuleDynamicTint(anchor: View) {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
-        val activity = findCachedActivityFromContext(anchor.context) ?: return
-        if (!isPbActivity(activity)) return
-        val scheduleAnchor = findPbActivityContentHost(activity) ?: anchor
+        val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return
+        if (!pageSessions.isPbActivity(activity)) return
+        val scheduleAnchor = pageSessions.findPbActivityContentHost(activity) ?: anchor
 
         var shouldPost = false
         synchronized(pbReplyBarInputApplyScheduled) {
@@ -4020,8 +3841,8 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbReplyBarInputCapsuleDynamicTint(anchor: View) {
-        val activity = findCachedActivityFromContext(anchor.context) ?: return
-        if (!isPbActivity(activity)) return
+        val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return
+        if (!pageSessions.isPbActivity(activity)) return
         val searchRoot = findPbReplyBarSearchRoot(anchor, activity) ?: return
         val capsule = findPbReplyBarInputCapsule(searchRoot) ?: return
         val frameColor = resolvePbCachedDynamicTintColor(capsule) ?: return
@@ -4079,7 +3900,7 @@ object HomeNativeGlassHook {
         if (!isNearWindowBottom(anchor)) return
         val insetBottom = SystemBarCompatHook.gestureNavigationInsetBottom(activity)
         if (insetBottom <= 0) return
-        val content = findPbActivityContentHost(activity) as? FrameLayout ?: return
+        val content = pageSessions.findPbActivityContentHost(activity) as? FrameLayout ?: return
         val bridge = findOrCreatePbReplyBarGestureBridge(activity, content, insetBottom)
         val params = bridge.layoutParams as? FrameLayout.LayoutParams
         if (params?.height != insetBottom || params.gravity != android.view.Gravity.BOTTOM) {
@@ -4131,7 +3952,7 @@ object HomeNativeGlassHook {
             current = current.parent as? View
             depth++
         }
-        return findPbActivityContentHost(activity)
+        return pageSessions.findPbActivityContentHost(activity)
     }
 
     private fun containsPbReplyBarInputCapsule(view: View, depth: Int): Boolean {
@@ -4292,20 +4113,20 @@ object HomeNativeGlassHook {
     private fun applyPbDialogRoundLayoutDynamicTint(view: View) {
         if (view.javaClass.name != StableTiebaHookPoints.CORE_DIALOG_ROUND_LINEAR_LAYOUT_CLASS) return
         if (!isPbDialogActionMenuRoundLayout(view)) return
-        val color = resolvePbCommentDynamicTintColor(view)
-        val manager = createEmManagerForView(view) ?: run {
+        val color = runtimeStyleStore.pbCommentTintColor()
+        val manager = hostAccessors.createEmManagerForView(view) ?: run {
             setBackgroundColorPreservingPadding(view, color)
             return
         }
-        if (!applyEmManagerRealBackgroundColor(manager, color)) {
+        if (!hostAccessors.applyEmManagerRealBackgroundColor(manager, color)) {
             setBackgroundColorPreservingPadding(view, color)
         }
     }
 
     private fun isPbDialogActionMenuRoundLayout(view: View): Boolean {
         if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
-        val activity = findCachedActivityFromContext(view.context) ?: return false
-        if (!isPbActivity(activity) && !isSubPbReplyHostActivity(activity)) return false
+        val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return false
+        if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return false
         val group = view as? ViewGroup ?: return false
         return hasDescendantClassName(group, "android.widget.HorizontalScrollView", maxDepth = 4) &&
             hasDescendantClassName(group, StableTiebaHookPoints.EM_TEXT_VIEW_CLASS, maxDepth = 6)
@@ -4455,133 +4276,6 @@ object HomeNativeGlassHook {
         view.background = state.background
         view.setPadding(state.left, state.top, state.right, state.bottom)
         view.invalidate()
-    }
-
-    private fun readEmManagerView(manager: Any): View? {
-        return try {
-            cachedFieldInHierarchy(
-                manager.javaClass,
-                "fromView",
-                emManagerFromViewFields,
-                emManagerFromViewMissingClasses,
-            )?.get(manager) as? View
-        } catch (t: Throwable) {
-            if (firstPbDynamicBackgroundColorErrorLogged.compareAndSet(false, true)) {
-                XposedCompat.logD { "$TAG EMManager.fromView unavailable: ${t.message}" }
-            }
-            null
-        }
-    }
-
-    private fun createEmManagerForView(view: View): Any? {
-        return try {
-            val classLoader = view.javaClass.classLoader ?: return null
-            val managerClass = XposedCompat.findClassOrNull(StableTiebaHookPoints.EM_MANAGER_CLASS, classLoader)
-                ?: return null
-            val fromMethod = cachedMethodInHierarchy(
-                managerClass,
-                "from",
-                emManagerFromMethods,
-                emManagerFromMethodMissingClasses,
-                View::class.java,
-            ) ?: return null
-            fromMethod.invoke(null, view)
-        } catch (t: Throwable) {
-            if (firstPbDynamicBackgroundColorErrorLogged.compareAndSet(false, true)) {
-                XposedCompat.logD { "$TAG EMManager.from(view) unavailable: ${t.message}" }
-            }
-            null
-        }
-    }
-
-    private fun applyEmManagerRealBackgroundColor(manager: Any, color: Int): Boolean {
-        return try {
-            cachedMethodInHierarchy(
-                manager.javaClass,
-                "setBackGroundRealColor",
-                emManagerRealBackgroundColorMethods,
-                emManagerRealBackgroundColorMissingClasses,
-                java.lang.Integer.TYPE,
-            )
-                ?.invoke(manager, color)
-                ?: return false
-            true
-        } catch (t: Throwable) {
-            if (firstPbDynamicBackgroundColorErrorLogged.compareAndSet(false, true)) {
-                XposedCompat.logD { "$TAG EMManager dynamic background failed: ${t.message}" }
-            }
-            false
-        }
-    }
-
-    private fun cachedFieldInHierarchy(
-        clazz: Class<*>,
-        name: String,
-        cache: ConcurrentHashMap<Class<*>, Field>,
-        missing: MutableSet<Class<*>>,
-    ): Field? {
-        cache[clazz]?.let { return it }
-        if (missing.contains(clazz)) return null
-        val field = findFieldInHierarchy(clazz, name)
-        if (field != null) {
-            cache[clazz] = field
-        } else {
-            missing.add(clazz)
-        }
-        return field
-    }
-
-    private fun cachedMethodInHierarchy(
-        clazz: Class<*>,
-        name: String,
-        cache: ConcurrentHashMap<Class<*>, Method>,
-        missing: MutableSet<Class<*>>,
-        vararg paramTypes: Class<*>,
-    ): Method? {
-        cache[clazz]?.let { return it }
-        if (missing.contains(clazz)) return null
-        val method = findMethodInHierarchy(clazz, name, *paramTypes)
-        if (method != null) {
-            cache[clazz] = method
-        } else {
-            missing.add(clazz)
-        }
-        return method
-    }
-
-    private fun resolvePbCommentDynamicTintColor(view: View): Int {
-        return resolveCachedPbCommentDynamicTintColor(view)
-    }
-
-    private fun resolveCachedPbCommentDynamicTintColor(view: View): Int {
-        resolveCachedPbCommentDynamicTintColorOrNull()?.let { return it }
-        return Color.rgb(255, 255, 255)
-    }
-
-    private fun resolveCachedHomeTabDynamicTintColor(view: View): Int? {
-        return resolveCachedPbCommentDynamicTintColorOrNull()
-    }
-
-    private fun resolveCachedPbCommentDynamicTintColorOrNull(): Int? {
-        val style = currentHomeNativeGlassRuntimeStyle()
-        val tintColor = style.tintColor
-        val autoTintColor = style.autoTintColor
-        val cached = pbCommentDynamicTintState
-        if (
-            cached != null &&
-            cached.tintColor == tintColor &&
-            cached.autoTintColor == autoTintColor
-        ) {
-            return cached.lightColor
-        }
-        val baseColor = style.configuredPbCommentTintColor() ?: return null
-        val state = PbCommentDynamicTintState(
-            tintColor = tintColor,
-            autoTintColor = autoTintColor,
-            lightColor = pbCommentBaseRgb(baseColor),
-        )
-        pbCommentDynamicTintState = state
-        return state.lightColor
     }
 
     private fun isPbCommentItemFrame(view: View): Boolean {
@@ -4843,7 +4537,7 @@ object HomeNativeGlassHook {
             shouldApply &&
             ConfigManager.isHomeTabDynamicTintEnabled
         ) {
-            resolveCachedHomeTabDynamicTintColor(topChrome)
+            runtimeStyleStore.pbCommentTintColorOrNull()
         } else {
             null
         }
@@ -4866,7 +4560,7 @@ object HomeNativeGlassHook {
             shouldApply &&
             ConfigManager.isHomeTabDynamicTintEnabled
         ) {
-            resolveCachedHomeTabDynamicTintColor(tabHost)
+            runtimeStyleStore.pbCommentTintColorOrNull()
         } else {
             null
         }
@@ -4888,7 +4582,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyHomeTopTabBoundaryDecoration(topChrome: View, color: Int?) {
-        val bottomLine = invokeNoArgView(topChrome, "getBottomLine") ?: return
+        val bottomLine = hostAccessors.invokeNoArgView(topChrome, "getBottomLine") ?: return
         if (color == null) {
             restoreChromeGlass(bottomLine)
             return
@@ -4903,7 +4597,7 @@ object HomeNativeGlassHook {
         if (BottomTabLiquidGlassHook.ownsBottomBar(tabHostOrWidget)) return
         if (tabHostOrWidget.javaClass.name == StableTiebaHookPoints.FRAGMENT_TAB_WIDGET_CLASS) {
             if (color != null) {
-                invokeBooleanMethod(tabHostOrWidget, "setShouldDrawTopLine", false)
+                hostAccessors.invokeBooleanMethod(tabHostOrWidget, "setShouldDrawTopLine", false)
             }
             return
         }
@@ -4912,10 +4606,10 @@ object HomeNativeGlassHook {
             findHomeBottomTabBoundaryLineViews(tabHostOrWidget).forEach { restoreChromeGlass(it) }
             return
         }
-        invokeBooleanMethod(tabHostOrWidget, "setShouldDrawTopLine", false)
-        invokeBooleanMethod(tabHostOrWidget, "setTabContainerShadowShow", false)
-        invokeNoArgView(tabHostOrWidget, "getFragmentTabWidget")?.let { widget ->
-            invokeBooleanMethod(widget, "setShouldDrawTopLine", false)
+        hostAccessors.invokeBooleanMethod(tabHostOrWidget, "setShouldDrawTopLine", false)
+        hostAccessors.invokeBooleanMethod(tabHostOrWidget, "setTabContainerShadowShow", false)
+        hostAccessors.invokeNoArgView(tabHostOrWidget, "getFragmentTabWidget")?.let { widget ->
+            hostAccessors.invokeBooleanMethod(widget, "setShouldDrawTopLine", false)
         }
         findHomeBottomTabBoundaryLineViews(tabHostOrWidget).forEach { line ->
             rememberChromeGlassOriginalState(line)
@@ -4928,7 +4622,7 @@ object HomeNativeGlassHook {
     private fun findHomeBottomTabBoundaryLineViews(tabHost: View): List<View> {
         val lines = ArrayList<View>(2)
         collectHomeBottomTabBoundaryLineViews(tabHost, lines)
-        invokeNoArgView(tabHost, StableTiebaHookPoints.METHOD_GET_TAB_WRAPPER)?.let { wrapper ->
+        hostAccessors.invokeNoArgView(tabHost, StableTiebaHookPoints.METHOD_GET_TAB_WRAPPER)?.let { wrapper ->
             collectHomeBottomTabBoundaryLineViews(wrapper, lines)
         }
         return lines.distinct()
@@ -4974,69 +4668,9 @@ object HomeNativeGlassHook {
             return listOf(tabHost)
         }
         val targets = ArrayList<View>(2)
-        invokeNoArgView(tabHost, StableTiebaHookPoints.METHOD_GET_TAB_WRAPPER)?.let { targets.add(it) }
-        invokeNoArgView(tabHost, "getFragmentTabWidget")?.let { targets.add(it) }
+        hostAccessors.invokeNoArgView(tabHost, StableTiebaHookPoints.METHOD_GET_TAB_WRAPPER)?.let { targets.add(it) }
+        hostAccessors.invokeNoArgView(tabHost, "getFragmentTabWidget")?.let { targets.add(it) }
         return targets.distinct()
-    }
-
-    private fun invokeNoArgView(target: View, methodName: String): View? {
-        return try {
-            cachedRuntimeMethodInHierarchy(
-                target.javaClass,
-                methodName,
-                "()View",
-                chromeNoArgViewMethods,
-                chromeNoArgViewMissingMethods,
-                validate = { method ->
-                    !Modifier.isStatic(method.modifiers) &&
-                        View::class.java.isAssignableFrom(method.returnType)
-                },
-            )?.invoke(target) as? View
-        } catch (_: Throwable) {
-            null
-        }
-    }
-
-    private fun invokeBooleanMethod(target: View, methodName: String, value: Boolean): Boolean {
-        return try {
-            cachedRuntimeMethodInHierarchy(
-                target.javaClass,
-                methodName,
-                "(boolean)",
-                chromeBooleanMethods,
-                chromeBooleanMissingMethods,
-                validate = { method ->
-                    !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE
-                },
-                java.lang.Boolean.TYPE,
-            )
-                ?.invoke(target, value)
-                ?: return false
-            true
-        } catch (_: Throwable) {
-            false
-        }
-    }
-
-    private fun cachedRuntimeMethodInHierarchy(
-        clazz: Class<*>,
-        name: String,
-        signature: String,
-        cache: ConcurrentHashMap<RuntimeMethodKey, Method>,
-        missing: MutableSet<RuntimeMethodKey>,
-        validate: (Method) -> Boolean,
-        vararg paramTypes: Class<*>,
-    ): Method? {
-        val key = RuntimeMethodKey(clazz, name, signature)
-        cache[key]?.let { return it }
-        if (missing.contains(key)) return null
-        val method = findMethodInHierarchy(clazz, name, *paramTypes)
-        if (method != null && validate(method)) {
-            cache[key] = method
-            return method
-        }
-        missing.add(key)
-        return null
     }
 
     private fun applyHomeSearchBoxGlassForMatchingViews(root: View, page: View?, shouldApply: Boolean) {
@@ -5146,52 +4780,8 @@ object HomeNativeGlassHook {
 
     private fun rememberCardComponentView(view: View) {
         homeCardComponentViews[view] = true
-        installCardComponentAttachRefresh(view)
+        preDrawObservers.installCardComponentAttachRefresh(view)
         scheduleCardComponentBootstrapRefresh(view)
-    }
-
-    private fun installCardComponentAttachRefresh(view: View) {
-        synchronized(cardComponentAttachRefreshInstalled) {
-            if (cardComponentAttachRefreshInstalled.containsKey(view)) return
-            cardComponentAttachRefreshInstalled[view] = true
-        }
-        lateinit var preDrawListener: ViewTreeObserver.OnPreDrawListener
-        preDrawListener = ViewTreeObserver.OnPreDrawListener {
-            runCatching {
-                if (view.viewTreeObserver.isAlive) {
-                    view.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-                }
-            }
-            if (view.isAttachedToWindow) {
-                ensureCardComponentGlassSafely(view)
-            }
-            true
-        }
-        val attachListener = object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {
-                runCatching {
-                    v.viewTreeObserver.addOnPreDrawListener(preDrawListener)
-                }
-                scheduleCardComponentBootstrapRefresh(v)
-            }
-
-            override fun onViewDetachedFromWindow(v: View) {
-                runCatching {
-                    if (v.viewTreeObserver.isAlive) {
-                        v.viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-                    }
-                }
-            }
-        }
-        runCatching {
-            view.addOnAttachStateChangeListener(attachListener)
-            if (view.isAttachedToWindow) {
-                view.viewTreeObserver.addOnPreDrawListener(preDrawListener)
-            }
-        }.onFailure {
-            cardComponentAttachRefreshInstalled.remove(view)
-            runCatching { view.removeOnAttachStateChangeListener(attachListener) }
-        }
     }
 
     private fun collapseBlockedHomeCardComponent(view: View) {
@@ -5283,7 +4873,7 @@ object HomeNativeGlassHook {
     }
 
     private fun effectiveCardRadiusDp(): Int {
-        return currentHomeNativeGlassRuntimeStyle().cardRadiusDp
+        return runtimeStyleStore.current().cardRadiusDp
     }
 
     private fun rememberChromeGlassOriginalState(view: View) {
@@ -5331,36 +4921,17 @@ object HomeNativeGlassHook {
         if (page != null && isHomeNativePageAnchor(anchor, page)) return true
         findTopChromeView(anchor)?.let { topChrome ->
             topChromeTabTypes[topChrome]?.let { return it == HOME_TOP_TAB_RECOMMEND_TYPE }
-            resolveCurrentTopTabItem(topChrome)?.let { item ->
-                resolveRecommendTopTabItemState(item)?.let { return it }
+            hostAccessors.resolveCurrentTopTabItem(topChrome)?.let { item ->
+                hostAccessors.resolveRecommendTopTabItemState(item, runtimeTargets)?.let { return it }
             }
         }
         findFirstTopChromeView(root)?.let { topChrome ->
             topChromeTabTypes[topChrome]?.let { return it == HOME_TOP_TAB_RECOMMEND_TYPE }
-            resolveCurrentTopTabItem(topChrome)?.let { item ->
-                resolveRecommendTopTabItemState(item)?.let { return it }
+            hostAccessors.resolveCurrentTopTabItem(topChrome)?.let { item ->
+                hostAccessors.resolveRecommendTopTabItemState(item, runtimeTargets)?.let { return it }
             }
         }
         return findVisibleHomeNativePage(root) != null
-    }
-
-    private fun resolveCurrentTopTabItem(topChrome: View): Any? {
-        return runCatching {
-            XposedCompat.callMethod(topChrome, "getCurrentFragmentTabItem")
-        }.getOrNull()
-    }
-
-    private fun resolveRecommendTopTabItemState(item: Any): Boolean? {
-        val targets = runtimeTargets ?: return null
-        val code = targets.homeTabItemCodeField?.let { fieldName ->
-            runCatching { XposedCompat.getObjectField(item, fieldName) as? String }.getOrNull()
-        }
-        if (code == HOME_TOP_TAB_RECOMMEND_CODE) return true
-        if (!code.isNullOrBlank()) return false
-        val type = targets.homeTabItemTypeField?.let { fieldName ->
-            runCatching { (XposedCompat.getObjectField(item, fieldName) as? Number)?.toInt() }.getOrNull()
-        }
-        return type?.let { it == HOME_TOP_TAB_RECOMMEND_TYPE }
     }
 
     private fun findTopChromeView(view: View): View? {
@@ -5502,7 +5073,7 @@ object HomeNativeGlassHook {
     private fun markNestedHomeRecyclerViews(view: View) {
         if (isRecyclerView(view)) {
             homeRecyclerViews[view] = true
-            installScrollInvalidation(view)
+            recyclerObservers.observe(view)
             installHomeRecyclerChildAttachRefresh(view)
             view.setBackgroundColor(Color.TRANSPARENT)
             return
@@ -5544,7 +5115,7 @@ object HomeNativeGlassHook {
         radius: Float,
         childSurfaceEnabled: Boolean = false,
     ) {
-        val style = currentHomeNativeGlassRuntimeStyle()
+        val style = runtimeStyleStore.current()
         val request = backgroundRequestForStyle(
             style,
             BACKGROUND_CACHE_SAMPLE_EDGE,
@@ -5646,21 +5217,10 @@ object HomeNativeGlassHook {
         clearElevation(view)
     }
 
-    private fun currentHomeNativeGlassRuntimeStyle(): HomeNativeGlassRuntimeStyle {
-        return runtimeStyleStore.current()
-    }
-
     private fun onHostDarkModeChanged(@Suppress("UNUSED_PARAMETER") darkMode: Boolean) {
-        if (refreshHomeNativeGlassRuntimeStyle(scheduleReapply = false)) {
+        if (runtimeStyleStore.refresh(scheduleReapply = false)) {
             scheduleHomeNativeGlassModeReapply()
         }
-    }
-
-    private fun refreshHomeNativeGlassRuntimeStyle(
-        forceHostRead: Boolean = false,
-        scheduleReapply: Boolean = true,
-    ): Boolean {
-        return runtimeStyleStore.refresh(forceHostRead, scheduleReapply)
     }
 
     private fun scheduleHomeNativeGlassModeReapply() {
@@ -5698,10 +5258,7 @@ object HomeNativeGlassHook {
                 pages.add(page)
             }
         }
-        synchronized(homeFeedCardStyleStates) {
-            homeFeedCardStyleStates.keys.forEach(::rememberCard)
-            homeFeedCardStyleStates.clear()
-        }
+        viewStyleStates.collectAndClearFeedCards(::rememberCard)
         synchronized(homeFeedCardGlassTargets) {
             homeFeedCardGlassTargets.keys.forEach { view ->
                 rememberCard(findHomeFeedCardAncestor(view))
@@ -5713,10 +5270,12 @@ object HomeNativeGlassHook {
         val componentViews = synchronized(homeCardComponentViews) {
             homeCardComponentViews.keys.toList()
         }
-        pbCommentBackgroundHostStates.clear()
-        pbSubPbLayoutCardStates.clear()
+        val pbBackgroundHosts = synchronized(pbCommentBackgroundHostStates) {
+            pbCommentBackgroundHostStates.keys.toList().also { pbCommentBackgroundHostStates.clear() }
+        }
+        viewStyleStates.clearSubPbLayouts()
         pbSortSwitchTintStates.clear()
-        pbCommentDynamicTintState = null
+        runtimeStyleStore.clearDerivedTint()
 
         for (recycler in recyclers) {
             if (!recycler.isAttachedToWindow) continue
@@ -5738,11 +5297,14 @@ object HomeNativeGlassHook {
                 ensureCardComponentGlassSafely(componentView)
             }
         }
+        for (host in pbBackgroundHosts) {
+            if (host.isAttachedToWindow) applyPbCommentBackgroundHost(host)
+        }
         invalidateGlassBackgroundViews()
     }
 
     private fun hasPageBackgroundOverride(): Boolean {
-        return currentHomeNativeGlassRuntimeStyle().hasBackgroundImage
+        return runtimeStyleStore.current().hasBackgroundImage
     }
 
     private fun createBackgroundDrawable(view: View, style: HomeNativeGlassRuntimeStyle): Drawable? {
@@ -5772,7 +5334,7 @@ object HomeNativeGlassHook {
 
     private fun prewarmBackgroundCacheIfNeeded() {
         if (!ConfigManager.isHomeNativeGlassEnabled) return
-        val style = currentHomeNativeGlassRuntimeStyle()
+        val style = runtimeStyleStore.current()
         if (!style.hasBackgroundImage) return
         val context = ConfigManager.getAppContext() ?: return
         val metrics = context.resources.displayMetrics
@@ -5783,28 +5345,11 @@ object HomeNativeGlassHook {
         )
         val request = backgroundRequestForStyle(style, targetSize.first, targetSize.second) ?: return
         if (findCachedBackgroundEntry(request) != null) return
-        val key = "prewarm|" + request.cacheKey
-        if (!backgroundDecodeKeys.add(key)) return
-        backgroundDecodeExecutor.execute {
-            try {
-                if (
-                    isBackgroundDecodeRequestCurrent(request) &&
-                    findCachedBackgroundEntry(request) == null
-                ) {
-                    decodeBackgroundEntry(request)
-                }
-            } catch (t: Throwable) {
-                if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
-                    XposedCompat.logD { "$TAG background image prewarm failed: ${t.message}" }
-                }
-            } finally {
-                backgroundDecodeKeys.remove(key)
-            }
-        }
+        backgroundLoader.schedule(request)
     }
 
     private fun findCachedBackgroundEntry(request: BackgroundRequest): CachedBackgroundBitmap? {
-        return backgroundStore.find(request)
+        return backgroundLoader.find(request)
     }
 
     private fun scheduleBackgroundDecode(
@@ -5812,151 +5357,15 @@ object HomeNativeGlassHook {
         anchor: View,
         onReady: (View) -> Unit,
     ) {
-        val key = request.cacheKey
-        if (!backgroundDecodeKeys.add(key)) return
-        val anchorRef = WeakReference(anchor)
-        backgroundDecodeExecutor.execute {
-            try {
-                if (
-                    isBackgroundDecodeRequestCurrent(request) &&
-                    findCachedBackgroundEntry(request) == null
-                ) {
-                    decodeBackgroundEntry(request)
-                }
-            } catch (t: Throwable) {
-                if (firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
-                    XposedCompat.logD { "$TAG background image decode failed: ${t.message}" }
-                }
-            } finally {
-                backgroundDecodeKeys.remove(key)
-            }
-            val target = anchorRef.get()
-            if (target != null) {
-                target.post {
-                    if (!target.isAttachedToWindow) return@post
-                    if (!isBackgroundDecodeRequestCurrent(request)) return@post
-                    onReady(target)
-                    invalidateGlassBackgroundViews()
-                }
-            }
-        }
+        backgroundLoader.schedule(request, anchor, onReady)
     }
 
     private fun isBackgroundDecodeRequestCurrent(request: BackgroundRequest): Boolean {
-        val style = currentHomeNativeGlassRuntimeStyle()
+        val style = runtimeStyleStore.peek()
         return ConfigManager.isHomeNativeGlassEnabled &&
             style.backgroundImagePath == request.path &&
             style.blurCacheImagePath == request.blurCachePath &&
             style.cardBlurPercent == request.blurPercent
-    }
-
-    private fun decodeBackgroundEntry(request: BackgroundRequest): CachedBackgroundBitmap? {
-        val cachedEntry = backgroundStore.decode(request)
-        if (cachedEntry.bitmap == null && firstBackgroundImageErrorLogged.compareAndSet(false, true)) {
-            XposedCompat.logD { "$TAG background image unavailable: ${request.path}" }
-        }
-        return cachedEntry
-    }
-
-    private fun installScrollInvalidation(recycler: View) {
-        installFramePositionInvalidation(recycler)
-        if (scrollInvalidationInstalled.containsKey(recycler)) return
-        scrollInvalidationInstalled[recycler] = true
-        val listener = ViewTreeObserver.OnScrollChangedListener {
-            scheduleGlassBackgroundInvalidation(recycler)
-        }
-        runCatching {
-            recycler.viewTreeObserver.addOnScrollChangedListener(listener)
-        }.onFailure {
-            scrollInvalidationInstalled.remove(recycler)
-        }
-    }
-
-    private fun installFramePositionInvalidation(recycler: View) {
-        if (frameInvalidationInstalled.containsKey(recycler)) return
-        frameInvalidationInstalled[recycler] = true
-        val state = HomeRecyclerFrameState()
-        val listener = ViewTreeObserver.OnPreDrawListener {
-            if (
-                recycler.isAttachedToWindow &&
-                ConfigManager.isHomeNativeGlassEnabled &&
-                hasPageBackgroundOverride() &&
-                updateHomeRecyclerFrameState(recycler, state)
-            ) {
-                scheduleGlassBackgroundInvalidation(recycler)
-            }
-            true
-        }
-        val attachListener = object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {
-                runCatching {
-                    v.viewTreeObserver.addOnPreDrawListener(listener)
-                }
-            }
-
-            override fun onViewDetachedFromWindow(v: View) {
-                runCatching {
-                    if (v.viewTreeObserver.isAlive) {
-                        v.viewTreeObserver.removeOnPreDrawListener(listener)
-                    }
-                }
-            }
-        }
-        runCatching {
-            recycler.addOnAttachStateChangeListener(attachListener)
-            recycler.viewTreeObserver.addOnPreDrawListener(listener)
-        }.onFailure {
-            frameInvalidationInstalled.remove(recycler)
-            runCatching { recycler.removeOnAttachStateChangeListener(attachListener) }
-        }
-    }
-
-    private fun updateHomeRecyclerFrameState(recycler: View, state: HomeRecyclerFrameState): Boolean {
-        recycler.getLocationInWindow(state.location)
-        val recyclerX = state.location[0]
-        val recyclerY = state.location[1]
-        val trackedChild = findFirstVisibleRecyclerChild(recycler)
-        if (trackedChild != null) {
-            trackedChild.getLocationInWindow(state.location)
-        }
-        val firstChildX = if (trackedChild == null) Int.MIN_VALUE else state.location[0]
-        val firstChildY = if (trackedChild == null) Int.MIN_VALUE else state.location[1]
-        val canScrollUp = recycler.canScrollVertically(-1)
-        val changed = state.initialized && (
-            state.recyclerX != recyclerX ||
-                state.recyclerY != recyclerY ||
-                state.firstChildX != firstChildX ||
-                state.firstChildY != firstChildY ||
-                state.canScrollUp != canScrollUp
-            )
-        state.initialized = true
-        state.recyclerX = recyclerX
-        state.recyclerY = recyclerY
-        state.firstChildX = firstChildX
-        state.firstChildY = firstChildY
-        state.canScrollUp = canScrollUp
-        return changed
-    }
-
-    private fun findFirstVisibleRecyclerChild(recycler: View): View? {
-        val group = recycler as? ViewGroup ?: return null
-        var firstVisibleChild: View? = null
-        for (index in 0 until group.childCount) {
-            val child = group.getChildAt(index) ?: continue
-            if (child.visibility != View.VISIBLE || child.width <= 0 || child.height <= 0) continue
-            if (firstVisibleChild == null) firstVisibleChild = child
-            if (isFeedCardView(child)) return child
-        }
-        return firstVisibleChild
-    }
-
-    private fun scheduleGlassBackgroundInvalidation(anchor: View) {
-        if (!scrollInvalidateScheduled.compareAndSet(false, true)) return
-        anchor.postOnAnimation {
-            scrollInvalidateScheduled.set(false)
-            refreshHomeNativeBackgroundLayers(anchor)
-            invalidateGlassBackgroundViews(anchor)
-        }
     }
 
     private fun refreshHomeNativeBackgroundLayers(recycler: View) {
@@ -6037,10 +5446,4 @@ object HomeNativeGlassHook {
         }
         return null
     }
-
-    private data class RuntimeMethodKey(
-        val clazz: Class<*>,
-        val name: String,
-        val signature: String,
-    )
 }

@@ -2,7 +2,6 @@ package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.account.AccountListDedupHook
 import com.forbidad4tieba.hook.feature.ad.FeedAdHook
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogHook
@@ -72,41 +71,12 @@ import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.ui.SettingsMenuHook
 import java.lang.reflect.Method
 
-internal data class HookInstallEntry(
-    val id: String,
-    val install: (ClassLoader) -> Unit,
-)
-
 internal data class HookInstallPlan(
     val processName: String,
     val phase: String,
     val entries: List<HookInstallEntry>,
 ) {
     fun isEmpty(): Boolean = entries.isEmpty()
-}
-
-internal object HookInstaller {
-    fun install(plan: HookInstallPlan, cl: ClassLoader) {
-        if (plan.entries.isEmpty()) {
-            XposedCompat.logD("[HookInstallPlan] ${plan.phase}: empty for process=${plan.processName}")
-            return
-        }
-        for (entry in plan.entries) {
-            try {
-                XposedCompat.logD("[HookInstallPlan] Installing ${entry.id} (${plan.phase})...")
-                entry.install(cl)
-            } catch (t: Throwable) {
-                XposedCompat.log(
-                    "[HookInstallPlan] ${entry.id} install FAILED (${plan.phase}): ${t.message}",
-                )
-                XposedCompat.log(t)
-            }
-        }
-        XposedCompat.logD(
-            "[HookInstallPlan] ${plan.phase}: entries=${plan.entries.size}, " +
-                "process=${plan.processName}"
-        )
-    }
 }
 
 internal object HookInstallPlanner {
@@ -122,8 +92,8 @@ internal object HookInstallPlanner {
         val entries = ArrayList<HookInstallEntry>()
         val isMain = HookProcess.isMain(processName)
         if (isMain) {
-            entries += HookInstallEntry("UpgradePopWindowBlockHook") { cl -> UpgradePopWindowBlockHook.hook(cl) }
-            entries += HookInstallEntry("HomeFeedPromptBarBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("UpgradePopWindowBlockHook") { cl -> UpgradePopWindowBlockHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("HomeFeedPromptBarBlockHook") { cl ->
                 HomeFeedPromptBarBlockHook.hook(cl)
             }
         }
@@ -138,27 +108,27 @@ internal object HookInstallPlanner {
         val entries = ArrayList<HookInstallEntry>()
         val context = HookInstallContext(processName, symbols)
 
-        entries += HookInstallEntry("CrashReportBlockHook") { cl -> CrashReportBlockHook.hook(cl) }
+        entries += HookInstallEntry.dispatched("CrashReportBlockHook") { cl -> CrashReportBlockHook.hook(cl) }
 
         if (context.canInstallFreeCopyCommentInjection(settings)) {
-            entries += HookInstallEntry("FreeCopyHook.CommentInjection") { cl ->
+            entries += HookInstallEntry.dispatched("FreeCopyHook.CommentInjection") { cl ->
                 HookSymbolResolver.resolveFreeCopyPopupSymbols(cl, symbols)?.let { targets ->
                     FreeCopyHook.hookCommentInjection(targets)
                 }
             }
         }
         if (context.canInstallFreeCopyNative(settings)) {
-            entries += HookInstallEntry("FreeCopyHook.Native") { cl ->
+            entries += HookInstallEntry.dispatched("FreeCopyHook.Native") { cl ->
                 HookSymbolResolver.resolveFreeCopyNativeSymbols(cl, symbols)?.let { targets ->
                     FreeCopyHook.hookNative(targets)
                 }
             }
         }
         if (context.isMain) {
-            entries += HookInstallEntry("FirstLikePopupBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("FirstLikePopupBlockHook") { cl ->
                 HookSymbolResolver.resolveFirstLikePopupSymbols(cl, symbols)?.let(FirstLikePopupBlockHook::hook)
             }
-            entries += HookInstallEntry("NotificationGuideBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("NotificationGuideBlockHook") { cl ->
                 HookSymbolResolver.resolveNotificationGuideSymbols(cl, symbols)?.let(NotificationGuideBlockHook::hook)
             }
             if (settings.isDetailedLoggingEnabled) {
@@ -171,7 +141,7 @@ internal object HookInstallPlanner {
                     settings.isAdSdkComponentsDisabled ||
                     settings.isApsarasScheduleDisabled
             if (enableSwitchManager) {
-                entries += HookInstallEntry("StrategyAdHook.static") { cl ->
+                entries += HookInstallEntry.dispatched("StrategyAdHook.static") { cl ->
                     StrategyAdHook.hookStatic(
                         cl = cl,
                         enableAccountData = settings.isStrategyAdBlockEnabled,
@@ -181,54 +151,54 @@ internal object HookInstallPlanner {
             }
         }
         if (context.isMain && settings.isHomeTabAutoHideEnabled) {
-            entries += HookInstallEntry("HomeTopTabAutoHideHook") { cl -> HomeTopTabAutoHideHook.hook(cl) }
-            entries += HookInstallEntry("HomeBottomTabAutoHideHook") { cl -> HomeBottomTabAutoHideHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("HomeTopTabAutoHideHook") { cl -> HomeTopTabAutoHideHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("HomeBottomTabAutoHideHook") { cl -> HomeBottomTabAutoHideHook.hook(cl) }
         }
         if (context.isMain && settings.isHomeTabRedDotHidden) {
-            entries += HookInstallEntry("HomeTabRedDotBlockHook") { cl -> HomeTabRedDotBlockHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("HomeTabRedDotBlockHook") { cl -> HomeTabRedDotBlockHook.hook(cl) }
         }
         if (context.isMain && settings.isBottomTabLiquidGlassEnabled) {
-            entries += HookInstallEntry("BottomTabLiquidGlassHook") { cl ->
+            entries += HookInstallEntry.dispatched("BottomTabLiquidGlassHook") { cl ->
                 BottomTabLiquidGlassHook.hook(cl)
             }
         }
         // The liquid glass pill owns the bottom bar chrome; the line/shadow cleanup hook would
         // fight it over the same backgrounds.
         if (context.canInstallHomeNativeGlass(settings) && !settings.isBottomTabLiquidGlassEnabled) {
-            entries += HookInstallEntry("BottomTabTopLineHook") { cl -> BottomTabTopLineHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("BottomTabTopLineHook") { cl -> BottomTabTopLineHook.hook(cl) }
         }
         if (context.isMain) {
             entries += performanceEntries(settings, symbols)
-            entries += HookInstallEntry("HelpCenterFooterBlockHook") { cl -> HelpCenterFooterBlockHook.hook(cl) }
-            entries += HookInstallEntry("AccountListDedupHook") { cl -> AccountListDedupHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("HelpCenterFooterBlockHook") { cl -> HelpCenterFooterBlockHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("AccountListDedupHook") { cl -> AccountListDedupHook.hook(cl) }
             if (context.canInstallMineTabWebBlock(settings)) {
-                entries += HookInstallEntry("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl, symbols) }
+                entries += HookInstallEntry.dispatched("MineTabWebBlockHook") { cl -> MineTabWebBlockHook.hook(cl, symbols) }
             }
             if (context.canInstallHomeSideBarWebBlock(settings)) {
-                entries += HookInstallEntry("HomeSideBarWebBlockHook") { cl ->
+                entries += HookInstallEntry.dispatched("HomeSideBarWebBlockHook") { cl ->
                     HomeSideBarWebBlockHook.hook(cl, symbols)
                 }
             }
             if (context.canInstallFollowedTabWeb(settings)) {
-                entries += HookInstallEntry("FollowedTabWebHook") { cl -> FollowedTabWebHook.hook(cl) }
+                entries += HookInstallEntry.dispatched("FollowedTabWebHook") { cl -> FollowedTabWebHook.hook(cl) }
             }
         }
         if (context.canInstallImageViewerNativeShare()) {
-            entries += HookInstallEntry("ImageViewerNativeShareHook") { cl ->
+            entries += HookInstallEntry.dispatched("ImageViewerNativeShareHook") { cl ->
                 HookSymbolResolver.resolveImageViewerNativeShareSymbols(cl, symbols)?.let { targets ->
                     ImageViewerNativeShareHook.hook(targets)
                 }
             }
         }
         if (context.canInstallDefaultOriginalImage(settings)) {
-            entries += HookInstallEntry("DefaultOriginalImageHook") { cl ->
+            entries += HookInstallEntry.dispatched("DefaultOriginalImageHook") { cl ->
                 HookSymbolResolver.resolveDefaultOriginalImageSymbols(cl, symbols)?.let { targets ->
                     DefaultOriginalImageHook.hook(targets)
                 }
             }
         }
         if (context.isImageViewerProcess) {
-            entries += HookInstallEntry("ImageViewerSwipeEnterForumBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("ImageViewerSwipeEnterForumBlockHook") { cl ->
                 ImageViewerSwipeEnterForumBlockHook.hook(cl)
             }
         }
@@ -244,7 +214,7 @@ internal object HookInstallPlanner {
         val entries = ArrayList<HookInstallEntry>()
         if (context.isImageViewerRemote) {
             if (context.canInstallImageViewerAiJumpButton(settings)) {
-                entries += HookInstallEntry("AiComponentDisableHook.imageViewerJumpButton") { cl ->
+                entries += HookInstallEntry.dispatched("AiComponentDisableHook.imageViewerJumpButton") { cl ->
                     HookSymbolResolver.resolveAiImageViewerJumpButtonSymbols(cl, symbols)?.let { targets ->
                         AiComponentDisableHook.hookImageViewerJumpButton(targets)
                     }
@@ -272,11 +242,11 @@ internal object HookInstallPlanner {
         val homeNativeGlassHook = context.canInstallHomeNativeGlass(settings)
         val feedListHook = feedListAdBlockHook || customPostFilterHook
 
-        entries += HookInstallEntry("SettingsMenuHook") { cl -> SettingsMenuHook.hook(cl, symbols) }
-        entries += HookInstallEntry("HomeSideBarSettingsEntryHook") { cl -> HomeSideBarSettingsEntryHook.hook(cl) }
+        entries += HookInstallEntry.dispatched("SettingsMenuHook") { cl -> SettingsMenuHook.hook(cl, symbols) }
+        entries += HookInstallEntry.dispatched("HomeSideBarSettingsEntryHook") { cl -> HomeSideBarSettingsEntryHook.hook(cl) }
 
         if (context.canInstallPbBottomEnterBarStable()) {
-            entries += HookInstallEntry("PbBottomEnterBarHook.Stable") { cl ->
+            entries += HookInstallEntry.dispatched("PbBottomEnterBarHook.Stable") { cl ->
                 HookSymbolResolver.resolvePbBottomEnterBarStableSymbols(cl, symbols)?.let { targets ->
                     PbBottomEnterBarHook.hookStable(targets)
                 }
@@ -284,7 +254,7 @@ internal object HookInstallPlanner {
         }
 
         if (context.canInstallPbBottomEnterBarHotTopicGuide()) {
-            entries += HookInstallEntry("PbBottomEnterBarHook.HotTopicGuide") { cl ->
+            entries += HookInstallEntry.dispatched("PbBottomEnterBarHook.HotTopicGuide") { cl ->
                 HookSymbolResolver.resolvePbBottomEnterBarHotTopicGuideSymbols(cl, symbols)?.let { targets ->
                     PbBottomEnterBarHook.hookHotTopicGuide(targets)
                 }
@@ -299,11 +269,11 @@ internal object HookInstallPlanner {
                     includeCustomPostFilter = customPostFilterHook,
                 )?.let { targets ->
                     FeedAdHook.hook(targets)
-                }
+                } ?: InstallOutcome.skipped("feed list targets unavailable")
             }
         }
         if (postAdBlockHook) {
-            entries += HookInstallEntry("PostAdHook") { cl ->
+            entries += HookInstallEntry.dispatched("PostAdHook") { cl ->
                 HookSymbolResolver.resolvePostAdDataFilterSymbols(cl, symbols)?.let { targets ->
                     PostAdHook.hook(targets)
                 }
@@ -311,34 +281,33 @@ internal object HookInstallPlanner {
         }
         if (forumPageAdBlockHook) {
             entries += HookInstallEntry("ForumPageAdBlockHook") { cl ->
-                HookSymbolResolver.resolveForumPageAdBlockSymbols(cl, symbols)?.let { targets ->
-                    ForumPageAdBlockHook.hook(targets)
-                }
+                HookSymbolResolver.resolveForumPageAdBlockSymbols(cl, symbols)?.let(ForumPageAdBlockHook::hook)
+                    ?: InstallOutcome.skipped("resolved targets unavailable")
             }
         }
         if (strategyAdBlockHook) {
-            entries += HookInstallEntry("StrategyAdHook.symbols") { cl ->
+            entries += HookInstallEntry.dispatched("StrategyAdHook.symbols") { cl ->
                 HookSymbolResolver.resolveStrategyAdSymbols(cl, symbols)?.let { targets ->
                     StrategyAdHook.hookWithSymbols(targets)
                 }
             }
         }
         if (homeBottomEasterEggAdBlockHook) {
-            entries += HookInstallEntry("HomeBottomEasterEggAdHook") { cl ->
+            entries += HookInstallEntry.dispatched("HomeBottomEasterEggAdHook") { cl ->
                 HookSymbolResolver.resolveHomeBottomEasterEggAdSymbols(cl, symbols)?.let { targets ->
                     HomeBottomEasterEggAdHook.hook(targets)
                 }
             }
         }
         if (pbEarlyAdBlockHook) {
-            entries += HookInstallEntry("PbEarlyAdBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("PbEarlyAdBlockHook") { cl ->
                 HookSymbolResolver.resolvePbEarlyAdBlockSymbols(cl, symbols)?.let { targets ->
                     PbEarlyAdBlockHook.hook(targets)
                 }
             }
         }
         if (pbFirstFloorRecommendBlockHook) {
-            entries += HookInstallEntry("PbFirstFloorRecommendBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("PbFirstFloorRecommendBlockHook") { cl ->
                 HookSymbolResolver.resolvePbFirstFloorRecommendInsertSymbols(cl, symbols)
                     ?.let { targets ->
                         PbFirstFloorRecommendBlockHook.hook(targets)
@@ -349,46 +318,46 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("PbAdRequestBlockHook") { cl ->
                 HookSymbolResolver.resolvePbAdRequestBlockSymbols(cl, symbols)?.let { targets ->
                     PbAdRequestBlockHook.hook(targets)
-                }
+                } ?: InstallOutcome.skipped("symbols unavailable")
             }
         }
         if (pbFallingAdBlockHook) {
-            entries += HookInstallEntry("PbFallingAdHook") { cl ->
+            entries += HookInstallEntry.dispatched("PbFallingAdHook") { cl ->
                 HookSymbolResolver.resolvePbFallingAdSymbols(cl, symbols)?.let { targets ->
                     PbFallingAdHook.hook(targets)
                 }
             }
         }
         if (context.canInstallHomeTopTabs(settings)) {
-            entries += HookInstallEntry("HomeTabHook") { cl ->
+            entries += HookInstallEntry.dispatched("HomeTabHook") { cl ->
                 HookSymbolResolver.resolveHomeTabSymbols(cl, symbols)?.let { targets ->
                     HomeTabHook.hook(targets)
                 }
             }
         }
         if (context.canInstallBottomTabs(settings)) {
-            entries += HookInstallEntry("MainTabBottomHook") { cl ->
+            entries += HookInstallEntry.dispatched("MainTabBottomHook") { cl ->
                 HookSymbolResolver.resolveMainTabBottomSymbols(cl, symbols)?.let { targets ->
                     MainTabBottomHook.hook(targets)
                 }
             }
         }
         if (searchBoxTextAdBlockHook) {
-            entries += HookInstallEntry("SearchBoxTextAdHook") { cl ->
+            entries += HookInstallEntry.dispatched("SearchBoxTextAdHook") { cl ->
                 HookSymbolResolver.resolveSearchBoxTextAdSymbols(cl, symbols)?.let { targets ->
                     SearchBoxTextAdHook.hook(targets)
                 }
             }
         }
         if (homeTopBarAdBlockHook) {
-            entries += HookInstallEntry("HomeTopBarRightSlotHook") { cl ->
+            entries += HookInstallEntry.dispatched("HomeTopBarRightSlotHook") { cl ->
                 HookSymbolResolver.resolveHomeTopBarRightSlotSymbols(cl, symbols)?.let { targets ->
                     HomeTopBarRightSlotHook.hook(targets)
                 }
             }
         }
         if (context.canInstallEnterForumWeb(settings)) {
-            entries += HookInstallEntry("EnterForumWebHook") { cl ->
+            entries += HookInstallEntry.dispatched("EnterForumWebHook") { cl ->
                 HookSymbolResolver.resolveEnterForumWebSymbols(cl, symbols)?.let { targets ->
                     EnterForumWebHook.hook(targets)
                 }
@@ -397,7 +366,7 @@ internal object HookInstallPlanner {
         val commentAvatarDirectProfile = context.canInstallCommentAvatarDirectProfile(settings)
         val systemBrowser = context.canInstallSystemBrowser(settings)
         if (systemBrowser || commentAvatarDirectProfile) {
-            entries += HookInstallEntry("PlainUrlDirectBrowserHook") { cl ->
+            entries += HookInstallEntry.dispatched("PlainUrlDirectBrowserHook") { cl ->
                 val spanTargets = HookSymbolResolver.resolvePlainUrlClickableSpanSymbols(cl, symbols)
                 val messageTarget = HookSymbolResolver.resolvePlainUrlMessageDispatchSymbols(cl, symbols)
                 val browserHelperTargets = if (systemBrowser) {
@@ -415,7 +384,6 @@ internal object HookInstallPlanner {
                     spanTargets = spanTargets,
                     messageTarget = messageTarget,
                     browserHelperTargets = browserHelperTargets,
-                    webContainerTargets = null,
                     mountCardTargets = mountCardTargets,
                     clickSpanMarkerField = clickSpanMarkerField,
                     isClickMessageCmd = HookSymbolResolver::isPlainUrlClickMessageCmd,
@@ -425,7 +393,7 @@ internal object HookInstallPlanner {
             }
         }
         if (context.canInstallForumNativeTopShift()) {
-            entries += HookInstallEntry("ForumNativeTopShiftBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("ForumNativeTopShiftBlockHook") { cl ->
                 HookSymbolResolver.resolveForumNativeTopShiftSymbols(cl, symbols)?.let { targets ->
                     ForumNativeTopShiftBlockHook.hook(targets)
                 }
@@ -435,61 +403,61 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("HomeNativeGlassHook") { cl -> HomeNativeGlassHook.hook(cl, symbols) }
         }
         if (context.canInstallAutoRefresh(settings)) {
-            entries += HookInstallEntry("AutoRefreshHook") { cl ->
+            entries += HookInstallEntry.dispatched("AutoRefreshHook") { cl ->
                 HookSymbolResolver.resolveAutoRefreshSymbols(cl, symbols)?.let { targets ->
                     AutoRefreshHook.hook(targets)
                 }
             }
         }
         if (context.canInstallAutoLoadMore(settings)) {
-            entries += HookInstallEntry("AutoLoadMoreHook") { cl ->
+            entries += HookInstallEntry.dispatched("AutoLoadMoreHook") { cl ->
                 HookSymbolResolver.resolveAutoLoadMoreSymbols(cl, symbols)?.let { targets ->
                     AutoLoadMoreHook.hook(targets)
                 }
             }
-            entries += HookInstallEntry("PbCommentAutoLoadHook") { cl ->
+            entries += HookInstallEntry.dispatched("PbCommentAutoLoadHook") { cl ->
                 HookSymbolResolver.resolvePbCommentAutoLoadSymbols(cl, symbols)?.let { targets ->
                     PbCommentAutoLoadHook.hook(targets)
                 }
             }
         }
         if (context.canInstallPbScrollCoalesce(settings)) {
-            entries += HookInstallEntry("PbScrollCoalesceHook") { cl ->
+            entries += HookInstallEntry.dispatched("PbScrollCoalesceHook") { cl ->
                 HookSymbolResolver.resolvePbScrollCoalesceSymbols(cl, symbols)?.let { targets ->
                     PbScrollCoalesceHook.hook(targets)
                 }
             }
         }
         if (context.canInstallPbGestureFontScale(settings)) {
-            entries += HookInstallEntry("PbDisableGestureFontScaleHook") { cl ->
+            entries += HookInstallEntry.dispatched("PbDisableGestureFontScaleHook") { cl ->
                 HookSymbolResolver.resolvePbGestureScaleSymbols(cl, symbols)?.let { targets ->
                     PbDisableGestureFontScaleHook.hook(targets)
                 }
             }
         }
         if (context.canInstallPbLikeAutoReply(settings)) {
-            entries += HookInstallEntry("PbLikeAutoReplyHook") { cl ->
+            entries += HookInstallEntry.dispatched("PbLikeAutoReplyHook") { cl ->
                 HookSymbolResolver.resolvePbLikeAutoReplySymbols(cl, symbols)?.let { targets ->
                     PbLikeAutoReplyHook.hook(targets, settings.pbLikeAutoReplyText)
                 }
             }
         }
         if (context.canInstallInputMemeBarBlock(settings)) {
-            entries += HookInstallEntry("InputMemeBarBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("InputMemeBarBlockHook") { cl ->
                 HookSymbolResolver.resolveInputMemeBarSymbols(cl, symbols)?.let { targets ->
                     InputMemeBarBlockHook.hook(targets)
                 }
             }
         }
         if (context.canInstallMainAiComponents(settings)) {
-            entries += HookInstallEntry("AiComponentDisableHook") { cl ->
+            entries += HookInstallEntry.dispatched("AiComponentDisableHook") { cl ->
                 HookSymbolResolver.resolveAiComponentSymbols(cl, symbols)?.let { targets ->
                     AiComponentDisableHook.hook(targets)
                 }
             }
         }
         if (context.canInstallDefaultNotifyTab(settings)) {
-            entries += HookInstallEntry("MsgTabDefaultNotifyHook") { cl ->
+            entries += HookInstallEntry.dispatched("MsgTabDefaultNotifyHook") { cl ->
                 HookSymbolResolver.resolveMsgTabDefaultNotifySymbols(cl, symbols)?.let { targets ->
                     MsgTabDefaultNotifyHook.hook(targets)
                 }
@@ -499,19 +467,19 @@ internal object HookInstallPlanner {
             entries += HookInstallEntry("PrivateReadReceiptBlockHook") { cl ->
                 HookSymbolResolver.resolvePrivateReadReceiptSymbols(cl, symbols)?.let { targets ->
                     PrivateReadReceiptBlockHook.hook(targets)
-                }
+                } ?: InstallOutcome.skipped("private read receipt targets unavailable")
             }
         }
 
         if (context.canInstallCollectionSearch()) {
-            entries += HookInstallEntry("CollectionSearchHook") { cl ->
+            entries += HookInstallEntry.dispatched("CollectionSearchHook") { cl ->
                 HookSymbolResolver.resolveCollectionSearchSymbols(cl, symbols)?.let { targets ->
                     CollectionSearchHook.hook(targets)
                 }
             }
         }
         if (context.canInstallHistorySearch()) {
-            entries += HookInstallEntry("HistorySearchHook") { cl ->
+            entries += HookInstallEntry.dispatched("HistorySearchHook") { cl ->
                 HookSymbolResolver.resolveHistorySearchSymbols(cl, symbols)?.let { targets ->
                     HistorySearchHook.hook(targets)
                 }
@@ -519,31 +487,31 @@ internal object HookInstallPlanner {
         }
 
         if (context.canInstallShareTrackingCleaner(settings)) {
-            entries += HookInstallEntry("ShareTrackingParamCleanerHook") { cl ->
+            entries += HookInstallEntry.dispatched("ShareTrackingParamCleanerHook") { cl ->
                 HookSymbolResolver.resolveShareTrackingParamCleanerSymbols(cl, symbols)?.let { targets ->
                     ShareTrackingParamCleanerHook.hook(targets)
                 }
             }
         }
         if (context.canInstallReplyVisibilityProbe(settings)) {
-            entries += HookInstallEntry("ReplyVisibilityProbeHook") { cl ->
+            entries += HookInstallEntry.dispatched("ReplyVisibilityProbeHook") { cl ->
                 HookSymbolResolver.resolveReplyVisibilityProbeSymbols(cl, symbols)?.let { targets ->
                     ReplyVisibilityProbeHook.hook(targets)
                 }
             }
         }
         if (settings.isDetailedLoggingEnabled) {
-            entries += HookInstallEntry("ReplyServerResponseLogHook") { cl ->
+            entries += HookInstallEntry.dispatched("ReplyServerResponseLogHook") { cl ->
                 HookSymbolResolver.resolveReplyServerResponseLogSymbols(cl, symbols)?.let { targets ->
                     ReplyServerResponseLogHook.hook(targets)
                 }
             }
-            entries += HookInstallEntry("AgreeServerResponseLogHook") { cl ->
+            entries += HookInstallEntry.dispatched("AgreeServerResponseLogHook") { cl ->
                 HookSymbolResolver.resolveAgreeServerResponseLogSymbols(cl, symbols)?.let { targets ->
                     AgreeServerResponseLogHook.hook(targets)
                 }
             }
-            entries += HookInstallEntry("FeedInfoLogHook") { cl ->
+            entries += HookInstallEntry.dispatched("FeedInfoLogHook") { cl ->
                 HookSymbolResolver.resolveFeedInfoLogSymbols(cl, symbols)?.let { targets ->
                     FeedInfoLogHook.hook(targets)
                 }
@@ -551,7 +519,7 @@ internal object HookInstallPlanner {
         }
 
         if (commentAvatarDirectProfile) {
-            entries += HookInstallEntry("CommentAvatarDirectProfileHook") { cl ->
+            entries += HookInstallEntry.dispatched("CommentAvatarDirectProfileHook") { cl ->
                 HookSymbolResolver.resolveGlobalDirectProfileSymbols(cl)?.let { targets ->
                     CommentAvatarDirectProfileHook.hook(targets)
                 }
@@ -570,28 +538,28 @@ internal object HookInstallPlanner {
         fun abSymbols(cl: ClassLoader): Map<String, Method> = abMethods
             ?: HookSymbolResolver.resolvePerformanceAbSymbols(cl, symbols).also { abMethods = it }
         if (settings.isPbPerformanceModeEnabled || settings.isPostPageAdBlockEnabled) {
-            entries += HookInstallEntry("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(abSymbols(cl)) }
+            entries += HookInstallEntry.dispatched("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(abSymbols(cl)) }
         }
         if (settings.isPbPreloadForced) {
-            entries += HookInstallEntry("PbForcePreloadHook") { cl ->
+            entries += HookInstallEntry.dispatched("PbForcePreloadHook") { cl ->
                 HookSymbolResolver.resolvePbPreloadTargets(cl, symbols)?.let { targets ->
                     PbForcePreloadHook.hook(targets, abSymbols(cl))
                 }
             }
         }
         if (settings.isAdSdkComponentsDisabled) {
-            entries += HookInstallEntry("AdSdkInitBlockHook") { cl -> AdSdkInitBlockHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("AdSdkInitBlockHook") { cl -> AdSdkInitBlockHook.hook(cl) }
         }
         if (settings.isMonitorSyncComponentsDisabled) {
-            entries += HookInstallEntry("TrackingBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("TrackingBlockHook") { cl ->
                 TrackingBlockHook.hook(HookSymbolResolver.resolveTrackingSymbols(cl, symbols))
             }
         }
         if (settings.isVideoComponentsDisabled) {
-            entries += HookInstallEntry("VideoPreloadBlockHook") { cl -> VideoPreloadBlockHook.hook(cl) }
+            entries += HookInstallEntry.dispatched("VideoPreloadBlockHook") { cl -> VideoPreloadBlockHook.hook(cl) }
         }
         if (settings.isHostSlideAnimationDisabled) {
-            entries += HookInstallEntry("HostSlideAnimationBlockHook") { cl ->
+            entries += HookInstallEntry.dispatched("HostSlideAnimationBlockHook") { cl ->
                 HostSlideAnimationBlockHook.hook(cl)
             }
         }
@@ -603,14 +571,19 @@ internal object HookInstallPlanner {
             settings.isVideoComponentsDisabled ||
             settings.isHostFeedColdOptEnabled
         ) {
-            entries += HookInstallEntry("ColdStartOptHook") { cl -> ColdStartOptHook.hook(abSymbols(cl)) }
+            entries += HookInstallEntry.dispatched("ColdStartOptHook") { cl -> ColdStartOptHook.hook(abSymbols(cl)) }
         }
         if (
             settings.isAdSdkComponentsDisabled ||
             settings.isFlutterPreinitDisabled ||
             settings.isLowEndDeviceConfigForced
         ) {
-            entries += HookInstallEntry("HostPerformanceConfigHook") { cl -> HostPerformanceConfigHook.hook(cl) }
+            entries += HookInstallEntry("HostPerformanceConfigHook") { cl ->
+                HostPerformanceConfigHook.hook(
+                    cl,
+                    if (settings.isLowEndDeviceConfigForced) symbols.lowEndConfig.restore(cl) else emptyMap(),
+                )
+            }
         }
         return entries
     }

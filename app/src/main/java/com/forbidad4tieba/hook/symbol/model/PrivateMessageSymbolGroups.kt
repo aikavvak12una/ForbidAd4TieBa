@@ -11,7 +11,7 @@ data class PrivateReadReceiptSymbolsGroup(
     val request: PrivateReadReceiptRequestSymbolsGroup = PrivateReadReceiptRequestSymbolsGroup(),
     val response: PrivateReadReceiptResponseSymbolsGroup = PrivateReadReceiptResponseSymbolsGroup(),
     val page: PrivateReadReceiptPageSymbolsGroup = PrivateReadReceiptPageSymbolsGroup(),
-    val localAccount: PrivateReadReceiptLocalAccountSymbolsGroup = PrivateReadReceiptLocalAccountSymbolsGroup(),
+    val account: PrivateReadReceiptAccountSymbolsGroup = PrivateReadReceiptAccountSymbolsGroup(),
 )
 
 data class PrivateReadReceiptModelSymbolsGroup(
@@ -49,18 +49,13 @@ data class PrivateReadReceiptPageSymbolsGroup(
     val privateReadReceiptChatMessageClass: String? = null,
     val privateReadReceiptChatMessageMsgIdMethod: String? = null,
     val privateReadReceiptChatMessageUserIdMethod: String? = null,
-    val privateReadReceiptChatMessageLocalDataMethod: String? = null,
 )
 
-data class PrivateReadReceiptLocalAccountSymbolsGroup(
-    val privateReadReceiptLocalDataClass: String? = null,
-    val privateReadReceiptLocalDataStatusMethod: String? = null,
+data class PrivateReadReceiptAccountSymbolsGroup(
     val privateReadReceiptAccountClass: String? = null,
     val privateReadReceiptCurrentAccountMethod: String? = null,
 )
 
 data class MessageTabSymbolsGroup(
     val msgTabLocateToTabMethod: String? = null,
-    val msgTabContainerSelectMethod: String? = null,
-    val msgTabContainerExtDataField: String? = null,
 )

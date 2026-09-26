@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.symbol.model
 
+import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigSymbols
+import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigTarget
 import java.lang.reflect.Modifier
 import java.lang.reflect.ParameterizedType
 import org.junit.Assert.assertEquals
@@ -7,8 +9,21 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class HookSymbolsJsonTest {
+    @Test
+    fun removedMessageContainerFieldsDoNotReenterTheConsumerContract() {
+        val old = JSONObject(buildHookSymbols { msgTabLocateToTabMethod = "locateTab" }.toJson())
+            .put("msgTabContainerSelectMethod", "unusedSelect")
+            .put("msgTabContainerExtDataField", "unusedExtData")
+        val parsed = requireNotNull(HookSymbols.fromJson(old.toString()))
+        assertEquals("locateTab", parsed.msgTabLocateToTabMethod)
+        val emitted = JSONObject(parsed.toJson())
+        assertFalse(emitted.has("msgTabContainerSelectMethod"))
+        assertFalse(emitted.has("msgTabContainerExtDataField"))
+    }
+
     @Test
     fun jsonRoundTripPreservesResourceHookPointAndScanMetaFields() {
         val symbols = buildHookSymbols {
@@ -77,6 +92,9 @@ class HookSymbolsJsonTest {
         index: Int,
     ): Any {
         return when (type) {
+            LowEndConfigSymbols::class.java -> LowEndConfigSymbols(
+                LowEndConfigTarget.entries.associateWith { "method_${it.name}" },
+            )
             PbAutoReplyFlowSymbols::class.java -> PbAutoReplyFlowSymbols(
                 sendMethodSpec = "host.Editor#submit",
                 writeModelField = "writeModel",

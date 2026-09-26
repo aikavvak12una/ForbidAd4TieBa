@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import android.graphics.Color
 import com.forbidad4tieba.hook.config.ConfigManager
 
 internal class HomeNativeGlassRuntimeStyleStore(
@@ -7,10 +8,44 @@ internal class HomeNativeGlassRuntimeStyleStore(
 ) {
     @Volatile private var runtimeStyle: HomeNativeGlassRuntimeStyle = HomeNativeGlassRuntimeStyle.EMPTY
     @Volatile private var runtimeStyleSnapshotVersion: Long = -1L
+    @Volatile private var pbCommentDynamicTintState: PbCommentDynamicTintState? = null
+
+    fun peek(): HomeNativeGlassRuntimeStyle = runtimeStyle
 
     fun current(): HomeNativeGlassRuntimeStyle {
         refresh()
         return runtimeStyle
+    }
+
+    fun pbCommentTintColor(): Int {
+        pbCommentTintColorOrNull()?.let { return it }
+        return Color.rgb(255, 255, 255)
+    }
+
+    fun pbCommentTintColorOrNull(): Int? {
+        val style = current()
+        val tintColor = style.tintColor
+        val autoTintColor = style.autoTintColor
+        val cached = pbCommentDynamicTintState
+        if (
+            cached != null &&
+            cached.tintColor == tintColor &&
+            cached.autoTintColor == autoTintColor
+        ) {
+            return cached.lightColor
+        }
+        val baseColor = style.configuredPbCommentTintColor() ?: return null
+        val state = PbCommentDynamicTintState(
+            tintColor = tintColor,
+            autoTintColor = autoTintColor,
+            lightColor = pbCommentBaseRgb(baseColor),
+        )
+        pbCommentDynamicTintState = state
+        return state.lightColor
+    }
+
+    fun clearDerivedTint() {
+        pbCommentDynamicTintState = null
     }
 
     fun refresh(
@@ -82,4 +117,10 @@ internal class HomeNativeGlassRuntimeStyleStore(
         }
         return true
     }
+
+    private data class PbCommentDynamicTintState(
+        val tintColor: Int,
+        val autoTintColor: Int,
+        val lightColor: Int,
+    )
 }

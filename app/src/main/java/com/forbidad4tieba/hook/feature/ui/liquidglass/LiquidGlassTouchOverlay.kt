@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
+import android.annotation.TargetApi
+import android.os.Build
 import android.graphics.Matrix
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -14,6 +16,7 @@ import android.view.ViewGroup
  * from moving the coordinate system under the finger. No host listener or global dispatch hook is
  * replaced. Native clicks, long presses and accessibility actions stay owned by the host tabs.
  */
+@TargetApi(Build.VERSION_CODES.TIRAMISU)
 internal class LiquidGlassTouchOverlay(
     private val panel: LiquidGlassPanel,
     private val droplet: DropletPanel,

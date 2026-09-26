@@ -1,7 +1,6 @@
 package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
-import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
 import com.forbidad4tieba.hook.symbol.model.PbAutoReplyFlowSymbols
 import com.forbidad4tieba.hook.symbol.model.PbAutoReplyFlowTargets
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
@@ -27,11 +26,8 @@ internal object PbAutoReplyFlowSymbolScanner {
         scanSubStep(TAG, logger, PbAutoReplyFlowSymbols()) {
             val paths = listOfNotNull(context.applicationInfo?.sourceDir) +
                 context.applicationInfo?.splitSourceDirs.orEmpty()
-            val cached = HookSymbolScanSession.get()?.dexKitBridge(paths, logger)
-            val opened = cached ?: DexKitBridgeProvider.openFirstAvailable(paths, logger)
-                ?: return@scanSubStep PbAutoReplyFlowSymbols()
-            if (cached != null) scan(opened.bridge, cl, logger)
-            else opened.use { scan(it.bridge, cl, logger) }
+            HookSymbolScanSession.withDexKitBridge(paths, logger) { scan(it.bridge, cl, logger) }
+                ?: PbAutoReplyFlowSymbols()
         }
 
     private fun scan(bridge: DexKitBridge, cl: ClassLoader, logger: ScanLogger?): PbAutoReplyFlowSymbols {

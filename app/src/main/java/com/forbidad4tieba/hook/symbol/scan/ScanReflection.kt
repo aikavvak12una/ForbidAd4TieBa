@@ -96,18 +96,6 @@ internal object ScanReflection {
         return false
     }
 
-    fun resolveHistoryDataStringGetterName(methods: List<Method>, vararg candidateNames: String): String? {
-        for (name in candidateNames) {
-            val method = methods.firstOrNull { method ->
-                method.name == name &&
-                    method.parameterTypes.isEmpty() &&
-                    (method.returnType == String::class.java || CharSequence::class.java.isAssignableFrom(method.returnType))
-            }
-            if (method != null) return method.name
-        }
-        return null
-    }
-
     fun resolveListSetterMethodName(clazz: Class<*>, preferredName: String): String? {
         val candidates = collectInstanceMethods(clazz).filter { method ->
             method.returnType == Void.TYPE &&

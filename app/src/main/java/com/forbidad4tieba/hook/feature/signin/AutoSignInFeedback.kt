@@ -1,9 +1,13 @@
 package com.forbidad4tieba.hook.feature.signin
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
 import java.text.SimpleDateFormat
@@ -14,6 +18,9 @@ internal object AutoSignInFeedback {
     private const val CHANNEL = "tbhook_auto_sign_result"
     private const val NOTIFICATION_ID = 0x5349474E
 
+    // Posts as the host, whose permission is checked below. A module manifest permission would
+    // not grant the host notification permission.
+    @SuppressLint("NotificationPermission")
     fun publish(context: Context, accountKey: String, state: SignInDayState,
                 store: AutoSignInStateStore, report: SignInReport) {
         try {
@@ -41,7 +48,9 @@ internal object AutoSignInFeedback {
 
     fun notificationsAllowed(context: Context): Boolean = try {
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager != null && manager.areNotificationsEnabled() &&
+        (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+            manager != null && manager.areNotificationsEnabled() &&
             manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
     } catch (_: Exception) { false }
 

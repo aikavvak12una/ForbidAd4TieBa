@@ -489,6 +489,7 @@ class ConfigManagerTest {
     @Test
     fun performanceChildrenUseEnabledDefaultsOnlyWhenMasterIsOn() {
         withScanAvailability(mapOf(
+            HookFeatureKey.FORCE_LOW_END_DEVICE_CONFIG to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
             HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
             HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
             HookFeatureKey.DISABLE_APSARAS_SCHEDULE to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
@@ -508,6 +509,21 @@ class ConfigManagerTest {
             assertTrue(snapshot.isVideoComponentsDisabled)
             assertTrue(snapshot.isMonitorSyncComponentsDisabled)
             assertFalse(snapshot.isTitanPatchBlockEnabled)
+        }
+    }
+
+    @Test
+    fun lowEndConfigurationRequiresResolvedSymbolsWithoutChangingSavedPreference() {
+        val saved = mapOf(
+            ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+            ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+            ConfigManager.KEY_FORCE_LOW_END_DEVICE_CONFIG to true,
+        )
+        withScanAvailability(mapOf(HookFeatureKey.FORCE_LOW_END_DEVICE_CONFIG to ConfigManager.ScanFeatureAvailabilityState.DISABLED)) {
+            assertFalse(buildSnapshot(saved).isLowEndDeviceConfigForced)
+        }
+        withScanAvailability(mapOf(HookFeatureKey.FORCE_LOW_END_DEVICE_CONFIG to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE)) {
+            assertTrue(buildSnapshot(saved).isLowEndDeviceConfigForced)
         }
     }
 

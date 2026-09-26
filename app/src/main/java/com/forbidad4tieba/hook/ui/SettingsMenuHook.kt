@@ -1,5 +1,9 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.ui.about.AboutItem
+
+import com.forbidad4tieba.hook.HookInstaller
+
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
@@ -483,7 +487,7 @@ object SettingsMenuHook {
 
             val versionInfo = buildVersionDisplayInfo(context, scanSymbols)
             val defaultAboutItems = listOf(
-                AboutInfoManager.AboutItem(
+                AboutItem(
                     UiText.Settings.VERSION,
                     UiText.Settings.aboutVersionSummary(
                         tiebaBuildType = versionInfo.tiebaBuildType,
@@ -493,7 +497,7 @@ object SettingsMenuHook {
                     ),
                     null,
                 ),
-                AboutInfoManager.AboutItem(UiText.Settings.AUTHOR, UiText.Settings.AUTHOR_NAME, "https://github.com/aikavvak12una/ForbidAd4TieBa"),
+                AboutItem(UiText.Settings.AUTHOR, UiText.Settings.AUTHOR_NAME, "https://github.com/aikavvak12una/ForbidAd4TieBa"),
             )
             val aboutItemsContainer = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -503,7 +507,7 @@ object SettingsMenuHook {
             var settingsDialog: AlertDialog? = null
             var versionTapCount = 0
 
-            fun renderAboutItems(remoteAboutItems: List<AboutInfoManager.AboutItem>) {
+            fun renderAboutItems(remoteAboutItems: List<AboutItem>) {
                 aboutItemsContainer.removeAllViews()
                 val aboutItems = defaultAboutItems + remoteAboutItems
                 for (aboutItem in aboutItems) {
@@ -1081,6 +1085,7 @@ object SettingsMenuHook {
                     HookSymbolResolver.formatHookPointStatusLines(scanSymbols).forEach(::appendScanLog)
                 }
                 ConfigManager.formatPerformanceStatusLines(ConfigManager.snapshot()).forEach(::appendScanLog)
+                HookInstaller.snapshot().forEach { appendScanLog(it.formatLine()) }
                 runtimeEnvironmentJson = runCatching {
                     AboutInfoManager.runtimeEnvironmentJsonForSettings(activity)
                 }.getOrElse { t ->

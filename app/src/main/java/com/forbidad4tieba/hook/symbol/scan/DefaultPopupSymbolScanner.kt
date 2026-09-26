@@ -1,7 +1,6 @@
 package com.forbidad4tieba.hook.symbol.scan
 
 import android.content.Context
-import com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider
 import com.forbidad4tieba.hook.symbol.model.DefaultPopupSymbols
 import com.forbidad4tieba.hook.symbol.model.FirstLikePopupTargets
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
@@ -26,8 +25,7 @@ internal object DefaultPopupSymbolScanner {
     fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): DefaultPopupSymbols {
         val paths = listOfNotNull(context.applicationInfo?.sourceDir) +
             context.applicationInfo?.splitSourceDirs.orEmpty()
-        val opened = DexKitBridgeProvider.openFirstAvailable(paths, logger) ?: return DefaultPopupSymbols()
-        return opened.use { source ->
+        return HookSymbolScanSession.withDexKitBridge(paths, logger) { source ->
             val firstLike = scanSubStep("FirstLikePopupBlockHook", logger, null as String?) {
                 scanFirstLike(source.bridge, cl, logger)
             }
@@ -40,7 +38,7 @@ internal object DefaultPopupSymbolScanner {
                 notificationGuideClass = notification?.first,
                 notificationGuideMethod = notification?.second,
             )
-        }
+        } ?: DefaultPopupSymbols()
     }
 
     private fun scanFirstLike(bridge: DexKitBridge, cl: ClassLoader, logger: ScanLogger?): String? {

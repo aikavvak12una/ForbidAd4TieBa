@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.symbol.model
 
+import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigSymbols
+
 data class HookPointSymbols(
     val primary: PrimaryHookPointSymbols = PrimaryHookPointSymbols(),
     val web: WebSymbols = WebSymbols(),
@@ -10,6 +12,7 @@ data class HookPointSymbols(
     val performanceAbMethods: List<String>? = null,
     val trackingMethods: List<String>? = null,
     val defaultPopups: DefaultPopupSymbols = DefaultPopupSymbols(),
+    val lowEndConfig: LowEndConfigSymbols = LowEndConfigSymbols(),
 )
 
 data class PrimaryHookPointSymbols(

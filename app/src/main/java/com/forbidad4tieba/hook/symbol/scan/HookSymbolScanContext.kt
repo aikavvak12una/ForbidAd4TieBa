@@ -73,6 +73,20 @@ internal object HookSymbolScanSession {
 
     fun get(): HookSymbolScanContext? = current.get()
 
+    inline fun <T> withDexKitBridge(
+        sourcePaths: List<String>,
+        logger: ScanLogger?,
+        block: (DexKitScanBridge) -> T,
+    ): T? {
+        val context = get()
+        if (context != null) {
+            // A cached failure belongs to this scan too; retry only in a new session.
+            val shared = context.dexKitBridge(sourcePaths, logger) ?: return null
+            return block(shared)
+        }
+        return DexKitBridgeProvider.openFirstAvailable(sourcePaths, logger)?.use(block)
+    }
+
     fun set(context: HookSymbolScanContext?) {
         current.set(context)
     }

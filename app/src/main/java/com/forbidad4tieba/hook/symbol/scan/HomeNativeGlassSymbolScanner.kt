@@ -16,24 +16,11 @@ import java.lang.reflect.Modifier
 internal object HomeNativeGlassSymbolScanner {
     private const val SUB_PB_NEXT_PAGE_MORE_VIEW_RES_NAME = "pb_more_view"
     private const val PB_REPLY_TITLE_DIVIDER_VIEW_RES_NAME = "divider_bottom"
-    private const val SORT_SWITCH_BACKGROUND_PAINT_FIELD = "o"
-    private const val SORT_SWITCH_SLIDE_DRAW_METHOD = "y"
-    private const val SORT_SWITCH_SLIDE_PATH_FIELD = "z"
-    private const val ENTER_FORUM_CAPSULE_CONTROLLER_CLASS = "com.baidu.tieba.gcd"
-    private const val ENTER_FORUM_CAPSULE_INIT_METHOD = "r"
-    private const val ENTER_FORUM_CAPSULE_REFRESH_METHOD = "D"
-    private const val ENTER_FORUM_CAPSULE_VIEW_FIELD = "l"
-    private const val ENTER_FORUM_CAPSULE_TITLE_FIELD = "q"
     private const val BASE_FRAGMENT_CLASS = "com.baidu.tbadk.core.BaseFragment"
     private const val PB_BAR_IMAGE_VIEW_CLASS = "com.baidu.tbadk.core.view.PbBarImageView"
     private const val ENTER_FORUM_CAPSULE_CLASS_SCAN_LIMIT = 24
     private const val ENTER_FORUM_CAPSULE_MIN_CLASS_SCORE = 170
     private const val ENTER_FORUM_CAPSULE_MIN_SCORE_GAP = 24
-    private const val MORE_ACTIVITY_CLASS = "com.baidu.tieba.setting.more.MoreActivity"
-    private const val BD_SWITCH_VIEW_CLASS = "com.baidu.adp.widget.BdSwitchView.BdSwitchView"
-    private const val HOST_SWITCH_STATE_FIELD_HINT = "a"
-    private const val HOST_SWITCH_SET_ON_METHOD_HINT = "j"
-    private const val HOST_SWITCH_SET_OFF_METHOD_HINT = "g"
     private val DYNAMIC_BACKGROUND_COLOR_RES_NAMES = arrayOf(
         "CAM_X0110",
         "CAM_X0112",
@@ -127,116 +114,8 @@ internal object HomeNativeGlassSymbolScanner {
         return out
     }
 
-    fun scanSortSwitch(cl: ClassLoader, logger: ScanLogger?): HomeNativeGlassSortSwitchSymbols {
-        val sortSwitchClass = safeFindClass(StableTiebaHookPoints.SORT_SWITCH_BUTTON_CLASS, cl)
-            ?: run {
-                log(
-                    logger,
-                    "homeNativeGlassSortSwitch: class missing ${StableTiebaHookPoints.SORT_SWITCH_BUTTON_CLASS}",
-                )
-                return HomeNativeGlassSortSwitchSymbols()
-            }
-        val fields = declaredFields("SortSwitch", sortSwitchClass, logger) ?: run {
-            log(logger, "homeNativeGlassSortSwitch: declaredFields unavailable")
-            return HomeNativeGlassSortSwitchSymbols()
-        }
-        val paintFields = fields.filter { field ->
-            !Modifier.isStatic(field.modifiers) &&
-                field.type.name == "android.graphics.Paint"
-        }
-        val backgroundPaint = if (paintFields.size < 3) {
-            log(logger, "homeNativeGlassSortSwitch: insufficient Paint fields count=${paintFields.size}")
-            null
-        } else {
-            val structural = paintFields.first()
-            val legacy = paintFields.singleOrNull { it.name == SORT_SWITCH_BACKGROUND_PAINT_FIELD }
-            if (legacy != null && legacy != structural) {
-                log(
-                    logger,
-                    "homeNativeGlassSortSwitch: background Paint legacy hint differs, " +
-                        "structural=${structural.name}, legacy=${legacy.name}",
-                )
-            }
-            structural
-        }
-        val pathFields = fields.filter { field ->
-            !Modifier.isStatic(field.modifiers) &&
-                field.type.name == "android.graphics.Path"
-        }
-        val slidePath = if (pathFields.size < 2) {
-            log(logger, "homeNativeGlassSortSwitch: insufficient Path fields count=${pathFields.size}")
-            null
-        } else {
-            val structural = pathFields.last()
-            val legacy = pathFields.singleOrNull { it.name == SORT_SWITCH_SLIDE_PATH_FIELD }
-            if (legacy != null && legacy != structural) {
-                log(
-                    logger,
-                    "homeNativeGlassSortSwitch: slide Path legacy hint differs, " +
-                        "structural=${structural.name}, legacy=${legacy.name}",
-                )
-            }
-            structural
-        }
-        val slideDrawCandidates = declaredMethods("SortSwitch", sortSwitchClass, logger)
-            ?.filter { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.returnType == java.lang.Void.TYPE &&
-                    method.parameterTypes.size == 1 &&
-                    method.parameterTypes[0].name == "android.graphics.Canvas"
-            }.orEmpty()
-        val slideDrawInnerCandidates = slideDrawCandidates.filter { method ->
-            method.name != "onDraw"
-        }
-        if (slideDrawInnerCandidates.size != slideDrawCandidates.size) {
-            log(
-                logger,
-                "homeNativeGlassSortSwitch: slide draw ignored framework candidates=" +
-                    slideDrawCandidates
-                        .filterNot { it in slideDrawInnerCandidates }
-                        .joinToString(",") { describeMethodShape(it) },
-            )
-        }
-        val slideDrawMethod = when (slideDrawInnerCandidates.size) {
-            0 -> {
-                log(logger, "homeNativeGlassSortSwitch: slide draw method missing")
-                null
-            }
-            1 -> slideDrawInnerCandidates.first()
-            2 -> {
-                val structural = slideDrawInnerCandidates.last()
-                val legacy = slideDrawInnerCandidates.singleOrNull { it.name == SORT_SWITCH_SLIDE_DRAW_METHOD }
-                if (legacy != null && legacy != structural) {
-                    log(
-                        logger,
-                        "homeNativeGlassSortSwitch: slide draw legacy hint differs, " +
-                            "structural=${structural.name}, legacy=${legacy.name}",
-                    )
-                }
-                structural
-            }
-            else -> {
-                log(
-                    logger,
-                    "homeNativeGlassSortSwitch: slide draw method ambiguous candidates=" +
-                        slideDrawInnerCandidates.joinToString(",") { describeMethodShape(it) },
-                )
-                null
-            }
-        }
-        log(
-            logger,
-            "homeNativeGlassSortSwitch: backgroundPaint=${backgroundPaint?.name}, " +
-                "slideDraw=${slideDrawMethod?.name}, slidePath=${slidePath?.name}, " +
-                "paintFields=${paintFields.joinToString(",") { it.name }}, " +
-                "pathFields=${pathFields.joinToString(",") { it.name }}",
-        )
-        return HomeNativeGlassSortSwitchSymbols(
-            backgroundPaintField = backgroundPaint?.name,
-            slideDrawMethod = slideDrawMethod?.name,
-            slidePathField = slidePath?.name,
-        )
-    }
+    fun scanSortSwitch(context: Context, logger: ScanLogger?): HomeNativeGlassSortSwitchSymbols =
+        SortSwitchSymbolScanner.scan(context, logger)
 
     fun scanTopChrome(cl: ClassLoader, logger: ScanLogger?): HomeNativeGlassTopChromeSymbols {
         val specs = ArrayList<String>(TOP_CHROME_CLASSES.size)
@@ -301,171 +180,7 @@ internal object HomeNativeGlassSymbolScanner {
         context: Context,
         cl: ClassLoader,
         logger: ScanLogger?,
-    ): HomeNativeGlassHostDarkModeSwitchSymbols {
-        val moreActivityClass = safeFindClass(MORE_ACTIVITY_CLASS, cl) ?: run {
-            return missingHostDarkModeSwitch(logger, "class missing $MORE_ACTIVITY_CLASS")
-        }
-        val switchClass = safeFindClass(BD_SWITCH_VIEW_CLASS, cl) ?: run {
-            return missingHostDarkModeSwitch(logger, "class missing $BD_SWITCH_VIEW_CLASS")
-        }
-        val switchMethods = declaredMethods("HostDarkModeSwitch.Switch", switchClass, logger) ?: run {
-            return missingHostDarkModeSwitch(logger, "switch declaredMethods unavailable")
-        }
-        val switchFields = declaredFields("HostDarkModeSwitch.Switch", switchClass, logger)
-            ?.filter { field -> !Modifier.isStatic(field.modifiers) } ?: run {
-            return missingHostDarkModeSwitch(logger, "switch fields unavailable")
-        }
-        val stateField = selectHostSwitchStateField(switchFields, logger) ?: run {
-            return missingHostDarkModeSwitch(logger, "state field missing")
-        }
-        val setOnMethod = selectHostSwitchNamedNoArgVoidMethod(
-            switchMethods,
-            HOST_SWITCH_SET_ON_METHOD_HINT,
-            "setOn",
-            logger,
-        ) ?: run {
-            return missingHostDarkModeSwitch(logger, "set on method missing")
-        }
-        val setOffMethod = selectHostSwitchNamedNoArgVoidMethod(
-            switchMethods,
-            HOST_SWITCH_SET_OFF_METHOD_HINT,
-            "setOff",
-            logger,
-        ) ?: run {
-            return missingHostDarkModeSwitch(logger, "set off method missing")
-        }
-
-        val fields = declaredFields("HostDarkModeSwitch.Activity", moreActivityClass, logger)
-            ?.filter { field -> !Modifier.isStatic(field.modifiers) } ?: run {
-            return missingHostDarkModeSwitch(logger, "activity fields unavailable")
-        }
-        val controllerMethodGroups = fields.mapNotNull { field ->
-            val methods = declaredMethods("HostDarkModeSwitch.Controller.${field.type.name}", field.type, logger)
-                ?.filter { method ->
-                    !Modifier.isStatic(method.modifiers) &&
-                        method.parameterTypes.isEmpty() &&
-                        switchClass.isAssignableFrom(method.returnType)
-                } ?: run {
-                log(
-                    logger,
-                    "homeNativeGlassHostDarkModeSwitch: controller methods unavailable ${field.type.name}",
-                )
-                return@mapNotNull null
-            }
-            if (methods.size > 1) {
-                log(
-                    logger,
-                    "homeNativeGlassHostDarkModeSwitch: getter candidates for ${field.name}=" +
-                        methods.joinToString(",") { describeMethodShape(it) },
-                )
-            }
-            if (methods.isEmpty()) null else field to methods
-        }
-        val controllerFields = controllerMethodGroups
-            .filter { (field, methods) ->
-                !Modifier.isStatic(field.modifiers) &&
-                    field.type.name.startsWith("com.baidu.tieba.") &&
-                    methods.size >= 2
-            }
-            .associate { (field, _) -> field.name to field.type.name }
-
-        val sourcePaths = appSourcePaths(context)
-        val dexMatches = if (sourcePaths.isNotEmpty() && controllerFields.isNotEmpty()) {
-            DexKitSemanticScanner.scanHostDarkModeSwitch(
-                sourcePaths = sourcePaths,
-                controllerFields = controllerFields,
-                logger = logger,
-            )
-        } else {
-            emptyList()
-        }
-        if (sourcePaths.isNotEmpty()) {
-            if (dexMatches.isNotEmpty()) {
-                log(
-                    logger,
-                    "homeNativeGlassHostDarkModeSwitch: dex matches=" +
-                        dexMatches.take(4).joinToString(",") {
-                            "${it.controllerFieldName}.${it.getterMethodName}" +
-                                "/callback=${it.callbackMethodName ?: "-"}" +
-                                "/score=${it.score}[${it.evidence}]"
-                        },
-                )
-            } else {
-                log(logger, "homeNativeGlassHostDarkModeSwitch: dex semantic match missing")
-            }
-        }
-        val dexMatchesByGetter = dexMatches
-            .groupBy { "${it.controllerFieldName}.${it.getterMethodName}" }
-            .mapValues { (_, matches) ->
-                matches.maxByOrNull { it.score }
-            }
-
-        val candidates = controllerMethodGroups.flatMap { (field, methods) ->
-            methods.map { getter ->
-                val dexMatch = dexMatchesByGetter["${field.name}.${getter.name}"]
-                HostDarkModeSwitchCandidate(
-                    field = field,
-                    getter = getter,
-                    score = scoreHostDarkModeSwitchCandidate(field, methods, dexMatch),
-                    dexMatch = dexMatch,
-                )
-            }
-        }.sortedWith(
-            compareByDescending<HostDarkModeSwitchCandidate> { it.score }
-                .thenBy { it.field.name }
-                .thenBy { it.getter.name },
-        )
-
-        if (candidates.isEmpty()) {
-            return missingHostDarkModeSwitch(
-                logger,
-                "controller field missing, activityFields=${fields.joinToString(",") { "${it.name}:${it.type.name}" }}",
-            )
-        }
-        val best = candidates.first()
-        if (candidates.size > 1 && candidates[1].score == best.score) {
-            return missingHostDarkModeSwitch(
-                logger,
-                "ambiguous candidates=" +
-                    candidates.joinToString(",") { "${it.field.name}.${it.getter.name}/score=${it.score}" },
-            )
-        }
-        val activityMethods = declaredMethods("HostDarkModeSwitch.Activity", moreActivityClass, logger) ?: run {
-            return missingHostDarkModeSwitch(logger, "activity methods unavailable")
-        }
-        val callbackMethod = selectHostDarkModeSwitchCallbackMethodByName(
-            activityMethods = activityMethods,
-            callbackMethodName = best.dexMatch?.callbackMethodName,
-            switchViewType = best.getter.returnType,
-            switchStateType = stateField.type,
-            logger = logger,
-        ) ?: selectHostDarkModeSwitchCallbackMethod(
-            activityMethods,
-            best.getter.returnType,
-            stateField.type,
-            logger,
-        ) ?: run {
-            return missingHostDarkModeSwitch(logger, "switch callback missing")
-        }
-        log(
-            logger,
-            "homeNativeGlassHostDarkModeSwitch: activity=${moreActivityClass.name}, " +
-                "controllerField=${best.field.name}, getter=${best.getter.name}, " +
-                "state=${stateField.name}, " +
-                "setOn=${setOnMethod.name}, setOff=${setOffMethod.name}, " +
-                "callback=${callbackMethod.name}" +
-                (best.dexMatch?.let { ", dex=${it.score}[${it.evidence}]" } ?: ""),
-        )
-        return HomeNativeGlassHostDarkModeSwitchSymbols(
-            moreActivityClass = moreActivityClass.name,
-            controllerField = best.field.name,
-            switchGetterMethod = best.getter.name,
-            switchStateField = stateField.name,
-            switchSetOnMethod = setOnMethod.name,
-            switchSetOffMethod = setOffMethod.name,
-            switchCallbackMethod = callbackMethod.name,
-        )
-    }
+    ): HomeNativeGlassHostDarkModeSwitchSymbols = HostDarkModeSwitchSymbolScanner.scan(context, cl, logger)
 
     fun scanEnterForumCapsule(
         context: Context,
@@ -509,7 +224,9 @@ internal object HomeNativeGlassSymbolScanner {
         }
 
         val sourcePaths = appSourcePaths(context)
-        val scannedCandidates = classCandidates.take(ENTER_FORUM_CAPSULE_CLASS_SCAN_LIMIT)
+        // A scan budget must not remove equally plausible candidates according to their names.
+        val cutoffScore = classCandidates.getOrNull(ENTER_FORUM_CAPSULE_CLASS_SCAN_LIMIT - 1)?.score
+        val scannedCandidates = classCandidates.takeWhile { cutoffScore == null || it.score >= cutoffScore }
         val dexMatchesByClass = if (sourcePaths.isNotEmpty()) {
             DexKitSemanticScanner.scanEnterForumCapsules(
                 sourcePaths = sourcePaths,
@@ -524,15 +241,14 @@ internal object HomeNativeGlassSymbolScanner {
                 resolveEnterForumCapsuleCandidate(
                     candidate,
                     dexMatchesByClass[candidate.clazz.name].orEmpty(),
+                    logger,
                 )
             }
-            .sortedWith(
-                compareByDescending<HomeNativeGlassEnterForumCapsuleResolvedCandidate> { it.score }
-                    .thenBy { it.symbols.controllerClass.orEmpty().length }
-                    .thenBy { it.symbols.controllerClass.orEmpty() },
-            )
 
-        val best = resolvedCandidates.firstOrNull() ?: run {
+        val best = selectUniqueScoredCandidate(
+            "HomeNativeGlassHook.EnterForumCapsule", resolvedCandidates,
+            ENTER_FORUM_CAPSULE_MIN_SCORE_GAP, logger, { it.score }, { it.symbols.controllerClass.orEmpty() },
+        ) ?: run {
             val preview = classCandidates
                 .take(6)
                 .joinToString(" || ") { "${it.clazz.name}:${it.score}[${it.evidence}]" }
@@ -543,17 +259,6 @@ internal object HomeNativeGlassSymbolScanner {
             )
             return HomeNativeGlassEnterForumCapsuleSymbols()
         }
-        val second = resolvedCandidates.getOrNull(1)
-        if (second != null && best.score - second.score < ENTER_FORUM_CAPSULE_MIN_SCORE_GAP) {
-            log(
-                logger,
-                "homeNativeGlassEnterForumCapsule ambiguous: " +
-                    "best=${best.symbols.controllerClass}:${best.score}[${best.evidence}], " +
-                    "second=${second.symbols.controllerClass}:${second.score}[${second.evidence}]",
-            )
-            return HomeNativeGlassEnterForumCapsuleSymbols()
-        }
-
         val symbols = best.symbols
         log(
             logger,
@@ -594,7 +299,7 @@ internal object HomeNativeGlassSymbolScanner {
         emTextViewClass: Class<*>,
         logger: ScanLogger?,
     ): List<HomeNativeGlassEnterForumCapsuleClassCandidate> {
-        val names = (candidateClassNames + ENTER_FORUM_CAPSULE_CONTROLLER_CLASS).distinct()
+        val names = candidateClassNames.distinct()
         val out = ArrayList<HomeNativeGlassEnterForumCapsuleClassCandidate>(8)
         var skippedByReflection = 0
         var firstReflectionError: String? = null
@@ -658,10 +363,11 @@ internal object HomeNativeGlassSymbolScanner {
         logger: ScanLogger?,
     ): Pair<Int, String>? {
         val constructors = declaredConstructors("EnterForumCapsule.${clazz.name}", clazz, logger) ?: return null
-        val compatibleCtor = constructors.firstOrNull { ctor ->
+        val compatibleConstructors = constructors.filter { ctor ->
             isEnterForumCapsuleConstructor(ctor, baseFragmentClass)
-        } ?: return null
-        val exactCtor = compatibleCtor.parameterTypes.size == 4
+        }
+        if (compatibleConstructors.isEmpty()) return null
+        val exactCtor = compatibleConstructors.any { it.parameterTypes.size == 4 }
         val hasNavigationBarField = fields.any { navigationBarClass.isAssignableFrom(it.type) }
         val hasBaseFragmentField = fields.any { baseFragmentClass.isAssignableFrom(it.type) }
         val hasPbBarImageField = fields.any { pbBarImageViewClass.isAssignableFrom(it.type) }
@@ -678,10 +384,6 @@ internal object HomeNativeGlassSymbolScanner {
         var score = if (exactCtor) 80 else 62
         val evidence = ArrayList<String>(10)
         evidence.add(if (exactCtor) "ctorExact" else "ctorCompatible")
-        if (clazz.name == ENTER_FORUM_CAPSULE_CONTROLLER_CLASS) {
-            score += 8
-            evidence.add("legacyClass")
-        }
         if (hasNavigationBarField) {
             score += 62
             evidence.add("navigationBar")
@@ -728,106 +430,31 @@ internal object HomeNativeGlassSymbolScanner {
     private fun resolveEnterForumCapsuleCandidate(
         candidate: HomeNativeGlassEnterForumCapsuleClassCandidate,
         dexMatches: List<DexEnterForumCapsuleMethodMatch>,
+        logger: ScanLogger?,
     ): HomeNativeGlassEnterForumCapsuleResolvedCandidate? {
         val validDexMatches = dexMatches.filter { match ->
-            candidate.methods.any { method ->
-                method.name == match.ownerMethodName && isNoArgVoidMethod(method)
-            }
+            candidate.methods.any { it.name == match.ownerMethodName && isNoArgVoidMethod(it) }
         }
-        val initDex = validDexMatches
-            .filter { it.kind == DexEnterForumCapsuleMethodKind.INIT }
-            .maxWithOrNull(compareBy<DexEnterForumCapsuleMethodMatch> { it.score }.thenByDescending { -it.ownerMethodName.length })
-        val refreshDex = validDexMatches
-            .filter { it.kind == DexEnterForumCapsuleMethodKind.REFRESH }
-            .maxWithOrNull(compareBy<DexEnterForumCapsuleMethodMatch> { it.score }.thenByDescending { -it.ownerMethodName.length })
-
-        val legacyInit = candidate.methods.singleOrNull { method ->
-            method.name == ENTER_FORUM_CAPSULE_INIT_METHOD && isNoArgVoidMethod(method)
-        }?.name
-        val legacyRefresh = candidate.methods.singleOrNull { method ->
-            method.name == ENTER_FORUM_CAPSULE_REFRESH_METHOD && isNoArgVoidMethod(method)
-        }?.name
-
-        val initMethodName = initDex?.ownerMethodName ?: legacyInit ?: return null
-        val refreshMethodName = refreshDex?.ownerMethodName ?: legacyRefresh ?: return null
-        val viewField = selectEnterForumCapsuleViewField(
-            fields = candidate.fields,
-            preferredNames = listOfNotNull(
-                initDex?.viewFieldName,
-                refreshDex?.viewFieldName,
-            ),
-            legacyName = ENTER_FORUM_CAPSULE_VIEW_FIELD,
+        val pairs = enterForumCapsulePairs(validDexMatches).filter { pair ->
+            candidate.fields.any { it.name == pair.init.viewFieldName && View::class.java.isAssignableFrom(it.type) } &&
+                candidate.fields.any { it.name == pair.refresh.titleFieldName && it.type == String::class.java }
+        }
+        val pair = selectUniqueScoredCandidate(
+            "HomeNativeGlassHook.EnterForumCapsule.${candidate.clazz.name}", pairs,
+            ENTER_FORUM_CAPSULE_MIN_SCORE_GAP, logger, { it.score },
+            { "${it.init.ownerMethodName}/${it.refresh.ownerMethodName}:${it.init.viewFieldName}/${it.refresh.titleFieldName}" },
         ) ?: return null
-        val titleField = selectEnterForumCapsuleTitleField(
-            fields = candidate.fields,
-            preferredNames = listOfNotNull(
-                refreshDex?.titleFieldName,
-            ),
-            legacyName = ENTER_FORUM_CAPSULE_TITLE_FIELD,
-        ) ?: return null
-
-        var score = candidate.score
-        val evidence = ArrayList<String>(6)
-        evidence.add("class=${candidate.evidence}")
-        if (initDex != null) {
-            score += initDex.score
-            evidence.add("initDex=${initDex.ownerMethodName}[${initDex.evidence}]")
-        } else if (legacyInit != null) {
-            score += 45
-            evidence.add("initLegacy=$legacyInit")
-        }
-        if (refreshDex != null) {
-            score += refreshDex.score
-            evidence.add("refreshDex=${refreshDex.ownerMethodName}[${refreshDex.evidence}]")
-        } else if (legacyRefresh != null) {
-            score += 45
-            evidence.add("refreshLegacy=$legacyRefresh")
-        }
-        if (initDex?.viewFieldName == viewField.name) score += 24
-        if (refreshDex?.viewFieldName == viewField.name) score += 18
-        if (refreshDex?.titleFieldName == titleField.name) score += 24
-        if (viewField.name == ENTER_FORUM_CAPSULE_VIEW_FIELD) score += 8
-        if (titleField.name == ENTER_FORUM_CAPSULE_TITLE_FIELD) score += 8
-
         return HomeNativeGlassEnterForumCapsuleResolvedCandidate(
             symbols = HomeNativeGlassEnterForumCapsuleSymbols(
                 controllerClass = candidate.clazz.name,
-                initMethod = initMethodName,
-                refreshMethod = refreshMethodName,
-                viewField = viewField.name,
-                titleField = titleField.name,
+                initMethod = pair.init.ownerMethodName,
+                refreshMethod = pair.refresh.ownerMethodName,
+                viewField = pair.init.viewFieldName,
+                titleField = pair.refresh.titleFieldName,
             ),
-            score = score,
-            evidence = evidence.joinToString(";"),
+            score = candidate.score + pair.score,
+            evidence = "class=${candidate.evidence};init=${pair.init.evidence};refresh=${pair.refresh.evidence}",
         )
-    }
-
-    private fun selectEnterForumCapsuleViewField(
-        fields: List<Field>,
-        preferredNames: List<String>,
-        legacyName: String,
-    ): Field? {
-        val viewFields = fields.filter { View::class.java.isAssignableFrom(it.type) }
-        for (name in preferredNames.distinct()) {
-            viewFields.singleOrNull { it.name == name }?.let { return it }
-        }
-        val primary = viewFields.filter { ViewGroup::class.java.isAssignableFrom(it.type) }
-        primary.singleOrNull()?.let { return it }
-        viewFields.singleOrNull { it.name == legacyName }?.let { return it }
-        return viewFields.singleOrNull()
-    }
-
-    private fun selectEnterForumCapsuleTitleField(
-        fields: List<Field>,
-        preferredNames: List<String>,
-        legacyName: String,
-    ): Field? {
-        val stringFields = fields.filter { it.type == String::class.java }
-        for (name in preferredNames.distinct()) {
-            stringFields.singleOrNull { it.name == name }?.let { return it }
-        }
-        stringFields.singleOrNull()?.let { return it }
-        return stringFields.singleOrNull { it.name == legacyName }
     }
 
     private fun isNoArgVoidMethod(method: Method): Boolean {
@@ -853,142 +480,6 @@ internal object HomeNativeGlassSymbolScanner {
 
     private fun encodeClassMethodSpec(clazz: Class<*>, method: Method): String {
         return "${clazz.name}#${method.name}"
-    }
-
-    private fun selectHostDarkModeSwitchCallbackMethod(
-        methods: List<Method>,
-        switchViewType: Class<*>,
-        switchStateType: Class<*>,
-        logger: ScanLogger?,
-    ): Method? {
-        val candidates = methods.filter { method ->
-            val params = method.parameterTypes
-            !Modifier.isStatic(method.modifiers) &&
-                method.returnType == Void.TYPE &&
-                params.size == 2 &&
-                View::class.java.isAssignableFrom(params[0]) &&
-                params[0].isAssignableFrom(switchViewType) &&
-                params[1] == switchStateType
-        }
-        if (candidates.size == 1) return candidates.first()
-        if (candidates.isNotEmpty()) {
-            log(
-                logger,
-                "homeNativeGlassHostDarkModeSwitch: callback ambiguous candidates=" +
-                    candidates.joinToString(",") { describeMethodShape(it) },
-            )
-        }
-        return null
-    }
-
-    private fun selectHostDarkModeSwitchCallbackMethodByName(
-        activityMethods: List<Method>,
-        callbackMethodName: String?,
-        switchViewType: Class<*>,
-        switchStateType: Class<*>,
-        logger: ScanLogger?,
-    ): Method? {
-        if (callbackMethodName.isNullOrBlank()) return null
-        val candidates = activityMethods.filter { method ->
-            method.name == callbackMethodName && isHostDarkModeSwitchCallbackMethod(
-                method,
-                switchViewType,
-                switchStateType,
-            )
-        }
-        if (candidates.size == 1) return candidates.first()
-        if (candidates.isNotEmpty()) {
-            log(
-                logger,
-                "homeNativeGlassHostDarkModeSwitch: named callback ambiguous candidates=" +
-                    candidates.joinToString(",") { describeMethodShape(it) },
-            )
-        }
-        return null
-    }
-
-    private fun isHostDarkModeSwitchCallbackMethod(
-        method: Method,
-        switchViewType: Class<*>,
-        switchStateType: Class<*>,
-    ): Boolean {
-        val params = method.parameterTypes
-        return !Modifier.isStatic(method.modifiers) &&
-            method.returnType == Void.TYPE &&
-            params.size == 2 &&
-            View::class.java.isAssignableFrom(params[0]) &&
-            params[0].isAssignableFrom(switchViewType) &&
-            params[1] == switchStateType
-    }
-
-    private fun selectHostSwitchStateField(
-        fields: List<Field>,
-        logger: ScanLogger?,
-    ): Field? {
-        val candidates = fields.filter { field ->
-            !Modifier.isStatic(field.modifiers) && field.type.isEnum
-        }
-        candidates.singleOrNull { it.name == HOST_SWITCH_STATE_FIELD_HINT }?.let { return it }
-        if (candidates.size == 1) return candidates.first()
-        if (candidates.isNotEmpty()) {
-            log(
-                logger,
-                "homeNativeGlassHostDarkModeSwitch: state ambiguous candidates=" +
-                    candidates.joinToString(",") { "${it.name}:${it.type.name}" },
-            )
-        }
-        return null
-    }
-
-    private fun selectHostSwitchNamedNoArgVoidMethod(
-        methods: List<Method>,
-        name: String,
-        role: String,
-        logger: ScanLogger?,
-    ): Method? {
-        val candidates = methods.filter { method ->
-            method.name == name && isNoArgVoidMethod(method)
-        }
-        if (candidates.size == 1) return candidates.first()
-        if (candidates.size > 1) {
-            log(
-                logger,
-                "homeNativeGlassHostDarkModeSwitch: $role ambiguous candidates=" +
-                    candidates.joinToString(",") { describeMethodShape(it) },
-            )
-        }
-        return null
-    }
-
-    private fun scoreHostDarkModeSwitchCandidate(
-        field: Field,
-        methods: List<Method>,
-        dexMatch: DexHostDarkModeSwitchMatch?,
-    ): Int {
-        var score = 0
-        if (field.type.name.startsWith("com.baidu.tieba.")) score += 6
-        score += methods.size.coerceAtMost(4)
-        if (dexMatch != null) score += 220 + dexMatch.score
-        return score
-    }
-
-    private data class HostDarkModeSwitchCandidate(
-        val field: Field,
-        val getter: Method,
-        val score: Int,
-        val dexMatch: DexHostDarkModeSwitchMatch?,
-    )
-
-    private fun missingHostDarkModeSwitch(
-        logger: ScanLogger?,
-        detail: String,
-    ): HomeNativeGlassHostDarkModeSwitchSymbols {
-        val tag = "HomeNativeGlassHook.HostDarkModeSwitch"
-        val message = HookSymbolScanDiagnostics.sanitizeScanStatusText(detail)
-        HookSymbolScanSession.get()?.scanErrors?.let { errors ->
-            HookSymbolScanDiagnostics.recordScanIssue(logger, tag, errors, message)
-        } ?: log(logger, "homeNativeGlassHostDarkModeSwitch: $message")
-        return HomeNativeGlassHostDarkModeSwitchSymbols()
     }
 
     private fun resolveRIdField(

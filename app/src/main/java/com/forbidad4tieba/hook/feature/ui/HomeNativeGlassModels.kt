@@ -38,7 +38,7 @@ internal data class CachedBackgroundBitmap(
     val bitmap: Bitmap?,
     val blurredBitmap: Bitmap?,
     val memoryBytes: Long,
-    var metadataCheckedAt: Long,
+    @Volatile var metadataCheckedAt: Long,
 )
 
 internal data class BackgroundFileMetadata(
@@ -109,24 +109,6 @@ internal data class HomeSubPbSetNextPageTarget(
     val parameterTypeName: String,
 )
 
-internal data class HomeFeedCardStyleState(
-    val page: View?,
-    val width: Int,
-    val height: Int,
-    val childCount: Int,
-    val sourcePath: String,
-    val blurCachePath: String,
-    val sourceLastModified: Long,
-    val sourceLength: Long,
-    val blurCacheLastModified: Long,
-    val blurCacheLength: Long,
-    val tintAlphaPercent: Int,
-    val cardBlurPercent: Int,
-    val cardRadiusDp: Int,
-    val strokeEnabled: Boolean,
-    val shadowStrengthPercent: Int,
-)
-
 internal data class ChromeGlassOriginalState(
     val background: Drawable?,
     val foreground: Drawable?,
@@ -139,11 +121,6 @@ internal data class PbCommentBackgroundState(
     val blurCachePath: String,
     val sourcePath: String,
     val tintAlphaPercent: Int,
-)
-
-internal data class PbActivityType(
-    val isPb: Boolean,
-    val isSubPbReplyHost: Boolean,
 )
 
 internal enum class PbCommentBackgroundWriteRole {
@@ -164,23 +141,6 @@ internal data class PbSortSwitchTintState(
     val pinnedReplyTitle: Boolean,
     val backgroundColor: Int?,
     val selectedColor: Int?,
-)
-
-internal data class PbCommentDynamicTintState(
-    val tintColor: Int,
-    val autoTintColor: Int,
-    val lightColor: Int,
-)
-
-internal data class PbSubPbLayoutCardState(
-    val host: View,
-    val blurCachePath: String,
-    val sourcePath: String,
-    val tintAlphaPercent: Int,
-    val cardBlurPercent: Int,
-    val cardRadiusDp: Int,
-    val strokeEnabled: Boolean,
-    val shadowStrengthPercent: Int,
 )
 
 internal data class PbSubPbLayoutPaddingState(
@@ -206,23 +166,4 @@ internal data class EnterForumCapsuleOriginalState(
 
 internal class PendingViewGroupApply(parent: ViewGroup?) {
     var parentRef: WeakReference<ViewGroup>? = parent?.let(::WeakReference)
-}
-
-internal class HomeRecyclerFrameState {
-    var initialized: Boolean = false
-    var recyclerX: Int = 0
-    var recyclerY: Int = 0
-    var firstChildX: Int = 0
-    var firstChildY: Int = 0
-    var canScrollUp: Boolean = false
-    val location: IntArray = IntArray(2)
-}
-
-internal class PbSubPbLayoutFrameState {
-    var initialized: Boolean = false
-    var x: Int = 0
-    var y: Int = 0
-    var width: Int = 0
-    var height: Int = 0
-    val location: IntArray = IntArray(2)
 }
