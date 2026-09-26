@@ -165,6 +165,12 @@ data class HookSymbols(
         get() = hookPoints.web.enterForum.enterForumInitInfoDataClass
     val enterForumInitInfoGetUrlMethod: String?
         get() = hookPoints.web.enterForum.enterForumInitInfoGetUrlMethod
+    val enterForumWebViewFieldOwnerClass: String?
+        get() = hookPoints.web.enterForum.enterForumWebViewFieldOwnerClass
+    val enterForumWebViewField: String?
+        get() = hookPoints.web.enterForum.enterForumWebViewField
+    val enterForumWebSetForceCommonMethod: String?
+        get() = hookPoints.web.enterForum.enterForumWebSetForceCommonMethod
     val plainUrlClickableSpanClass: String?
         get() = hookPoints.web.plainUrl.clickableSpan.plainUrlClickableSpanClass
     val plainUrlClickableSpanOnClickMethod: String?
@@ -922,6 +928,9 @@ data class HookSymbols(
             put("enterForumWebLoadMethod", enterForumWebLoadMethod)
             put("enterForumInitInfoDataClass", enterForumInitInfoDataClass)
             put("enterForumInitInfoGetUrlMethod", enterForumInitInfoGetUrlMethod)
+            put("enterForumWebViewFieldOwnerClass", enterForumWebViewFieldOwnerClass)
+            put("enterForumWebViewField", enterForumWebViewField)
+            put("enterForumWebSetForceCommonMethod", enterForumWebSetForceCommonMethod)
             put("plainUrlClickableSpanClass", plainUrlClickableSpanClass)
             put("plainUrlClickableSpanOnClickMethod", plainUrlClickableSpanOnClickMethod)
             putStringArray("plainUrlClickableSpanOnClickOwnerClasses", plainUrlClickableSpanOnClickOwnerClasses)
@@ -1344,8 +1353,8 @@ data class HookSymbols(
     }
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 59
-        const val DEXKIT_RULE_VERSION = 58
+        const val CACHE_SCHEMA_VERSION = 60
+        const val DEXKIT_RULE_VERSION = 59
 
         fun unsupported(
             scanErrors: List<String> = emptyList(),
@@ -1458,6 +1467,9 @@ data class HookSymbols(
                     enterForumWebLoadMethod = obj.optStringOrNull("enterForumWebLoadMethod")
                     enterForumInitInfoDataClass = obj.optStringOrNull("enterForumInitInfoDataClass")
                     enterForumInitInfoGetUrlMethod = obj.optStringOrNull("enterForumInitInfoGetUrlMethod")
+                    enterForumWebViewFieldOwnerClass = obj.optStringOrNull("enterForumWebViewFieldOwnerClass")
+                    enterForumWebViewField = obj.optStringOrNull("enterForumWebViewField")
+                    enterForumWebSetForceCommonMethod = obj.optStringOrNull("enterForumWebSetForceCommonMethod")
                     plainUrlClickableSpanClass = obj.optStringOrNull("plainUrlClickableSpanClass")
                     plainUrlClickableSpanOnClickMethod = obj.optStringOrNull("plainUrlClickableSpanOnClickMethod")
                     plainUrlClickableSpanOnClickOwnerClasses = obj.optStringArray("plainUrlClickableSpanOnClickOwnerClasses")

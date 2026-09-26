@@ -625,19 +625,20 @@ internal object HookSymbolStatusFormatter {
                 "forumBusinessPromotJumpMethod" to has(symbols.forumBusinessPromotJumpMethod),
             ),
         )
-        val enterForumInitInfoReady =
-            has(symbols.enterForumInitInfoDataClass) &&
-                has(symbols.enterForumInitInfoGetUrlMethod)
-        val enterForumWebLoadReady =
-            has(symbols.enterForumWebControllerClass) &&
-                has(symbols.enterForumWebLoadMethod)
+        val enterForumLoadChecks = listOf(
+            "enterForumWebControllerClass" to has(symbols.enterForumWebControllerClass),
+            "enterForumWebLoadMethod" to has(symbols.enterForumWebLoadMethod),
+        )
+        val enterForumPolicyChecks = listOf(
+            "enterForumWebViewFieldOwnerClass" to has(symbols.enterForumWebViewFieldOwnerClass),
+            "enterForumWebViewField" to has(symbols.enterForumWebViewField),
+            "enterForumWebSetForceCommonMethod" to has(symbols.enterForumWebSetForceCommonMethod),
+        )
         add(
             "EnterForumWebHook",
             "source=${symbols.enterForumInitInfoDataClass}.${symbols.enterForumInitInfoGetUrlMethod} " +
                 "webLoad=${symbols.enterForumWebControllerClass}.${symbols.enterForumWebLoadMethod}(String)",
-            listOf(
-                "enterForumUrlSourceOrWebLoadTarget" to (enterForumInitInfoReady || enterForumWebLoadReady),
-            ),
+            enterForumLoadChecks + enterForumPolicyChecks,
         )
         addOptional(
             "EnterForumWebHook.InitInfoData",
@@ -647,13 +648,16 @@ internal object HookSymbolStatusFormatter {
                 "enterForumInitInfoGetUrlMethod" to has(symbols.enterForumInitInfoGetUrlMethod),
             ),
         )
-        addOptional(
+        add(
             "EnterForumWebHook.WebLoad",
             "${symbols.enterForumWebControllerClass}.${symbols.enterForumWebLoadMethod}(String)",
-            listOf(
-                "enterForumWebControllerClass" to has(symbols.enterForumWebControllerClass),
-                "enterForumWebLoadMethod" to has(symbols.enterForumWebLoadMethod),
-            ),
+            enterForumLoadChecks,
+        )
+        add(
+            "EnterForumWebHook.LoadPolicy",
+            "${symbols.enterForumWebViewFieldOwnerClass}.${symbols.enterForumWebViewField} -> " +
+                "TbWebView.${symbols.enterForumWebSetForceCommonMethod}(boolean)",
+            enterForumPolicyChecks,
         )
         addOptional(
             "PlainUrlDirectBrowserHook.Direct",

@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.symbol.validation
 
+import com.forbidad4tieba.hook.symbol.resolve.EnterForumWebTargetResolver
 import com.forbidad4tieba.hook.symbol.model.*
 
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
@@ -147,7 +148,10 @@ internal object HookSymbolValidator {
     if (hasForumPageAdSymbols && !isForumPageAdValid(symbols, cl)) return false
     val hasEnterForumWebSymbols =
         symbols.enterForumWebControllerClass != null ||
-            symbols.enterForumWebLoadMethod != null
+            symbols.enterForumWebLoadMethod != null ||
+            symbols.enterForumWebViewFieldOwnerClass != null ||
+            symbols.enterForumWebViewField != null ||
+            symbols.enterForumWebSetForceCommonMethod != null
     if (hasEnterForumWebSymbols && !isEnterForumWebValid(symbols, cl)) return false
     val hasEnterForumInitInfoSymbols =
         symbols.enterForumInitInfoDataClass != null ||
@@ -1269,38 +1273,7 @@ private fun isPbFirstFloorRecommendInsertValid(
 }
 
 private fun isEnterForumWebValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-    val className = symbols.enterForumWebControllerClass ?: return false
-    val methodName = symbols.enterForumWebLoadMethod ?: return false
-    return try {
-        val targetClass = safeFindClass(className, cl) ?: return false
-        if (!hasEnterForumMainWebControllerSignal(targetClass)) return false
-        val tbWebViewClass = safeFindClass(TB_WEB_VIEW_CLASS, cl) ?: return false
-        val hasWebViewGetter = targetClass.declaredMethods.any { method ->
-            !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                tbWebViewClass.isAssignableFrom(method.returnType)
-        }
-        if (!hasWebViewGetter) return false
-        targetClass.declaredMethods.any { method ->
-            !java.lang.reflect.Modifier.isStatic(method.modifiers) &&
-                method.name == methodName &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                method.parameterTypes[0] == String::class.java
-        }
-    } catch (_: Throwable) {
-        false
-    }
-}
-
-private fun hasEnterForumMainWebControllerSignal(targetClass: Class<*>): Boolean {
-    val hasUniqueIdField = targetClass.declaredFields.any { field ->
-        field.type.name == BD_UNIQUE_ID_CLASS
-    }
-    val hasUniqueIdConstructor = targetClass.declaredConstructors.any { constructor ->
-        constructor.parameterTypes.any { it.name == BD_UNIQUE_ID_CLASS }
-    }
-    return hasUniqueIdField || hasUniqueIdConstructor
+    return EnterForumWebTargetResolver.resolveWebLoad(cl, symbols) != null
 }
 
 private fun isEnterForumInitInfoValid(symbols: HookSymbols, cl: ClassLoader): Boolean {

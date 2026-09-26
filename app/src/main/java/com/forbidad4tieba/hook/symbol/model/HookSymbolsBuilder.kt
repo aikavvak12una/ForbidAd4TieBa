@@ -65,6 +65,9 @@ internal class HookSymbolsBuilder {
     var enterForumWebLoadMethod: String? = null
     var enterForumInitInfoDataClass: String? = null
     var enterForumInitInfoGetUrlMethod: String? = null
+    var enterForumWebViewFieldOwnerClass: String? = null
+    var enterForumWebViewField: String? = null
+    var enterForumWebSetForceCommonMethod: String? = null
     var plainUrlClickableSpanClass: String? = null
     var plainUrlClickableSpanOnClickMethod: String? = null
     var plainUrlClickableSpanOnClickOwnerClasses: List<String>? = null
@@ -725,6 +728,9 @@ internal class HookSymbolsBuilder {
                 enterForumWebLoadMethod,
                 enterForumInitInfoDataClass,
                 enterForumInitInfoGetUrlMethod,
+                enterForumWebViewFieldOwnerClass,
+                enterForumWebViewField,
+                enterForumWebSetForceCommonMethod,
             ),
             plainUrl = PlainUrlSymbolsGroup(
                 clickableSpan = PlainUrlClickableSpanSymbolsGroup(

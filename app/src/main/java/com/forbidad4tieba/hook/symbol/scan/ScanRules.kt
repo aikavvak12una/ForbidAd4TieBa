@@ -184,65 +184,6 @@ internal class HomeTabsLevel1Rule : ScanRule() {
     }
 }
 
-internal class EnterForumWebControllerRule(
-    private val tbWebViewClass: Class<*>,
-) : ScanRule() {
-    override val minScoreGap: Int = 20
-
-    override fun match(cls: Class<*>, cl: ClassLoader): ScanMatch? = match(cls, cl, null)
-
-    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
-        if (cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
-        if (!cls.name.startsWith("com.baidu.tieba.")) return null
-
-        val shape = scanRuleClassShape("EnterForumWebControllerRule", cls, logger) ?: return null
-        val fields = shape.fields
-        val constructors = shape.constructors
-        val methods = shape.methods.filter { !Modifier.isStatic(it.modifiers) }
-        val hasWebViewGetter = methods.any { method ->
-            method.parameterTypes.isEmpty() &&
-                tbWebViewClass.isAssignableFrom(method.returnType)
-        }
-        if (!hasWebViewGetter) return null
-
-        val stringVoidMethods = methods.filter { method ->
-            method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 1 &&
-                method.parameterTypes[0] == String::class.java
-        }
-        if (stringVoidMethods.isEmpty()) return null
-
-        val targetMethod = stringVoidMethods.minWithOrNull(
-            compareBy<java.lang.reflect.Method>(
-                { if (it.name.length <= 2) 0 else 1 },
-                { it.name.length },
-                { it.name },
-            ),
-        ) ?: return null
-
-        val hasUniqueIdField = fields.any { it.type.name == "com.baidu.adp.BdUniqueId" }
-        val hasUniqueIdConstructor = constructors.any { constructor ->
-            constructor.parameterTypes.any { it.name == "com.baidu.adp.BdUniqueId" }
-        }
-        val hasViewField = fields.any { View::class.java.isAssignableFrom(it.type) }
-
-        var score = 90
-        if (hasUniqueIdField) score += 36
-        if (hasUniqueIdConstructor) score += 30
-        if (hasViewField) score += 8
-        if (cls.simpleName.length <= 4) score += 6
-        score -= methods.size / 6
-        score -= stringVoidMethods.size
-        score -= cls.simpleName.length
-        return ScanMatch(
-            className = cls.name,
-            methodName = targetMethod.name,
-            fieldName = "",
-            score = score,
-        )
-    }
-}
-
 internal class AutoLoadMoreConfigRule(
     private val parserClassName: String,
     private val preferredMethodName: String = "a",

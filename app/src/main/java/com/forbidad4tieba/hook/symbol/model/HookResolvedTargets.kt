@@ -120,7 +120,9 @@ internal data class ImageViewerNativeShareSymbols(
 
 internal data class EnterForumWebSymbols(
     val sourceGetUrlMethod: Method?,
-    val webLoadMethod: Method?,
+    val webLoadMethod: Method,
+    val webViewField: Field,
+    val setForceCommonMethod: Method,
 )
 
 internal data class ForumNativeTopShiftSymbols(

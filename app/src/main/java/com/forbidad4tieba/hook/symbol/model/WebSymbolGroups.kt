@@ -12,6 +12,9 @@ data class EnterForumWebSymbolsGroup(
     val enterForumWebLoadMethod: String? = null,
     val enterForumInitInfoDataClass: String? = null,
     val enterForumInitInfoGetUrlMethod: String? = null,
+    val enterForumWebViewFieldOwnerClass: String? = null,
+    val enterForumWebViewField: String? = null,
+    val enterForumWebSetForceCommonMethod: String? = null,
 )
 
 data class PlainUrlSymbolsGroup(
