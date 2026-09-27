@@ -1,0 +1,334 @@
+package com.forbidad4tieba.hook.symbol.scan
+
+import com.forbidad4tieba.hook.contracts.Diagnostics
+import com.forbidad4tieba.hook.symbol.model.*
+
+import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
+import android.content.Context
+import org.luckypray.dexkit.DexKitBridge
+import java.lang.reflect.Constructor
+import java.lang.reflect.Field
+import java.lang.reflect.Method
+import java.lang.reflect.Modifier
+
+internal object PrivateReadReceiptSymbolScanner {
+    private const val MODEL_CLASS =
+        "com.baidu.tieba.immessagecenter.im.model.PersonalMsglistModel"
+    private const val MESSAGE_MANAGER_CLASS = "com.baidu.adp.framework.MessageManager"
+    private const val MESSAGE_MANAGER_GET_INSTANCE_METHOD = "getInstance"
+    private const val MESSAGE_MANAGER_GET_SOCKET_CLIENT_METHOD = "getSocketClient"
+    private const val MESSAGE_BASE_CLASS = "com.baidu.adp.framework.message.Message"
+    private const val MESSAGE_SEND_METHOD = "sendMessage"
+    private const val REQUEST_CLASS =
+        "com.baidu.tieba.im.message.RequestPersonalMsgReadMessage"
+    private const val MODEL_BASE_CLASS = "com.baidu.tieba.im.model.MsglistModel"
+    private const val COMMIT_RESPONSE_CLASS = "com.baidu.tieba.im.message.ResponseCommitMessage"
+    private const val PROCESS_ACK_METHOD = "processMsgACK"
+    private const val RESPONSE_ERROR_METHOD = "getError"
+    private const val REQUEST_MSG_ID_FIELD = "hasSentMsgId"
+    private const val REQUEST_TO_UID_FIELD = "toUid"
+    private const val MODEL_DATA_FIELD = "mDatas"
+    private const val PAGE_DATA_CLASS = "com.baidu.tieba.im.data.MsgPageData"
+    private const val PAGE_DATA_CHAT_LIST_METHOD = "getChatMessages"
+    private const val CHAT_MESSAGE_CLASS = "com.baidu.tieba.im.message.chat.ChatMessage"
+    private const val CHAT_MESSAGE_MSG_ID_METHOD = "getMsgId"
+    private const val CHAT_MESSAGE_USER_ID_METHOD = "getUserId"
+    private const val ACCOUNT_CLASS = "com.baidu.tbadk.core.TbadkCoreApplication"
+    private const val CURRENT_ACCOUNT_METHOD = "getCurrentAccount"
+
+    fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): PrivateReadReceiptScanSymbols {
+        fun declaredConstructors(label: String, clazz: Class<*>): List<Constructor<*>>? {
+            return scanSubStep("PrivateReadReceiptBlockHook.$label.Constructors", logger, null) {
+                clazz.declaredConstructors.toList()
+            }
+        }
+
+        fun declaredMethods(label: String, clazz: Class<*>): List<Method>? {
+            return scanSubStep("PrivateReadReceiptBlockHook.$label.Methods", logger, null) {
+                clazz.declaredMethods.toList()
+            }
+        }
+
+        fun instanceFields(label: String, clazz: Class<*>): List<Field>? {
+            return scanSubStep("PrivateReadReceiptBlockHook.$label.InstanceFields", logger, null) {
+                collectInstanceFields(clazz)
+            }
+        }
+
+        fun instanceMethods(label: String, clazz: Class<*>): List<Method>? {
+            return scanSubStep("PrivateReadReceiptBlockHook.$label.InstanceMethods", logger, null) {
+                collectInstanceMethods(clazz)
+            }
+        }
+
+        val modelClass = safeFindClass(MODEL_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $MODEL_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val messageManagerClass = safeFindClass(MESSAGE_MANAGER_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $MESSAGE_MANAGER_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val messageBaseClass = safeFindClass(MESSAGE_BASE_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $MESSAGE_BASE_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val requestClass = safeFindClass(REQUEST_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $REQUEST_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val requestConstructors = declaredConstructors("RequestPersonalMsgReadMessage", requestClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        requestConstructors.singleOrNull { ctor ->
+            ctor.parameterTypes.size == 2 &&
+                ctor.parameterTypes[0] == Long::class.javaPrimitiveType &&
+                ctor.parameterTypes[1] == Long::class.javaPrimitiveType
+        } ?: run {
+            log(logger, "privateReadReceipt: RequestPersonalMsgReadMessage(long,long) not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val modelBaseClass = safeFindClass(MODEL_BASE_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $MODEL_BASE_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val commitResponseClass = safeFindClass(COMMIT_RESPONSE_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $COMMIT_RESPONSE_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val pageDataClass = safeFindClass(PAGE_DATA_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $PAGE_DATA_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val chatMessageClass = safeFindClass(CHAT_MESSAGE_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $CHAT_MESSAGE_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val accountClass = safeFindClass(ACCOUNT_CLASS, cl) ?: run {
+            log(logger, "privateReadReceipt: class not found: $ACCOUNT_CLASS")
+            return PrivateReadReceiptScanSymbols()
+        }
+        if (!messageBaseClass.isAssignableFrom(requestClass)) {
+            log(logger, "privateReadReceipt: request class hierarchy mismatch")
+            return PrivateReadReceiptScanSymbols()
+        }
+
+        val messageManagerMethods = declaredMethods("MessageManager", messageManagerClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val modelBaseMethods = declaredMethods("MsglistModel", modelBaseClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val commitResponseMethods = instanceMethods("ResponseCommitMessage", commitResponseClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val requestFields = instanceFields("RequestPersonalMsgReadMessage", requestClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val modelFields = instanceFields("PersonalMsglistModel", modelClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val pageDataMethods = declaredMethods("MsgPageData", pageDataClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val chatMessageMethods = declaredMethods("ChatMessage", chatMessageClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val accountMethods = declaredMethods("TbadkCoreApplication", accountClass)
+            ?: return PrivateReadReceiptScanSymbols()
+
+        val modelReadDispatchMethod = scanSubStep(
+            "PrivateReadReceiptBlockHook.ReadDispatch", logger, null,
+        ) {
+            val paths = listOfNotNull(context.applicationInfo?.sourceDir) +
+                context.applicationInfo?.splitSourceDirs.orEmpty()
+            HookSymbolScanSession.withDexKitBridge(paths, logger) {
+                resolveReadDispatch(it.bridge, cl, logger)
+            }
+        } ?: run {
+            log(logger, "privateReadReceipt: semantic read dispatch missing or ambiguous")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val messageSendMethod = messageManagerMethods.singleOrNull { method ->
+            method.name == MESSAGE_SEND_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Boolean::class.javaPrimitiveType &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0] == messageBaseClass
+        } ?: run {
+            log(logger, "privateReadReceipt: MessageManager.sendMessage(Message) not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val messageManagerGetInstanceMethod = messageManagerMethods.singleOrNull { method ->
+            method.name == MESSAGE_MANAGER_GET_INSTANCE_METHOD &&
+                Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == messageManagerClass
+        } ?: run {
+            log(logger, "privateReadReceipt: MessageManager.getInstance() not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val messageManagerGetSocketClientMethod = messageManagerMethods.singleOrNull { method ->
+            method.name == MESSAGE_MANAGER_GET_SOCKET_CLIENT_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType != Void.TYPE
+        } ?: run {
+            log(logger, "privateReadReceipt: MessageManager.getSocketClient() not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val socketClientClass = messageManagerGetSocketClientMethod.returnType
+        val socketClientMethods = declaredMethods("SocketClient", socketClientClass)
+            ?: return PrivateReadReceiptScanSymbols()
+        val socketDuplicateCheckMethod = socketClientMethods.singleOrNull { method ->
+            !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Boolean::class.javaPrimitiveType &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0].isAssignableFrom(requestClass)
+        } ?: run {
+            log(logger, "privateReadReceipt: socket duplicate check method not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val processAckMethod = modelBaseMethods.singleOrNull { method ->
+            method.name == PROCESS_ACK_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.returnType == Void.TYPE &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes[0] == commitResponseClass
+        } ?: run {
+            log(logger, "privateReadReceipt: MsglistModel.processMsgACK(ResponseCommitMessage) not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val responseErrorMethod = commitResponseMethods.singleOrNull { method ->
+            method.name == RESPONSE_ERROR_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                isIntType(method.returnType)
+        } ?: run {
+            log(logger, "privateReadReceipt: ResponseCommitMessage.getError() not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val requestMsgIdField = requestFields.singleOrNull { field ->
+            field.name == REQUEST_MSG_ID_FIELD &&
+                field.type == Long::class.javaPrimitiveType
+        } ?: run {
+            log(logger, "privateReadReceipt: RequestPersonalMsgReadMessage.hasSentMsgId not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val requestToUidField = requestFields.singleOrNull { field ->
+            field.name == REQUEST_TO_UID_FIELD &&
+                field.type == Long::class.javaPrimitiveType
+        } ?: run {
+            log(logger, "privateReadReceipt: RequestPersonalMsgReadMessage.toUid not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val modelDataField = modelFields.singleOrNull { field ->
+            field.name == MODEL_DATA_FIELD &&
+                field.type == pageDataClass
+        } ?: run {
+            log(logger, "privateReadReceipt: PersonalMsglistModel.mDatas not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val pageDataChatListMethod = pageDataMethods.singleOrNull { method ->
+            method.name == PAGE_DATA_CHAT_LIST_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                isListType(method.returnType)
+        } ?: run {
+            log(logger, "privateReadReceipt: MsgPageData.getChatMessages() not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val chatMsgIdMethod = chatMessageMethods.singleOrNull { method ->
+            method.name == CHAT_MESSAGE_MSG_ID_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == Long::class.javaPrimitiveType
+        } ?: run {
+            log(logger, "privateReadReceipt: ChatMessage.getMsgId() not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val chatUserIdMethod = chatMessageMethods.singleOrNull { method ->
+            method.name == CHAT_MESSAGE_USER_ID_METHOD &&
+                !Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == Long::class.javaPrimitiveType
+        } ?: run {
+            log(logger, "privateReadReceipt: ChatMessage.getUserId() not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+        val currentAccountMethod = accountMethods.singleOrNull { method ->
+            method.name == CURRENT_ACCOUNT_METHOD &&
+                Modifier.isStatic(method.modifiers) &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == String::class.java
+        } ?: run {
+            log(logger, "privateReadReceipt: TbadkCoreApplication.getCurrentAccount() not found")
+            return PrivateReadReceiptScanSymbols()
+        }
+
+        log(
+            logger,
+            "privateReadReceipt matched: ${modelClass.name}.${modelReadDispatchMethod.name} " +
+                "${messageManagerClass.name}.${messageSendMethod.name}(${messageBaseClass.name})",
+        )
+        return PrivateReadReceiptScanSymbols(
+            modelClass = modelClass.name,
+            modelReadDispatchMethod = modelReadDispatchMethod.name,
+            messageManagerClass = messageManagerClass.name,
+            messageManagerGetInstanceMethod = messageManagerGetInstanceMethod.name,
+            messageManagerGetSocketClientMethod = messageManagerGetSocketClientMethod.name,
+            messageSendMethod = messageSendMethod.name,
+            messageBaseClass = messageBaseClass.name,
+            socketClientClass = socketClientClass.name,
+            socketDuplicateCheckMethod = socketDuplicateCheckMethod.name,
+            requestClass = requestClass.name,
+            modelBaseClass = modelBaseClass.name,
+            commitResponseClass = commitResponseClass.name,
+            processAckMethod = processAckMethod.name,
+            responseErrorMethod = responseErrorMethod.name,
+            requestMsgIdField = requestMsgIdField.name,
+            requestToUidField = requestToUidField.name,
+            modelDataField = modelDataField.name,
+            pageDataClass = pageDataClass.name,
+            pageDataChatListMethod = pageDataChatListMethod.name,
+            chatMessageClass = chatMessageClass.name,
+            chatMessageMsgIdMethod = chatMsgIdMethod.name,
+            chatMessageUserIdMethod = chatUserIdMethod.name,
+            accountClass = accountClass.name,
+            currentAccountMethod = currentAccountMethod.name,
+        )
+    }
+
+    private fun resolveReadDispatch(bridge: DexKitBridge, cl: ClassLoader, logger: ScanLogger?): Method? {
+        val candidates = bridge.getClassData(MODEL_CLASS)?.methods.orEmpty().filter { method ->
+            !Modifier.isStatic(method.modifiers) && method.returnTypeName == "void" &&
+                method.paramCount == 0 && method.methodName != "<init>" && method.invokes.let { calls ->
+                    calls.any {
+                        it.declaredClassName == REQUEST_CLASS && it.methodName == "<init>" &&
+                            it.paramTypeNames == listOf("long", "long")
+                    } && calls.any {
+                        it.declaredClassName == MESSAGE_MANAGER_CLASS && it.methodName == MESSAGE_SEND_METHOD &&
+                            it.paramTypeNames == listOf(MESSAGE_BASE_CLASS) && it.returnTypeName == "boolean"
+                    } && calls.any {
+                        it.declaredClassName == MESSAGE_MANAGER_CLASS &&
+                            it.methodName == MESSAGE_MANAGER_GET_SOCKET_CLIENT_METHOD && it.paramCount == 0
+                    }
+                }
+        }.distinctBy { it.descriptor }
+        val method = selectUniqueScanCandidate("PrivateReadReceiptBlockHook.ReadDispatch", candidates, logger) {
+            it.descriptor
+        } ?: return null
+        return method.getMethodInstance(cl)
+    }
+
+    private fun safeFindClass(name: String, cl: ClassLoader): Class<*>? =
+        ScanReflection.safeFindClass(name, cl)
+
+    private fun collectInstanceFields(clazz: Class<*>): List<java.lang.reflect.Field> =
+        ScanReflection.collectInstanceFields(clazz)
+
+    private fun collectInstanceMethods(clazz: Class<*>): List<java.lang.reflect.Method> =
+        ScanReflection.collectInstanceMethods(clazz)
+
+    private fun isIntType(type: Class<*>): Boolean =
+        ScanReflection.isIntType(type)
+
+    private fun isListType(type: Class<*>): Boolean =
+        ScanReflection.isListType(type)
+
+    private fun log(logger: ScanLogger?, line: String) {
+        HookSymbolScanDiagnostics.log(logger, line)
+    }
+}
