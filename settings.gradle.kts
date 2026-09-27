@@ -24,5 +24,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "forbidad4tieba"
-include(":app")
- 
+include(":contracts", ":host", ":runtime", ":features", ":app")

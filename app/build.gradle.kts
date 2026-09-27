@@ -49,7 +49,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = moduleVersionCode
-        versionName = "26092602"
+        versionName = "26092702"
         buildConfigField(
             "int",
             "MIN_SUPPORTED_USER_SETTINGS_VERSION_CODE",
@@ -112,7 +112,10 @@ android {
 }
 
 dependencies {
-    implementation(libs.dexkit)
+    implementation(project(":contracts"))
+    implementation(project(":host"))
+    implementation(project(":runtime"))
+    implementation(project(":features"))
     compileOnly(libs.xposed.api)
     testImplementation(libs.json)
     testImplementation(libs.junit)

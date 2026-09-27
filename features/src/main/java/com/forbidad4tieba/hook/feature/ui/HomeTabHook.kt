@@ -1,0 +1,770 @@
+package com.forbidad4tieba.hook.feature.ui
+
+import com.forbidad4tieba.hook.core.RuntimeHooks
+import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
+import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.ui.UiText
+import com.forbidad4tieba.hook.core.XposedCompat
+import java.lang.reflect.Constructor
+import java.lang.reflect.Field
+import java.lang.reflect.Method
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+
+object HomeTabHook {
+    /**
+     * 集中定义 tab item 字段解析规则。
+     * 第一次遇到某个类时一次性解析所有字段，
+     * 把缓存未命中次数从 4 次降到 1 次。
+     */
+    private data class TabItemFieldSchema(
+        val typeField: Field? = null,
+        val codeField: Field? = null,
+        val nameField: Field? = null,
+        val urlField: Field? = null,
+    )
+
+    private val sSchemaCache = ConcurrentHashMap<Class<*>, TabItemFieldSchema>()
+    private val sMainSetterMethodCache = ConcurrentHashMap<Class<*>, Method>()
+    private val sMainSetterMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val sMainIntFieldCache = ConcurrentHashMap<Class<*>, Field>()
+    private val sMainIntFieldMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val sMainBooleanFieldCache = ConcurrentHashMap<Class<*>, Field>()
+    private val sMainBooleanFieldMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    private val sNoArgCtorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
+    private val sNoArgCtorMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    @Volatile private var sLastTabItemClass: Class<*>? = null
+
+    private const val TAB_TYPE_RECOMMEND = 1
+    private const val TAB_TYPE_LIVE = 6
+    private const val TAB_TYPE_MATERIAL = 9
+    private const val TAB_TYPE_WEB_ACTIVITY = 202
+
+    private const val TAB_CODE_RECOMMEND = ConfigManager.HOME_TOP_TAB_CODE_RECOMMEND
+    private const val TAB_CODE_LIVE = ConfigManager.HOME_TOP_TAB_CODE_LIVE
+    private const val TAB_CODE_MATERIAL = ConfigManager.HOME_TOP_TAB_CODE_MATERIAL
+    private const val TAB_CODE_FOLLOWED = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED
+    private const val TAB_CODE_FOLLOWED_ALT = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED_ALT
+    private const val TAB_CODE_FOLLOWED_ALT_2 = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED_ALT_2
+
+    private val TAB_NAME_FOLLOWED = UiText.Settings.HOME_TOP_TAB_FOLLOWED_LABEL
+    private const val TAB_URL_FOLLOWED =
+        "https://tieba.baidu.com/mo/q/hybrid-usergrow-base/myFollowed/hybrid" +
+            "?customfullscreen=1&nonavigationbar=1&loadingSignal=1&nohead=1&skin=default" +
+            "&tbhook_from_home_top_tab=1"
+    private const val TAB_URL_FOLLOWED_PATH = ConfigManager.HOME_TOP_TAB_URL_FOLLOWED_PATH
+
+    private data class FollowedTemplateContext(
+        val itemClass: Class<*>?,
+        val template: Any?,
+    )
+
+    private data class FollowedSyncResult(
+        val added: Boolean,
+        val removed: Int,
+        val failed: Boolean,
+    ) {
+        val changed: Boolean
+            get() = added || removed > 0
+    }
+
+    @Volatile private var sRuntimeTargets: HomeTabResolvedSymbols? = null
+
+    internal fun hook(symbols: HomeTabResolvedSymbols) {
+        val mod = XposedCompat.module ?: return
+        sRuntimeTargets = symbols
+        sSchemaCache.clear()
+        sMainSetterMethodCache.clear()
+        sMainSetterMethodMissCache.clear()
+        sMainIntFieldCache.clear()
+        sMainIntFieldMissCache.clear()
+        sMainBooleanFieldCache.clear()
+        sMainBooleanFieldMissCache.clear()
+        try {
+            RuntimeHooks.builder(mod, symbols.rebuildMethod, "HomeTabHook", "hook:symbols.rebuildMethod").intercept { chain ->
+                val result = chain.proceed()
+                val currentSelection = currentSelectionOrNull() ?: return@intercept result
+                @Suppress("UNCHECKED_CAST")
+                val list = resolveMutableListField(chain.thisObject) as? MutableList<Any?>
+                if (list != null) {
+                    publishHomeTopTabCatalog(list)
+                    val templateContext = resolveFollowedTemplateContext(list)
+                    val sizeBefore = list.size
+                    val filteredCount = filterTabsInPlace(list, currentSelection)
+                    val followedSync = syncFollowedTabState(list, currentSelection, templateContext)
+                    if (filteredCount > 0 || followedSync.changed || followedSync.failed) {
+                        XposedCompat.logD {
+                            "[HomeTabHook] > top tabs rebuilt: $sizeBefore -> ${list.size}, " +
+                                "removed=$filteredCount, followedAdded=${followedSync.added}, " +
+                                "followedRemoved=${followedSync.removed}, followedFailed=${followedSync.failed}, " +
+                                "disabledKeys=${currentSelection.disabledKeys.size}, " +
+                                "followed=${currentSelection.followedEnabled}"
+                        }
+                    }
+                }
+                result
+            }
+            XposedCompat.log("[HomeTabHook] hook INSTALLED: ${symbols.hostClass.name}.${symbols.rebuildMethod.name}")
+        } catch (t: Throwable) {
+            XposedCompat.log(
+                "[HomeTabHook] FAILED (${symbols.hostClass.name}.${symbols.rebuildMethod.name}): ${t.message}",
+            )
+            XposedCompat.log(t)
+        }
+    }
+
+    private fun currentSelectionOrNull(): ConfigManager.HomeTopTabSelection? {
+        if (!ConfigManager.snapshot().isHomeTopTabsCustomEnabled) return null
+        return ConfigManager.resolveHomeTopTabSelection()
+    }
+
+    private fun publishHomeTopTabCatalog(list: List<Any?>) {
+        if (list.isEmpty()) return
+        val entries = ArrayList<ConfigManager.HomeTopTabCatalogEntry>(list.size)
+        for (index in list.indices) {
+            val tabItem = list[index] ?: continue
+            val tabType = resolveTabType(tabItem)
+            val tabCode = resolveTabCode(tabItem)
+            val tabUrl = resolveTabUrl(tabItem)
+            val key = ConfigManager.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl) ?: continue
+            if (key == ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED) continue
+            ConfigManager.buildHomeTopTabCatalogEntry(
+                type = tabType.takeIf { it >= 0 },
+                code = tabCode,
+                label = resolveTabName(tabItem),
+                url = tabUrl,
+                order = index,
+            )?.let(entries::add)
+        }
+        if (entries.isEmpty()) return
+        val context = ConfigManager.getAppContext() ?: return
+        runCatching {
+            ConfigManager.updateHomeTopTabCatalog(context, entries)
+        }.onFailure { t ->
+            XposedCompat.logD { "[HomeTabHook] update top tab catalog ignored: ${t.message}" }
+        }
+    }
+
+    private fun filterTabsInPlace(
+        list: MutableList<Any?>,
+        selection: ConfigManager.HomeTopTabSelection,
+    ): Int {
+        if (list.isEmpty()) return 0
+        var removedCount = 0
+        val it = list.iterator()
+        while (it.hasNext()) {
+            val tabItem = it.next() ?: continue
+            val tabType = resolveTabType(tabItem)
+            val tabCode = resolveTabCode(tabItem)
+            val tabUrl = resolveTabUrl(tabItem)
+            if (shouldFilterOut(tabType, tabCode, tabUrl, selection)) {
+                it.remove()
+                removedCount++
+            }
+        }
+        return removedCount
+    }
+
+    private fun shouldFilterOut(
+        tabType: Int,
+        tabCode: String?,
+        tabUrl: String?,
+        selection: ConfigManager.HomeTopTabSelection,
+    ): Boolean {
+        val key = ConfigManager.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl)
+        return !selection.isTabKeyEnabled(key)
+    }
+
+    private fun resolveTargetTab(tabType: Int, tabCode: String?, tabUrl: String?): HomeTopTargetTab {
+        if (isFollowedCode(tabCode) || isFollowedUrl(tabUrl)) {
+            return HomeTopTargetTab.FOLLOWED
+        }
+        when (tabCode) {
+            TAB_CODE_MATERIAL -> return HomeTopTargetTab.MATERIAL
+            TAB_CODE_RECOMMEND -> return HomeTopTargetTab.RECOMMEND
+            TAB_CODE_LIVE -> return HomeTopTargetTab.LIVE
+        }
+        return when (tabType) {
+            TAB_TYPE_MATERIAL -> HomeTopTargetTab.MATERIAL
+            TAB_TYPE_RECOMMEND -> HomeTopTargetTab.RECOMMEND
+            TAB_TYPE_LIVE -> HomeTopTargetTab.LIVE
+            else -> HomeTopTargetTab.OTHER
+        }
+    }
+
+    private fun resolveFollowedTemplateContext(list: List<Any?>): FollowedTemplateContext {
+        var itemClass: Class<*>? = null
+        var materialTemplate: Any? = null
+        var webTemplate: Any? = null
+        var anyTemplate: Any? = null
+        for (entry in list) {
+            val tabItem = entry ?: continue
+            if (itemClass == null) itemClass = tabItem.javaClass
+            if (anyTemplate == null) anyTemplate = tabItem
+
+            val tabType = resolveTabType(tabItem)
+            val tabCode = resolveTabCode(tabItem)
+            val tabUrl = resolveTabUrl(tabItem)
+            if (materialTemplate == null &&
+                resolveTargetTab(tabType, tabCode, tabUrl) == HomeTopTargetTab.MATERIAL
+            ) {
+                materialTemplate = tabItem
+            }
+            if (webTemplate == null && isWebTabCandidate(tabType, tabUrl)) {
+                webTemplate = tabItem
+            }
+        }
+        val finalClass = itemClass ?: sLastTabItemClass
+        if (finalClass != null) {
+            sLastTabItemClass = finalClass
+        }
+        return FollowedTemplateContext(
+            itemClass = finalClass,
+            template = materialTemplate ?: webTemplate ?: anyTemplate,
+        )
+    }
+
+    private fun isWebTabCandidate(tabType: Int, tabUrl: String?): Boolean {
+        if (tabType == TAB_TYPE_MATERIAL || tabType == TAB_TYPE_WEB_ACTIVITY) return true
+        return isUrlLike(tabUrl.orEmpty())
+    }
+
+    private fun syncFollowedTabState(
+        list: MutableList<Any?>,
+        selection: ConfigManager.HomeTopTabSelection,
+        templateContext: FollowedTemplateContext,
+    ): FollowedSyncResult {
+        if (!selection.followedEnabled) {
+            val removed = removeFollowedTabs(list)
+            return FollowedSyncResult(
+                added = false,
+                removed = removed,
+                failed = false,
+            )
+        }
+        return ensureFollowedTabEnabled(list, templateContext)
+    }
+
+    private fun ensureFollowedTabEnabled(
+        list: MutableList<Any?>,
+        templateContext: FollowedTemplateContext,
+    ): FollowedSyncResult {
+        val followedIndexes = ArrayList<Int>(2)
+        for (index in list.indices) {
+            val tabItem = list[index] ?: continue
+            if (isFollowedTab(tabItem)) {
+                followedIndexes.add(index)
+            }
+        }
+
+        var removed = 0
+        if (followedIndexes.size > 1) {
+            for (i in followedIndexes.size - 1 downTo 1) {
+                list.removeAt(followedIndexes[i])
+                removed++
+            }
+        }
+        if (followedIndexes.isNotEmpty()) {
+            return FollowedSyncResult(
+                added = false,
+                removed = removed,
+                failed = false,
+            )
+        }
+
+        val newFollowedTab = createFollowedTabItem(templateContext)
+        if (newFollowedTab == null) {
+            XposedCompat.logW("[HomeTabHook] followed tab inject failed: no writable tab template/class found")
+            return FollowedSyncResult(
+                added = false,
+                removed = removed,
+                failed = true,
+            )
+        }
+
+        val insertIndex = resolveFollowedInsertIndex(list).coerceIn(0, list.size)
+        list.add(insertIndex, newFollowedTab)
+        return FollowedSyncResult(
+            added = true,
+            removed = removed,
+            failed = false,
+        )
+    }
+
+    private fun removeFollowedTabs(list: MutableList<Any?>): Int {
+        if (list.isEmpty()) return 0
+        var removed = 0
+        val it = list.iterator()
+        while (it.hasNext()) {
+            val tabItem = it.next() ?: continue
+            if (isFollowedTab(tabItem)) {
+                it.remove()
+                removed++
+            }
+        }
+        return removed
+    }
+
+    private fun isFollowedTab(tabItem: Any): Boolean {
+        return resolveTargetTab(
+            tabType = resolveTabType(tabItem),
+            tabCode = resolveTabCode(tabItem),
+            tabUrl = resolveTabUrl(tabItem),
+        ) == HomeTopTargetTab.FOLLOWED
+    }
+
+    private fun resolveFollowedInsertIndex(list: List<Any?>): Int {
+        var recommendIndex = -1
+        var materialIndex = -1
+        loop@ for (index in list.indices) {
+            val tabItem = list[index] ?: continue
+            val target = resolveTargetTab(
+                tabType = resolveTabType(tabItem),
+                tabCode = resolveTabCode(tabItem),
+                tabUrl = resolveTabUrl(tabItem),
+            )
+            when (target) {
+                HomeTopTargetTab.RECOMMEND -> {
+                    recommendIndex = index
+                    break@loop
+                }
+                HomeTopTargetTab.MATERIAL -> if (materialIndex < 0) {
+                    materialIndex = index
+                }
+                else -> Unit
+            }
+        }
+        if (recommendIndex >= 0) return recommendIndex + 1
+        if (materialIndex >= 0) return materialIndex + 1
+        return list.size
+    }
+
+    private fun createFollowedTabItem(templateContext: FollowedTemplateContext): Any? {
+        val itemClass = templateContext.itemClass ?: sLastTabItemClass ?: return null
+        val clonedTemplate = templateContext.template?.let { cloneTabItem(it) }
+        val tabItem = clonedTemplate ?: instantiateTabItem(itemClass) ?: return null
+        if (!applyFollowedTabIdentity(tabItem)) {
+            return null
+        }
+        return tabItem
+    }
+
+    private fun instantiateTabItem(cls: Class<*>): Any? {
+        val cached = sNoArgCtorCache[cls]
+        if (cached != null) {
+            return newInstance(cached)
+        }
+        if (sNoArgCtorMissCache.contains(cls)) return null
+
+        val ctor = try {
+            cls.getDeclaredConstructor().apply { isAccessible = true }
+        } catch (_: Throwable) {
+            null
+        }
+        if (ctor == null) {
+            sNoArgCtorMissCache.add(cls)
+            return null
+        }
+        sNoArgCtorCache[cls] = ctor
+        return newInstance(ctor)
+    }
+
+    private fun newInstance(ctor: Constructor<*>): Any? {
+        return try {
+            ctor.newInstance()
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun cloneTabItem(template: Any): Any? {
+        val clone = instantiateTabItem(template.javaClass) ?: return null
+        copyCachedTabFields(template, clone)
+        return clone
+    }
+
+    private fun copyCachedTabFields(source: Any, target: Any) {
+        val cls = source.javaClass
+        copyFieldValue(resolveTypeField(cls), source, target)
+        copyFieldValue(resolveCodeField(cls), source, target)
+        copyFieldValue(resolveNameField(cls), source, target)
+        copyFieldValue(resolveUrlField(cls), source, target)
+        copyFieldValue(resolveMainIntField(cls), source, target)
+        copyFieldValue(resolveMainBooleanField(cls), source, target)
+    }
+
+    private fun copyFieldValue(field: Field?, source: Any, target: Any) {
+        if (field == null) return
+        try {
+            field.set(target, field.get(source))
+        } catch (_: Throwable) {
+            // Template copy is best-effort; followed identity is applied afterward.
+        }
+    }
+
+    private fun applyFollowedTabIdentity(tabItem: Any): Boolean {
+        val typeApplied = setTabType(tabItem, TAB_TYPE_WEB_ACTIVITY)
+        val codeApplied = setTabCode(tabItem, TAB_CODE_FOLLOWED)
+        val nameApplied = setTabName(tabItem, TAB_NAME_FOLLOWED)
+        val urlApplied = setTabUrl(tabItem, TAB_URL_FOLLOWED)
+        setTabMain(tabItem, true)
+
+        if (!typeApplied || !codeApplied || !nameApplied || !urlApplied) {
+            XposedCompat.logW(
+                "[HomeTabHook] followed tab build failed: " +
+                    "type=$typeApplied, code=$codeApplied, name=$nameApplied, " +
+                    "url=$urlApplied, class=${tabItem.javaClass.name}"
+            )
+            return false
+        }
+        return true
+    }
+
+    private fun setTabType(item: Any, type: Int): Boolean {
+        val field = resolveTypeField(item.javaClass) ?: return false
+        return writeIntField(field, item, type)
+    }
+
+    private fun setTabCode(item: Any, code: String): Boolean {
+        val cls = item.javaClass
+        val field = resolveCodeField(cls) ?: return false
+        return try {
+            field.set(item, code)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun setTabName(item: Any, name: String): Boolean {
+        val cls = item.javaClass
+        val field = resolveNameField(cls) ?: return false
+        return try {
+            field.set(item, name)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun setTabUrl(item: Any, url: String): Boolean {
+        val cls = item.javaClass
+        val field = resolveUrlField(cls) ?: return false
+        return try {
+            field.set(item, url)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun setTabMain(item: Any, enabled: Boolean): Boolean {
+        val cls = item.javaClass
+        val mainSetter = resolveMainSetterMethod(cls)
+        if (mainSetter != null) {
+            try {
+                mainSetter.invoke(item, enabled)
+                return true
+            } catch (_: Throwable) {
+                // Skip and continue.
+            }
+        }
+
+        val mainIntField = resolveMainIntField(cls)
+        if (mainIntField != null && writeIntField(mainIntField, item, if (enabled) 1 else 0)) {
+            return true
+        }
+
+        val mainBooleanField = resolveMainBooleanField(cls)
+        if (mainBooleanField != null) {
+            return try {
+                if (mainBooleanField.type == Boolean::class.javaPrimitiveType) {
+                    mainBooleanField.setBoolean(item, enabled)
+                } else {
+                    mainBooleanField.set(item, enabled)
+                }
+                true
+            } catch (_: Throwable) {
+                false
+            }
+        }
+
+        return false
+    }
+
+    private fun writeIntField(field: Field, target: Any, value: Int): Boolean {
+        return try {
+            if (field.type == Int::class.javaPrimitiveType) {
+                field.setInt(target, value)
+            } else {
+                field.set(target, value)
+            }
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun resolveTabType(item: Any): Int {
+        val field = resolveTypeField(item.javaClass) ?: return -1
+        return try {
+            when (val value = field.get(item)) {
+                is Number -> value.toInt()
+                else -> -1
+            }
+        } catch (_: Throwable) {
+            -1
+        }
+    }
+
+    private fun resolveTabCode(item: Any): String? {
+        val cls = item.javaClass
+        val codeField = resolveCodeField(cls)
+        if (codeField != null) {
+            val code = try {
+                normalizeCode(codeField.get(item) as? String)
+            } catch (_: Throwable) {
+                null
+            }
+            if (code != null) return code
+        }
+        return null
+    }
+
+    private fun resolveTabUrl(item: Any): String? {
+        val cls = item.javaClass
+        val urlField = resolveUrlField(cls)
+        if (urlField != null) {
+            val value = try {
+                normalizeNonBlank(urlField.get(item) as? String)
+            } catch (_: Throwable) {
+                null
+            }
+            if (value != null) return value
+        }
+        return null
+    }
+
+    private fun resolveTabName(item: Any): String? {
+        val cls = item.javaClass
+        val nameField = resolveNameField(cls)
+        if (nameField != null) {
+            val value = try {
+                normalizeNonBlank(nameField.get(item) as? String)
+            } catch (_: Throwable) {
+                null
+            }
+            if (value != null) return value
+        }
+        return null
+    }
+
+    private fun resolveMutableListField(owner: Any?): Any? {
+        if (owner == null) return null
+        val field = sRuntimeTargets?.listField ?: return null
+        return try {
+            field.get(owner)
+        } catch (t: Throwable) {
+            XposedCompat.logD { "HomeTabHook: ${t.message}" }
+            null
+        }
+    }
+
+    private fun resolveSchema(cls: Class<*>): TabItemFieldSchema {
+        sSchemaCache[cls]?.let { return it }
+        val targets = sRuntimeTargets
+        val typeField = resolveFieldByName(
+            cls = cls,
+            fieldName = targets?.itemTypeField,
+        ) { it == Int::class.javaPrimitiveType || it == Int::class.javaObjectType }
+        val codeField = resolveFieldByName(
+            cls = cls,
+            fieldName = targets?.itemCodeField,
+        ) { it == String::class.java }
+        val nameField = resolveFieldByName(
+            cls = cls,
+            fieldName = targets?.itemNameField,
+        ) { it == String::class.java }
+        val urlField = resolveFieldByName(
+            cls = cls,
+            fieldName = targets?.itemUrlField,
+        ) { it == String::class.java }
+        val schema = TabItemFieldSchema(
+            typeField = typeField,
+            codeField = codeField,
+            nameField = nameField,
+            urlField = urlField,
+        )
+        sSchemaCache[cls] = schema
+        return schema
+    }
+
+    private fun resolveFieldByName(
+        cls: Class<*>,
+        fieldName: String?,
+        typeCheck: (Class<*>) -> Boolean,
+    ): Field? {
+        if (fieldName.isNullOrBlank()) return null
+        val field = resolveDeclaredFieldInHierarchy(cls, fieldName) ?: return null
+        if (!typeCheck(field.type)) return null
+        field.isAccessible = true
+        return field
+    }
+
+    private fun resolveTypeField(cls: Class<*>): Field? {
+        return resolveSchema(cls).typeField
+    }
+
+    private fun resolveCodeField(cls: Class<*>): Field? {
+        return resolveSchema(cls).codeField
+    }
+
+    private fun resolveNameField(cls: Class<*>): Field? {
+        return resolveSchema(cls).nameField
+    }
+
+    private fun resolveUrlField(cls: Class<*>): Field? {
+        return resolveSchema(cls).urlField
+    }
+
+    private fun resolveMainSetterMethod(cls: Class<*>): Method? {
+        val cached = sMainSetterMethodCache[cls]
+        if (cached != null) return cached
+        if (sMainSetterMethodMissCache.contains(cls)) return null
+
+        val methodName = sRuntimeTargets?.itemMainSetterMethod
+        if (!methodName.isNullOrBlank()) {
+            val method = resolveDeclaredMethodInHierarchy(
+                cls = cls,
+                methodName = methodName,
+                parameterTypes = arrayOf(Boolean::class.javaPrimitiveType!!),
+            ) ?: resolveDeclaredMethodInHierarchy(
+                cls = cls,
+                methodName = methodName,
+                parameterTypes = arrayOf(Boolean::class.java),
+            )
+            if (method != null) {
+                method.isAccessible = true
+                sMainSetterMethodCache[cls] = method
+                return method
+            }
+        }
+
+        sMainSetterMethodMissCache.add(cls)
+        return null
+    }
+
+    private fun resolveMainIntField(cls: Class<*>): Field? {
+        val cached = sMainIntFieldCache[cls]
+        if (cached != null) return cached
+        if (sMainIntFieldMissCache.contains(cls)) return null
+
+        val fieldName = sRuntimeTargets?.itemMainIntField
+        if (!fieldName.isNullOrBlank()) {
+            val field = resolveDeclaredFieldInHierarchy(cls, fieldName)
+            if (field != null && (field.type == Int::class.javaPrimitiveType || field.type == Int::class.javaObjectType)) {
+                field.isAccessible = true
+                sMainIntFieldCache[cls] = field
+                return field
+            }
+        }
+
+        sMainIntFieldMissCache.add(cls)
+        return null
+    }
+
+    private fun resolveMainBooleanField(cls: Class<*>): Field? {
+        val cached = sMainBooleanFieldCache[cls]
+        if (cached != null) return cached
+        if (sMainBooleanFieldMissCache.contains(cls)) return null
+
+        val fieldName = sRuntimeTargets?.itemMainBooleanField
+        if (!fieldName.isNullOrBlank()) {
+            val field = resolveDeclaredFieldInHierarchy(cls, fieldName)
+            if (field != null &&
+                (field.type == Boolean::class.javaPrimitiveType || field.type == Boolean::class.javaObjectType)
+            ) {
+                field.isAccessible = true
+                sMainBooleanFieldCache[cls] = field
+                return field
+            }
+        }
+
+        sMainBooleanFieldMissCache.add(cls)
+        return null
+    }
+
+    private fun resolveDeclaredFieldInHierarchy(cls: Class<*>, fieldName: String): Field? {
+        var current: Class<*>? = cls
+        while (current != null && current != Any::class.java) {
+            val field = try {
+                current.getDeclaredField(fieldName)
+            } catch (_: Throwable) {
+                null
+            }
+            if (field != null) return field
+            current = current.superclass
+        }
+        return null
+    }
+
+    private fun resolveDeclaredMethodInHierarchy(
+        cls: Class<*>,
+        methodName: String,
+        parameterTypes: Array<Class<*>>,
+    ): Method? {
+        var current: Class<*>? = cls
+        while (current != null && current != Any::class.java) {
+            val method = try {
+                current.getDeclaredMethod(methodName, *parameterTypes)
+            } catch (_: Throwable) {
+                null
+            }
+            if (method != null && method.returnType == Void.TYPE) return method
+            current = current.superclass
+        }
+        return null
+    }
+
+    private fun normalizeCode(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return raw.trim().lowercase(Locale.ROOT)
+    }
+
+    private fun normalizeUrl(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return raw.trim().lowercase(Locale.ROOT)
+    }
+
+    private fun normalizeNonBlank(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return raw.trim()
+    }
+
+    private fun isFollowedCode(code: String?): Boolean {
+        val normalized = normalizeCode(code) ?: return false
+        return normalized == TAB_CODE_FOLLOWED ||
+            normalized == TAB_CODE_FOLLOWED_ALT ||
+            normalized == TAB_CODE_FOLLOWED_ALT_2
+    }
+
+    private fun isFollowedUrl(url: String?): Boolean {
+        val normalized = normalizeUrl(url) ?: return false
+        return normalized.contains(TAB_URL_FOLLOWED_PATH)
+    }
+
+    private fun isUrlLike(value: String): Boolean {
+        val normalized = value.trim().lowercase(Locale.ROOT)
+        return normalized.startsWith("http://") ||
+            normalized.startsWith("https://") ||
+            normalized.startsWith("tbopen://")
+    }
+
+    private enum class HomeTopTargetTab {
+        MATERIAL,
+        RECOMMEND,
+        LIVE,
+        FOLLOWED,
+        OTHER,
+    }
+}

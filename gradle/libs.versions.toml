@@ -3,12 +3,19 @@ agp = "9.2.1"
 junit = "4.13.2"
 json = "20240303"
 dexkit = "2.2.0"
+kotlin = "2.2.10"
+konsist = "0.17.3"
+androidx-annotation = "1.9.1"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 json = { group = "org.json", name = "json", version.ref = "json" }
 xposed-api = { group = "io.github.libxposed", name = "api", version = "102.0.0" }
 dexkit = { group = "org.luckypray", name = "dexkit", version.ref = "dexkit" }
+konsist = { group = "com.lemonappdev", name = "konsist", version.ref = "konsist" }
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidx-annotation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
