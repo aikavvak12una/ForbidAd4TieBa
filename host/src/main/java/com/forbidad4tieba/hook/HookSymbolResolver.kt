@@ -52,6 +52,9 @@ object HookSymbolResolver {
 
     fun getMemorySymbols(): HookSymbols? = memoryCache.currentSymbols()
 
+    fun prepareNativeRuntime() =
+        com.forbidad4tieba.hook.symbol.dexkit.DexKitBridgeProvider.prepareTranslatedRuntime()
+
     fun featureStatusMap(symbols: HookSymbols?): Map<String, HookFeatureStatus> {
         return HookFeatureStatusDeriver.derive(symbols ?: HookSymbols.unsupported())
     }

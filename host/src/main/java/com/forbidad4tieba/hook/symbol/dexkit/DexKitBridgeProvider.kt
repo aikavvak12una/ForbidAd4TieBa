@@ -35,6 +35,25 @@ internal object DexKitBridgeProvider {
     @Volatile
     private var nativeLibraryLoadError: String? = null
 
+    fun prepareTranslatedRuntime() {
+        val abis = Build.SUPPORTED_ABIS.orEmpty()
+        if (abis.firstOrNull() != "x86_64" || "arm64-v8a" !in abis) return
+        synchronized(this) {
+            if (nativeLibraryLoaded) return
+            // Create the module namespace before translated host SDKs initialize theirs.
+            // This only loads JNI; DexKit bridges remain owned by explicit scan sessions.
+            try {
+                System.loadLibrary(DEXKIT_LIBRARY_NAME)
+                nativeLibraryLoaded = true
+                Diagnostics.log("$TAG: native library prepared for translated runtime")
+            } catch (failure: LinkageError) {
+                // Application context is not available yet. Keep the normal scan-time
+                // loading paths and their negative cache available if preparation fails.
+                Diagnostics.logW("$TAG: early native preparation failed: ${failure.message}")
+            }
+        }
+    }
+
     fun openFirstAvailable(
         sourcePaths: List<String>,
         logger: ScanLogger?,

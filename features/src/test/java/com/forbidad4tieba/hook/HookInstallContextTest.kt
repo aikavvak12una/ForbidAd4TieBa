@@ -19,6 +19,46 @@ import org.junit.Test
 
 class HookInstallContextTest {
     @Test
+    fun homeTabCatalogObservesWithCustomizationOffButFollowedWebStillRequiresIt() {
+        val symbols = cachedSymbols {
+            this["homeTabClass"] = "com.tieba.HomeTabs"
+            this["homeTabRebuildMethod"] = "rebuild"
+            this["homeTabListField"] = "tabs"
+            this["homeTabItemTypeField"] = "type"
+            this["homeTabItemCodeField"] = "code"
+            this["homeTabItemNameField"] = "name"
+            this["homeTabItemUrlField"] = "url"
+        }
+        val disabled = SettingsSnapshot()
+        val enabled = SettingsSnapshot(isHomeTopTabsCustomEnabled = true)
+        for (settings in listOf(disabled, enabled)) {
+            assertEquals(
+                1,
+                FeatureCatalog.symbolPlan(Constants.TARGET_PACKAGE, symbols, settings)
+                    .entries.count { it.id == "HomeTabHook" },
+            )
+            assertFalse(
+                FeatureCatalog.symbolPlan(Constants.TARGET_PACKAGE + ":remote", symbols, settings)
+                    .entries.any { it.id == "HomeTabHook" },
+            )
+        }
+        assertFalse(
+            FeatureCatalog.symbolPlan(Constants.TARGET_PACKAGE, cachedSymbols {}, disabled)
+                .entries.any { it.id == "HomeTabHook" },
+        )
+        assertFalse(HookInstallContext(Constants.TARGET_PACKAGE, symbols).canInstallHomeTopTabs(disabled))
+        assertTrue(HookInstallContext(Constants.TARGET_PACKAGE, symbols).canInstallHomeTopTabs(enabled))
+        assertFalse(
+            FeatureCatalog.postAttachPlan(Constants.TARGET_PACKAGE, symbols, disabled)
+                .entries.any { it.id == "FollowedTabWebHook" },
+        )
+        assertTrue(
+            FeatureCatalog.postAttachPlan(Constants.TARGET_PACKAGE, symbols, enabled)
+                .entries.any { it.id == "FollowedTabWebHook" },
+        )
+    }
+
+    @Test
     fun feedListHookIsSharedByStrategyAndFeedSettingsOnlyInMainProcess() {
         val symbols = cachedSymbols {
             this["feedTemplateKeyMethod"] = "templateKey"

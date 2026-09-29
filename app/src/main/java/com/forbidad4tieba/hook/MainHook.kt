@@ -13,6 +13,9 @@ class MainHook : XposedModule() {
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         super.onModuleLoaded(param)
         ModuleComposition.initialize(this)
+        if (HookProcess.isImageViewerProcess(param.processName)) {
+            HookSymbolResolver.prepareNativeRuntime()
+        }
         lifecycle.onModuleLoaded(param.processName)
     }
 

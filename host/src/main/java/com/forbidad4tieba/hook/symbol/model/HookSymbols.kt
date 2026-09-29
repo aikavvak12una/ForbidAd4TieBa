@@ -85,7 +85,7 @@ data class HookSymbols internal constructor(
 
     companion object {
         const val CACHE_SCHEMA_VERSION = 60
-        const val DEXKIT_RULE_VERSION = 65
+        const val DEXKIT_RULE_VERSION = 66
 
         fun unsupported(scanErrors: List<String> = emptyList(), createdAt: Long = 0L): HookSymbols =
             buildHookSymbols {
