@@ -244,3 +244,37 @@ The baseline source is e94abd3 with schema60/rule64. The current-host isolated r
 The rebuilt baseline APK was installed and its installed SHA-256 matched the checked artifact. Warm starts restored the cache without scanning in both processes; captured installation records contained 22 entries/91 retained handles in main and 3 entries/31 handles in the image process. The scan/restart flow, home and enter-forum pages were observed. Temporary auto-sign-in disablement was reverted byte-for-byte and the host was stopped at each verification finish. These observations do not certify unexercised features or constitute user visual acceptance.
 
 Machine details, exact fingerprints and raw evidence remain local under docs/reviews/2026-09-29-focused-optimization/. Ongoing implementation and remaining acceptance are tracked in [the progress record](optimization-progress-2026-09-29.md).
+
+## 2026-09-29 focused optimization completion
+
+Feed dependency consolidation is commit `b905d3f` (schema60/rule65). Capability
+and diagnostic consumers now share the existing dependency groups while retaining
+their different required/optional roles. Independent expectations cover all 512
+presence combinations, blank descriptors and partial-cache round trips. Removing
+cardDataList from an actual diagnostic consumer failed the test before restoration.
+
+Commit `454d8d1` isolates eligibility and entry-factory failures at FeatureDefinition.
+The production catalog previously aborted the whole plan when B failed, preventing
+independent A/C entries from reaching installation. Recoverable exceptions and
+linkage failures now become a failed entry in the existing installation ledger.
+Assertion errors still propagate. Tests exercise all three catalog phases, lazy
+installation, partial handles, repeated plans without duplicate native handles and
+inactive old callbacks. They do not simulate the complete Android lifecycle;
+lifecycle marker timing is unchanged, with no automatic retries added.
+
+The final `verify` passed 421 tests (125 host, 16 runtime, 280 features), with zero
+failures, errors or skips, both Lint variants, module graph verification and the
+Release build. The final isolated current-host run passed 29 checks: 132 points,
+47 capabilities and no scan errors. Its symbols equal the earlier rule65 result
+except for creation time.
+
+The installed final Release hash matches the built APK. With the original feature
+configuration, main retained 22 entries/91 handles and the image process 3/31,
+matching the baseline; both restored the cache without a new scan or fatal error.
+That configuration did not enable Feed filtering. A separate temporary custom-post
+keyword-filter check installed two Feed handles and logged a real list reduction
+from 13 to 11 items. Disabling the temporary filter and restarting restored the
+baseline installation records. This verifies one custom-filter path, not all ad
+or custom-filter rules. Home and enter-forum pages were observed; user visual
+acceptance remains outstanding. Original preferences were restored byte-for-byte
+and the host was left stopped. Raw logs, screenshots and fingerprints remain local.
