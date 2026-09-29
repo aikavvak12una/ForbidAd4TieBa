@@ -182,7 +182,7 @@ the uncompressed arm64-v8a DexKit library. Packaging inspection used the final
 rebuilt artifact, not the earlier candidate. APKs, signatures, logs and machine
 details remain in ignored local review evidence.
 
-## Current-host symbols and cache
+## Historical current-host symbols and cache (schema60/rule62)
 
 On Tieba 22.12.1.0 (369885440), an isolated Android process ran 29 checks using the
 production contracts/host bytecode and the installed host's classes and resources.
@@ -194,7 +194,7 @@ cleanup. The checked artifact hashes still match the final build.
 All 130 diagnostic Hook points are FOUND, all 47 capabilities are full, and there
 are zero scan errors. All 382 cached descriptors match the pre-refactor rule59
 baseline for the same host APK. Diagnostic and capability lines also match after
-normalizing order. Current versions are schema60/rule62; JSON layout is unchanged.
+normalizing order. The artifact verified in this historical run used schema60/rule62; JSON layout was unchanged.
 
 After installing the final Release, the existing first-resume dialog rejected the
 old rule59 cache and completed a visible scan. Its persisted result matches the
@@ -235,3 +235,12 @@ unit/session evidence described above, rather than comprehensive live coverage.
 No manual sign-in, like, reply or post action was performed. These limits do not
 turn symbol availability or successful installation into proof of every feature's
 visible effect.
+
+
+## 2026-09-29 focused optimization baseline
+
+The baseline source is e94abd3 with schema60/rule64. The current-host isolated run passed 29 checks with 132 diagnostic points, 47 capabilities and no scan errors. Compared with the rule62 evidence above on the same host APK, two fields/points were added (auto-refresh pull gesture and crash-report exception handling), and the plain-URL clickable-span owner list changed. This is a new measured baseline, not a relabeling of the old result.
+
+The rebuilt baseline APK was installed and its installed SHA-256 matched the checked artifact. Warm starts restored the cache without scanning in both processes; captured installation records contained 22 entries/91 retained handles in main and 3 entries/31 handles in the image process. The scan/restart flow, home and enter-forum pages were observed. Temporary auto-sign-in disablement was reverted byte-for-byte and the host was stopped at each verification finish. These observations do not certify unexercised features or constitute user visual acceptance.
+
+Machine details, exact fingerprints and raw evidence remain local under docs/reviews/2026-09-29-focused-optimization/. Ongoing implementation and remaining acceptance are tracked in [the progress record](optimization-progress-2026-09-29.md).
