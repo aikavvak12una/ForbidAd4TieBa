@@ -24,8 +24,23 @@ internal class FeatureDefinition(
     val process: FeatureProcess,
     private val factory: (HookInstallContext, SettingsSnapshot) -> List<HookInstallEntry>,
 ) {
-    fun entries(context: HookInstallContext, settings: SettingsSnapshot): List<HookInstallEntry> =
-        if (process.accepts(context)) factory(context, settings) else emptyList()
+    fun entries(context: HookInstallContext, settings: SettingsSnapshot): List<HookInstallEntry> {
+        if (!process.accepts(context)) return emptyList()
+        return try {
+            factory(context, settings)
+        } catch (failure: Exception) {
+            planningFailure(failure)
+        } catch (failure: LinkageError) {
+            planningFailure(failure)
+        }
+    }
+
+    private fun planningFailure(failure: Throwable): List<HookInstallEntry> {
+        // Keep the failed owner in the normal installation ledger without aborting its siblings.
+        val outcome = InstallOutcome(InstallState.FAILED,
+            reason = "plan: ${failure.javaClass.name}: ${failure.message.orEmpty()}")
+        return listOf(HookInstallEntry(id) { outcome })
+    }
 
     companion object {
         fun single(
