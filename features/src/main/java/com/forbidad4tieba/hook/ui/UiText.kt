@@ -110,7 +110,7 @@ object UiText {
         const val TAB_CUSTOMIZATION_DESC = "统一设置顶部和底部 Tab 的显示、滚动收起与液态玻璃效果"
         const val TAB_CUSTOMIZATION_SAVED = "Tab 栏开关已保存"
         const val SIMPLIFY_HOME_TAB_LABEL = "自定义顶部 Tab"
-        const val SIMPLIFY_HOME_TAB_DESC = "选择首页顶部保留的 Tab"
+        const val SIMPLIFY_HOME_TAB_DESC = "选择首页顶部保留的 Tab \n*选项不全尝试重新启动贴吧"
         const val AUTO_HIDE_HOME_TAB_LABEL = "滚动收起 Tab 栏"
         const val AUTO_HIDE_HOME_TAB_DESC = "浏览首页信息流时，随滚动收起或展开顶部和底部 Tab 栏"
         const val HIDE_HOME_TAB_RED_DOT_LABEL = "隐藏小红点"
