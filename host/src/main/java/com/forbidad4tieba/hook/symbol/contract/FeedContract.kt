@@ -10,7 +10,6 @@ import com.forbidad4tieba.hook.symbol.model.FeedCardScanSymbols
 import com.forbidad4tieba.hook.symbol.model.FeedInfoLogSymbols
 import com.forbidad4tieba.hook.symbol.model.FeedTemplateScanSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
-import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.HookSymbolsBuilder
@@ -42,6 +41,15 @@ object FeedContract : SymbolContract("Feed") {
     val feedHeadParamsField = text("feedHeadParamsField")
     val feedRecommendCardNestedDataMethod = text("feedRecommendCardNestedDataMethod")
     val feedRecommendCardNestedDataListField = text("feedRecommendCardNestedDataListField")
+
+    private val templateKey = SymbolDependencies(feedTemplateKeyMethod)
+    private val payload = SymbolDependencies(feedTemplatePayloadMethod)
+    private val loadMore = SymbolDependencies(feedTemplateLoadMoreMethod)
+    private val customRequired = templateKey + payload + loadMore + SymbolDependencies(feedCardDataListField)
+    private val headParams = SymbolDependencies(feedHeadParamsField)
+    private val topicSchema = SymbolDependencies(feedCardSchemaGetterSpec)
+    private val recommendCard = SymbolDependencies(feedRecommendCardNestedDataMethod, feedRecommendCardNestedDataListField)
+    private val customOptional = headParams + topicSchema + recommendCard
 
     internal override fun scan(scan: SymbolScanContext, output: HookSymbolsBuilder) = with(scan) {
 
@@ -255,88 +263,46 @@ object FeedContract : SymbolContract("Feed") {
         )
     }
 
-    internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> {
-        val out = linkedMapOf<String, HookFeatureStatus>()
-        val feedTemplateKeyMissing = symbols[FeedContract.feedTemplateKeyMethod].isNullOrBlank()
-        val customPostCritical = ArrayList<String>(4)
-        val customPostOptional = ArrayList<String>(1)
-        if (feedTemplateKeyMissing) customPostCritical.add("feedTemplateKeyMethod")
-        if (symbols[FeedContract.feedTemplatePayloadMethod].isNullOrBlank()) customPostCritical.add("feedTemplatePayloadMethod")
-        if (symbols[FeedContract.feedTemplateLoadMoreMethod].isNullOrBlank()) customPostCritical.add("feedTemplateLoadMoreMethod")
-        if (symbols[FeedContract.feedCardDataListField].isNullOrBlank()) customPostCritical.add("feedCardDataListField")
-        if (symbols[FeedContract.feedHeadParamsField].isNullOrBlank()) customPostOptional.add("feedHeadParamsField")
-        if (symbols[FeedContract.feedCardSchemaGetterSpec].isNullOrBlank()) customPostOptional.add("feedCardSchemaGetterSpec")
-        if (symbols[FeedContract.feedRecommendCardNestedDataMethod].isNullOrBlank()) {
-            customPostOptional.add("feedRecommendCardNestedDataMethod")
-        }
-        if (symbols[FeedContract.feedRecommendCardNestedDataListField].isNullOrBlank()) {
-            customPostOptional.add("feedRecommendCardNestedDataListField")
-        }
-        out[HookFeatureKey.ENABLE_CUSTOM_POST_FILTER] = if (customPostCritical.isNotEmpty()) {
-            HookFeatureStatus(
-                state = HookFeatureState.DISABLED,
-                missingCritical = customPostCritical,
-                missingOptional = customPostOptional,
-            )
-        } else if (customPostOptional.isNotEmpty()) {
-            HookFeatureStatus(
-                state = HookFeatureState.PARTIAL,
-                missingOptional = customPostOptional,
-            )
-        } else {
-            HookFeatureStatus(state = HookFeatureState.FULL)
-        }
-        val feedAdCritical = ArrayList<String>(1)
-        val feedAdOptional = ArrayList<String>(1)
-        if (symbols[FeedContract.feedTemplateKeyMethod].isNullOrBlank()) feedAdCritical.add("feedTemplateKeyMethod")
-        if (symbols[FeedContract.feedTemplateLoadMoreMethod].isNullOrBlank()) feedAdOptional.add("feedTemplateLoadMoreMethod")
-        out[HookFeatureKey.BLOCK_AD_FEED] = statusFromMissing(feedAdCritical, feedAdOptional)
-        return out
-    }
+    internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> = linkedMapOf(
+        HookFeatureKey.ENABLE_CUSTOM_POST_FILTER to statusFromMissing(customRequired.missing(symbols), customOptional.missing(symbols)),
+        HookFeatureKey.BLOCK_AD_FEED to statusFromMissing(templateKey.missing(symbols), loadMore.missing(symbols)),
+    )
 
     internal override fun points(symbols: HookSymbols): List<HookPointStatus> = SymbolPointCollector().apply {
         add(
             "FeedAdHook.TemplateKey",
             "Feed item.${symbols[FeedContract.feedTemplateKeyMethod]}()",
-            listOf(FeedContract.feedTemplateKeyMethod.check(symbols)),
+            templateKey.checks(symbols),
         )
         add(
             "CustomPostCardBlockHook.Payload",
             "Feed item.${symbols[FeedContract.feedTemplatePayloadMethod]}()",
-            listOf(FeedContract.feedTemplatePayloadMethod.check(symbols)),
+            payload.checks(symbols),
         )
         add(
             "FeedAdHook.LoadMore",
             "com.baidu.tieba.feed.list.FeedTemplateAdapter.${symbols[FeedContract.feedTemplateLoadMoreMethod]}(List)",
-            listOf(FeedContract.feedTemplateLoadMoreMethod.check(symbols)),
+            loadMore.checks(symbols),
         )
         add(
             "CustomPostCardBlockHook",
             "com.baidu.tieba.feed.list.TemplateAdapter.setList / FeedTemplateAdapter.${symbols[FeedContract.feedTemplateLoadMoreMethod]}",
-            listOf(
-                FeedContract.feedTemplateKeyMethod.check(symbols),
-                FeedContract.feedTemplatePayloadMethod.check(symbols),
-                FeedContract.feedTemplateLoadMoreMethod.check(symbols),
-                FeedContract.feedCardDataListField.check(symbols),
-            ),
+            customRequired.checks(symbols),
         )
         add(
             "CustomPostCardBlockHook.HeadParams",
             "Feed head params.${symbols[FeedContract.feedHeadParamsField]}",
-            listOf(FeedContract.feedHeadParamsField.check(symbols)),
+            headParams.checks(symbols),
         )
         add(
             "CustomPostCardBlockHook.TopicSchema",
             "Card schema getter ${symbols[FeedContract.feedCardSchemaGetterSpec]}",
-            listOf(FeedContract.feedCardSchemaGetterSpec.check(symbols)),
+            topicSchema.checks(symbols),
         )
         add(
             "CustomPostCardBlockHook.RecommendCard",
             "RecommendCardUiState.${symbols[FeedContract.feedRecommendCardNestedDataMethod]}()[NestedData.${symbols[FeedContract.feedRecommendCardNestedDataListField]}]",
-            listOf(
-                FeedContract.feedRecommendCardNestedDataMethod.check(symbols),
-                FeedContract.feedRecommendCardNestedDataListField.check(symbols),
-            ),
+            recommendCard.checks(symbols),
         )
         add(
             "FeedInfoLogHook.Bind",
