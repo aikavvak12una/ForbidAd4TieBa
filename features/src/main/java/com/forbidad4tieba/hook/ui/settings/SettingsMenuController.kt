@@ -17,6 +17,7 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.BlockCountStats
 import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
+import com.forbidad4tieba.hook.feature.ui.HomeTabHook
 import com.forbidad4tieba.hook.ui.AboutInfoManager
 import com.forbidad4tieba.hook.ui.BottomTabLiquidGlassDialog
 import com.forbidad4tieba.hook.ui.SETTINGS_ROOT_GROUP_GAP_DP
@@ -81,6 +82,7 @@ internal object SettingsMenuController {
             if (scanSymbols != null) {
                 ConfigManager.applyScanAvailability(context, featureStatusMap, refreshRuntime = false)
             }
+            HomeTabHook.refreshTopTabCatalog(context)
 
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL

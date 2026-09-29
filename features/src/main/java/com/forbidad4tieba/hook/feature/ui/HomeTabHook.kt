@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import android.content.Context
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
@@ -69,10 +70,12 @@ object HomeTabHook {
     }
 
     @Volatile private var sRuntimeTargets: HomeTabResolvedSymbols? = null
+    private val catalogSnapshot = HomeTabCatalogSnapshot()
 
     internal fun hook(symbols: HomeTabResolvedSymbols) {
         val mod = XposedCompat.module ?: return
         sRuntimeTargets = symbols
+        catalogSnapshot.clear()
         sSchemaCache.clear()
         sMainSetterMethodCache.clear()
         sMainSetterMethodMissCache.clear()
@@ -83,11 +86,12 @@ object HomeTabHook {
         try {
             RuntimeHooks.builder(mod, symbols.rebuildMethod, "HomeTabHook", "hook:symbols.rebuildMethod").intercept { chain ->
                 val result = chain.proceed()
-                val currentSelection = currentSelectionOrNull() ?: return@intercept result
                 @Suppress("UNCHECKED_CAST")
                 val list = resolveMutableListField(chain.thisObject) as? MutableList<Any?>
                 if (list != null) {
-                    publishHomeTopTabCatalog(list)
+                    // Retain membership only; settings decode and persist the latest host list on open.
+                    catalogSnapshot.capture(list)
+                    val currentSelection = currentSelectionOrNull() ?: return@intercept result
                     val templateContext = resolveFollowedTemplateContext(list)
                     val sizeBefore = list.size
                     val filteredCount = filterTabsInPlace(list, currentSelection)
@@ -118,7 +122,8 @@ object HomeTabHook {
         return ConfigManager.resolveHomeTopTabSelection()
     }
 
-    private fun publishHomeTopTabCatalog(list: List<Any?>) {
+    internal fun refreshTopTabCatalog(context: Context) {
+        val list = catalogSnapshot.current()
         if (list.isEmpty()) return
         val entries = ArrayList<ConfigManager.HomeTopTabCatalogEntry>(list.size)
         for (index in list.indices) {
@@ -137,7 +142,6 @@ object HomeTabHook {
             )?.let(entries::add)
         }
         if (entries.isEmpty()) return
-        val context = ConfigManager.getAppContext() ?: return
         runCatching {
             ConfigManager.updateHomeTopTabCatalog(context, entries)
         }.onFailure { t ->
