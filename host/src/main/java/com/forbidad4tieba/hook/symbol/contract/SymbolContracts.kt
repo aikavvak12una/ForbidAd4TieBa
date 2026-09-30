@@ -3,6 +3,7 @@ package com.forbidad4tieba.hook.symbol.contract
 /** Explicit registration: a feature contributes its complete contract once. */
 internal object SymbolContracts {
     val all: List<SymbolContract> = listOf(
+        CommentFilterContract,
         PerformanceContract,
         TrackingContract,
         CrashReportContract,

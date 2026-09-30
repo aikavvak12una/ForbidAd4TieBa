@@ -132,6 +132,7 @@ class SettingsCompletenessTest {
         }
         val actions = SettingsMenuGroupActions(
             onAdBlock = ::collect, onCustomPostFilter = ::collect,
+            onCommentLevelFilter = ::collect,
             onCustomPostModelScore = {}, onCustomPostFilterKeyword = {}, onPbLikeAutoReply = {},
             onFreeCopy = ::collect, onPerformanceOptimization = { groups -> groups.forEach { collect(it.items) } },
             onAutoSignIn = {}, onReplyVisibilityProbe = {}, onDetailedLogSave = {},

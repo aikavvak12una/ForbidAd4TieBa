@@ -2,6 +2,14 @@ package com.forbidad4tieba.hook.ui
 
 object UiText {
     object Settings {
+        const val COMMENT_LEVEL_FILTER_LABEL = "屏蔽评论"
+        const val COMMENT_LEVEL_FILTER_DESC = "屏蔽低于指定等级的评论和楼中楼"
+        const val COMMENT_MINIMUM_LEVEL_LABEL = "最低保留等级"
+        const val COMMENT_MINIMUM_LEVEL_DESC = "范围 1–18，保留该等级及以上的评论；设为 1 级时屏蔽无等级评论（通常为未关注本吧的用户）"
+        fun commentMinimumLevel(value: Int): String = "$COMMENT_MINIMUM_LEVEL_LABEL：$value 级"
+        const val COMMENT_KEEP_REPLIES_LABEL = "绕过含楼中楼的评论"
+        const val COMMENT_KEEP_REPLIES_DESC = "评论含有楼中楼时，不受等级限制；其中的楼中楼仍按等级屏蔽"
+        const val COMMENT_LEVEL_SAVED = "评论等级屏蔽设置已保存"
         const val GROUP_CONTENT_BLOCK = "内容屏蔽"
         const val GROUP_UI_OPTIMIZE = "UI 净化"
         const val GROUP_PERFORMANCE = "性能优化"
