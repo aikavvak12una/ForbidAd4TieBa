@@ -1,11 +1,11 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.animation.StateListAnimator
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
-import com.forbidad4tieba.hook.config.ConfigManager
 import java.lang.ref.WeakReference
 
 internal data class BackgroundRequest(
@@ -63,15 +63,15 @@ internal data class HomeNativeGlassRuntimeStyle(
     companion object {
         val EMPTY = HomeNativeGlassRuntimeStyle(
             darkMode = false,
-            backgroundImagePath = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-            blurCacheImagePath = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
-            tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
-            autoTintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
-            tintAlphaPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            cardBlurPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            cardRadiusDp = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-            strokeEnabled = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
-            shadowStrengthPercent = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            backgroundImagePath = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
+            blurCacheImagePath = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH,
+            tintColor = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
+            autoTintColor = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR,
+            tintAlphaPercent = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            cardBlurPercent = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            cardRadiusDp = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+            strokeEnabled = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED,
+            shadowStrengthPercent = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
         )
     }
 }

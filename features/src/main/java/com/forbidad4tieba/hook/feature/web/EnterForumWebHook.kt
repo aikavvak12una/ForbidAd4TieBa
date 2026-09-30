@@ -72,7 +72,7 @@ object EnterForumWebHook {
         installedMethods.install(targets.webLoadMethod) {
             val failureLogged = AtomicBoolean()
             RuntimeHooks.builder(mod, targets.webLoadMethod, "EnterForumWebHook", "installUrlReplaceHook:targets.webLoadMethod").intercept { chain ->
-                if (!ConfigManager.isEnterForumWebFilterEnabled) return@intercept chain.proceed()
+                if (!ConfigManager.snapshot().isEnterForumWebFilterEnabled) return@intercept chain.proceed()
 
                 val originalUrl = chain.args.firstOrNull() as? String
                 val targetUrl = targetUrlForLoad(originalUrl) ?: return@intercept chain.proceed()
@@ -102,7 +102,7 @@ object EnterForumWebHook {
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "EnterForumWebHook", "installForumUrlSourceHook:method").intercept { chain ->
                 val result = chain.proceed()
-                if (!ConfigManager.isEnterForumWebFilterEnabled) {
+                if (!ConfigManager.snapshot().isEnterForumWebFilterEnabled) {
                     return@intercept result
                 }
 

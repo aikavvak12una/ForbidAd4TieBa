@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import com.forbidad4tieba.hook.symbol.contract.*
 
 import com.forbidad4tieba.hook.contracts.MemberAccess
@@ -25,7 +26,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
-import com.forbidad4tieba.hook.HookSymbolResolver
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
@@ -35,7 +35,6 @@ import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassHook
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
-import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.lang.reflect.Proxy
 import java.util.Collections
@@ -61,7 +60,7 @@ object HomeNativeGlassHook {
     private val homeRecyclerViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val glassBackgroundViews = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
     private val viewSessions = HomeNativeGlassViewSessions(
-        isEnabled = { ConfigManager.isHomeNativeGlassEnabled },
+        isEnabled = { ConfigManager.snapshot().isHomeNativeGlassEnabled },
         apply = { role, view ->
             when (role) {
                 HomeNativeGlassViewRole.TOP_CHROME -> applyHomeTopTabDynamicTintSafely(view)
@@ -83,7 +82,7 @@ object HomeNativeGlassHook {
         },
     )
     private val recyclerObservers = HomeNativeGlassRecyclerObservers(
-        shouldTrackPosition = { ConfigManager.isHomeNativeGlassEnabled && hasPageBackgroundOverride() },
+        shouldTrackPosition = { ConfigManager.snapshot().isHomeNativeGlassEnabled && hasPageBackgroundOverride() },
         isFeedCardView = ::isFeedCardView,
         onInvalidation = { anchor ->
             refreshHomeNativeBackgroundLayers(anchor)
@@ -105,7 +104,7 @@ object HomeNativeGlassHook {
         onContentHostFound = { host ->
             rememberPbCommentBackgroundWriteRole(host, PbCommentBackgroundWriteRole.HOST)
         },
-        isEnabled = { ConfigManager.isHomeNativeGlassEnabled },
+        isEnabled = { ConfigManager.snapshot().isHomeNativeGlassEnabled },
         onActivityRefresh = ::applyPbCommentActivityBackgroundSafely,
     )
     private val pbCommentListItemApplyScheduled =
@@ -166,7 +165,7 @@ object HomeNativeGlassHook {
     @Volatile private var pbEnterForumCapsuleTitleField: Field? = null
 
     internal fun hook(cl: ClassLoader, symbols: HookSymbols): InstallOutcome {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !ConfigManager.hasAnyHomeNativeGlassBackgroundImage) {
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !HomeGlassPreferences.hasAnyHomeNativeGlassBackgroundImage) {
             return InstallOutcome.skipped("glass background disabled")
         }
         if (XposedCompat.module == null) return InstallOutcome.skipped("module unavailable")
@@ -210,12 +209,12 @@ object HomeNativeGlassHook {
             val dynamicColorHooks = installPbDynamicBackgroundColorHooks(cl)
             val sortSwitchHooks = installPbSortSwitchButtonDynamicTintHooks(cl)
             val enterForumCapsuleHooks = installPbEnterForumCapsuleDynamicTintHooks(cl)
-            val tabDynamicTintEnabled = feedPlan.hasHomeFeedTargets && ConfigManager.isHomeTabDynamicTintEnabled
+            val tabDynamicTintEnabled = feedPlan.hasHomeFeedTargets && ConfigManager.snapshot().isHomeTabDynamicTintEnabled
             val topTabObservers = if (tabDynamicTintEnabled) installHomeTopTabObservers(cl) else 0
             // The liquid glass pill owns the bottom bar background; letting the dynamic tint also
             // write it would leave the visible result decided by whichever ran last.
             val bottomTabDynamicTintHooks = if (
-                tabDynamicTintEnabled && !ConfigManager.isBottomTabLiquidGlassEnabled
+                tabDynamicTintEnabled && !ConfigManager.snapshot().isBottomTabLiquidGlassEnabled
             ) {
                 installHomeBottomTabDynamicTintHooks(cl)
             } else {
@@ -331,7 +330,7 @@ object HomeNativeGlassHook {
             val card = chain.thisObject as? View
             if (
                 card != null &&
-                ConfigManager.isHomeNativeGlassEnabled &&
+                ConfigManager.snapshot().isHomeNativeGlassEnabled &&
                 hasPageBackgroundOverride() &&
                 isInsideHomeNativePage(card)
             ) {
@@ -963,7 +962,7 @@ object HomeNativeGlassHook {
     private fun resolveShareDialogDynamicTintColor(view: View, colorResId: Int): Int? {
         val targets = runtimeTargets ?: return null
         if (colorResId == 0 || colorResId !in targets.dynamicBackgroundColorIds) return null
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         if (!isShareDialogDynamicTintTarget(view)) return null
         return runtimeStyleStore.pbCommentTintColorOrNull()
     }
@@ -1523,7 +1522,7 @@ object HomeNativeGlassHook {
             if (isChromeDynamicTintBackgroundWriteInProgress()) {
                 return@intercept chain.proceed()
             }
-            if (!ConfigManager.isHomeNativeGlassEnabled || !ConfigManager.isHomeTabDynamicTintEnabled) {
+            if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !ConfigManager.snapshot().isHomeTabDynamicTintEnabled) {
                 return@intercept chain.proceed()
             }
             val view = chain.thisObject as? View ?: return@intercept chain.proceed()
@@ -1555,8 +1554,8 @@ object HomeNativeGlassHook {
 
     private fun applyHomeTopTabDynamicTintForBackgroundWrite(view: View): Boolean {
         if (
-            !ConfigManager.isHomeNativeGlassEnabled ||
-            !ConfigManager.isHomeTabDynamicTintEnabled ||
+            !ConfigManager.snapshot().isHomeNativeGlassEnabled ||
+            !ConfigManager.snapshot().isHomeTabDynamicTintEnabled ||
             !hasPageBackgroundOverride()
         ) {
             return false
@@ -1584,8 +1583,8 @@ object HomeNativeGlassHook {
         // the widget underneath it.
         if (BottomTabLiquidGlassHook.ownsBottomBar(view)) return true
         if (
-            !ConfigManager.isHomeNativeGlassEnabled ||
-            !ConfigManager.isHomeTabDynamicTintEnabled ||
+            !ConfigManager.snapshot().isHomeNativeGlassEnabled ||
+            !ConfigManager.snapshot().isHomeTabDynamicTintEnabled ||
             !hasPageBackgroundOverride()
         ) {
             return false
@@ -1610,8 +1609,8 @@ object HomeNativeGlassHook {
         if (view.javaClass.name != "android.view.View") return false
         if (BottomTabLiquidGlassHook.ownsBottomBar(view)) return true
         if (
-            !ConfigManager.isHomeNativeGlassEnabled ||
-            !ConfigManager.isHomeTabDynamicTintEnabled ||
+            !ConfigManager.snapshot().isHomeNativeGlassEnabled ||
+            !ConfigManager.snapshot().isHomeTabDynamicTintEnabled ||
             !hasPageBackgroundOverride()
         ) {
             return false
@@ -1684,7 +1683,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPageStyleSafely(page: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         val style = runtimeStyleStore.current()
         try {
             SystemBarCompatHook.applyIfNeeded(ReflectionUtils.findActivityFromContext(page.context))
@@ -1715,7 +1714,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyCardStyleSafely(card: View, force: Boolean = false) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         val hasBackgroundOverride = hasPageBackgroundOverride()
         if (!hasBackgroundOverride) return
         try {
@@ -1975,7 +1974,7 @@ object HomeNativeGlassHook {
     }
 
     private fun rememberHomeFeedCardGlassTargets(card: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         val group = card as? ViewGroup
         val backgroundHolder = group?.getChildAt(0)
         if (backgroundHolder != null) {
@@ -1996,7 +1995,7 @@ object HomeNativeGlassHook {
     }
 
     private fun interceptHomeFeedCardNativeBackgroundWrite(view: View): Boolean {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
         if (!homeFeedCardGlassTargets.containsKey(view) && view.background !is CardGlassDrawable) return false
         if (view.background !is CardGlassDrawable) {
             findHomeFeedCardAncestor(view)?.let { card ->
@@ -2026,7 +2025,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyHomeFeedImageContainerRadius(card: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         val radius = effectiveImageContainerRadius(card)
         applyCardPicViewImageRadiusInTree(card, radius, depth = 0)
     }
@@ -2112,7 +2111,7 @@ object HomeNativeGlassHook {
     }
 
     private fun handleCardTouchVisualSafely(card: View, event: MotionEvent?) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         try {
             if (!isInsideHomeNativePage(card)) return
@@ -2168,7 +2167,7 @@ object HomeNativeGlassHook {
 
 
     private fun applyPbCommentActivityBackgroundSafely(activity: Activity) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         if (!pageSessions.isPbActivity(activity)) return
         try {
@@ -2196,14 +2195,14 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbCommentItemGlassSafely(itemFrame: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         if (!isPbCommentItemFrame(itemFrame)) return
         applyPbCommentUnifiedBackgroundSafely(itemFrame)
     }
 
     private fun applyPbCommonPreloadedLayoutTintSafely(view: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return
         if (!pageSessions.isPbActivity(activity)) return
@@ -2232,7 +2231,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbSubPbLayoutGlassSafely(subPbLayout: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         if (!isPbSubPbLayout(subPbLayout)) return
         val activity = pageSessions.findCachedActivityFromContext(subPbLayout.context) ?: return
@@ -2252,7 +2251,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbCommentUnifiedBackgroundSafely(source: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         val activity = pageSessions.findCachedActivityFromContext(source.context) ?: return
         if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return
@@ -2272,7 +2271,7 @@ object HomeNativeGlassHook {
     }
 
     private fun schedulePbCommentListItemBackground(itemView: View, parent: ViewGroup?) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         var shouldPost = false
         synchronized(pbCommentListItemApplyScheduled) {
@@ -2294,7 +2293,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyPbCommentListItemBackgroundSafely(itemView: View, parent: ViewGroup?) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         val activity = pageSessions.findCachedActivityFromContext(itemView.context)
             ?: pageSessions.findCachedActivityFromContext(parent?.context)
@@ -2314,7 +2313,7 @@ object HomeNativeGlassHook {
     }
 
     private fun scheduleSubPbReplyItemGlass(itemView: View, parent: ViewGroup?) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         var shouldPost = false
         synchronized(subPbReplyItemApplyScheduled) {
@@ -2336,7 +2335,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applySubPbReplyItemGlassSafely(itemView: View, parent: ViewGroup?) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         val activity = pageSessions.findCachedActivityFromContext(itemView.context)
             ?: pageSessions.findCachedActivityFromContext(parent?.context)
@@ -2358,7 +2357,7 @@ object HomeNativeGlassHook {
     }
 
     private fun scheduleSubPbNextPageGlass(listView: ViewGroup) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         listView.post {
             try {
@@ -2396,7 +2395,7 @@ object HomeNativeGlassHook {
     }
 
     private fun findSubPbNextPageMoreViewForRuntimeTint(anchor: View): View? {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return null
         if (!pageSessions.isSubPbReplyHostActivity(activity)) return null
         val viewId = runtimeTargets?.subPbNextPageMoreViewId ?: return null
@@ -2615,8 +2614,8 @@ object HomeNativeGlassHook {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
         val density = subPbLayout.resources.displayMetrics.density
         val shadowStrength = runtimeStyleStore.current().shadowStrengthPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
         )
         if (shadowStrength > 0) {
             allowPbSubPbLayoutShadowOverflow(subPbLayout)
@@ -2652,7 +2651,7 @@ object HomeNativeGlassHook {
     }
 
     private fun interceptPbCommentNativeBackgroundWrite(view: View): Boolean {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return false
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return false
         if (!hasPageBackgroundOverride()) return false
         val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return false
         if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return false
@@ -2900,7 +2899,7 @@ object HomeNativeGlassHook {
     }
 
     private fun removePbCommentReplyTitleDecorationsSafely(root: View, requireKnownDivider: Boolean) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         val activity = pageSessions.findCachedActivityFromContext(root.context) ?: return
         if (!pageSessions.isPbActivity(activity)) return
@@ -2928,7 +2927,7 @@ object HomeNativeGlassHook {
     }
 
     private fun refreshPbReplyTitleDynamicTintSafely(root: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         val activity = pageSessions.findCachedActivityFromContext(root.context) ?: return
         if (!pageSessions.isPbActivity(activity)) return
@@ -3110,7 +3109,7 @@ object HomeNativeGlassHook {
     }
 
     private fun scheduleSubPbNavigationBarTint(navigationBar: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         if (!isSubPbNavigationBar(navigationBar)) return
         val activity = pageSessions.findCachedActivityFromContext(navigationBar.context) ?: return
         if (!pageSessions.isSubPbReplyHostActivity(activity)) return
@@ -3155,7 +3154,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applySubPbNavigationBarTint(navigationBar: View): Boolean {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
         if (!isSubPbNavigationBar(navigationBar)) return false
         val activity = pageSessions.findCachedActivityFromContext(navigationBar.context) ?: return false
         if (!pageSessions.isSubPbReplyHostActivity(activity)) return false
@@ -3192,7 +3191,7 @@ object HomeNativeGlassHook {
         anchor: View,
         reapplyAfterDelay: Boolean = true,
     ) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return
         if (!pageSessions.isSubPbReplyHostActivity(activity)) return
         val root = findSubPbViewRoot(anchor) ?: return
@@ -3253,7 +3252,7 @@ object HomeNativeGlassHook {
     }
 
     private fun findSubPbInputBarMatch(anchor: View): SubPbInputBarMatch? {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return null
         if (!pageSessions.isSubPbReplyHostActivity(activity)) return null
         val root = findSubPbViewRoot(anchor) ?: return null
@@ -3489,7 +3488,7 @@ object HomeNativeGlassHook {
     ): Int? {
         val targets = runtimeTargets ?: return null
         if (colorResId == 0 || colorResId !in targets.dynamicBackgroundColorIds) return null
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return null
         if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return null
         return runtimeStyleStore.pbCommentTintColorOrNull()
@@ -3564,7 +3563,7 @@ object HomeNativeGlassHook {
     }
 
     private fun isPbSortSwitchDynamicTintHost(view: View): Boolean {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
         val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return false
         return pageSessions.isPbActivity(activity) || pageSessions.isSubPbReplyHostActivity(activity)
     }
@@ -3589,14 +3588,14 @@ object HomeNativeGlassHook {
     }
 
     private fun resolvePbCachedDynamicTintColor(view: View): Int? {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return null
         val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return null
         if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return null
         return runtimeStyleStore.pbCommentTintColorOrNull()
     }
 
     private fun schedulePbReplyBarInputCapsuleDynamicTint(anchor: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         val activity = pageSessions.findCachedActivityFromContext(anchor.context) ?: return
         if (!pageSessions.isPbActivity(activity)) return
         val scheduleAnchor = pageSessions.findPbActivityContentHost(activity) ?: anchor
@@ -3918,7 +3917,7 @@ object HomeNativeGlassHook {
     }
 
     private fun isPbDialogActionMenuRoundLayout(view: View): Boolean {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return false
         val activity = pageSessions.findCachedActivityFromContext(view.context) ?: return false
         if (!pageSessions.isPbActivity(activity) && !pageSessions.isSubPbReplyHostActivity(activity)) return false
         val group = view as? ViewGroup ?: return false
@@ -4224,12 +4223,12 @@ object HomeNativeGlassHook {
         try {
             val root = anchor.rootView ?: anchor
             val page = findHomeNativePageForFeature(anchor, root)
-            val hasNativeGlassBackground = ConfigManager.isHomeNativeGlassEnabled &&
+            val hasNativeGlassBackground = ConfigManager.snapshot().isHomeNativeGlassEnabled &&
                 hasPageBackgroundOverride()
             val canApplyChrome = hasNativeGlassBackground &&
                 page != null
 
-            if (ConfigManager.isHomeTabDynamicTintEnabled) {
+            if (ConfigManager.snapshot().isHomeTabDynamicTintEnabled) {
                 applyHomeTopTabDynamicTintForMatchingViews(root, canApplyChrome)
                 applyHomeBottomTabDynamicTintForMatchingViews(root, hasNativeGlassBackground)
             }
@@ -4247,7 +4246,7 @@ object HomeNativeGlassHook {
         try {
             applyHomeBottomTabDynamicTint(
                 tabHost,
-                ConfigManager.isHomeNativeGlassEnabled && hasPageBackgroundOverride(),
+                ConfigManager.snapshot().isHomeNativeGlassEnabled && hasPageBackgroundOverride(),
             )
         } catch (t: Throwable) {
             if (firstChromeErrorLogged.compareAndSet(false, true)) {
@@ -4259,7 +4258,7 @@ object HomeNativeGlassHook {
     private fun applyHomeTopTabDynamicTintSafely(topChrome: View) {
         try {
             val root = topChrome.rootView ?: topChrome
-            val canApplyChrome = ConfigManager.isHomeNativeGlassEnabled &&
+            val canApplyChrome = ConfigManager.snapshot().isHomeNativeGlassEnabled &&
                 hasPageBackgroundOverride() &&
                 findHomeNativePageForFeature(topChrome, root) != null
             applyHomeTopTabDynamicTint(topChrome, canApplyChrome)
@@ -4291,7 +4290,7 @@ object HomeNativeGlassHook {
     private fun applyHomeTopTabDynamicTint(topChrome: View, shouldApply: Boolean) {
         val color = if (
             shouldApply &&
-            ConfigManager.isHomeTabDynamicTintEnabled
+            ConfigManager.snapshot().isHomeTabDynamicTintEnabled
         ) {
             runtimeStyleStore.pbCommentTintColorOrNull()
         } else {
@@ -4314,7 +4313,7 @@ object HomeNativeGlassHook {
         val targets = resolveHomeBottomTabDynamicTintTargets(tabHost)
         val color = if (
             shouldApply &&
-            ConfigManager.isHomeTabDynamicTintEnabled
+            ConfigManager.snapshot().isHomeTabDynamicTintEnabled
         ) {
             runtimeStyleStore.pbCommentTintColorOrNull()
         } else {
@@ -4491,7 +4490,7 @@ object HomeNativeGlassHook {
     }
 
     private fun ensureCardComponentGlassSafely(componentView: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) {
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) {
             restoreCardComponentGlass(componentView)
             return
         }
@@ -4537,7 +4536,7 @@ object HomeNativeGlassHook {
     }
 
     private fun collapseBlockedHomeCardComponent(view: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         if (view.parent != null && !isInsideHomeNativePage(view)) return
 
         var changed = false
@@ -4780,7 +4779,7 @@ object HomeNativeGlassHook {
     }
 
     private fun handleHomeRecyclerChildAttached(child: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         if (isFeedCardView(child)) {
             applyCardStyleSafely(child, force = true)
             viewSessions.request(HomeNativeGlassViewRole.FEED_CARD, child)
@@ -4790,14 +4789,14 @@ object HomeNativeGlassHook {
     }
 
     private fun scheduleHomeRecyclerChildBackgroundRefresh(child: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         child.post {
             applyHomeRecyclerChildBackgroundSafely(child)
         }
     }
 
     private fun applyHomeRecyclerChildBackgroundSafely(child: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled || !hasPageBackgroundOverride()) return
         try {
             if (!isInsideHomeNativePage(child)) return
             markNestedHomeRecyclerViews(child)
@@ -5069,7 +5068,7 @@ object HomeNativeGlassHook {
     }
 
     private fun prewarmBackgroundCacheIfNeeded() {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         val style = runtimeStyleStore.current()
         if (!style.hasBackgroundImage) return
         val context = ConfigManager.getAppContext() ?: return
@@ -5098,14 +5097,14 @@ object HomeNativeGlassHook {
 
     private fun isBackgroundDecodeRequestCurrent(request: BackgroundRequest): Boolean {
         val style = runtimeStyleStore.peek()
-        return ConfigManager.isHomeNativeGlassEnabled &&
+        return ConfigManager.snapshot().isHomeNativeGlassEnabled &&
             style.backgroundImagePath == request.path &&
             style.blurCacheImagePath == request.blurCachePath &&
             style.cardBlurPercent == request.blurPercent
     }
 
     private fun refreshHomeNativeBackgroundLayers(recycler: View) {
-        if (!ConfigManager.isHomeNativeGlassEnabled) return
+        if (!ConfigManager.snapshot().isHomeNativeGlassEnabled) return
         if (!hasPageBackgroundOverride()) return
         clearVisibleHomeRecyclerTopBackgrounds(recycler)
         if (!recycler.canScrollVertically(-1)) {

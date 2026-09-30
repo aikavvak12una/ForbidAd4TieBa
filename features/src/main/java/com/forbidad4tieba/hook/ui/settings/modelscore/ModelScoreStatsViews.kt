@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui.settings.modelscore
 
+import com.forbidad4tieba.hook.config.ModelScoreSettings
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Typeface
@@ -9,7 +10,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
 import com.forbidad4tieba.hook.ui.ModelScoreDistributionView
 import com.forbidad4tieba.hook.ui.ModelScoreUiItem
@@ -89,8 +89,8 @@ internal object ModelScoreStatsViews {
         onAutoPercentileSelected: (Int, Double, Int) -> Unit,
     ): View {
         val active = autoPercentile != null
-        val displayPercentile = ConfigManager.normalizeModelScoreAutoPercentile(
-            autoPercentile ?: ConfigManager.DEFAULT_MODEL_SCORE_AUTO_PERCENTILE
+        val displayPercentile = ModelScoreSettings.normalizeModelScoreAutoPercentile(
+            autoPercentile ?: ModelScoreSettings.DEFAULT_MODEL_SCORE_AUTO_PERCENTILE
         )
         val percentileValue = summary.percentileValue(displayPercentile)
         return LinearLayout(context).apply {
@@ -216,7 +216,7 @@ internal object ModelScoreStatsViews {
         val tokens = UiStyle.tokens(context)
         val density = context.resources.displayMetrics.density
         val padding = settingsDialogPadding(density)
-        val percentiles = ConfigManager.SUPPORTED_MODEL_SCORE_AUTO_PERCENTILES
+        val percentiles = ModelScoreSettings.SUPPORTED_MODEL_SCORE_AUTO_PERCENTILES
         val checkedIndex = percentiles.indexOf(currentPercentile).coerceAtLeast(0)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL

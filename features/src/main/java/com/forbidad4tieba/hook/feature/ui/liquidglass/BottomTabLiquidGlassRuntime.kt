@@ -379,7 +379,7 @@ internal object BottomTabLiquidGlassRuntime {
     }
 
     private fun apply(host: ViewGroup) {
-        if (!ConfigManager.isBottomTabLiquidGlassEnabled) return
+        if (!ConfigManager.snapshot().isBottomTabLiquidGlassEnabled) return
         val api = hostApi ?: return
         if (states.containsKey(host)) {
             refresh(host)
@@ -624,7 +624,7 @@ internal object BottomTabLiquidGlassRuntime {
      * is still reachable - while letting the rows draw behind the pill.
      */
     private fun relaxScrollContainerClipping(state: GlassState) {
-        if (!ConfigManager.isBottomTabLiquidGlassEnabled || state.panel.parent == null) return
+        if (!ConfigManager.snapshot().isBottomTabLiquidGlassEnabled || state.panel.parent == null) return
         val pager = state.pager
         for (i in 0 until pager.childCount) {
             val page = pager.getChildAt(i) as? ViewGroup ?: continue

@@ -29,7 +29,7 @@ internal object ModuleComposition {
             }.getOrNull()
         }
         XposedCompat.configureLogging {
-            !HookProcess.isSystemUi(processName) && ConfigManager.shouldOutputDetailedLogs()
+            !HookProcess.isSystemUi(processName) && ConfigManager.snapshot().isDetailedLoggingEnabled
         }
         Diagnostics.initialize(object : DiagnosticSink {
             override fun info(message: String) = XposedCompat.log(message)

@@ -49,8 +49,8 @@ class FeatureCatalogTest {
         val context = HookInstallContext("com.baidu.tieba", null)
         val definition = FeatureDefinition.observed("example", FeaturePhase.STATIC, FeatureProcess.MAIN,
             enabled = { it.isAutoLoadMoreEnabled }) { _, _ -> installations++ }
-        assertTrue(definition.entries(context, SettingsSnapshot()).isEmpty())
-        val entries = definition.entries(context, SettingsSnapshot(isAutoLoadMoreEnabled = true))
+        assertTrue(definition.entries(context, SettingsSnapshot.bootstrap()).isEmpty())
+        val entries = definition.entries(context, SettingsSnapshot.bootstrap().copy(isAutoLoadMoreEnabled = true))
         assertEquals(0, installations)
         entries.single().install(javaClass.classLoader!!)
         assertEquals(1, installations)
@@ -59,7 +59,7 @@ class FeatureCatalogTest {
             factories++
             emptyList()
         }
-        guardedFactory.entries(HookInstallContext("com.baidu.tieba:remote", null), SettingsSnapshot())
+        guardedFactory.entries(HookInstallContext("com.baidu.tieba:remote", null), SettingsSnapshot.bootstrap())
         assertEquals(0, factories)
     }
 }

@@ -27,7 +27,7 @@ object HostSlideAnimationBlockHook {
     private val installed = AtomicBoolean(false)
 
     fun hook(cl: ClassLoader) {
-        if (!ConfigManager.isHostSlideAnimationDisabled) {
+        if (!ConfigManager.snapshot().isHostSlideAnimationDisabled) {
             XposedCompat.logD("$TAG skipped: config disabled")
             return
         }
@@ -58,7 +58,7 @@ object HostSlideAnimationBlockHook {
                 method.isAccessible = true
                 RuntimeHooks.builder(mod, method, "HostSlideAnimationBlockHook", "hook:method").intercept { chain ->
                     val key = chain.args.firstOrNull() as? String
-                    if (key == KEY_SYNC_SLIDE_ANIMATION && ConfigManager.isHostSlideAnimationDisabled) {
+                    if (key == KEY_SYNC_SLIDE_ANIMATION && ConfigManager.snapshot().isHostSlideAnimationDisabled) {
                         return@intercept 0
                     }
                     chain.proceed()
@@ -78,7 +78,7 @@ object HostSlideAnimationBlockHook {
                 method.isAccessible = true
                 RuntimeHooks.builder(mod, method, "HostSlideAnimationBlockHook", "hook:method:2").intercept { chain ->
                     val key = chain.args.firstOrNull() as? String
-                    if (key == KEY_LOCAL_SLIDE_ANIMATION && ConfigManager.isHostSlideAnimationDisabled) {
+                    if (key == KEY_LOCAL_SLIDE_ANIMATION && ConfigManager.snapshot().isHostSlideAnimationDisabled) {
                         return@intercept false
                     }
                     chain.proceed()

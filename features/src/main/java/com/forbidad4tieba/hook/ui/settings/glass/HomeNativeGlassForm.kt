@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui.settings.glass
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Bitmap
@@ -10,7 +11,6 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassImageCache
@@ -71,15 +71,15 @@ internal object HomeNativeGlassForm {
                 .coerceAtLeast((220 * density).toInt())
 
             val lightModeState = createHomeNativeGlassModeConfigState(
-                ConfigManager.readHomeNativeGlassStyle(
+                HomeGlassPreferences.readHomeNativeGlassStyle(
                     prefs,
-                    ConfigManager.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS,
+                    HomeGlassPreferences.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS,
                 )
             )
             val darkModeState = createHomeNativeGlassModeConfigState(
-                ConfigManager.readHomeNativeGlassStyle(
+                HomeGlassPreferences.readHomeNativeGlassStyle(
                     prefs,
-                    ConfigManager.HOME_NATIVE_GLASS_DARK_STYLE_KEYS,
+                    HomeGlassPreferences.HOME_NATIVE_GLASS_DARK_STYLE_KEYS,
                 )
             )
             var selectedDarkMode = HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled() == true
@@ -199,8 +199,8 @@ internal object HomeNativeGlassForm {
             }
 
             val visibleImageState = HomeNativeGlassImageSelectionState(
-                ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
-                ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
+                HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH,
+                HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR,
             )
             copyHomeNativeGlassImageState(visibleImageState, currentModeState().imageState)
             val tintColorRowAndRefresh = createHomeNativeGlassTintColorRow(
@@ -218,8 +218,8 @@ internal object HomeNativeGlassForm {
                 context = context,
                 label = UiText.Settings.HOME_NATIVE_GLASS_TINT_ALPHA_LABEL,
                 description = UiText.Settings.HOME_NATIVE_GLASS_TINT_ALPHA_DESC,
-                minValue = ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                maxValue = ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                minValue = HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                maxValue = HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                 value = currentModeState().tintAlphaPercent,
                 suffix = "",
                 density = density,
@@ -228,9 +228,9 @@ internal object HomeNativeGlassForm {
             val tintAlphaSeekBar = tintAlphaRowAndSeekBar.second
             val backgroundImageImportCallback: (HomeNativeGlassImageAnalysis) -> Unit = { analysis ->
                 tintAlphaSeekBar.progress = analysis.tintAlphaPercent.coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                ) - ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
+                    HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                ) - HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
                 requestVisibleModePreviewRefresh()
             }
             val backgroundImageRowAndDisplay = createHomeNativeGlassImagePickerRow(
@@ -247,8 +247,8 @@ internal object HomeNativeGlassForm {
                 context = context,
                 label = UiText.Settings.HOME_NATIVE_GLASS_CARD_BLUR_LABEL,
                 description = UiText.Settings.HOME_NATIVE_GLASS_CARD_BLUR_DESC,
-                minValue = ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                maxValue = ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                minValue = HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                maxValue = HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 value = currentModeState().cardBlurPercent,
                 suffix = "%",
                 density = density,
@@ -260,8 +260,8 @@ internal object HomeNativeGlassForm {
                 context = context,
                 label = UiText.Settings.HOME_NATIVE_GLASS_CARD_RADIUS_LABEL,
                 description = UiText.Settings.HOME_NATIVE_GLASS_CARD_RADIUS_DESC,
-                minValue = ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-                maxValue = ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                minValue = HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                maxValue = HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
                 value = currentModeState().cardRadiusDp,
                 suffix = "dp",
                 density = density,
@@ -281,8 +281,8 @@ internal object HomeNativeGlassForm {
                 context = context,
                 label = UiText.Settings.HOME_NATIVE_GLASS_SHADOW_LABEL,
                 description = UiText.Settings.HOME_NATIVE_GLASS_SHADOW_DESC,
-                minValue = ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-                maxValue = ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                minValue = HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                maxValue = HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
                 value = currentModeState().shadowStrengthPercent,
                 suffix = "%",
                 density = density,
@@ -297,36 +297,36 @@ internal object HomeNativeGlassForm {
                 val previousCardBlurPercent = state.cardBlurPercent
                 copyHomeNativeGlassImageState(state.imageState, visibleImageState)
                 state.tintAlphaPercent = (
-                    tintAlphaSeekBar.progress + ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
+                    tintAlphaSeekBar.progress + HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
                     ).coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                 )
                 state.cardBlurPercent = (
-                    blurSeekBar.progress + ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
+                    blurSeekBar.progress + HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
                     ).coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                    HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                    HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 )
                 state.cardRadiusDp = (
-                    radiusSeekBar.progress + ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP
+                    radiusSeekBar.progress + HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP
                     ).coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                    HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                    HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
                 )
                 state.strokeEnabled = strokeSwitch.second.isChecked
                 state.shadowStrengthPercent = (
-                    shadowSeekBar.progress + ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+                    shadowSeekBar.progress + HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
                     ).coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                    HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                    HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
                 )
                 if (
                     state.imageState.path.trim() != previousImagePath ||
                     state.tintAlphaPercent != previousTintAlphaPercent ||
                     state.cardBlurPercent != previousCardBlurPercent
                 ) {
-                    state.blurCacheImagePath = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH
+                    state.blurCacheImagePath = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH
                 }
             }
 
@@ -338,22 +338,22 @@ internal object HomeNativeGlassForm {
                     backgroundImageDisplay.text = HomeNativeGlassImageFiles.displayText(visibleImageState.path)
                     tintColorRefresh()
                     tintAlphaSeekBar.progress = state.tintAlphaPercent.coerceIn(
-                        ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                        ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                    ) - ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
+                        HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                        HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    ) - HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
                     blurSeekBar.progress = state.cardBlurPercent.coerceIn(
-                        ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                        ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                    ) - ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
+                        HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                        HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                    ) - HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
                     radiusSeekBar.progress = state.cardRadiusDp.coerceIn(
-                        ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-                        ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-                    ) - ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP
+                        HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                        HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+                    ) - HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP
                     strokeSwitch.second.isChecked = state.strokeEnabled
                     shadowSeekBar.progress = state.shadowStrengthPercent.coerceIn(
-                        ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-                        ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-                    ) - ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+                        HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                        HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+                    ) - HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
                 } finally {
                     loadingVisibleModeState = false
                 }
@@ -428,21 +428,21 @@ internal object HomeNativeGlassForm {
                 dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
                     loadingVisibleModeState = true
                     try {
-                        tintAlphaSeekBar.progress = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT -
-                            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
-                        blurSeekBar.progress = ConfigManager.APPLE_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT -
-                            ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
-                        radiusSeekBar.progress = ConfigManager.APPLE_HOME_NATIVE_GLASS_CARD_RADIUS_DP -
-                            ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP
-                        visibleImageState.path = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH
-                        visibleImageState.tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
+                        tintAlphaSeekBar.progress = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT -
+                            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
+                        blurSeekBar.progress = HomeGlassPreferences.APPLE_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT -
+                            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
+                        radiusSeekBar.progress = HomeGlassPreferences.APPLE_HOME_NATIVE_GLASS_CARD_RADIUS_DP -
+                            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP
+                        visibleImageState.path = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH
+                        visibleImageState.tintColor = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
                         visibleImageState.paletteColors = emptyList()
                         visibleImageState.defaultTintColor = null
                         backgroundImageDisplay.text = HomeNativeGlassImageFiles.displayText(visibleImageState.path)
                         tintColorRefresh()
-                        strokeSwitch.second.isChecked = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
-                        shadowSeekBar.progress = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT -
-                            ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+                        strokeSwitch.second.isChecked = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
+                        shadowSeekBar.progress = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT -
+                            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
                     } finally {
                         loadingVisibleModeState = false
                     }
@@ -459,7 +459,7 @@ internal object HomeNativeGlassForm {
                     thread(name = "tbhook-home-native-glass-blur-cache", isDaemon = true) {
                         fun ensureBlurCache(
                             modeName: String,
-                            style: ConfigManager.HomeNativeGlassStyleConfig,
+                            style: HomeGlassPreferences.HomeNativeGlassStyleConfig,
                         ): String {
                             if (style.backgroundImagePath.isBlank()) return ""
                             return runCatching {
@@ -489,29 +489,29 @@ internal object HomeNativeGlassForm {
                             val editor = prefs.edit()
                             putHomeNativeGlassStyle(
                                 editor,
-                                ConfigManager.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS,
+                                HomeGlassPreferences.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS,
                                 savedLightStyle,
                             )
                             putHomeNativeGlassStyle(
                                 editor,
-                                ConfigManager.HOME_NATIVE_GLASS_DARK_STYLE_KEYS,
+                                HomeGlassPreferences.HOME_NATIVE_GLASS_DARK_STYLE_KEYS,
                                 savedDarkStyle,
                             )
                             editor
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_COLOR)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_PALETTE)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_STROKE_ENABLED)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED)
-                                .remove(ConfigManager.KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT)
-                                .remove(ConfigManager.KEY_ENABLE_HOME_TAB_DYNAMIC_TINT)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_COLOR)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_PALETTE)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_STROKE_ENABLED)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED)
+                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT)
+                                .remove(HomeGlassPreferences.KEY_ENABLE_HOME_TAB_DYNAMIC_TINT)
                                 .putBoolean(
-                                    ConfigManager.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED,
+                                    HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED,
                                     true,
                                 )
                                 .apply()

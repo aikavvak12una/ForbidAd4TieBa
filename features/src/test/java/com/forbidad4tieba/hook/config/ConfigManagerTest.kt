@@ -11,83 +11,40 @@ import java.lang.reflect.Proxy
 
 class ConfigManagerTest {
     @Test
-    fun parseModelScoreThresholdsAcceptsSupportedSeparatorsAndKeepsLastDuplicateValue() {
-        val thresholds = ConfigManager.parseModelScoreThresholds(
-            """
-            alpha=0.25
-            beta:1.5; alpha = 0.75
-            """.trimIndent(),
-        )
-
-        assertEquals(listOf("alpha", "beta"), thresholds.map { it.key })
-        assertEquals(0.75, thresholds[0].threshold, 0.0)
-        assertEquals(1.5, thresholds[1].threshold, 0.0)
-    }
-
-    @Test
-    fun parseModelScoreThresholdsIgnoresInvalidValuesAndBlankKeys() {
-        val thresholds = ConfigManager.parseModelScoreThresholds(
-            """
-            =0.1
-            negative=-1
-            nan=NaN
-            infinite=Infinity
-            bad=text
-            ok=0
-            spaced : 2.5
-            """.trimIndent(),
-        )
-
-        assertEquals(
-            listOf(
-                ConfigManager.ModelScoreThreshold("ok", 0.0),
-                ConfigManager.ModelScoreThreshold("spaced", 2.5),
-            ),
-            thresholds,
-        )
-    }
-
-    @Test
-    fun parseModelScoreThresholdsReturnsEmptyListForBlankInput() {
-        assertTrue(ConfigManager.parseModelScoreThresholds(null).isEmpty())
-        assertTrue(ConfigManager.parseModelScoreThresholds("   ").isEmpty())
-    }
-
-    @Test
     fun nonScanPreferencesAreAvailableWithoutScanState() {
-        assertNull(ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION))
-        assertNull(ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT))
+        assertNull(SettingsCatalog.capabilityFor(PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION))
+        assertNull(SettingsCatalog.capabilityFor(TabPreferences.KEY_HIDE_HOME_TAB_RED_DOT))
         assertEquals(
             ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-            ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION),
+            ConfigManager.getScanFeatureAvailabilityState(PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION),
         )
-        assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT))
+        assertTrue(ConfigManager.isScanFeatureAvailable(TabPreferences.KEY_HIDE_HOME_TAB_RED_DOT))
     }
 
     @Test
     fun detailedLoggingStableHostPathIsAvailableBeforeSymbolScan() {
         assertEquals(
             HookFeatureKey.DETAILED_LOGGING,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_DETAILED_LOGGING),
+            SettingsCatalog.capabilityFor(AccountPreferences.KEY_ENABLE_DETAILED_LOGGING),
         )
         assertEquals(
             ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-            ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_DETAILED_LOGGING),
+            ConfigManager.getScanFeatureAvailabilityState(AccountPreferences.KEY_ENABLE_DETAILED_LOGGING),
         )
-        assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_DETAILED_LOGGING))
+        assertTrue(ConfigManager.isScanFeatureAvailable(AccountPreferences.KEY_ENABLE_DETAILED_LOGGING))
     }
 
     @Test
     fun autoSignInRemainsUnknownUntilScanStateIsApplied() {
         assertEquals(
-            ConfigManager.KEY_ENABLE_AUTO_SIGN_IN,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
+            AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN,
+            SettingsCatalog.capabilityFor(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN),
         )
         assertEquals(
             ConfigManager.ScanFeatureAvailabilityState.UNKNOWN,
-            ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
+            ConfigManager.getScanFeatureAvailabilityState(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN),
         )
-        assertFalse(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+        assertFalse(ConfigManager.isScanFeatureAvailable(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN))
     }
 
     @Test
@@ -99,9 +56,9 @@ class ConfigManagerTest {
         ) {
             assertEquals(
                 ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-                ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
+                ConfigManager.getScanFeatureAvailabilityState(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN),
             )
-            assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+            assertTrue(ConfigManager.isScanFeatureAvailable(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN))
         }
 
         withScanAvailability(
@@ -111,9 +68,9 @@ class ConfigManagerTest {
         ) {
             assertEquals(
                 ConfigManager.ScanFeatureAvailabilityState.PARTIAL,
-                ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
+                ConfigManager.getScanFeatureAvailabilityState(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN),
             )
-            assertTrue(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+            assertTrue(ConfigManager.isScanFeatureAvailable(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN))
         }
 
         withScanAvailability(
@@ -123,21 +80,21 @@ class ConfigManagerTest {
         ) {
             assertEquals(
                 ConfigManager.ScanFeatureAvailabilityState.DISABLED,
-                ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN),
+                ConfigManager.getScanFeatureAvailabilityState(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN),
             )
-            assertFalse(ConfigManager.isScanFeatureAvailable(ConfigManager.KEY_ENABLE_AUTO_SIGN_IN))
+            assertFalse(ConfigManager.isScanFeatureAvailable(AccountPreferences.KEY_ENABLE_AUTO_SIGN_IN))
         }
     }
 
     @Test
     fun scanBackedPreferencesRemainUnknownUntilScanStateIsApplied() {
         assertEquals(
-            ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS),
+            HomeGlassPreferences.KEY_ENABLE_HOME_NATIVE_GLASS,
+            SettingsCatalog.capabilityFor(HomeGlassPreferences.KEY_ENABLE_HOME_NATIVE_GLASS),
         )
         assertEquals(
             ConfigManager.ScanFeatureAvailabilityState.UNKNOWN,
-            ConfigManager.getScanFeatureAvailabilityState(ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS),
+            ConfigManager.getScanFeatureAvailabilityState(HomeGlassPreferences.KEY_ENABLE_HOME_NATIVE_GLASS),
         )
     }
 
@@ -145,16 +102,16 @@ class ConfigManagerTest {
     fun adChildPreferencesMapToIndependentFeatureKeys() {
         assertEquals(
             HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_BLOCK_AD_SEARCH_BOX_TEXT),
+            SettingsCatalog.capabilityFor(AdPreferences.KEY_BLOCK_AD_SEARCH_BOX_TEXT),
         )
         assertEquals(
             HookFeatureKey.BLOCK_AD_FEED,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_BLOCK_AD_FEED),
+            SettingsCatalog.capabilityFor(AdPreferences.KEY_BLOCK_AD_FEED),
         )
         assertEquals(
             HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(
-                ConfigManager.KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
+            SettingsCatalog.capabilityFor(
+                AdPreferences.KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
             ),
         )
     }
@@ -163,23 +120,23 @@ class ConfigManagerTest {
     fun formerlyDescribedPreferencesUseCanonicalFeatureKeys() {
         assertEquals(
             HookFeatureKey.AUTO_LOAD_MORE,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_AUTO_LOAD_MORE),
+            SettingsCatalog.capabilityFor(ExtensionPreferences.KEY_ENABLE_AUTO_LOAD_MORE),
         )
         assertEquals(
             HookFeatureKey.DISABLE_AUTO_REFRESH,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_DISABLE_AUTO_REFRESH),
+            SettingsCatalog.capabilityFor(ExtensionPreferences.KEY_DISABLE_AUTO_REFRESH),
         )
         assertEquals(
             HookFeatureKey.DEFAULT_ORIGINAL_IMAGE,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE),
+            SettingsCatalog.capabilityFor(SimpleToggle.DEFAULT_ORIGINAL_IMAGE.prefKey),
         )
         assertEquals(
             HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER),
+            SettingsCatalog.capabilityFor(ExtensionPreferences.KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER),
         )
         assertEquals(
             HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_ENABLE_PB_LIKE_AUTO_REPLY),
+            SettingsCatalog.capabilityFor(ReplyPreferences.KEY_ENABLE_PB_LIKE_AUTO_REPLY),
         )
     }
 
@@ -193,13 +150,13 @@ class ConfigManagerTest {
         ) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_ENABLE_CUSTOM_POST_FILTER to false,
-                    ConfigManager.KEY_FILTER_POST_VOTE to true,
-                    ConfigManager.KEY_FILTER_POST_LOTTERY to true,
-                    ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD to true,
-                    ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD_LIST to "alpha,beta",
-                    ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    ConfigManager.KEY_FILTER_POST_MODEL_SCORE to true,
+                    PostFilterPreferences.KEY_ENABLE_CUSTOM_POST_FILTER to false,
+                    PostFilterPreferences.KEY_FILTER_POST_VOTE to true,
+                    PostFilterPreferences.KEY_FILTER_POST_LOTTERY to true,
+                    PostFilterPreferences.KEY_FILTER_POST_FORUM_KEYWORD to true,
+                    PostFilterPreferences.KEY_FILTER_POST_FORUM_KEYWORD_LIST to "alpha,beta",
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE to true,
                 ),
             )
 
@@ -222,13 +179,13 @@ class ConfigManagerTest {
         ) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_ENABLE_CUSTOM_POST_FILTER to true,
-                    ConfigManager.KEY_FILTER_POST_VOTE to true,
-                    ConfigManager.KEY_FILTER_POST_LOTTERY to true,
-                    ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD to true,
-                    ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD_LIST to "alpha,beta",
-                    ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    ConfigManager.KEY_FILTER_POST_MODEL_SCORE to true,
+                    PostFilterPreferences.KEY_ENABLE_CUSTOM_POST_FILTER to true,
+                    PostFilterPreferences.KEY_FILTER_POST_VOTE to true,
+                    PostFilterPreferences.KEY_FILTER_POST_LOTTERY to true,
+                    PostFilterPreferences.KEY_FILTER_POST_FORUM_KEYWORD to true,
+                    PostFilterPreferences.KEY_FILTER_POST_FORUM_KEYWORD_LIST to "alpha,beta",
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE to true,
                 ),
             )
 
@@ -253,17 +210,17 @@ class ConfigManagerTest {
         ) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to false,
-                    ConfigManager.KEY_HOME_TOP_TAB_MATERIAL to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_RECOMMEND to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_LIVE to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_FOLLOWED to true,
-                    ConfigManager.KEY_CUSTOM_BOTTOM_TABS to false,
-                    ConfigManager.KEY_BOTTOM_TAB_HOME to true,
-                    ConfigManager.KEY_BOTTOM_TAB_ENTER_FORUM to true,
-                    ConfigManager.KEY_BOTTOM_TAB_RETAIL_STORE to true,
-                    ConfigManager.KEY_BOTTOM_TAB_MESSAGE to true,
-                    ConfigManager.KEY_BOTTOM_TAB_MINE to true,
+                    TabPreferences.KEY_CUSTOM_HOME_TOP_TABS to false,
+                    TabPreferences.KEY_HOME_TOP_TAB_MATERIAL to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_RECOMMEND to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_LIVE to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_FOLLOWED to true,
+                    TabPreferences.KEY_CUSTOM_BOTTOM_TABS to false,
+                    TabPreferences.KEY_BOTTOM_TAB_HOME to true,
+                    TabPreferences.KEY_BOTTOM_TAB_ENTER_FORUM to true,
+                    TabPreferences.KEY_BOTTOM_TAB_RETAIL_STORE to true,
+                    TabPreferences.KEY_BOTTOM_TAB_MESSAGE to true,
+                    TabPreferences.KEY_BOTTOM_TAB_MINE to true,
                 ),
             )
 
@@ -294,17 +251,17 @@ class ConfigManagerTest {
         ) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_MATERIAL to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_RECOMMEND to false,
-                    ConfigManager.KEY_HOME_TOP_TAB_LIVE to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_FOLLOWED to false,
-                    ConfigManager.KEY_CUSTOM_BOTTOM_TABS to true,
-                    ConfigManager.KEY_BOTTOM_TAB_HOME to true,
-                    ConfigManager.KEY_BOTTOM_TAB_ENTER_FORUM to false,
-                    ConfigManager.KEY_BOTTOM_TAB_RETAIL_STORE to true,
-                    ConfigManager.KEY_BOTTOM_TAB_MESSAGE to false,
-                    ConfigManager.KEY_BOTTOM_TAB_MINE to true,
+                    TabPreferences.KEY_CUSTOM_HOME_TOP_TABS to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_MATERIAL to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_RECOMMEND to false,
+                    TabPreferences.KEY_HOME_TOP_TAB_LIVE to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_FOLLOWED to false,
+                    TabPreferences.KEY_CUSTOM_BOTTOM_TABS to true,
+                    TabPreferences.KEY_BOTTOM_TAB_HOME to true,
+                    TabPreferences.KEY_BOTTOM_TAB_ENTER_FORUM to false,
+                    TabPreferences.KEY_BOTTOM_TAB_RETAIL_STORE to true,
+                    TabPreferences.KEY_BOTTOM_TAB_MESSAGE to false,
+                    TabPreferences.KEY_BOTTOM_TAB_MINE to true,
                 ),
             )
 
@@ -313,8 +270,8 @@ class ConfigManagerTest {
             assertFalse(snapshot.isHomeTopTabRecommendEnabled)
             assertTrue(snapshot.isHomeTopTabLiveEnabled)
             assertFalse(snapshot.isHomeTopTabFollowedEnabled)
-            assertTrue(ConfigManager.HOME_TOP_TAB_KEY_RECOMMEND in snapshot.homeTopTabDisabledKeys)
-            assertTrue(ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED in snapshot.homeTopTabDisabledKeys)
+            assertTrue(TabPreferences.HOME_TOP_TAB_KEY_RECOMMEND in snapshot.homeTopTabDisabledKeys)
+            assertTrue(TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED in snapshot.homeTopTabDisabledKeys)
             assertTrue(snapshot.isBottomTabsCustomEnabled)
             assertTrue(snapshot.isBottomTabHomeEnabled)
             assertFalse(snapshot.isBottomTabEnterForumEnabled)
@@ -329,7 +286,7 @@ class ConfigManagerTest {
         val defaultSnapshot = buildSnapshot(emptyMap())
         val enabledSnapshot = buildSnapshot(
             mapOf(
-                ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT to true,
+                TabPreferences.KEY_HIDE_HOME_TAB_RED_DOT to true,
             ),
         )
 
@@ -341,7 +298,7 @@ class ConfigManagerTest {
     fun inputMemeBarBlockDefaultsOffAndFollowsScanAvailability() {
         assertEquals(
             HookFeatureKey.HIDE_INPUT_MEME_BAR,
-            ConfigManager.scanFeatureKeyForPrefKeyOrNull(ConfigManager.KEY_HIDE_INPUT_MEME_BAR),
+            SettingsCatalog.capabilityFor(ExtensionPreferences.KEY_HIDE_INPUT_MEME_BAR),
         )
         withScanAvailability(
             mapOf(
@@ -352,7 +309,7 @@ class ConfigManagerTest {
             assertFalse(buildSnapshot(emptyMap()).isInputMemeBarHidden)
             assertTrue(
                 buildSnapshot(
-                    mapOf(ConfigManager.KEY_HIDE_INPUT_MEME_BAR to true),
+                    mapOf(ExtensionPreferences.KEY_HIDE_INPUT_MEME_BAR to true),
                 ).isInputMemeBarHidden,
             )
         }
@@ -364,7 +321,7 @@ class ConfigManagerTest {
         ) {
             assertFalse(
                 buildSnapshot(
-                    mapOf(ConfigManager.KEY_HIDE_INPUT_MEME_BAR to true),
+                    mapOf(ExtensionPreferences.KEY_HIDE_INPUT_MEME_BAR to true),
                 ).isInputMemeBarHidden,
             )
         }
@@ -379,20 +336,20 @@ class ConfigManagerTest {
             ),
         ) {
             val disabled = setOf(
-                ConfigManager.HOME_TOP_TAB_KEY_RECOMMEND,
-                ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED,
+                TabPreferences.HOME_TOP_TAB_KEY_RECOMMEND,
+                TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED,
                 "code:custom",
             )
-            val expandedDisabled = ConfigManager.expandHomeTopTabDisabledKeys(disabled)
+            val expandedDisabled = TabPreferences.expandHomeTopTabDisabledKeys(disabled)
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_MATERIAL to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_RECOMMEND to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_LIVE to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_FOLLOWED to true,
-                    ConfigManager.KEY_HOME_TOP_TAB_DISABLED_KEYS to
-                        ConfigManager.serializeHomeTopTabDisabledKeys(disabled),
+                    TabPreferences.KEY_CUSTOM_HOME_TOP_TABS to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_MATERIAL to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_RECOMMEND to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_LIVE to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_FOLLOWED to true,
+                    TabPreferences.KEY_HOME_TOP_TAB_DISABLED_KEYS to
+                        TabPreferences.serializeHomeTopTabDisabledKeys(disabled),
                 ),
             )
 
@@ -417,13 +374,13 @@ class ConfigManagerTest {
         ) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    ConfigManager.KEY_ENABLE_PB_LIKE_AUTO_REPLY to false,
-                    ConfigManager.KEY_PB_LIKE_AUTO_REPLY_TEXT to "hello",
-                    ConfigManager.KEY_ENABLE_CUSTOM_POST_FILTER to true,
-                    ConfigManager.KEY_FILTER_POST_MODEL_SCORE to false,
-                    ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS to "quality=0.5",
-                    ConfigManager.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES to "quality=10",
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    ReplyPreferences.KEY_ENABLE_PB_LIKE_AUTO_REPLY to false,
+                    ReplyPreferences.KEY_PB_LIKE_AUTO_REPLY_TEXT to "hello",
+                    PostFilterPreferences.KEY_ENABLE_CUSTOM_POST_FILTER to true,
+                    PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE to false,
+                    PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS to "quality=0.5",
+                    PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES to "quality=10",
                 ),
             )
 
@@ -440,10 +397,10 @@ class ConfigManagerTest {
         withScanAvailability(emptyMap()) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to false,
-                    ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
-                    ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to false,
+                    PerformancePreferences.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
+                    PerformancePreferences.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
                 ),
             )
 
@@ -469,12 +426,12 @@ class ConfigManagerTest {
         ) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-                    ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
-                    ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
-                    ConfigManager.KEY_DISABLE_AI_COMPONENTS to true,
-                    ConfigManager.KEY_ENABLE_PB_SCROLL_COALESCE to true,
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+                    PerformancePreferences.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
+                    PerformancePreferences.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
+                    PerformancePreferences.KEY_DISABLE_AI_COMPONENTS to true,
+                    PerformancePreferences.KEY_ENABLE_PB_SCROLL_COALESCE to true,
                 ),
             )
 
@@ -496,8 +453,8 @@ class ConfigManagerTest {
         )) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
                 ),
             )
 
@@ -515,9 +472,9 @@ class ConfigManagerTest {
     @Test
     fun lowEndConfigurationRequiresResolvedSymbolsWithoutChangingSavedPreference() {
         val saved = mapOf(
-            ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-            ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-            ConfigManager.KEY_FORCE_LOW_END_DEVICE_CONFIG to true,
+            AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+            PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+            PerformancePreferences.KEY_FORCE_LOW_END_DEVICE_CONFIG to true,
         )
         withScanAvailability(mapOf(HookFeatureKey.FORCE_LOW_END_DEVICE_CONFIG to ConfigManager.ScanFeatureAvailabilityState.DISABLED)) {
             assertFalse(buildSnapshot(saved).isLowEndDeviceConfigForced)
@@ -535,10 +492,10 @@ class ConfigManagerTest {
                 HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
             )) {
                 val snapshot = buildSnapshot(mapOf(
-                    ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-                    ConfigManager.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
-                    ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+                    PerformancePreferences.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
+                    PerformancePreferences.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
                 ))
                 assertFalse(snapshot.isMonitorSyncComponentsDisabled)
                 assertTrue(snapshot.isHostPerformanceFlagsForced)
@@ -556,8 +513,8 @@ class ConfigManagerTest {
         ) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS to true,
-                    ConfigManager.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH_LIGHT to "/tmp/bg.png",
+                    HomeGlassPreferences.KEY_ENABLE_HOME_NATIVE_GLASS to true,
+                    HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH_LIGHT to "/tmp/bg.png",
                 ),
             )
 
@@ -567,7 +524,7 @@ class ConfigManagerTest {
 
     @Test fun liquidGlassSnapshotUsesCustomSettingsOnlyWhenEnabled() {
         val values = mapOf<String, Any?>(
-            ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
+            TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
             BottomTabLiquidGlassPreferences.HEIGHT to 84,
             BottomTabLiquidGlassPreferences.WIDTH to 80,
             BottomTabLiquidGlassPreferences.BOTTOM_GAP to 40,
@@ -576,7 +533,7 @@ class ConfigManagerTest {
         assertEquals(BottomTabLiquidGlassConfig(84, 80, 40, pressEffectEnabled = false),
             buildSnapshot(values).bottomTabLiquidGlass)
         assertEquals(BottomTabLiquidGlassConfig.DEFAULT,
-            buildSnapshot(values + (ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to false)).bottomTabLiquidGlass)
+            buildSnapshot(values + (TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to false)).bottomTabLiquidGlass)
     }
 
     @Test
@@ -586,14 +543,14 @@ class ConfigManagerTest {
             HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
         )) {
             val snapshot = buildSnapshot(mapOf(
-                ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-                ConfigManager.KEY_ENABLE_PB_PERFORMANCE_MODE to true,
-                ConfigManager.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
+                AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+                PerformancePreferences.KEY_ENABLE_PB_PERFORMANCE_MODE to true,
+                PerformancePreferences.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
             ))
             assertFalse(snapshot.isPbPerformanceModeEnabled)
             assertTrue(snapshot.isHostPerformanceFlagsForced)
-            val status = ConfigManager.formatPerformanceStatusLines(snapshot)
+            val status = SettingsDiagnostics.formatPerformanceStatusLines(snapshot)
                 .single { it.startsWith("PerformanceFeature[enable_pb_performance_mode]") }
             assertTrue(status.contains("active=OFF scan=DISABLED reason=scan_unavailable"))
         }
@@ -608,10 +565,10 @@ class ConfigManagerTest {
             ),
         ) {
             val keys = listOf(
-                ConfigManager.KEY_CUSTOM_HOME_TOP_TABS,
-                ConfigManager.KEY_CUSTOM_BOTTOM_TABS,
-                ConfigManager.KEY_AUTO_HIDE_HOME_TAB,
-                ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS,
+                TabPreferences.KEY_CUSTOM_HOME_TOP_TABS,
+                TabPreferences.KEY_CUSTOM_BOTTOM_TABS,
+                TabPreferences.KEY_AUTO_HIDE_HOME_TAB,
+                TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS,
             )
             keys.forEachIndexed { index, key ->
                 val snapshot = buildSnapshot(mapOf(key to true))
@@ -633,15 +590,15 @@ class ConfigManagerTest {
             ),
         ) {
             val values = mapOf<String, Any?>(
-                ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to false,
-                ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
-                ConfigManager.KEY_CUSTOM_BOTTOM_TABS to true,
-                ConfigManager.KEY_AUTO_HIDE_HOME_TAB to true,
-                ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
-                ConfigManager.KEY_HOME_TOP_TAB_DISABLED_KEYS to "code:material",
-                ConfigManager.KEY_BOTTOM_TAB_RETAIL_STORE to false,
+                TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to false,
+                TabPreferences.KEY_CUSTOM_HOME_TOP_TABS to true,
+                TabPreferences.KEY_CUSTOM_BOTTOM_TABS to true,
+                TabPreferences.KEY_AUTO_HIDE_HOME_TAB to true,
+                TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
+                TabPreferences.KEY_HOME_TOP_TAB_DISABLED_KEYS to "code:material",
+                TabPreferences.KEY_BOTTOM_TAB_RETAIL_STORE to false,
                 BottomTabLiquidGlassPreferences.HEIGHT to 84,
-                ConfigManager.KEY_HIDE_HOME_TAB_RED_DOT to true,
+                TabPreferences.KEY_HIDE_HOME_TAB_RED_DOT to true,
             )
             val disabled = buildSnapshot(values)
             assertFalse(disabled.isHomeTopTabsCustomEnabled)
@@ -653,7 +610,7 @@ class ConfigManagerTest {
             assertEquals(BottomTabLiquidGlassConfig.DEFAULT, disabled.bottomTabLiquidGlass)
             assertTrue(disabled.isHomeTabRedDotHidden)
 
-            val restored = buildSnapshot(values + (ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true))
+            val restored = buildSnapshot(values + (TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to true))
             assertTrue(restored.isHomeTopTabsCustomEnabled)
             assertTrue(restored.isBottomTabsCustomEnabled)
             assertTrue(restored.isHomeTabAutoHideEnabled)
@@ -667,7 +624,7 @@ class ConfigManagerTest {
 
     @Test
     fun tabCustomizationMasterDoesNotEnableUnselectedChildren() {
-        val snapshot = buildSnapshot(mapOf(ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true))
+        val snapshot = buildSnapshot(mapOf(TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to true))
         assertFalse(snapshot.isHomeTopTabsCustomEnabled)
         assertFalse(snapshot.isBottomTabsCustomEnabled)
         assertFalse(snapshot.isHomeTabAutoHideEnabled)
@@ -684,11 +641,11 @@ class ConfigManagerTest {
         ) {
             val snapshot = buildSnapshot(
                 mapOf(
-                    ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true,
-                    ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to true,
-                    ConfigManager.KEY_CUSTOM_BOTTOM_TABS to true,
-                    ConfigManager.KEY_AUTO_HIDE_HOME_TAB to true,
-                    ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
+                    TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to true,
+                    TabPreferences.KEY_CUSTOM_HOME_TOP_TABS to true,
+                    TabPreferences.KEY_CUSTOM_BOTTOM_TABS to true,
+                    TabPreferences.KEY_AUTO_HIDE_HOME_TAB to true,
+                    TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
                 ),
             )
             assertFalse(snapshot.isHomeTopTabsCustomEnabled)

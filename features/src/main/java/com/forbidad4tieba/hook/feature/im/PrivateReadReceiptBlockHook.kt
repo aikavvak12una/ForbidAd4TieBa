@@ -43,7 +43,7 @@ object PrivateReadReceiptBlockHook {
                 RuntimeHooks.builder(mod, targets.processAckMethod, "PrivateReadReceiptBlockHook", "hook:targets.processAckMethod").intercept { chain ->
                     if (activeInstallation !== installation) return@intercept chain.proceed()
                     val result = chain.proceed()
-                    if (!ConfigManager.isPrivateReadReceiptInvisibleEnabled) {
+                    if (!ConfigManager.snapshot().isPrivateReadReceiptInvisibleEnabled) {
                         return@intercept result
                     }
                     val model = chain.thisObject
@@ -61,7 +61,7 @@ object PrivateReadReceiptBlockHook {
 
             hooks.install(targets.messageManagerSendMethod) {
                 RuntimeHooks.builder(mod, targets.messageManagerSendMethod, "PrivateReadReceiptBlockHook", "hook:targets.messageManagerSendMethod").intercept { chain ->
-                    if (activeInstallation !== installation || !ConfigManager.isPrivateReadReceiptInvisibleEnabled) {
+                    if (activeInstallation !== installation || !ConfigManager.snapshot().isPrivateReadReceiptInvisibleEnabled) {
                         return@intercept chain.proceed()
                     }
                     val message = chain.args.firstOrNull() ?: return@intercept chain.proceed()

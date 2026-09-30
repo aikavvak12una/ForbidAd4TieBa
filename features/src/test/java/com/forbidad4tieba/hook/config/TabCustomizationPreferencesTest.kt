@@ -10,16 +10,16 @@ class TabCustomizationPreferencesTest {
     @Test
     fun migrationPreservesEachOldSwitchAndOnlyAddsTheMaster() {
         val keys = listOf(
-            ConfigManager.KEY_CUSTOM_HOME_TOP_TABS,
-            ConfigManager.KEY_CUSTOM_BOTTOM_TABS,
-            ConfigManager.KEY_AUTO_HIDE_HOME_TAB,
-            ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS,
+            TabPreferences.KEY_CUSTOM_HOME_TOP_TABS,
+            TabPreferences.KEY_CUSTOM_BOTTOM_TABS,
+            TabPreferences.KEY_AUTO_HIDE_HOME_TAB,
+            TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS,
         )
         for (key in keys) {
             val values = mutableMapOf<String, Any>(key to true, "unrelated" to false)
             val before = values.toMap()
             TabCustomizationPreferences.ensureInitialized(preferences(values))
-            assertEquals(before + (ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to true), values)
+            assertEquals(before + (TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to true), values)
         }
     }
 
@@ -28,20 +28,20 @@ class TabCustomizationPreferencesTest {
         val values = mutableMapOf<String, Any>()
         val prefs = preferences(values)
         TabCustomizationPreferences.ensureInitialized(prefs)
-        assertEquals(mapOf(ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to false), values)
-        values[ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS] = true
+        assertEquals(mapOf(TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to false), values)
+        values[TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS] = true
         TabCustomizationPreferences.ensureInitialized(prefs)
         assertFalse(TabCustomizationPreferences.isEnabled(prefs))
-        assertEquals(true, values[ConfigManager.KEY_BOTTOM_TAB_LIQUID_GLASS])
+        assertEquals(true, values[TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS])
     }
 
     @Test
     fun repeatedInitializationPreservesExplicitMasterChoices() {
         for (enabled in listOf(false, true)) {
             val values = mutableMapOf<String, Any>(
-                ConfigManager.KEY_ENABLE_TAB_CUSTOMIZATION to enabled,
-                ConfigManager.KEY_CUSTOM_HOME_TOP_TABS to !enabled,
-                ConfigManager.KEY_CUSTOM_BOTTOM_TABS to !enabled,
+                TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to enabled,
+                TabPreferences.KEY_CUSTOM_HOME_TOP_TABS to !enabled,
+                TabPreferences.KEY_CUSTOM_BOTTOM_TABS to !enabled,
             )
             val before = values.toMap()
             TabCustomizationPreferences.ensureInitialized(preferences(values))

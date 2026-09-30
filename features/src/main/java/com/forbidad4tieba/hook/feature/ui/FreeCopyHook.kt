@@ -87,7 +87,7 @@ object FreeCopyHook {
         }
         val longPressReady =
             copyInstalled &&
-            ConfigManager.isFreeCopyPostLongPressEnabled &&
+            ConfigManager.snapshot().isFreeCopyPostLongPressEnabled &&
             symbols.postFloorMethod != null
         val bodyLongPressInstalled = if (
             longPressReady && symbols.richTextViewClass != null
@@ -121,8 +121,8 @@ object FreeCopyHook {
             RuntimeHooks.builder(mod, popupSymbols.contentViewMethod, "FreeCopyHook", "hookPopupMenuText:popupSymbols.contentViewMethod").intercept { chain ->
                 val result = chain.proceed()
                 if (
-                    !ConfigManager.isFreeCopyEnabled ||
-                    !ConfigManager.isFreeCopyCommentInjectionEnabled
+                    !ConfigManager.snapshot().isFreeCopyEnabled ||
+                    !ConfigManager.snapshot().isFreeCopyCommentInjectionEnabled
                 ) {
                     return@intercept result
                 }
@@ -250,7 +250,7 @@ object FreeCopyHook {
         val mod = XposedCompat.module ?: return false
         return try {
             RuntimeHooks.builder(mod, symbols.copyMethod, "FreeCopyHook", "hookPostDataCopy:symbols.copyMethod").intercept { chain ->
-                if (!ConfigManager.isFreeCopyEnabled) return@intercept chain.proceed()
+                if (!ConfigManager.snapshot().isFreeCopyEnabled) return@intercept chain.proceed()
                 val postData = chain.thisObject ?: return@intercept chain.proceed()
                 val longPress = longPressInvocation.get()
                 val metadata = resolvePostMetadata(postData, symbols) ?: run {
@@ -263,10 +263,10 @@ object FreeCopyHook {
                 }
                 val isPostBody = metadata.floor == 1
                 val shouldOpen = when {
-                    isPostBody && longPress != null -> ConfigManager.isFreeCopyPostLongPressEnabled
-                    isPostBody -> ConfigManager.isFreeCopyPostBodyEnabled
+                    isPostBody && longPress != null -> ConfigManager.snapshot().isFreeCopyPostLongPressEnabled
+                    isPostBody -> ConfigManager.snapshot().isFreeCopyPostBodyEnabled
                     longPress != null -> false
-                    else -> ConfigManager.isFreeCopyCommentDialogEnabled
+                    else -> ConfigManager.snapshot().isFreeCopyCommentDialogEnabled
                 }
                 if (!shouldOpen || clipboardCapture.get() != null) {
                     return@intercept chain.proceed()
@@ -324,8 +324,8 @@ object FreeCopyHook {
             try {
                 RuntimeHooks.builder(mod, method, "FreeCopyHook", "hookPostBodyLongPress:method").intercept { chain ->
                     if (
-                        !ConfigManager.isFreeCopyEnabled ||
-                        !ConfigManager.isFreeCopyPostLongPressEnabled
+                        !ConfigManager.snapshot().isFreeCopyEnabled ||
+                        !ConfigManager.snapshot().isFreeCopyPostLongPressEnabled
                     ) {
                         return@intercept chain.proceed()
                     }
@@ -404,8 +404,8 @@ object FreeCopyHook {
                 RuntimeHooks.builder(mod, method, "FreeCopyHook", "hookPostTitleLongPress:method").intercept { chain ->
                     val result = chain.proceed()
                     if (
-                        !ConfigManager.isFreeCopyEnabled ||
-                        !ConfigManager.isFreeCopyPostLongPressEnabled
+                        !ConfigManager.snapshot().isFreeCopyEnabled ||
+                        !ConfigManager.snapshot().isFreeCopyPostLongPressEnabled
                     ) {
                         return@intercept result
                     }
@@ -449,8 +449,8 @@ object FreeCopyHook {
                     }
                     titleContainer.setOnLongClickListener { view ->
                         if (
-                            !ConfigManager.isFreeCopyEnabled ||
-                            !ConfigManager.isFreeCopyPostLongPressEnabled
+                            !ConfigManager.snapshot().isFreeCopyEnabled ||
+                            !ConfigManager.snapshot().isFreeCopyPostLongPressEnabled
                         ) {
                             false
                         } else {
@@ -482,8 +482,8 @@ object FreeCopyHook {
             RuntimeHooks.builder(mod, bindMethod, "FreeCopyHook", "hookPostWebViewLongPress:bindMethod").intercept { chain ->
                 val result = chain.proceed()
                 if (
-                    !ConfigManager.isFreeCopyEnabled ||
-                    !ConfigManager.isFreeCopyPostLongPressEnabled
+                    !ConfigManager.snapshot().isFreeCopyEnabled ||
+                    !ConfigManager.snapshot().isFreeCopyPostLongPressEnabled
                 ) {
                     return@intercept result
                 }
@@ -517,8 +517,8 @@ object FreeCopyHook {
                 } ?: return@intercept result
                 webView.setOnLongClickListener { view ->
                     if (
-                        !ConfigManager.isFreeCopyEnabled ||
-                        !ConfigManager.isFreeCopyPostLongPressEnabled
+                        !ConfigManager.snapshot().isFreeCopyEnabled ||
+                        !ConfigManager.snapshot().isFreeCopyPostLongPressEnabled
                     ) {
                         false
                     } else {

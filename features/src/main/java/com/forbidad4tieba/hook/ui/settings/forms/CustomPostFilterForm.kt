@@ -1,12 +1,12 @@
 package com.forbidad4tieba.hook.ui.settings.forms
 
+import com.forbidad4tieba.hook.config.PostFilterPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.SwitchItem
 import com.forbidad4tieba.hook.ui.UiText
@@ -41,7 +41,7 @@ internal object CustomPostFilterForm {
             val views = ArrayList<Pair<SwitchItem, Switch>>(items.size)
             var modelScoreStatsStartToastShown = false
             for (item in items) {
-                val actionClick = if (item.prefKey == ConfigManager.KEY_FILTER_POST_MODEL_SCORE) {
+                val actionClick = if (item.prefKey == PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE) {
                     { showCustomPostModelScoreDialog(context, prefs) }
                 } else {
                     item.onActionClick
@@ -64,7 +64,7 @@ internal object CustomPostFilterForm {
                     XposedCompat.logW("[SettingsMenuHook] showCustomPostFilterDialog failed: switch view missing for ${item.prefKey}")
                     return
                 }
-                if (item.prefKey == ConfigManager.KEY_FILTER_POST_MODEL_SCORE) {
+                if (item.prefKey == PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE) {
                     switchView.setOnCheckedChangeListener { _, isChecked ->
                         if (
                             isChecked &&
@@ -96,7 +96,7 @@ internal object CustomPostFilterForm {
                     var modelScoreStatsStarted = false
                     for ((item, switchView) in views) {
                         if (
-                            item.prefKey == ConfigManager.KEY_FILTER_POST_MODEL_SCORE &&
+                            item.prefKey == PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE &&
                             !prefs.getBoolean(item.prefKey, item.defaultValue) &&
                             switchView.isChecked &&
                             !modelScoreStatsStartToastShown

@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui.settings.forms
 
+import com.forbidad4tieba.hook.config.ReplyPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Typeface
@@ -9,7 +10,6 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.SETTINGS_VALUE_TEXT_SP
 import com.forbidad4tieba.hook.ui.UiStyle
@@ -114,31 +114,25 @@ internal object ReplyVisibilityForm {
             val maxAttemptsRow = createNumberInputRow(
                 UiText.Settings.REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS_LABEL,
                 UiText.Settings.replyVisibilityProbeMaxAttemptsDesc(
-                    ConfigManager.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
-                    ConfigManager.MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
-                    ConfigManager.DEFAULT_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                    ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                    ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                    ReplyPreferences.DEFAULT_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
                 ),
-                prefs.getInt(
-                    ConfigManager.KEY_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
-                    ConfigManager.DEFAULT_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
-                ).coerceIn(
-                    ConfigManager.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
-                    ConfigManager.MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                ReplyPreferences.REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS.read(prefs).coerceIn(
+                    ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                    ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
                 ),
             )
             val intervalRow = createNumberInputRow(
                 UiText.Settings.REPLY_VISIBILITY_PROBE_INTERVAL_LABEL,
                 UiText.Settings.replyVisibilityProbeIntervalDesc(
-                    ConfigManager.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
-                    ConfigManager.MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
-                    ConfigManager.DEFAULT_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                    ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                    ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                    ReplyPreferences.DEFAULT_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
                 ),
-                prefs.getInt(
-                    ConfigManager.KEY_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
-                    ConfigManager.DEFAULT_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
-                ).coerceIn(
-                    ConfigManager.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
-                    ConfigManager.MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                ReplyPreferences.REPLY_VISIBILITY_PROBE_INTERVAL_MS.read(prefs).coerceIn(
+                    ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                    ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
                 ),
                 UiText.Settings.REPLY_VISIBILITY_PROBE_INTERVAL_UNIT,
             )
@@ -162,13 +156,13 @@ internal object ReplyVisibilityForm {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
                     val maxAttempts = parseNumber(
                         maxAttemptsRow.second,
-                        ConfigManager.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
-                        ConfigManager.MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                        ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                        ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
                     )
                     val intervalMs = parseNumber(
                         intervalRow.second,
-                        ConfigManager.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
-                        ConfigManager.MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                        ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                        ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
                     )
                     if (maxAttempts == null || intervalMs == null) {
                         Toast.makeText(
@@ -179,8 +173,8 @@ internal object ReplyVisibilityForm {
                         return@setOnClickListener
                     }
                     prefs.edit()
-                        .putInt(ConfigManager.KEY_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS, maxAttempts)
-                        .putInt(ConfigManager.KEY_REPLY_VISIBILITY_PROBE_INTERVAL_MS, intervalMs)
+                        .putInt(ReplyPreferences.KEY_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS, maxAttempts)
+                        .putInt(ReplyPreferences.KEY_REPLY_VISIBILITY_PROBE_INTERVAL_MS, intervalMs)
                         .apply()
                     Toast.makeText(
                         context,

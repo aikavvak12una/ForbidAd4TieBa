@@ -31,7 +31,7 @@ object FeedInfoLogHook {
         val mod = XposedCompat.module ?: return
         RuntimeHooks.builder(mod, symbols.bindMethod, "FeedInfoLogHook", "hook:symbols.bindMethod").intercept { chain ->
             val result = chain.proceed()
-            if (!ConfigManager.shouldOutputDetailedLogs()) return@intercept result
+            if (!ConfigManager.snapshot().isDetailedLoggingEnabled) return@intercept result
             try {
                 val cardData = chain.args[0] ?: return@intercept result
                 val json = buildCardJson(cardData)

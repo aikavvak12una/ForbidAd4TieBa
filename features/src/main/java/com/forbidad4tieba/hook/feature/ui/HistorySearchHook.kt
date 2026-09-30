@@ -13,7 +13,6 @@ import android.widget.TextView
 import android.widget.Toast
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.symbol.model.HistorySearchSymbols
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
 import com.forbidad4tieba.hook.utils.ReflectionUtils
@@ -68,13 +67,13 @@ object HistorySearchHook {
     private var sRuntimeTargets: HistorySearchSymbols? = null
 
     private inline fun dbg(message: () -> String) {
-        if (ConfigManager.shouldOutputDetailedLogs()) {
+        if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
             XposedCompat.logD("[HistorySearchHook][dbg] ${message()}")
         }
     }
 
     private fun dbg(message: String) {
-        if (ConfigManager.shouldOutputDetailedLogs()) {
+        if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
             XposedCompat.logD("[HistorySearchHook][dbg] $message")
         }
     }

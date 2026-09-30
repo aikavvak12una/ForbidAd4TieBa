@@ -19,7 +19,7 @@ object AgreeServerResponseLogHook {
         try {
             RuntimeHooks.builder(mod, targets.decodeLogicMethod, "AgreeServerResponseLogHook", "hook:targets.decodeLogicMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (ConfigManager.shouldOutputDetailedLogs()) {
+                if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
                     try {
                         val json = chain.args.getOrNull(1) as? JSONObject
                         if (json == null) {

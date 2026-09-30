@@ -26,7 +26,7 @@ object ShareTrackingParamCleanerHook {
         try {
             RuntimeHooks.builder(mod, targetMethod, "ShareTrackingParamCleanerHook", "hook:targetMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (!ConfigManager.isCleanShareTrackingParamsEnabled) return@intercept result
+                if (!ConfigManager.snapshot().isCleanShareTrackingParamsEnabled) return@intercept result
                 val url = result as? String ?: return@intercept result
                 sanitizeTrackingParams(url)
             }

@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import android.app.Activity
 import android.app.Application
@@ -253,18 +254,18 @@ object SystemBarCompatHook {
         if (!isGestureNavigation(activity)) return false
         if (isHomeNativeGlassRuntimeActive()) return isSupportedActivity(activity)
         return (
-            ConfigManager.isHomeTabAutoHideEnabled ||
+            ConfigManager.snapshot().isHomeTabAutoHideEnabled ||
                 isBottomTabLiquidGlassRuntimeActive()
             ) && isMainTabActivity(activity)
     }
 
     private fun isHomeNativeGlassRuntimeActive(): Boolean {
-        return ConfigManager.isHomeNativeGlassEnabled &&
-            ConfigManager.hasAnyHomeNativeGlassBackgroundImage
+        return ConfigManager.snapshot().isHomeNativeGlassEnabled &&
+            HomeGlassPreferences.hasAnyHomeNativeGlassBackgroundImage
     }
 
     private fun isBottomTabLiquidGlassRuntimeActive(): Boolean {
-        return ConfigManager.isBottomTabLiquidGlassEnabled &&
+        return ConfigManager.snapshot().isBottomTabLiquidGlassEnabled &&
             BottomTabLiquidGlassHook.isRuntimeActive()
     }
 
@@ -396,7 +397,7 @@ object SystemBarCompatHook {
             clearGestureBridgeForLiquidGlass(wrapper, state)
             return
         }
-        if (!ConfigManager.isHomeTabAutoHideEnabled || isHomeNativeGlassRuntimeActive()) {
+        if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled || isHomeNativeGlassRuntimeActive()) {
             restoreGestureBridgeIfNeeded(wrapper, state)
             return
         }

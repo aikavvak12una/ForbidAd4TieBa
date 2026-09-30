@@ -13,7 +13,7 @@ internal class HostCapabilities(states: Map<String, ScanFeatureAvailabilityState
 
     companion object {
         fun availabilityOf(states: Map<String, ScanFeatureAvailabilityState>, key: String): ScanFeatureAvailabilityState {
-            val feature = ConfigManager.scanFeatureKeyForPrefKeyOrNull(key)
+            val feature = SettingsCatalog.capabilityFor(key)
                 ?: return ScanFeatureAvailabilityState.AVAILABLE
             // The stable logging path does not depend on a symbol scan.
             if (feature == HookFeatureKey.DETAILED_LOGGING) return ScanFeatureAvailabilityState.AVAILABLE

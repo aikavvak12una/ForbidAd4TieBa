@@ -45,14 +45,14 @@ object CommentAvatarDirectProfileHook {
         try {
             RuntimeHooks.builder(mod, targets.clickableHeaderSetDataMethod, "CommentAvatarDirectProfileHook", "hook:targets.clickableHeaderSetDataMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (ConfigManager.isCommentAvatarDirectProfileEnabled) {
+                if (ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled) {
                     (chain.thisObject as? View)?.setOnClickListener(directHeaderClickListener)
                 }
                 result
             }
             targets.urlManagerDealOneLinkMethods.forEach { method ->
                 RuntimeHooks.builder(mod, method, "CommentAvatarDirectProfileHook", "hook:method").intercept { chain ->
-                    if (!ConfigManager.isCommentAvatarDirectProfileEnabled) {
+                    if (!ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled) {
                         return@intercept chain.proceed()
                     }
                     val portrait = chain.args.firstNotNullOfOrNull(::extractBusinessCardPortrait)
@@ -65,7 +65,7 @@ object CommentAvatarDirectProfileHook {
                 }
             }
             RuntimeHooks.builder(mod, targets.customMessageConstructor, "CommentAvatarDirectProfileHook", "hook:targets.customMessageConstructor").intercept { chain ->
-                if (!ConfigManager.isCommentAvatarDirectProfileEnabled || runtimeDisabled) {
+                if (!ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled || runtimeDisabled) {
                     return@intercept chain.proceed()
                 }
                 val replacementArgs = try {
@@ -91,7 +91,7 @@ object CommentAvatarDirectProfileHook {
     }
 
     internal fun openUserId(context: Context?, rawUserId: String?): Boolean {
-        if (!ConfigManager.isCommentAvatarDirectProfileEnabled || runtimeDisabled) return false
+        if (!ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled || runtimeDisabled) return false
         val targets = runtimeTargets ?: return false
         val userId = parsePositiveUserId(rawUserId) ?: return false
         val targetContext = context ?: return false

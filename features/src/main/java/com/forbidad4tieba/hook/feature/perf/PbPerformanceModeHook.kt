@@ -9,14 +9,14 @@ object PbPerformanceModeHook {
     private val booleanOverrides = arrayOf(
         UbsAbTestBooleanOverride(PerformanceAbTarget.HYBRID_PB, true) {
             // 强制帖子预加载开启时让位：hybrid webview 的 apiData 预加载通道需要 hybridPbOpt=false
-            ConfigManager.isPbPerformanceModeEnabled && !ConfigManager.isPbPreloadForced
+            ConfigManager.snapshot().isPbPerformanceModeEnabled && !ConfigManager.snapshot().isPbPreloadForced
         },
-        UbsAbTestBooleanOverride(PerformanceAbTarget.IMAGE_PERF_LOG, false) { ConfigManager.isPbPerformanceModeEnabled },
+        UbsAbTestBooleanOverride(PerformanceAbTarget.IMAGE_PERF_LOG, false) { ConfigManager.snapshot().isPbPerformanceModeEnabled },
         UbsAbTestBooleanOverride(PerformanceAbTarget.PB_COMMENT_AD, false) {
-            ConfigManager.isPbPerformanceModeEnabled || ConfigManager.isPbAdExperimentBlockEnabled
+            ConfigManager.snapshot().isPbPerformanceModeEnabled || ConfigManager.snapshot().isPostPageAdBlockEnabled
         },
         UbsAbTestBooleanOverride(PerformanceAbTarget.PB_BANNER_AD, false) {
-            ConfigManager.isPbPerformanceModeEnabled || ConfigManager.isPbAdExperimentBlockEnabled
+            ConfigManager.snapshot().isPbPerformanceModeEnabled || ConfigManager.snapshot().isPostPageAdBlockEnabled
         },
     )
 

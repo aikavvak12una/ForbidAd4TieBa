@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.res.Configuration
@@ -68,7 +69,7 @@ internal object UiStyle {
 
     internal fun tokens(context: Context): Tokens {
         val density = context.resources.displayMetrics.density
-        if (ConfigManager.isHomeNativeGlassEnabled) {
+        if (ConfigManager.snapshot().isHomeNativeGlassEnabled) {
             val base = if (HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled() == true) {
                 darkTokens(density)
             } else {
@@ -82,7 +83,7 @@ internal object UiStyle {
 
     internal fun homeNativeGlassPreviewTokens(
         context: Context,
-        style: ConfigManager.HomeNativeGlassStyleConfig,
+        style: HomeGlassPreferences.HomeNativeGlassStyleConfig,
         darkMode: Boolean,
     ): Tokens {
         val density = context.resources.displayMetrics.density
@@ -165,7 +166,7 @@ internal object UiStyle {
         val bg = GradientDrawable().apply {
             setColor(tokens.surface)
             cornerRadius = tokens.cardCornerPx
-            if (ConfigManager.isHomeNativeGlassEnabled && ConfigManager.isHomeNativeGlassStrokeEnabled) {
+            if (ConfigManager.snapshot().isHomeNativeGlassEnabled && HomeGlassPreferences.isHomeNativeGlassStrokeEnabled) {
                 val density = window.context.resources.displayMetrics.density
                 setStroke((1 * density).toInt().coerceAtLeast(1), tokens.inputStroke)
             }
@@ -175,11 +176,11 @@ internal object UiStyle {
 
     private fun Tokens.withHomeNativeGlassOverrides(
         density: Float,
-        style: ConfigManager.HomeNativeGlassStyleConfig? = null,
+        style: HomeGlassPreferences.HomeNativeGlassStyleConfig? = null,
     ): Tokens {
-        val radiusDp = (style?.cardRadiusDp ?: ConfigManager.homeNativeGlassCardRadiusDp).coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+        val radiusDp = (style?.cardRadiusDp ?: HomeGlassPreferences.activeHomeNativeGlassStyle().cardRadiusDp).coerceIn(
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
         )
         val styleAccent = style?.let { homeNativeGlassStyleAccent(it) }
         val dynamicAccent = settingsUiAccentForMode(
@@ -229,12 +230,12 @@ internal object UiStyle {
         return HomeNativeGlassDynamicTintCache.resolveAccentColor()
     }
 
-    private fun homeNativeGlassStyleAccent(style: ConfigManager.HomeNativeGlassStyleConfig): Int? {
-        ConfigManager.normalizeHomeNativeGlassTintColor(style.tintColor)
-            .takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR }
+    private fun homeNativeGlassStyleAccent(style: HomeGlassPreferences.HomeNativeGlassStyleConfig): Int? {
+        HomeGlassPreferences.normalizeHomeNativeGlassTintColor(style.tintColor)
+            .takeIf { it != HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR }
             ?.let { return it }
-        return ConfigManager.normalizeHomeNativeGlassTintColor(style.autoTintColor)
-            .takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
+        return HomeGlassPreferences.normalizeHomeNativeGlassTintColor(style.autoTintColor)
+            .takeIf { it != HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
     }
 
     private fun withAlpha(color: Int, alpha: Int): Int {

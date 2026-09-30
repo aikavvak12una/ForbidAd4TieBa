@@ -1,11 +1,11 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.TabPreferences
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.symbol.model.MainTabBottomSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Field
-import java.lang.reflect.Method
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -94,11 +94,11 @@ object MainTabBottomHook {
         }
     }
 
-    private fun currentSelectionOrNull(): ConfigManager.BottomTabSelection? {
+    private fun currentSelectionOrNull(): TabPreferences.BottomTabSelection? {
         val settings = ConfigManager.snapshot()
         if (!settings.isBottomTabsCustomEnabled) return null
-        return ConfigManager.normalizeBottomTabSelection(
-            ConfigManager.BottomTabSelection(
+        return TabPreferences.normalizeBottomTabSelection(
+            TabPreferences.BottomTabSelection(
                 homeEnabled = settings.isBottomTabHomeEnabled,
                 enterForumEnabled = settings.isBottomTabEnterForumEnabled,
                 retailStoreEnabled = settings.isBottomTabRetailStoreEnabled,
@@ -110,7 +110,7 @@ object MainTabBottomHook {
 
     private fun shouldFilterOut(
         targetTab: BottomTargetTab,
-        selection: ConfigManager.BottomTabSelection,
+        selection: TabPreferences.BottomTabSelection,
     ): Boolean {
         return when (targetTab) {
             BottomTargetTab.HOME -> !selection.homeEnabled

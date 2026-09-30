@@ -1,9 +1,9 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import com.forbidad4tieba.hook.config.ConfigManager
 import java.io.File
 import kotlin.math.max
 
@@ -63,7 +63,7 @@ internal object HomeNativeGlassImageAnalyzer {
                 tintAlphaPercent = averageLuma?.let {
                     autoTintAlphaPercent(it, darkMode)
                 }
-                    ?: ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    ?: HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
             )
         } finally {
             bitmap.recycle()
@@ -175,7 +175,7 @@ internal object HomeNativeGlassImageAnalyzer {
             AUTO_TINT_MID_LUMA - luma
         }
         if (distanceFromMid >= AUTO_TINT_TRIGGER_DISTANCE) {
-            return ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
+            return HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
         }
         val strength = (
             (AUTO_TINT_TRIGGER_DISTANCE - distanceFromMid) *
@@ -184,8 +184,8 @@ internal object HomeNativeGlassImageAnalyzer {
             ) / AUTO_TINT_TRIGGER_DISTANCE
         val signedStrength = if (darkMode) -strength else strength
         return signedStrength.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         )
     }
 

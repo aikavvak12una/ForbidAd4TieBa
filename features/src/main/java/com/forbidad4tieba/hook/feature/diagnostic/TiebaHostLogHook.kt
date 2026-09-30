@@ -171,7 +171,7 @@ internal object TiebaHostLogHook {
     }
 
     private inline fun capture(installation: Any, block: () -> Unit) {
-        if (activeInstallation !== installation || !ConfigManager.shouldOutputDetailedLogs()) return
+        if (activeInstallation !== installation || !ConfigManager.snapshot().isDetailedLoggingEnabled) return
         try {
             block()
         } catch (t: Throwable) {

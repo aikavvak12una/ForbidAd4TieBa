@@ -55,7 +55,7 @@ object PbFallingAdHook {
 
     private fun hookInitMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         RuntimeHooks.builder(mod, method, "PbFallingAdHook", "hookInitMethod:method").intercept { chain ->
-            if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
+            if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
             Unit
         }
@@ -64,7 +64,7 @@ object PbFallingAdHook {
 
     private fun hookShowMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         RuntimeHooks.builder(mod, method, "PbFallingAdHook", "hookShowMethod:method").intercept { chain ->
-            if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
+            if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
             Unit
         }
@@ -73,7 +73,7 @@ object PbFallingAdHook {
 
     private fun hookClearMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
         RuntimeHooks.builder(mod, method, "PbFallingAdHook", "hookClearMethod:method").intercept { chain ->
-            if (!ConfigManager.isPbFallingAdBlockEnabled) return@intercept chain.proceed()
+            if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
             Unit
         }

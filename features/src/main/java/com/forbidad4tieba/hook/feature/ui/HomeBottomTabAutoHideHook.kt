@@ -46,7 +46,7 @@ object HomeBottomTabAutoHideHook {
 
     fun hook(cl: ClassLoader) {
         val mod = XposedCompat.module ?: return
-        if (!ConfigManager.isHomeTabAutoHideEnabled) {
+        if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) {
             XposedCompat.logD("[HomeBottomTabAutoHideHook] disabled by config")
             return
         }
@@ -194,7 +194,7 @@ object HomeBottomTabAutoHideHook {
     private fun handleScroll(target: View, dy: Int) {
         val resolved = resolveBottomTabForScrollTarget(target) ?: return
         val state = bottomTabStateFor(resolved.tabHost, resolved.wrapper)
-        if (!ConfigManager.isHomeTabAutoHideEnabled) {
+        if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) {
             if (state.hidden) showBottomTab(state)
             HomeTabAutoHideStrategy.reset(state)
             return
@@ -344,7 +344,7 @@ object HomeBottomTabAutoHideHook {
                 val state = synchronized(tabHostStates) {
                     tabHostStates[tabHost]
                 } ?: return
-                if (!ConfigManager.isHomeTabAutoHideEnabled) {
+                if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) {
                     showBottomTab(state, animate = false)
                     return
                 }
@@ -469,7 +469,7 @@ object HomeBottomTabAutoHideHook {
     }
 
     private fun shouldHandleScroll(): Boolean {
-        return ConfigManager.isHomeTabAutoHideEnabled || hiddenTabPresent.get()
+        return ConfigManager.snapshot().isHomeTabAutoHideEnabled || hiddenTabPresent.get()
     }
 
     private fun registerSystemBarCompatIfNeeded() {

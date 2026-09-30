@@ -18,7 +18,7 @@ object PbForcePreloadHook {
     private val hooked = AtomicBoolean(false)
 
     fun hook(targets: PbPreloadTargets, abMethods: Map<String, Method>) {
-        if (!ConfigManager.isPbPreloadForced) return
+        if (!ConfigManager.snapshot().isPbPreloadForced) return
         val mod = XposedCompat.module ?: return
         val hybrid = abMethods[PerformanceAbTarget.HYBRID_PB.methodName] ?: run {
             XposedCompat.log("$TAG hybrid gate unresolved, installation skipped")
@@ -29,14 +29,14 @@ object PbForcePreloadHook {
         val disabled = AtomicBoolean(false)
         try {
             handles += RuntimeHooks.builder(mod, targets.preloadSwitch, "PbForcePreloadHook", "hook:targets.preloadSwitch").intercept { chain ->
-                if (ConfigManager.isPbPreloadForced && !disabled.get()) true else chain.proceed()
+                if (ConfigManager.snapshot().isPbPreloadForced && !disabled.get()) true else chain.proceed()
             }
             handles += RuntimeHooks.builder(mod, hybrid, "PbForcePreloadHook", "hook:hybrid").intercept { chain ->
-                if (ConfigManager.isPbPreloadForced && !disabled.get()) false else chain.proceed()
+                if (ConfigManager.snapshot().isPbPreloadForced && !disabled.get()) false else chain.proceed()
             }
             handles += RuntimeHooks.builder(mod, targets.pageState.constructor, "PbForcePreloadHook", "hook:targets.pageState.constructor").intercept { chain ->
                 val original = chain.proceed()
-                if (!disabled.get() && ConfigManager.isPbPreloadForced) {
+                if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) {
                     try {
                         retainPageState(targets.pageState, requireNotNull(chain.thisObject))
                     } catch (failure: Throwable) {
@@ -50,7 +50,7 @@ object PbForcePreloadHook {
             }
             handles += RuntimeHooks.builder(mod, targets.provider, "PbForcePreloadHook", "hook:targets.provider").intercept { chain ->
                 val original = chain.proceed()
-                if (original != null || disabled.get() || !ConfigManager.isPbPreloadForced) return@intercept original
+                if (original != null || disabled.get() || !ConfigManager.snapshot().isPbPreloadForced) return@intercept original
                 val tid = chain.args.firstOrNull() as? String ?: return@intercept original
                 try {
                     val card = targets.cardGetter.invoke(null) ?: return@intercept original

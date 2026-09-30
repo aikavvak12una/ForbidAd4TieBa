@@ -5,8 +5,8 @@ import android.content.SharedPreferences
 /** Storage migrations happen at the existing refresh boundary, before pure derivation. */
 internal object UserSettingsReader {
     fun read(prefs: SharedPreferences): UserSettings {
-        val light = ConfigManager.readHomeNativeGlassStyle(prefs, ConfigManager.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS)
-        val dark = ConfigManager.readHomeNativeGlassStyle(prefs, ConfigManager.HOME_NATIVE_GLASS_DARK_STYLE_KEYS)
+        val light = HomeGlassPreferences.readHomeNativeGlassStyle(prefs, HomeGlassPreferences.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS)
+        val dark = HomeGlassPreferences.readHomeNativeGlassStyle(prefs, HomeGlassPreferences.HOME_NATIVE_GLASS_DARK_STYLE_KEYS)
         return UserSettings(prefs.all, light, dark)
     }
 }

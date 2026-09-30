@@ -19,7 +19,7 @@ object ReplyServerResponseLogHook {
         try {
             RuntimeHooks.builder(mod, targets.decodeMethod, "ReplyServerResponseLogHook", "hook:targets.decodeMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (ConfigManager.shouldOutputDetailedLogs()) {
+                if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
                     try {
                         val json = targets.resultJsonField.get(chain.thisObject) as? JSONObject
                         if (json == null) {

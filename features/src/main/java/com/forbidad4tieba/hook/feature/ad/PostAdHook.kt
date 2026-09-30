@@ -42,7 +42,7 @@ object PostAdHook {
             for (setDataMethod in targets.setDataMethods) {
                 try {
                     RuntimeHooks.builder(mod, setDataMethod, "PostAdHook", "hook:setDataMethod").intercept { chain ->
-                        if (!ConfigManager.isPostAdBlockEnabled) {
+                        if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) {
                             return@intercept chain.proceed()
                         }
                         val list = chain.args.firstOrNull() as? List<*> ?: return@intercept chain.proceed()

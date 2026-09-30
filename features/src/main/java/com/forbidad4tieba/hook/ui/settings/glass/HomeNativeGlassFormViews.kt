@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui.settings.glass
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -12,7 +13,6 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImageAnalysis
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImageFiles
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImagePickerBridge
@@ -157,8 +157,8 @@ internal object HomeNativeGlassFormViews {
         darkMode: Boolean,
     ): Int {
         val offset = state.tintAlphaPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         )
         val alpha = (kotlin.math.abs(offset) * 255 / 100)
             .coerceAtLeast(HOME_NATIVE_GLASS_MODE_SELECTOR_MIN_FILL_ALPHA)
@@ -293,7 +293,7 @@ internal object HomeNativeGlassFormViews {
             tag = HomeNativeGlassStyleRole.BUTTON_SECONDARY
             setOnClickListener {
                 state.path = ""
-                state.tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
+                state.tintColor = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
                 state.paletteColors = emptyList()
                 state.defaultTintColor = null
                 display.text = HomeNativeGlassImageFiles.displayText(state.path)

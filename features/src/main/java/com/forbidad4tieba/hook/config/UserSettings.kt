@@ -11,8 +11,8 @@ internal interface SettingsValues {
 /** Saved choices are independent of capability and remote-policy decisions. */
 internal class UserSettings(
     values: Map<String, *>,
-    val lightGlassStyle: ConfigManager.HomeNativeGlassStyleConfig = ConfigManager.HomeNativeGlassStyleConfig(),
-    val darkGlassStyle: ConfigManager.HomeNativeGlassStyleConfig = ConfigManager.HomeNativeGlassStyleConfig(),
+    val lightGlassStyle: HomeGlassPreferences.HomeNativeGlassStyleConfig = HomeGlassPreferences.HomeNativeGlassStyleConfig(),
+    val darkGlassStyle: HomeGlassPreferences.HomeNativeGlassStyleConfig = HomeGlassPreferences.HomeNativeGlassStyleConfig(),
 ) : SettingsValues {
     private val values = values.mapValues { (_, value) ->
         if (value is Set<*>) value.toSet() else value
@@ -28,5 +28,5 @@ internal data class RemoteSettingsPolicy(val restrictedFeaturesLocked: Boolean)
 
 internal data class SettingsEvaluation(
     val snapshot: SettingsSnapshot,
-    val normalizedBottomTabs: ConfigManager.BottomTabSelection? = null,
+    val normalizedBottomTabs: TabPreferences.BottomTabSelection? = null,
 )

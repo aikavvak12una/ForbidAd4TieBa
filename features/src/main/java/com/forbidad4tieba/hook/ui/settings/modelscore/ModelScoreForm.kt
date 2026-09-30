@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.ui.settings.modelscore
 
+import com.forbidad4tieba.hook.config.PostFilterPreferences
+import com.forbidad4tieba.hook.config.ModelScoreSettings
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Typeface
@@ -10,7 +12,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
 import com.forbidad4tieba.hook.ui.CustomPostModelScoreUiCatalog
@@ -42,19 +43,16 @@ internal object ModelScoreForm {
         try {
             val density = context.resources.displayMetrics.density
             val padding = settingsDialogPadding(density)
-            val thresholdByKey = ConfigManager.parseModelScoreThresholds(
-                prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
+            val thresholdByKey = ModelScoreSettings.parseModelScoreThresholds(
+                PostFilterPreferences.FILTER_POST_MODEL_SCORE_THRESHOLDS.read(prefs)
             ).associate { it.key to it.threshold }.toMutableMap()
-            val autoPercentiles = ConfigManager.parseModelScoreAutoPercentiles(
-                prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES, "")
+            val autoPercentiles = ModelScoreSettings.parseModelScoreAutoPercentiles(
+                PostFilterPreferences.FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES.read(prefs)
             ).toMutableMap()
             val modelScoreUiItems = CustomPostModelScoreUiCatalog.items
             val inputRows = ArrayList<Pair<ModelScoreUiItem, android.widget.EditText>>(modelScoreUiItems.size)
             val statsRefreshers = ArrayList<() -> Unit>(modelScoreUiItems.size)
-            val initialStatsPostLimit = prefs.getInt(
-                ConfigManager.KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT,
-                ConfigManager.DEFAULT_MODEL_SCORE_STATS_POST_LIMIT
-            ).coerceAtLeast(ConfigManager.MIN_MODEL_SCORE_STATS_POST_LIMIT)
+            val initialStatsPostLimit = PostFilterPreferences.FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT.read(prefs).coerceAtLeast(ModelScoreSettings.MIN_MODEL_SCORE_STATS_POST_LIMIT)
 
             fun persistModelScoreAutoThreshold(
                 modelKey: String,
@@ -62,11 +60,11 @@ internal object ModelScoreForm {
                 value: Double,
                 applyThreshold: Boolean,
             ) {
-                val roundedValue = ConfigManager.roundModelScoreThreshold(value)
-                autoPercentiles[modelKey] = ConfigManager.normalizeModelScoreAutoPercentile(percentile)
+                val roundedValue = ModelScoreSettings.roundModelScoreThreshold(value)
+                autoPercentiles[modelKey] = ModelScoreSettings.normalizeModelScoreAutoPercentile(percentile)
                 val merged = LinkedHashMap<String, Double>()
-                for (threshold in ConfigManager.parseModelScoreThresholds(
-                    prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
+                for (threshold in ModelScoreSettings.parseModelScoreThresholds(
+                    PostFilterPreferences.FILTER_POST_MODEL_SCORE_THRESHOLDS.read(prefs)
                 )) {
                     merged[threshold.key] = threshold.threshold
                 }
@@ -76,32 +74,32 @@ internal object ModelScoreForm {
                     merged.remove(modelKey)
                 }
                 val thresholds = merged.map { (key, threshold) ->
-                    ConfigManager.ModelScoreThreshold(key, threshold)
+                    ModelScoreSettings.ModelScoreThreshold(key, threshold)
                 }
                 prefs.edit()
                     .putString(
-                        ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
-                        ConfigManager.serializeModelScoreThresholds(thresholds)
+                        PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
+                        ModelScoreSettings.serializeModelScoreThresholds(thresholds)
                     )
                     .putString(
-                        ConfigManager.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
-                        ConfigManager.serializeModelScoreAutoPercentiles(autoPercentiles)
+                        PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
+                        ModelScoreSettings.serializeModelScoreAutoPercentiles(autoPercentiles)
                     )
                     .apply()
             }
 
             fun persistModelScoreAutoDisabled(modelKey: String) {
-                val thresholds = ConfigManager.parseModelScoreThresholds(
-                    prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
+                val thresholds = ModelScoreSettings.parseModelScoreThresholds(
+                    PostFilterPreferences.FILTER_POST_MODEL_SCORE_THRESHOLDS.read(prefs)
                 ).filter { it.key != modelKey }
                 prefs.edit()
                     .putString(
-                        ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
-                        ConfigManager.serializeModelScoreThresholds(thresholds)
+                        PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
+                        ModelScoreSettings.serializeModelScoreThresholds(thresholds)
                     )
                     .putString(
-                        ConfigManager.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
-                        ConfigManager.serializeModelScoreAutoPercentiles(autoPercentiles)
+                        PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
+                        ModelScoreSettings.serializeModelScoreAutoPercentiles(autoPercentiles)
                     )
                     .apply()
             }
@@ -241,9 +239,9 @@ internal object ModelScoreForm {
                 lateinit var refreshStatsContent: () -> Unit
 
                 fun enableAutoPercentile(percentile: Int, value: Double, sampleCount: Int) {
-                    val roundedValue = ConfigManager.roundModelScoreThreshold(value)
+                    val roundedValue = ModelScoreSettings.roundModelScoreThreshold(value)
                     val valueText = formatModelScoreThreshold(roundedValue)
-                    val applyThreshold = sampleCount > ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT
+                    val applyThreshold = sampleCount > ModelScoreSettings.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT
                     if (applyThreshold) {
                         input.setText(valueText)
                         input.setSelection(input.text?.length ?: 0)
@@ -261,7 +259,7 @@ internal object ModelScoreForm {
                             UiText.Settings.modelScoreAutoPercentilePending(
                                 percentile,
                                 sampleCount,
-                                ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT,
+                                ModelScoreSettings.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT,
                             )
                         },
                         Toast.LENGTH_SHORT
@@ -396,7 +394,7 @@ internal object ModelScoreForm {
                     val statsPostLimit = statsLimitInput.text?.toString().orEmpty().trim().toIntOrNull()
                     if (
                         statsPostLimit == null ||
-                        statsPostLimit < ConfigManager.MIN_MODEL_SCORE_STATS_POST_LIMIT
+                        statsPostLimit < ModelScoreSettings.MIN_MODEL_SCORE_STATS_POST_LIMIT
                     ) {
                         Toast.makeText(
                             context,
@@ -408,7 +406,7 @@ internal object ModelScoreForm {
                         return@setOnClickListener
                     }
                     val nextAutoPercentiles = autoPercentiles.toMutableMap()
-                    val thresholds = ArrayList<ConfigManager.ModelScoreThreshold>(inputRows.size)
+                    val thresholds = ArrayList<ModelScoreSettings.ModelScoreThreshold>(inputRows.size)
                     for ((item, input) in inputRows) {
                         val raw = input.text?.toString().orEmpty().trim()
                         if (raw.isEmpty()) {
@@ -437,25 +435,25 @@ internal object ModelScoreForm {
                         if (
                             nextAutoPercentiles.containsKey(item.key) &&
                             CustomPostModelScoreStats.summary(item.key).sampleCount <=
-                            ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT
+                            ModelScoreSettings.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT
                         ) {
                             thresholdByKey.remove(item.key)
                             continue
                         }
-                        thresholds.add(ConfigManager.ModelScoreThreshold(item.key, threshold))
+                        thresholds.add(ModelScoreSettings.ModelScoreThreshold(item.key, threshold))
                     }
                     prefs.edit()
                         .putInt(
-                            ConfigManager.KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT,
+                            PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT,
                             statsPostLimit
                         )
                         .putString(
-                            ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
-                            ConfigManager.serializeModelScoreThresholds(thresholds)
+                            PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
+                            ModelScoreSettings.serializeModelScoreThresholds(thresholds)
                         )
                         .putString(
-                            ConfigManager.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
-                            ConfigManager.serializeModelScoreAutoPercentiles(nextAutoPercentiles)
+                            PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
+                            ModelScoreSettings.serializeModelScoreAutoPercentiles(nextAutoPercentiles)
                         )
                         .apply()
                     CustomPostModelScoreStats.trimToPostLimitAsync(statsPostLimit)
@@ -479,6 +477,6 @@ internal object ModelScoreForm {
     }
 
     private fun formatModelScoreThreshold(value: Double?): String {
-        return ConfigManager.formatModelScoreThresholdValue(value)
+        return ModelScoreSettings.formatModelScoreThresholdValue(value)
     }
 }

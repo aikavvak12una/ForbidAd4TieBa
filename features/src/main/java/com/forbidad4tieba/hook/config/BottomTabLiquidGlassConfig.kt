@@ -45,20 +45,30 @@ internal object BottomTabLiquidGlassPreferences {
     const val TILT = "bottom_tab_liquid_glass_tilt"
     const val PRESS = "bottom_tab_liquid_glass_press_effect"
 
+    val HEIGHT_SETTING = IntPreference(HEIGHT, BottomTabLiquidGlassConfig.DEFAULT.heightDp, PreferenceUse.FORM)
+    val WIDTH_SETTING = IntPreference(WIDTH, BottomTabLiquidGlassConfig.DEFAULT.widthPercent, PreferenceUse.FORM)
+    val BOTTOM_GAP_SETTING = IntPreference(BOTTOM_GAP, BottomTabLiquidGlassConfig.DEFAULT.bottomGapDp, PreferenceUse.FORM)
+    val BLUR_SETTING = BooleanPreference(BLUR, BottomTabLiquidGlassConfig.DEFAULT.blurEnabled, PreferenceUse.FORM, null)
+    val REFRACTION_SETTING = BooleanPreference(REFRACTION, BottomTabLiquidGlassConfig.DEFAULT.refractionEnabled, PreferenceUse.FORM, null)
+    val HIGHLIGHT_SETTING = BooleanPreference(HIGHLIGHT, BottomTabLiquidGlassConfig.DEFAULT.highlightEnabled, PreferenceUse.FORM, null)
+    val SHADOW_SETTING = BooleanPreference(SHADOW, BottomTabLiquidGlassConfig.DEFAULT.shadowEnabled, PreferenceUse.FORM, null)
+    val TILT_SETTING = BooleanPreference(TILT, BottomTabLiquidGlassConfig.DEFAULT.tiltEnabled, PreferenceUse.FORM, null)
+    val PRESS_SETTING = BooleanPreference(PRESS, BottomTabLiquidGlassConfig.DEFAULT.pressEffectEnabled, PreferenceUse.FORM, null)
+    val preferences: List<Preference<*>> = listOf(HEIGHT_SETTING, WIDTH_SETTING, BOTTOM_GAP_SETTING, BLUR_SETTING, REFRACTION_SETTING, HIGHLIGHT_SETTING, SHADOW_SETTING, TILT_SETTING, PRESS_SETTING)
+
     fun read(prefs: SharedPreferences): BottomTabLiquidGlassConfig = read(prefs.readOnlyValues())
 
     fun read(prefs: SettingsValues): BottomTabLiquidGlassConfig {
-        val defaults = BottomTabLiquidGlassConfig.DEFAULT
         return BottomTabLiquidGlassConfig(
-            heightDp = prefs.getInt(HEIGHT, defaults.heightDp),
-            widthPercent = prefs.getInt(WIDTH, defaults.widthPercent),
-            bottomGapDp = prefs.getInt(BOTTOM_GAP, defaults.bottomGapDp),
-            blurEnabled = prefs.getBoolean(BLUR, defaults.blurEnabled),
-            refractionEnabled = prefs.getBoolean(REFRACTION, defaults.refractionEnabled),
-            highlightEnabled = prefs.getBoolean(HIGHLIGHT, defaults.highlightEnabled),
-            shadowEnabled = prefs.getBoolean(SHADOW, defaults.shadowEnabled),
-            tiltEnabled = prefs.getBoolean(TILT, defaults.tiltEnabled),
-            pressEffectEnabled = prefs.getBoolean(PRESS, defaults.pressEffectEnabled),
+            heightDp = HEIGHT_SETTING.read(prefs),
+            widthPercent = WIDTH_SETTING.read(prefs),
+            bottomGapDp = BOTTOM_GAP_SETTING.read(prefs),
+            blurEnabled = BLUR_SETTING.read(prefs),
+            refractionEnabled = REFRACTION_SETTING.read(prefs),
+            highlightEnabled = HIGHLIGHT_SETTING.read(prefs),
+            shadowEnabled = SHADOW_SETTING.read(prefs),
+            tiltEnabled = TILT_SETTING.read(prefs),
+            pressEffectEnabled = PRESS_SETTING.read(prefs),
         ).normalized()
     }
 

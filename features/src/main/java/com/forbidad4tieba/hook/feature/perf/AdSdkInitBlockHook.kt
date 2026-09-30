@@ -72,7 +72,7 @@ object AdSdkInitBlockHook {
     )
 
     fun hook(cl: ClassLoader) {
-        if (!ConfigManager.isAdSdkComponentsDisabled) {
+        if (!ConfigManager.snapshot().isAdSdkComponentsDisabled) {
             XposedCompat.logD("$TAG skipped: config disabled")
             return
         }
@@ -90,7 +90,7 @@ object AdSdkInitBlockHook {
             try {
                 method.isAccessible = true
                 RuntimeHooks.builder(mod, method, "AdSdkInitBlockHook", "hook:method").intercept { chain ->
-                    if (ConfigManager.isAdSdkComponentsDisabled) {
+                    if (ConfigManager.snapshot().isAdSdkComponentsDisabled) {
                         return@intercept nullReturnValue(method)
                     }
                     chain.proceed()

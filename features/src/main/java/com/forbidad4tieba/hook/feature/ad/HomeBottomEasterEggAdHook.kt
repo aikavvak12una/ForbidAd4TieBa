@@ -9,7 +9,7 @@ object HomeBottomEasterEggAdHook {
     @Volatile private var hooked = false
 
     internal fun hook(targets: HomeBottomEasterEggAdSymbols) {
-        if (!ConfigManager.isHomeBottomEasterEggAdBlockEnabled) {
+        if (!ConfigManager.snapshot().isHomeBottomEasterEggAdBlockEnabled) {
             XposedCompat.log("[HomeBottomEasterEggAdHook] skipped: config disabled")
             return
         }
@@ -18,7 +18,7 @@ object HomeBottomEasterEggAdHook {
 
         try {
             RuntimeHooks.builder(mod, targets.parserMethod, "HomeBottomEasterEggAdHook", "hook:targets.parserMethod").intercept { chain ->
-                if (ConfigManager.isHomeBottomEasterEggAdBlockEnabled) {
+                if (ConfigManager.snapshot().isHomeBottomEasterEggAdBlockEnabled) {
                     return@intercept null
                 }
                 chain.proceed()

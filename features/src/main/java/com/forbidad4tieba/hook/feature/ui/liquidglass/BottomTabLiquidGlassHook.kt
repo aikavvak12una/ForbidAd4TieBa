@@ -9,7 +9,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 object BottomTabLiquidGlassHook {
     fun hook(cl: ClassLoader) {
         if (XposedCompat.module == null) return
-        if (!ConfigManager.isBottomTabLiquidGlassEnabled) {
+        if (!ConfigManager.snapshot().isBottomTabLiquidGlassEnabled) {
             XposedCompat.logD("[BottomTabLiquidGlassHook] disabled by config")
             return
         }

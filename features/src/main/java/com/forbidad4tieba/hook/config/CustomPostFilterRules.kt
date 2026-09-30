@@ -16,7 +16,7 @@ internal data class CustomPostFilterRules(
     val forumKeyword: Boolean,
     val forumKeywords: List<String>,
     val modelScore: Boolean,
-    val modelScoreThresholds: List<ConfigManager.ModelScoreThreshold>,
+    val modelScoreThresholds: List<ModelScoreSettings.ModelScoreThreshold>,
 ) {
     val needsFeedHeadParamsCheck: Boolean =
         reply ||

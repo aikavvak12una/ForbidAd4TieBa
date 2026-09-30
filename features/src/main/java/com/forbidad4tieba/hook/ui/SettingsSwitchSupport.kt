@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.config.SettingsCatalog
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
@@ -24,7 +25,7 @@ internal object SettingsSwitchSupportResolver {
                 note = null,
             )
         }
-        val featureKey = ConfigManager.scanFeatureKeyForPrefKeyOrNull(prefKey)
+        val featureKey = SettingsCatalog.capabilityFor(prefKey)
             ?: return SettingsSwitchSupport(
                 supported = true,
                 partial = false,

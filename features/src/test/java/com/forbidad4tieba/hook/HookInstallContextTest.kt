@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook
 
+import com.forbidad4tieba.hook.config.SimpleToggle
 import com.forbidad4tieba.hook.feature.ad.*
 import com.forbidad4tieba.hook.feature.ui.*
 import com.forbidad4tieba.hook.feature.perf.*
@@ -29,8 +30,8 @@ class HookInstallContextTest {
             this["homeTabItemNameField"] = "name"
             this["homeTabItemUrlField"] = "url"
         }
-        val disabled = SettingsSnapshot()
-        val enabled = SettingsSnapshot(isHomeTopTabsCustomEnabled = true)
+        val disabled = SettingsSnapshot.bootstrap()
+        val enabled = SettingsSnapshot.bootstrap().copy(isHomeTopTabsCustomEnabled = true)
         for (settings in listOf(disabled, enabled)) {
             assertEquals(
                 1,
@@ -65,9 +66,9 @@ class HookInstallContextTest {
             this["feedTemplateLoadMoreMethod"] = "loadMore"
         }
         val enabledSettings = listOf(
-            SettingsSnapshot(isStrategyAdBlockEnabled = true),
-            SettingsSnapshot(isFeedAdBlockEnabled = true),
-            SettingsSnapshot(isStrategyAdBlockEnabled = true, isFeedAdBlockEnabled = true),
+            SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true),
+            SettingsSnapshot.bootstrap().copy(isFeedAdBlockEnabled = true),
+            SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true, isFeedAdBlockEnabled = true),
         )
         enabledSettings.forEach { settings ->
             assertEquals(
@@ -81,14 +82,14 @@ class HookInstallContextTest {
             )
         }
         assertFalse(
-            FeatureCatalog.symbolPlan(Constants.TARGET_PACKAGE, symbols, SettingsSnapshot())
+            FeatureCatalog.symbolPlan(Constants.TARGET_PACKAGE, symbols, SettingsSnapshot.bootstrap())
                 .entries.any { it.id == "FeedAdHook" },
         )
     }
 
     @Test
     fun missingFeedSymbolsLeaveOtherStrategyPathsAvailableAndReportPartialStatus() {
-        val settings = SettingsSnapshot(isStrategyAdBlockEnabled = true)
+        val settings = SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true)
         val symbols = cachedSymbols {
             this["splashAdHelperClass"] = "com.tieba.SplashAdHelper"
             this["splashAdHelperMethod"] = "showSplash"
@@ -116,8 +117,8 @@ class HookInstallContextTest {
     @Test
     fun tiebaHostLoggingInstallsOnlyForEnabledMainProcess() {
         val symbols = cachedSymbols {}
-        val enabled = SettingsSnapshot(isDetailedLoggingEnabled = true)
-        val disabled = SettingsSnapshot(isDetailedLoggingEnabled = false)
+        val enabled = SettingsSnapshot.bootstrap().copy(isDetailedLoggingEnabled = true)
+        val disabled = SettingsSnapshot.bootstrap().copy(isDetailedLoggingEnabled = false)
 
         assertTrue(
             FeatureCatalog.postAttachPlan(Constants.TARGET_PACKAGE, symbols, enabled)
@@ -174,22 +175,22 @@ class HookInstallContextTest {
 
         assertTrue(
             context.canInstallHomeTopTabs(
-                SettingsSnapshot(isHomeTopTabsCustomEnabled = true),
+                SettingsSnapshot.bootstrap().copy(isHomeTopTabsCustomEnabled = true),
             ),
         )
         assertTrue(
             context.canInstallBottomTabs(
-                SettingsSnapshot(isBottomTabsCustomEnabled = true),
+                SettingsSnapshot.bootstrap().copy(isBottomTabsCustomEnabled = true),
             ),
         )
         assertTrue(
-            context.canInstallDefaultOriginalImage(
-                SettingsSnapshot(isDefaultOriginalImageEnabled = true),
-            ),
+            DefaultOriginalImageFeature.entries(
+                context, SettingsSnapshot.bootstrap().copy(simpleToggles = setOf(SimpleToggle.DEFAULT_ORIGINAL_IMAGE)),
+            ).isNotEmpty(),
         )
         assertTrue(
             context.canInstallMainAiComponents(
-                SettingsSnapshot(isAiComponentsDisabled = true),
+                SettingsSnapshot.bootstrap().copy(isAiComponentsDisabled = true),
             ),
         )
     }
@@ -211,7 +212,7 @@ class HookInstallContextTest {
                 this["freeCopyPopupTextField"] = "text"
             },
         )
-        val enabled = SettingsSnapshot(
+        val enabled = SettingsSnapshot.bootstrap().copy(
             isFreeCopyEnabled = true,
             isFreeCopyCommentInjectionEnabled = true,
         )
@@ -248,7 +249,7 @@ class HookInstallContextTest {
                 this["freeCopyPostParseMethodSpec"] = "parse|void|tbclient.Post"
             },
         )
-        val enabled = SettingsSnapshot(
+        val enabled = SettingsSnapshot.bootstrap().copy(
             isFreeCopyEnabled = true,
             isFreeCopyPostBodyEnabled = true,
             isFreeCopyPostLongPressEnabled = false,
@@ -317,7 +318,7 @@ class HookInstallContextTest {
             this["aiImageViewerJumpButtonOwnerClass"] = "com.tieba.ImageViewer"
             this["aiImageViewerJumpButtonInitMethod"] = "initAiButton"
         }
-        val settings = SettingsSnapshot(isAiComponentsDisabled = true)
+        val settings = SettingsSnapshot.bootstrap().copy(isAiComponentsDisabled = true)
 
         assertTrue(
             HookInstallContext(
@@ -335,7 +336,7 @@ class HookInstallContextTest {
 
     @Test
     fun inputMemeBarBlockRequiresEnabledMainProcessAndReadySymbols() {
-        val settings = SettingsSnapshot(isInputMemeBarHidden = true)
+        val settings = SettingsSnapshot.bootstrap().copy(isInputMemeBarHidden = true)
         val readySymbols = cachedSymbols {
             this["inputMemeBarControllerClass"] = "com.tieba.SpriteMemePanController"
             this["inputMemeBarEnableMethod"] = "enabled"
@@ -355,13 +356,13 @@ class HookInstallContextTest {
         )
         assertFalse(
             HookInstallContext(Constants.TARGET_PACKAGE, readySymbols)
-                .canInstallInputMemeBarBlock(SettingsSnapshot()),
+                .canInstallInputMemeBarBlock(SettingsSnapshot.bootstrap()),
         )
     }
 
     @Test
     fun postAdAggregateInstallsOnlyEachReadyScannedSubpath() {
-        val settings = SettingsSnapshot(isPostPageAdBlockEnabled = true)
+        val settings = SettingsSnapshot.bootstrap().copy(isPostPageAdBlockEnabled = true)
         val dataPath = HookInstallContext(
             Constants.TARGET_PACKAGE,
             cachedSymbols {
@@ -434,7 +435,7 @@ class HookInstallContextTest {
             this["homeBottomEasterEggParserClass"] = "com.tieba.EasterEggParser"
             this["homeBottomEasterEggParserMethod"] = "parseJson"
         }
-        val enabled = SettingsSnapshot(isHomeBottomEasterEggAdBlockEnabled = true)
+        val enabled = SettingsSnapshot.bootstrap().copy(isHomeBottomEasterEggAdBlockEnabled = true)
 
         assertTrue(
             HookInstallContext(Constants.TARGET_PACKAGE, symbols)
@@ -446,7 +447,7 @@ class HookInstallContextTest {
         )
         assertFalse(
             HookInstallContext(Constants.TARGET_PACKAGE, symbols)
-                .canInstallHomeBottomEasterEggAdBlock(SettingsSnapshot()),
+                .canInstallHomeBottomEasterEggAdBlock(SettingsSnapshot.bootstrap()),
         )
         assertFalse(
             HookInstallContext(Constants.TARGET_PACKAGE + ":remote", symbols)

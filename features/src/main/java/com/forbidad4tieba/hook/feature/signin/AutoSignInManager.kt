@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.signin
 
+import com.forbidad4tieba.hook.config.AccountPreferences
 import android.app.Activity
 import android.content.Context
 import android.os.Handler
@@ -26,7 +27,7 @@ object AutoSignInManager {
 
     fun tryAutoSignIn(context: Context, force: Boolean = false) {
         val app = context.applicationContext
-        if (!force && !ConfigManager.isAutoSignInEnabled(app)) return
+        if (!force && !AccountPreferences.isAutoSignInEnabled(app)) return
         if (!running.compareAndSet(false, true)) {
             if (force) toast(context, UiText.AutoSignIn.TOAST_TASK_RUNNING)
             return
@@ -37,7 +38,7 @@ object AutoSignInManager {
             val started = System.currentTimeMillis()
             var accountKey: String? = null
             try {
-                if (!hasLoginCookie(force) { force || ConfigManager.isAutoSignInEnabled(app) }) {
+                if (!hasLoginCookie(force) { force || AccountPreferences.isAutoSignInEnabled(app) }) {
                     if (force) toast(app, UiText.AutoSignIn.TOAST_BDUSS_MISSING)
                     return@thread
                 }
@@ -60,7 +61,7 @@ object AutoSignInManager {
                 val store = AutoSignInStateStore(ConfigManager.getModuleStatePrefs(app), accountKey)
                 val state = store.load(day)
                 val active = {
-                    (force || ConfigManager.isAutoSignInEnabled(app)) &&
+                    (force || AccountPreferences.isAutoSignInEnabled(app)) &&
                         currentDay() == day && network.currentAccountId() == accountId
                 }
                 val report = AutoSignInTask(network, store::save, active, ::pause)

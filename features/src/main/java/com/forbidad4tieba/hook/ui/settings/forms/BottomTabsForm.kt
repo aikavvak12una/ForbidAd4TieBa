@@ -1,11 +1,11 @@
 package com.forbidad4tieba.hook.ui.settings.forms
 
+import com.forbidad4tieba.hook.config.TabPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
@@ -23,12 +23,12 @@ internal object BottomTabsForm {
             val density = context.resources.displayMetrics.density
             val padding = settingsDialogPadding(density)
 
-            val persistedSelection = ConfigManager.BottomTabSelection(
-                homeEnabled = prefs.getBoolean(ConfigManager.KEY_BOTTOM_TAB_HOME, true),
-                enterForumEnabled = prefs.getBoolean(ConfigManager.KEY_BOTTOM_TAB_ENTER_FORUM, true),
-                retailStoreEnabled = prefs.getBoolean(ConfigManager.KEY_BOTTOM_TAB_RETAIL_STORE, true),
-                messageEnabled = prefs.getBoolean(ConfigManager.KEY_BOTTOM_TAB_MESSAGE, true),
-                mineEnabled = prefs.getBoolean(ConfigManager.KEY_BOTTOM_TAB_MINE, true),
+            val persistedSelection = TabPreferences.BottomTabSelection(
+                homeEnabled = TabPreferences.BOTTOM_TAB_HOME.read(prefs),
+                enterForumEnabled = TabPreferences.BOTTOM_TAB_ENTER_FORUM.read(prefs),
+                retailStoreEnabled = TabPreferences.BOTTOM_TAB_RETAIL_STORE.read(prefs),
+                messageEnabled = TabPreferences.BOTTOM_TAB_MESSAGE.read(prefs),
+                mineEnabled = TabPreferences.BOTTOM_TAB_MINE.read(prefs),
             )
             val initialSelection = persistedSelection
 
@@ -123,7 +123,7 @@ internal object BottomTabsForm {
             dialog.setOnShowListener {
                 dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val rawSelection = ConfigManager.BottomTabSelection(
+                    val rawSelection = TabPreferences.BottomTabSelection(
                         homeEnabled = homeSwitch.isChecked,
                         enterForumEnabled = enterForumSwitch.isChecked,
                         retailStoreEnabled = retailStoreSwitch.isChecked,
@@ -134,14 +134,14 @@ internal object BottomTabsForm {
                         Toast.makeText(context, UiText.Settings.BOTTOM_TAB_AT_LEAST_ONE, Toast.LENGTH_SHORT).show()
                         return@setOnClickListener
                     }
-                    val normalized = ConfigManager.normalizeBottomTabSelection(rawSelection)
+                    val normalized = TabPreferences.normalizeBottomTabSelection(rawSelection)
 
                     prefs.edit()
-                        .putBoolean(ConfigManager.KEY_BOTTOM_TAB_HOME, normalized.homeEnabled)
-                        .putBoolean(ConfigManager.KEY_BOTTOM_TAB_ENTER_FORUM, normalized.enterForumEnabled)
-                        .putBoolean(ConfigManager.KEY_BOTTOM_TAB_RETAIL_STORE, normalized.retailStoreEnabled)
-                        .putBoolean(ConfigManager.KEY_BOTTOM_TAB_MESSAGE, normalized.messageEnabled)
-                        .putBoolean(ConfigManager.KEY_BOTTOM_TAB_MINE, normalized.mineEnabled)
+                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_HOME, normalized.homeEnabled)
+                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_ENTER_FORUM, normalized.enterForumEnabled)
+                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_RETAIL_STORE, normalized.retailStoreEnabled)
+                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_MESSAGE, normalized.messageEnabled)
+                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_MINE, normalized.mineEnabled)
                         .apply()
                     Toast.makeText(
                         context,

@@ -20,7 +20,7 @@ object PbScrollCoalesceHook {
     private var lastListenerState = ScrollState()
 
     internal fun hook(targets: PbScrollCoalesceSymbols) {
-        if (!ConfigManager.isPbScrollCoalesceEnabled) {
+        if (!ConfigManager.snapshot().isPbScrollCoalesceEnabled) {
             XposedCompat.log("[PbScrollCoalesceHook] skipped: config disabled")
             return
         }
@@ -30,7 +30,7 @@ object PbScrollCoalesceHook {
 
         try {
             RuntimeHooks.builder(mod, scrollMethod, "PbScrollCoalesceHook", "hook:scrollMethod").intercept { chain ->
-                if (!ConfigManager.isPbScrollCoalesceEnabled) {
+                if (!ConfigManager.snapshot().isPbScrollCoalesceEnabled) {
                     return@intercept chain.proceed()
                 }
                 val listener = chain.thisObject ?: return@intercept chain.proceed()

@@ -1,7 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.graphics.Color
-import com.forbidad4tieba.hook.config.ConfigManager
 
 private const val PB_SORT_SWITCH_SELECTED_TINT_OVERLAY_ALPHA = 28
 private const val PB_REPLY_BAR_INPUT_CAPSULE_COLOR_SHIFT_ALPHA = 28
@@ -16,8 +16,8 @@ internal fun pbCommentBaseRgb(color: Int): Int {
 }
 
 internal fun HomeNativeGlassRuntimeStyle.configuredPbCommentTintColor(): Int? {
-    if (tintColor != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR) return tintColor
-    return autoTintColor.takeIf { it != ConfigManager.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
+    if (tintColor != HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR) return tintColor
+    return autoTintColor.takeIf { it != HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_AUTO_TINT_COLOR }
 }
 
 internal fun HomeNativeGlassRuntimeStyle.pbSortSwitchTintState(

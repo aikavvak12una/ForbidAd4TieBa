@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.feature.ad
 
+import com.forbidad4tieba.hook.config.PostFilterPreferences
+import com.forbidad4tieba.hook.config.ModelScoreSettings
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.io.File
@@ -62,17 +64,17 @@ internal object CustomPostModelScoreStats {
             persistence.reset()
             postsSinceLastTrim = 0
             runCatching {
-                File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME).delete()
+                File(context.filesDir, ModelScoreSettings.MODEL_SCORE_STATS_FILE_NAME).delete()
             }.onFailure { t ->
                 XposedCompat.logW("[CustomPostModelScoreStats] clear failed: ${t.message}")
             }
         }
     }
 
-    fun trimToPostLimitAsync(postLimit: Int = ConfigManager.postModelScoreStatsPostLimit) {
+    fun trimToPostLimitAsync(postLimit: Int = ConfigManager.snapshot().postModelScoreStatsPostLimit) {
         executor.execute {
             val context = ConfigManager.getAppContext() ?: return@execute
-            val file = File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME)
+            val file = File(context.filesDir, ModelScoreSettings.MODEL_SCORE_STATS_FILE_NAME)
             synchronized(fileLock) {
                 runCatching {
                     trimStoredFileToPostLimit(file, postLimit)
@@ -99,7 +101,7 @@ internal object CustomPostModelScoreStats {
         val min = values.first()
         val max = values.last()
         val percentileValues = LinkedHashMap<Int, Double>()
-        for (percentile in ConfigManager.SUPPORTED_MODEL_SCORE_AUTO_PERCENTILES) {
+        for (percentile in ModelScoreSettings.SUPPORTED_MODEL_SCORE_AUTO_PERCENTILES) {
             percentileValues[percentile] = percentile(values, percentile / 100.0)
         }
         val displayMax = percentile(values, HISTOGRAM_TAIL_PERCENTILE)
@@ -141,7 +143,7 @@ internal object CustomPostModelScoreStats {
             }
             return false
         }
-        val file = File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME)
+        val file = File(context.filesDir, ModelScoreSettings.MODEL_SCORE_STATS_FILE_NAME)
         synchronized(fileLock) {
             if (persistence.disabled) {
                 // Drop buffered records after persistence is disabled.
@@ -183,12 +185,12 @@ internal object CustomPostModelScoreStats {
             persistence.succeeded()
             val newPostCount = activeRecords.map { it.postId }.distinct().size
             postsSinceLastTrim += newPostCount
-            val trimThreshold = (ConfigManager.postModelScoreStatsPostLimit * TRIM_POST_THRESHOLD_RATIO).toInt()
+            val trimThreshold = (ConfigManager.snapshot().postModelScoreStatsPostLimit * TRIM_POST_THRESHOLD_RATIO).toInt()
                 .coerceAtLeast(50)
             if (postsSinceLastTrim >= trimThreshold) {
                 postsSinceLastTrim = 0
                 runCatching {
-                    trimStoredFileToPostLimit(file, ConfigManager.postModelScoreStatsPostLimit)
+                    trimStoredFileToPostLimit(file, ConfigManager.snapshot().postModelScoreStatsPostLimit)
                 }.onFailure { t ->
                     XposedCompat.logW("[CustomPostModelScoreStats] trim failed: ${t.message}")
                 }
@@ -207,14 +209,14 @@ internal object CustomPostModelScoreStats {
         val applied = ArrayList<AppliedAutoThreshold>(autoPercentiles.size)
         val skippedBySampleCount = LinkedHashMap<String, Int>()
         for ((key, rawPercentile) in autoPercentiles) {
-            val percentile = ConfigManager.normalizeModelScoreAutoPercentile(rawPercentile)
+            val percentile = ModelScoreSettings.normalizeModelScoreAutoPercentile(rawPercentile)
             val summary = summary(key)
-            if (summary.sampleCount <= ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT) {
+            if (summary.sampleCount <= ModelScoreSettings.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT) {
                 skippedBySampleCount[key] = summary.sampleCount
                 continue
             }
             val rawValue = summary.percentileValue(percentile) ?: continue
-            val value = ConfigManager.roundModelScoreThreshold(rawValue)
+            val value = ModelScoreSettings.roundModelScoreThreshold(rawValue)
             if (value < 0.0 || value.isNaN() || value.isInfinite()) continue
             applied.add(AppliedAutoThreshold(key, percentile, value))
         }
@@ -222,8 +224,8 @@ internal object CustomPostModelScoreStats {
 
         val prefs = ConfigManager.getPrefs(context)
         val merged = LinkedHashMap<String, Double>()
-        for (threshold in ConfigManager.parseModelScoreThresholds(
-            prefs.getString(ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS, "")
+        for (threshold in ModelScoreSettings.parseModelScoreThresholds(
+            PostFilterPreferences.FILTER_POST_MODEL_SCORE_THRESHOLDS.read(prefs)
         )) {
             merged[threshold.key] = threshold.threshold
         }
@@ -241,14 +243,14 @@ internal object CustomPostModelScoreStats {
             }
         }
         val thresholds = merged.map { (key, threshold) ->
-            ConfigManager.ModelScoreThreshold(key, threshold)
+            ModelScoreSettings.ModelScoreThreshold(key, threshold)
         }
         if (changed) {
-            ConfigManager.postModelScoreThresholds = thresholds
+            PostFilterPreferences.publishThresholds(thresholds)
             val persisted = prefs.edit()
                 .putString(
-                    ConfigManager.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
-                    ConfigManager.serializeModelScoreThresholds(thresholds)
+                    PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
+                    ModelScoreSettings.serializeModelScoreThresholds(thresholds)
                 )
                 .commit()
             if (!persisted) {
@@ -259,7 +261,7 @@ internal object CustomPostModelScoreStats {
             XposedCompat.log(
                 "[CustomPostModelScoreStats] auto percentile effective: " +
                     applied.joinToString(", ") {
-                        "${it.key}=P${it.percentile}:${ConfigManager.formatModelScoreThresholdValue(it.value)}"
+                        "${it.key}=P${it.percentile}:${ModelScoreSettings.formatModelScoreThresholdValue(it.value)}"
                     }
             )
         }
@@ -267,7 +269,7 @@ internal object CustomPostModelScoreStats {
             XposedCompat.log(
                 "[CustomPostModelScoreStats] auto percentile pending samples: " +
                     skippedBySampleCount.entries.joinToString(", ") {
-                        "${it.key}=${it.value}<=${ConfigManager.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT}"
+                        "${it.key}=${it.value}<=${ModelScoreSettings.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT}"
                     }
             )
         }
@@ -279,10 +281,10 @@ internal object CustomPostModelScoreStats {
 
     /**
      * 读取 [modelKey] 的已存储值和待写入值。
-     * 按帖子数量限制处理，只让最新 [ConfigManager.postModelScoreStatsPostLimit] 个帖子参与统计。
+     * 按帖子数量限制处理，只让最新 [ConfigManager.snapshot().postModelScoreStatsPostLimit] 个帖子参与统计。
      */
     private fun readLimitedValues(modelKey: String): ArrayList<Double> {
-        val limit = ConfigManager.postModelScoreStatsPostLimit
+        val limit = ConfigManager.snapshot().postModelScoreStatsPostLimit
         val storedRecords = readStoredRecordsForKey(modelKey)
         val pendingForKey = synchronized(lock) {
             pendingRecords.filter { it.modelKey == modelKey }
@@ -311,7 +313,7 @@ internal object CustomPostModelScoreStats {
     private fun readStoredRecordsForKey(modelKey: String): List<StoredRecord> {
         val result = ArrayList<StoredRecord>()
         val context = ConfigManager.getAppContext() ?: return result
-        val file = File(context.filesDir, ConfigManager.MODEL_SCORE_STATS_FILE_NAME)
+        val file = File(context.filesDir, ModelScoreSettings.MODEL_SCORE_STATS_FILE_NAME)
         if (!file.isFile) return result
         synchronized(fileLock) {
             runCatching {
@@ -336,7 +338,7 @@ internal object CustomPostModelScoreStats {
 
     private fun trimStoredFileToPostLimit(file: File, rawLimit: Int) {
         if (!file.isFile) return
-        val limit = rawLimit.coerceAtLeast(ConfigManager.MIN_MODEL_SCORE_STATS_POST_LIMIT)
+        val limit = rawLimit.coerceAtLeast(ModelScoreSettings.MIN_MODEL_SCORE_STATS_POST_LIMIT)
         val records = readStoredRecords(file)
         if (records.isEmpty()) {
             file.delete()
@@ -465,7 +467,7 @@ internal object CustomPostModelScoreStats {
         val buckets: List<Bucket>,
     ) {
         fun percentileValue(percentile: Int): Double? {
-            return percentileValues[ConfigManager.normalizeModelScoreAutoPercentile(percentile)]
+            return percentileValues[ModelScoreSettings.normalizeModelScoreAutoPercentile(percentile)]
         }
 
         companion object {

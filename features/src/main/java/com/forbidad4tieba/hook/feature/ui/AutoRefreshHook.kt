@@ -44,7 +44,7 @@ object AutoRefreshHook {
     private val hasSeenForeground = AtomicBoolean(false)
 
     internal fun registerForegroundCallbacks(app: Application) {
-        if (!ConfigManager.isAutoRefreshDisabled) return
+        if (!ConfigManager.snapshot().isAutoRefreshDisabled) return
         if (!foregroundCallbacksRegistered.compareAndSet(false, true)) return
 
         app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
@@ -73,7 +73,7 @@ object AutoRefreshHook {
     }
 
     internal fun hook(targets: AutoRefreshSymbols) {
-        if (!ConfigManager.isAutoRefreshDisabled) {
+        if (!ConfigManager.snapshot().isAutoRefreshDisabled) {
             XposedCompat.log("[AutoRefreshHook] skipped: config disabled")
             return
         }
@@ -131,7 +131,7 @@ object AutoRefreshHook {
         if (!installedMethodKeys.add(methodKey)) return false
         val key = "disable_home_cache"
         RuntimeHooks.builder(mod, method, "AutoRefreshHook", "installCacheRestoreHook:method").intercept { chain ->
-            if (!ConfigManager.isAutoRefreshDisabled) {
+            if (!ConfigManager.snapshot().isAutoRefreshDisabled) {
                 return@intercept chain.proceed()
             }
             val taskId = chain.args.firstOrNull() as? String
@@ -167,7 +167,7 @@ object AutoRefreshHook {
         runCatching {
             method.isAccessible = true
             RuntimeHooks.builder(mod, method, "AutoRefreshHook", "installRefreshAnimationHook:method").intercept { chain ->
-                if (!ConfigManager.isAutoRefreshDisabled) {
+                if (!ConfigManager.snapshot().isAutoRefreshDisabled) {
                     return@intercept chain.proceed()
                 }
                 val refreshing = chain.args.firstOrNull() as? Boolean
@@ -265,7 +265,7 @@ object AutoRefreshHook {
         if (!installedMethodKeys.add(methodKey)) return false
 
         RuntimeHooks.builder(mod, method, "AutoRefreshHook", "installNetRequestHook:method").intercept { chain ->
-            if (!ConfigManager.isAutoRefreshDisabled) {
+            if (!ConfigManager.snapshot().isAutoRefreshDisabled) {
                 return@intercept chain.proceed()
             }
             // Load-more (loadType >= 2) must never be blocked; only the
@@ -284,7 +284,7 @@ object AutoRefreshHook {
     }
 
     private fun markUserRefresh(reason: String) {
-        if (!ConfigManager.isAutoRefreshDisabled) return
+        if (!ConfigManager.snapshot().isAutoRefreshDisabled) return
         userRefreshUntilMs.set(SystemClock.uptimeMillis() + USER_REFRESH_GRACE_MS)
         XposedCompat.logD("[AutoRefreshHook] user refresh gesture: $reason")
     }
@@ -296,7 +296,7 @@ object AutoRefreshHook {
      * gesture.
      */
     private fun beginAutomaticPhase(reason: String) {
-        if (!ConfigManager.isAutoRefreshDisabled) return
+        if (!ConfigManager.snapshot().isAutoRefreshDisabled) return
         userRefreshUntilMs.set(0L)
         XposedCompat.logD("[AutoRefreshHook] automatic phase: $reason")
     }

@@ -1,7 +1,7 @@
 package com.forbidad4tieba.hook.feature.ad
 
+import com.forbidad4tieba.hook.config.ModelScoreSettings
 import com.forbidad4tieba.hook.config.CustomPostFilterRules
-import com.forbidad4tieba.hook.config.ConfigManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -137,7 +137,7 @@ class CustomPostFilterMatcherTest {
         val decision = CustomPostFilterMatcher.decideByFeedHeadParams(
             mapOf("extra" to "msd_score:0.2"),
             runtimeRules(
-                thresholds = listOf(ConfigManager.ModelScoreThreshold(modelKey, 0.5)),
+                thresholds = listOf(ModelScoreSettings.ModelScoreThreshold(modelKey, 0.5)),
             ),
         )
 
@@ -329,7 +329,7 @@ class CustomPostFilterMatcherTest {
     }
 
     private fun runtimeRules(
-        thresholds: List<ConfigManager.ModelScoreThreshold> = emptyList(),
+        thresholds: List<ModelScoreSettings.ModelScoreThreshold> = emptyList(),
         lottery: Boolean = false,
         recommendForum: Boolean = false,
         reply: Boolean = false,

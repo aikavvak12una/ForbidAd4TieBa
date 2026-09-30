@@ -1,8 +1,8 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import com.forbidad4tieba.hook.contracts.MemberAccess
 import android.app.Activity
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.HomeNativeGlassHostDarkModeSwitchTargets
 import java.lang.reflect.Method
@@ -223,7 +223,7 @@ internal object HomeNativeGlassHostDarkModeBridge {
         if (enabled == null) return lastKnownDarkMode
         val previous = lastKnownDarkMode
         lastKnownDarkMode = enabled
-        val changed = ConfigManager.setHomeNativeGlassDarkModeActive(enabled) || previous != enabled
+        val changed = HomeGlassPreferences.setHomeNativeGlassDarkModeActive(enabled) || previous != enabled
         if (changed) {
             darkModeChangeListeners.forEach { listener ->
                 runCatching { listener(enabled) }

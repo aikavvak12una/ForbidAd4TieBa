@@ -30,7 +30,7 @@ object PbCommentAutoLoadHook {
     private val recyclerCheckStates = Collections.synchronizedMap(WeakHashMap<Any, RecyclerCheckState>())
 
     internal fun hook(targets: PbCommentAutoLoadSymbols) {
-        if (!ConfigManager.isAutoLoadMoreEnabled) {
+        if (!ConfigManager.snapshot().isAutoLoadMoreEnabled) {
             XposedCompat.log("$TAG skipped: config disabled")
             return
         }
@@ -56,7 +56,7 @@ object PbCommentAutoLoadHook {
         return try {
             RuntimeHooks.builder(mod, targets.scrollMethod, "PbCommentAutoLoadHook", "installBdListViewHook:targets.scrollMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (!ConfigManager.isAutoLoadMoreEnabled || runtimeDisabled) {
+                if (!ConfigManager.snapshot().isAutoLoadMoreEnabled || runtimeDisabled) {
                     return@intercept result
                 }
                 val argList = chain.args.getOrNull(0)
@@ -100,7 +100,7 @@ object PbCommentAutoLoadHook {
             recyclerAdapterGetItemCountMethod = getItemCountMethod
             RuntimeHooks.builder(mod, targets.scrollMethod, "PbCommentAutoLoadHook", "installBdRecyclerViewHook:targets.scrollMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (!ConfigManager.isAutoLoadMoreEnabled || runtimeDisabled) {
+                if (!ConfigManager.snapshot().isAutoLoadMoreEnabled || runtimeDisabled) {
                     return@intercept result
                 }
                 val dy = chain.args.getOrNull(2) as? Int ?: return@intercept result
@@ -166,7 +166,7 @@ object PbCommentAutoLoadHook {
                     state.lastCheckedAt = SystemClock.uptimeMillis()
                 }
             }
-            if (!ConfigManager.isAutoLoadMoreEnabled || runtimeDisabled) return@postDelayed
+            if (!ConfigManager.snapshot().isAutoLoadMoreEnabled || runtimeDisabled) return@postDelayed
             performRecyclerAutoLoadCheck(recycler, targets)
         }, delayMs)
     }

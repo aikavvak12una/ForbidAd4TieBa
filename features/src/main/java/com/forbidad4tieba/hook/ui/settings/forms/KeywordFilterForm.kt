@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui.settings.forms
 
+import com.forbidad4tieba.hook.config.PostFilterPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Typeface
@@ -8,7 +9,6 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.SETTINGS_INPUT_TEXT_SP
 import com.forbidad4tieba.hook.ui.SETTINGS_ROW_DESC_SP
@@ -30,7 +30,7 @@ internal object KeywordFilterForm {
         try {
             val tokens = UiStyle.tokens(context)
             val density = context.resources.displayMetrics.density
-            val initialRaw = prefs.getString(ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD_LIST, "").orEmpty()
+            val initialRaw = PostFilterPreferences.FILTER_POST_FORUM_KEYWORD_LIST.read(prefs).orEmpty()
 
             fun keywordCount(raw: String): Int {
                 if (raw.isBlank()) return 0
@@ -126,7 +126,7 @@ internal object KeywordFilterForm {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
                     val raw = input.text?.toString().orEmpty().trim()
                     prefs.edit()
-                        .putString(ConfigManager.KEY_FILTER_POST_FORUM_KEYWORD_LIST, raw)
+                        .putString(PostFilterPreferences.KEY_FILTER_POST_FORUM_KEYWORD_LIST, raw)
                         .apply()
                     val toastText = if (raw.isEmpty()) {
                         UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_EMPTY

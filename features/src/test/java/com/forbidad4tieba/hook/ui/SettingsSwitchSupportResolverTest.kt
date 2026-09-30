@@ -1,6 +1,8 @@
 package com.forbidad4tieba.hook.ui
 
-import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.config.PerformancePreferences
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
+import com.forbidad4tieba.hook.config.AdPreferences
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
@@ -13,7 +15,7 @@ class SettingsSwitchSupportResolverTest {
     @Test
     fun nonScanPreferenceDoesNotShowUnknownScanState() {
         val support = SettingsSwitchSupportResolver.resolve(
-            prefKey = ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION,
+            prefKey = PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION,
             supported = true,
             featureStatusMap = emptyMap(),
         )
@@ -27,7 +29,7 @@ class SettingsSwitchSupportResolverTest {
     @Test
     fun scanBackedPreferenceStillShowsUnknownWhenStatusIsUnavailable() {
         val support = SettingsSwitchSupportResolver.resolve(
-            prefKey = ConfigManager.KEY_ENABLE_HOME_NATIVE_GLASS,
+            prefKey = HomeGlassPreferences.KEY_ENABLE_HOME_NATIVE_GLASS,
             supported = true,
             featureStatusMap = emptyMap(),
         )
@@ -40,7 +42,7 @@ class SettingsSwitchSupportResolverTest {
     @Test
     fun adChildPreferenceUsesItsOwnScanStatus() {
         val support = SettingsSwitchSupportResolver.resolve(
-            prefKey = ConfigManager.KEY_BLOCK_AD_SEARCH_BOX_TEXT,
+            prefKey = AdPreferences.KEY_BLOCK_AD_SEARCH_BOX_TEXT,
             supported = true,
             featureStatusMap = mapOf(
                 HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT to HookFeatureStatus(

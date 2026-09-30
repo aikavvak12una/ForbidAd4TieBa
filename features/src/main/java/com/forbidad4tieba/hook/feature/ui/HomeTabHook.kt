@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.TabPreferences
 import android.content.Context
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
@@ -41,19 +42,19 @@ object HomeTabHook {
     private const val TAB_TYPE_MATERIAL = 9
     private const val TAB_TYPE_WEB_ACTIVITY = 202
 
-    private const val TAB_CODE_RECOMMEND = ConfigManager.HOME_TOP_TAB_CODE_RECOMMEND
-    private const val TAB_CODE_LIVE = ConfigManager.HOME_TOP_TAB_CODE_LIVE
-    private const val TAB_CODE_MATERIAL = ConfigManager.HOME_TOP_TAB_CODE_MATERIAL
-    private const val TAB_CODE_FOLLOWED = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED
-    private const val TAB_CODE_FOLLOWED_ALT = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED_ALT
-    private const val TAB_CODE_FOLLOWED_ALT_2 = ConfigManager.HOME_TOP_TAB_CODE_FOLLOWED_ALT_2
+    private const val TAB_CODE_RECOMMEND = TabPreferences.HOME_TOP_TAB_CODE_RECOMMEND
+    private const val TAB_CODE_LIVE = TabPreferences.HOME_TOP_TAB_CODE_LIVE
+    private const val TAB_CODE_MATERIAL = TabPreferences.HOME_TOP_TAB_CODE_MATERIAL
+    private const val TAB_CODE_FOLLOWED = TabPreferences.HOME_TOP_TAB_CODE_FOLLOWED
+    private const val TAB_CODE_FOLLOWED_ALT = TabPreferences.HOME_TOP_TAB_CODE_FOLLOWED_ALT
+    private const val TAB_CODE_FOLLOWED_ALT_2 = TabPreferences.HOME_TOP_TAB_CODE_FOLLOWED_ALT_2
 
     private val TAB_NAME_FOLLOWED = UiText.Settings.HOME_TOP_TAB_FOLLOWED_LABEL
     private const val TAB_URL_FOLLOWED =
         "https://tieba.baidu.com/mo/q/hybrid-usergrow-base/myFollowed/hybrid" +
             "?customfullscreen=1&nonavigationbar=1&loadingSignal=1&nohead=1&skin=default" +
             "&tbhook_from_home_top_tab=1"
-    private const val TAB_URL_FOLLOWED_PATH = ConfigManager.HOME_TOP_TAB_URL_FOLLOWED_PATH
+    private const val TAB_URL_FOLLOWED_PATH = TabPreferences.HOME_TOP_TAB_URL_FOLLOWED_PATH
 
     private data class FollowedTemplateContext(
         val itemClass: Class<*>?,
@@ -117,23 +118,23 @@ object HomeTabHook {
         }
     }
 
-    private fun currentSelectionOrNull(): ConfigManager.HomeTopTabSelection? {
+    private fun currentSelectionOrNull(): TabPreferences.HomeTopTabSelection? {
         if (!ConfigManager.snapshot().isHomeTopTabsCustomEnabled) return null
-        return ConfigManager.resolveHomeTopTabSelection()
+        return TabPreferences.resolveHomeTopTabSelection()
     }
 
     internal fun refreshTopTabCatalog(context: Context) {
         val list = catalogSnapshot.current()
         if (list.isEmpty()) return
-        val entries = ArrayList<ConfigManager.HomeTopTabCatalogEntry>(list.size)
+        val entries = ArrayList<TabPreferences.HomeTopTabCatalogEntry>(list.size)
         for (index in list.indices) {
             val tabItem = list[index] ?: continue
             val tabType = resolveTabType(tabItem)
             val tabCode = resolveTabCode(tabItem)
             val tabUrl = resolveTabUrl(tabItem)
-            val key = ConfigManager.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl) ?: continue
-            if (key == ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED) continue
-            ConfigManager.buildHomeTopTabCatalogEntry(
+            val key = TabPreferences.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl) ?: continue
+            if (key == TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED) continue
+            TabPreferences.buildHomeTopTabCatalogEntry(
                 type = tabType.takeIf { it >= 0 },
                 code = tabCode,
                 label = resolveTabName(tabItem),
@@ -143,7 +144,7 @@ object HomeTabHook {
         }
         if (entries.isEmpty()) return
         runCatching {
-            ConfigManager.updateHomeTopTabCatalog(context, entries)
+            TabPreferences.updateHomeTopTabCatalog(context, entries)
         }.onFailure { t ->
             XposedCompat.logD { "[HomeTabHook] update top tab catalog ignored: ${t.message}" }
         }
@@ -151,7 +152,7 @@ object HomeTabHook {
 
     private fun filterTabsInPlace(
         list: MutableList<Any?>,
-        selection: ConfigManager.HomeTopTabSelection,
+        selection: TabPreferences.HomeTopTabSelection,
     ): Int {
         if (list.isEmpty()) return 0
         var removedCount = 0
@@ -173,9 +174,9 @@ object HomeTabHook {
         tabType: Int,
         tabCode: String?,
         tabUrl: String?,
-        selection: ConfigManager.HomeTopTabSelection,
+        selection: TabPreferences.HomeTopTabSelection,
     ): Boolean {
-        val key = ConfigManager.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl)
+        val key = TabPreferences.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl)
         return !selection.isTabKeyEnabled(key)
     }
 
@@ -235,7 +236,7 @@ object HomeTabHook {
 
     private fun syncFollowedTabState(
         list: MutableList<Any?>,
-        selection: ConfigManager.HomeTopTabSelection,
+        selection: TabPreferences.HomeTopTabSelection,
         templateContext: FollowedTemplateContext,
     ): FollowedSyncResult {
         if (!selection.followedEnabled) {

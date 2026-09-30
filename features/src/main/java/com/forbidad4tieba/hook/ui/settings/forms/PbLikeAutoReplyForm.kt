@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui.settings.forms
 
+import com.forbidad4tieba.hook.config.ReplyPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Typeface
@@ -9,7 +10,6 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.SETTINGS_INPUT_TEXT_SP
 import com.forbidad4tieba.hook.ui.SETTINGS_SECTION_TITLE_SP
@@ -46,7 +46,7 @@ internal object PbLikeAutoReplyForm {
                     android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                     android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
                 hint = UiText.Settings.PB_LIKE_AUTO_REPLY_CONTENT_HINT
-                setText(prefs.getString(ConfigManager.KEY_PB_LIKE_AUTO_REPLY_TEXT, "").orEmpty())
+                setText(ReplyPreferences.PB_LIKE_AUTO_REPLY_TEXT.read(prefs).orEmpty())
                 setTextColor(tokens.textPrimary)
                 setHintTextColor(tokens.textMuted)
                 textSize = SETTINGS_INPUT_TEXT_SP
@@ -81,7 +81,7 @@ internal object PbLikeAutoReplyForm {
                         return@setOnClickListener
                     }
                     prefs.edit()
-                        .putString(ConfigManager.KEY_PB_LIKE_AUTO_REPLY_TEXT, content)
+                        .putString(ReplyPreferences.KEY_PB_LIKE_AUTO_REPLY_TEXT, content)
                         .apply()
                     Toast.makeText(
                         context,

@@ -12,7 +12,7 @@ object PbDisableGestureFontScaleHook {
     private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
 
     internal fun hook(targets: PbGestureScaleSymbols) {
-        if (!ConfigManager.isPbGestureFontScaleDisabled) {
+        if (!ConfigManager.snapshot().isPbGestureFontScaleDisabled) {
             XposedCompat.log("[PbDisableGestureFontScaleHook] skipped: config disabled")
             return
         }
@@ -45,7 +45,7 @@ object PbDisableGestureFontScaleHook {
         if (!installedMethodKeys.add(methodKey)) return false
 
         RuntimeHooks.builder(mod, method, "PbDisableGestureFontScaleHook", "installDispatchHook:method").intercept { chain ->
-            if (ConfigManager.isPbGestureFontScaleDisabled) false else chain.proceed()
+            if (ConfigManager.snapshot().isPbGestureFontScaleDisabled) false else chain.proceed()
         }
         return true
     }

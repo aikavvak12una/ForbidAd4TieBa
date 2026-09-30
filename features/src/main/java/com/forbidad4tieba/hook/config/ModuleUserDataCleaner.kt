@@ -49,8 +49,8 @@ internal object ModuleUserDataCleaner {
         )
         deleteOwnedFile(
             parent = appCtx.filesDir,
-            name = ConfigManager.MODEL_SCORE_STATS_FILE_NAME,
-            label = "files/${ConfigManager.MODEL_SCORE_STATS_FILE_NAME}",
+            name = ModelScoreSettings.MODEL_SCORE_STATS_FILE_NAME,
+            label = "files/${ModelScoreSettings.MODEL_SCORE_STATS_FILE_NAME}",
             deleted = deleted,
             failed = failed,
         )

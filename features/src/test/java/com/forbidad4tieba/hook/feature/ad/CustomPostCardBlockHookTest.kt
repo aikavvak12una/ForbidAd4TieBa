@@ -110,7 +110,7 @@ class CustomPostCardBlockHookTest {
         val field = ConfigManager::class.java.getDeclaredField("settingsSnapshot").apply { isAccessible = true }
         val original = field.get(ConfigManager)
         try {
-            field.set(ConfigManager, SettingsSnapshot(isCustomPostFilterEnabled = master, isPostHelpFilterEnabled = help))
+            field.set(ConfigManager, SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = master, isPostHelpFilterEnabled = help))
             block()
         } finally {
             field.set(ConfigManager, original)

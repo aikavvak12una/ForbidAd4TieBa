@@ -150,7 +150,7 @@ object MineTabWebBlockHook {
                 val result = chain.proceed()
 
                 val view = target as? View
-                if (view != null && isMineTabUrl(url) && ConfigManager.isMineTabWebAdBlockEnabled) {
+                if (view != null && isMineTabUrl(url) && ConfigManager.snapshot().isMineTabWebAdBlockEnabled) {
                     scheduleInjection(target, view, url.orEmpty())
                 }
                 result
@@ -181,7 +181,7 @@ object MineTabWebBlockHook {
 
         for (delay in INJECT_DELAYS_MS) {
             hostView.postDelayed({
-                if (!ConfigManager.isMineTabWebAdBlockEnabled) {
+                if (!ConfigManager.snapshot().isMineTabWebAdBlockEnabled) {
                     clearState(target)
                     return@postDelayed
                 }

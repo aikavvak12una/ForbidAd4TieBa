@@ -1,12 +1,12 @@
 package com.forbidad4tieba.hook.ui.settings.forms
 
+import com.forbidad4tieba.hook.config.TabPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
@@ -23,8 +23,8 @@ internal object HomeTopTabsForm {
         try {
             val density = context.resources.displayMetrics.density
             val padding = settingsDialogPadding(density)
-            val catalog = ConfigManager.readHomeTopTabCatalog(context)
-            val disabledKeys = ConfigManager.readHomeTopTabDisabledKeys(prefs)
+            val catalog = TabPreferences.readHomeTopTabCatalog(context)
+            val disabledKeys = TabPreferences.readHomeTopTabDisabledKeys(prefs)
 
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -36,14 +36,14 @@ internal object HomeTopTabsForm {
             }
 
             data class RowState(
-                val entry: ConfigManager.HomeTopTabCatalogEntry,
+                val entry: TabPreferences.HomeTopTabCatalogEntry,
                 val switchView: Switch,
             )
 
             val rows = ArrayList<RowState>(catalog.size)
             catalog.forEachIndexed { index, entry ->
                 val label = when (entry.key) {
-                    ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED -> UiText.Settings.HOME_TOP_TAB_FOLLOWED_LABEL
+                    TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED -> UiText.Settings.HOME_TOP_TAB_FOLLOWED_LABEL
                     else -> entry.label.ifBlank { UiText.Settings.homeTopTabFallbackLabel(index + 1) }
                 }
                 val row = createSwitchRow(
@@ -74,7 +74,7 @@ internal object HomeTopTabsForm {
             dialog.setOnShowListener {
                 dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val hasHostCatalog = rows.any { it.entry.source == ConfigManager.HOME_TOP_TAB_SOURCE_HOST }
+                    val hasHostCatalog = rows.any { it.entry.source == TabPreferences.HOME_TOP_TAB_SOURCE_HOST }
                     if (hasHostCatalog && rows.none { it.switchView.isChecked }) {
                         Toast.makeText(context, UiText.Settings.HOME_TOP_TAB_AT_LEAST_ONE, Toast.LENGTH_SHORT).show()
                         return@setOnClickListener
@@ -83,39 +83,39 @@ internal object HomeTopTabsForm {
                         .filter { !it.switchView.isChecked }
                         .map { it.entry.key }
                         .toCollection(LinkedHashSet())
-                        .let(ConfigManager::expandHomeTopTabDisabledKeys)
+                        .let(TabPreferences::expandHomeTopTabDisabledKeys)
 
                     prefs.edit()
                         .putString(
-                            ConfigManager.KEY_HOME_TOP_TAB_DISABLED_KEYS,
-                            ConfigManager.serializeHomeTopTabDisabledKeys(nextDisabledKeys),
+                            TabPreferences.KEY_HOME_TOP_TAB_DISABLED_KEYS,
+                            TabPreferences.serializeHomeTopTabDisabledKeys(nextDisabledKeys),
                         )
                         .putBoolean(
-                            ConfigManager.KEY_HOME_TOP_TAB_MATERIAL,
-                            ConfigManager.isLegacyHomeTopTabEnabled(
+                            TabPreferences.KEY_HOME_TOP_TAB_MATERIAL,
+                            TabPreferences.isLegacyHomeTopTabEnabled(
                                 nextDisabledKeys,
-                                ConfigManager.HOME_TOP_TAB_KEY_MATERIAL,
+                                TabPreferences.HOME_TOP_TAB_KEY_MATERIAL,
                             ),
                         )
                         .putBoolean(
-                            ConfigManager.KEY_HOME_TOP_TAB_RECOMMEND,
-                            ConfigManager.isLegacyHomeTopTabEnabled(
+                            TabPreferences.KEY_HOME_TOP_TAB_RECOMMEND,
+                            TabPreferences.isLegacyHomeTopTabEnabled(
                                 nextDisabledKeys,
-                                ConfigManager.HOME_TOP_TAB_KEY_RECOMMEND,
+                                TabPreferences.HOME_TOP_TAB_KEY_RECOMMEND,
                             ),
                         )
                         .putBoolean(
-                            ConfigManager.KEY_HOME_TOP_TAB_LIVE,
-                            ConfigManager.isLegacyHomeTopTabEnabled(
+                            TabPreferences.KEY_HOME_TOP_TAB_LIVE,
+                            TabPreferences.isLegacyHomeTopTabEnabled(
                                 nextDisabledKeys,
-                                ConfigManager.HOME_TOP_TAB_KEY_LIVE,
+                                TabPreferences.HOME_TOP_TAB_KEY_LIVE,
                             ),
                         )
                         .putBoolean(
-                            ConfigManager.KEY_HOME_TOP_TAB_FOLLOWED,
-                            ConfigManager.isLegacyHomeTopTabEnabled(
+                            TabPreferences.KEY_HOME_TOP_TAB_FOLLOWED,
+                            TabPreferences.isLegacyHomeTopTabEnabled(
                                 nextDisabledKeys,
-                                ConfigManager.HOME_TOP_TAB_KEY_FOLLOWED,
+                                TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED,
                             ),
                         )
                         .apply()

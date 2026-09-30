@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui.settings
 
+import com.forbidad4tieba.hook.config.RemoteEnvironmentState
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Typeface
@@ -90,7 +91,7 @@ internal object SettingsMenuController {
                 setPadding(padding, verticalPadding, padding, verticalPadding)
             }
 
-            val restrictedFeaturesUnlocked = ConfigManager.isRestrictedFeaturesUnlocked(context)
+            val restrictedFeaturesUnlocked = RemoteEnvironmentState.isRestrictedFeaturesUnlocked(context)
             val groups = SettingsMenuGroupBuilder.build(
                 restrictedFeaturesUnlocked = restrictedFeaturesUnlocked,
                 actions = SettingsMenuGroupActions(
@@ -272,7 +273,7 @@ internal object SettingsMenuController {
                             { showRuntimeEnvironmentDialog(context) }
                         } else {
                             versionClick@{
-                                if (ConfigManager.isRestrictedFeatureUnlockBlocked(context)) {
+                                if (RemoteEnvironmentState.isRestrictedFeatureUnlockBlocked(context)) {
                                     Toast.makeText(
                                         context,
                                         UiText.Settings.RESTRICTED_FEATURE_UNSUPPORTED_ENVIRONMENT,
@@ -464,7 +465,7 @@ internal object SettingsMenuController {
                 handler.postDelayed(countdownRunnable!!, 1000L)
 
                 confirmButton.setOnClickListener {
-                    ConfigManager.setRestrictedFeaturesUnlocked(context, true)
+                    RemoteEnvironmentState.setRestrictedFeaturesUnlocked(context, true)
                     Toast.makeText(context, UiText.Settings.RESTRICTED_FEATURE_UNLOCKED, Toast.LENGTH_SHORT).show()
                     dialog.dismiss()
                     onConfirmed()

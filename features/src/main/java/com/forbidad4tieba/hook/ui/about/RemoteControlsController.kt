@@ -1,8 +1,8 @@
 package com.forbidad4tieba.hook.ui.about
 
+import com.forbidad4tieba.hook.config.RemoteEnvironmentState
 import android.content.Context
 import com.forbidad4tieba.hook.contracts.BuildIdentity
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.TiebaAccountIdentity
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,7 +35,7 @@ internal object RemoteControlsController {
                 revision.environment, accountId, BuildIdentity.current.versionCode,
             ),
         )
-        ConfigManager.applyRemoteEnvironmentControls(
+        RemoteEnvironmentState.applyRemoteEnvironmentControls(
             context,
             showWarningDialog = level.showWarningDialog || result.showWarningDialog,
             lockHiddenFeatures = level.lockHiddenFeatures || result.lockHiddenFeatures,

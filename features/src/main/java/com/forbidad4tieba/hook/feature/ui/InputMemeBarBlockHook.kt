@@ -10,7 +10,7 @@ object InputMemeBarBlockHook {
     private val installed = AtomicBoolean(false)
 
     internal fun hook(targets: InputMemeBarSymbols) {
-        if (!ConfigManager.isInputMemeBarHidden) {
+        if (!ConfigManager.snapshot().isInputMemeBarHidden) {
             XposedCompat.log("[InputMemeBarBlockHook] skipped: config disabled")
             return
         }
@@ -21,7 +21,7 @@ object InputMemeBarBlockHook {
         }
         try {
             RuntimeHooks.builder(mod, targets.enableMethod, "InputMemeBarBlockHook", "hook:targets.enableMethod").intercept { chain ->
-                if (ConfigManager.isInputMemeBarHidden) false else chain.proceed()
+                if (ConfigManager.snapshot().isInputMemeBarHidden) false else chain.proceed()
             }
             XposedCompat.log(
                 "[InputMemeBarBlockHook] hook INSTALLED: " +

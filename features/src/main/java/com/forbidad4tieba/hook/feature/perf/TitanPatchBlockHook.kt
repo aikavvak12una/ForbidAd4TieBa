@@ -1,5 +1,8 @@
 package com.forbidad4tieba.hook.feature.perf
 
+import com.forbidad4tieba.hook.config.RemoteEnvironmentState
+import com.forbidad4tieba.hook.config.PerformancePreferences
+import com.forbidad4tieba.hook.config.AccountPreferences
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.contracts.MemberAccess
 import android.content.Context
@@ -112,21 +115,21 @@ object TitanPatchBlockHook {
     private fun isEnabled(loaderManager: Any?): Boolean {
         // Fast path after ConfigManager is initialized.
         if (ConfigManager.getAppContext() != null) {
-            return ConfigManager.isTitanPatchBlockEnabled
+            return ConfigManager.snapshot().isTitanPatchBlockEnabled
         }
         // Slow path reads prefs from Titan loader context before attach completes.
         try {
             val context = getContextFromLoaderManager(loaderManager) ?: return false
-            if (ConfigManager.isRestrictedFeatureUnlockBlocked(context)) return false
+            if (RemoteEnvironmentState.isRestrictedFeatureUnlockBlocked(context)) return false
             val prefs = context.getSharedPreferences(
                 ConfigManager.USER_SETTINGS_PREFS_NAME,
                 android.content.Context.MODE_PRIVATE
             )
-            val unlocked = prefs.getBoolean(ConfigManager.KEY_RESTRICTED_FEATURES_UNLOCKED, false)
-            val performanceEnabled = prefs.getBoolean(ConfigManager.KEY_ENABLE_PERFORMANCE_OPTIMIZATION, false)
+            val unlocked = AccountPreferences.RESTRICTED_FEATURES_UNLOCKED.read(prefs)
+            val performanceEnabled = PerformancePreferences.ENABLE_PERFORMANCE_OPTIMIZATION.read(prefs)
             return unlocked &&
                 performanceEnabled &&
-                prefs.getBoolean(ConfigManager.KEY_BLOCK_TITAN_PATCH, false)
+                PerformancePreferences.BLOCK_TITAN_PATCH.read(prefs)
         } catch (_: Throwable) {
             return false
         }
@@ -148,7 +151,7 @@ object TitanPatchBlockHook {
      * 需要在 Context 可用后调用，避免补丁数据跨重启保留。
      */
     fun deletePatchFiles(context: Context) {
-        if (!ConfigManager.isTitanPatchBlockEnabled) return
+        if (!ConfigManager.snapshot().isTitanPatchBlockEnabled) return
         if (!patchesCleaned.compareAndSet(false, true)) return
 
         try {

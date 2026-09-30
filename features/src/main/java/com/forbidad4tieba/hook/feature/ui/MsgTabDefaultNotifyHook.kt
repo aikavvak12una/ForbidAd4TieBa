@@ -25,7 +25,7 @@ object MsgTabDefaultNotifyHook {
         return try {
             RuntimeHooks.builder(mod, locateMethod, "MsgTabDefaultNotifyHook", "installViewModelStrategy:locateMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (!ConfigManager.isDefaultNotifyTabEnabled) return@intercept result
+                if (!ConfigManager.snapshot().isDefaultNotifyTabEnabled) return@intercept result
 
                 val defaultValue = asLong(chain.args.getOrNull(0)) ?: return@intercept result
                 if (defaultValue != TAB_ID_CHAT) return@intercept result
