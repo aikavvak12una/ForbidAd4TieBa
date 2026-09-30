@@ -169,6 +169,7 @@ object ConfigManager {
     const val KEY_REPLY_VISIBILITY_PROBE_INTERVAL_MS = "reply_visibility_probe_interval_ms"
     const val KEY_DEFAULT_NOTIFY_TAB = "default_notify_tab"
     const val KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE = "enable_default_original_image"
+    const val KEY_DEFAULT_LZL_EARLIEST = "default_lzl_earliest"
     const val KEY_ENABLE_AUTO_SIGN_IN = "enable_auto_sign_in"
     const val KEY_RESTRICTED_FEATURES_UNLOCKED = "restricted_features_unlocked"
     const val KEY_CLEAN_SHARE_TRACKING_PARAMS = "clean_share_tracking_params"
@@ -387,6 +388,7 @@ object ConfigManager {
     val isPbScrollCoalesceEnabled: Boolean get() = settingsSnapshot.isPbScrollCoalesceEnabled
     val isDefaultNotifyTabEnabled: Boolean get() = settingsSnapshot.isDefaultNotifyTabEnabled
     val isDefaultOriginalImageEnabled: Boolean get() = settingsSnapshot.isDefaultOriginalImageEnabled
+    val isDefaultLzlEarliestEnabled: Boolean get() = settingsSnapshot.isDefaultLzlEarliestEnabled
     val isCleanShareTrackingParamsEnabled: Boolean get() = settingsSnapshot.isCleanShareTrackingParamsEnabled
     val isAiComponentsDisabled: Boolean get() = settingsSnapshot.isAiComponentsDisabled
     val isCustomPostFilterEnabled: Boolean get() = settingsSnapshot.isCustomPostFilterEnabled
@@ -899,6 +901,7 @@ object ConfigManager {
             KEY_FREE_COPY_COMMENT_INJECTION -> HookFeatureKey.FREE_COPY_COMMENT_INJECTION
             KEY_FREE_COPY_COMMENT_DIALOG -> HookFeatureKey.FREE_COPY_COMMENT_DIALOG
             KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE -> HookFeatureKey.DEFAULT_ORIGINAL_IMAGE
+            KEY_DEFAULT_LZL_EARLIEST -> HookFeatureKey.DEFAULT_LZL_EARLIEST
             KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER -> HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER
             KEY_ENABLE_PB_LIKE_AUTO_REPLY -> HookFeatureKey.ENABLE_PB_LIKE_AUTO_REPLY
             KEY_ENABLE_COMMENT_AVATAR_DIRECT_PROFILE ->

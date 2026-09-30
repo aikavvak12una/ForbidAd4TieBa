@@ -32,6 +32,7 @@ import com.forbidad4tieba.hook.feature.ui.CollectionSearchFeature
 import com.forbidad4tieba.hook.feature.ui.CommentAvatarDirectProfileFeature
 import com.forbidad4tieba.hook.feature.ui.CommentAvatarDirectProfileHook
 import com.forbidad4tieba.hook.feature.ui.DefaultOriginalImageFeature
+import com.forbidad4tieba.hook.feature.ui.DefaultLzlEarliestFeature
 import com.forbidad4tieba.hook.feature.ui.FirstLikePopupBlockFeature
 import com.forbidad4tieba.hook.feature.ui.ForumNativeTopShiftBlockFeature
 import com.forbidad4tieba.hook.feature.ui.FreeCopyCommentInjectionFeature
@@ -96,6 +97,7 @@ internal object FeatureCatalog {
         FollowedTabWebFeature,
         ImageViewerNativeShareFeature,
         DefaultOriginalImageFeature,
+        DefaultLzlEarliestFeature,
         ImageViewerSwipeEnterForumBlockFeature,
         AiImageViewerJumpButtonFeature,
         SettingsMenuFeature,

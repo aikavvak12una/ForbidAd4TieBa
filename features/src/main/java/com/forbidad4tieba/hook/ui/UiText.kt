@@ -298,6 +298,8 @@ object UiText {
         const val PRIVATE_READ_RECEIPT_INVISIBLE_DESC = "仅在回复后标记对面信息为已读状态"
         const val DEFAULT_ORIGINAL_IMAGE_LABEL = "默认查看原图"
         const val DEFAULT_ORIGINAL_IMAGE_DESC = "进入图片预览后自动查看原图"
+        const val DEFAULT_LZL_EARLIEST_LABEL = "楼中楼默认最早排序"
+        const val DEFAULT_LZL_EARLIEST_DESC = "打开楼中楼时默认按最早排序"
         const val DISABLE_AI_COMPONENTS_LABEL = "禁用 AI 组件"
         const val DISABLE_AI_COMPONENTS_DESC = "屏蔽回复页 AI 写回复、AI 萌图面板和图片查看器 AI 跳转按钮，减少对应渲染与入口开销。\n* 相关 AI 功能入口消失"
         const val DISABLE_AD_SDK_COMPONENTS_LABEL = "阻断广告 SDK 初始化"

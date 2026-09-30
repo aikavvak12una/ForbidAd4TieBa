@@ -230,6 +230,12 @@ internal object SettingsMenuGroupBuilder {
                 supported = true,
             ),
             SwitchItem(
+                label = UiText.Settings.DEFAULT_LZL_EARLIEST_LABEL,
+                description = UiText.Settings.DEFAULT_LZL_EARLIEST_DESC,
+                prefKey = ConfigManager.KEY_DEFAULT_LZL_EARLIEST,
+                supported = true,
+            ),
+            SwitchItem(
                 label = UiText.Settings.OPEN_WEB_LINK_IN_SYSTEM_BROWSER_LABEL,
                 description = UiText.Settings.OPEN_WEB_LINK_IN_SYSTEM_BROWSER_DESC,
                 prefKey = ConfigManager.KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER,

@@ -43,6 +43,7 @@ internal object SymbolContracts {
         CollectionContract,
         HistoryContract,
         MessageTabContract,
+        LzlSortContract,
         FreeCopyContract,
         MainTabsContract,
         OriginalImageContract,

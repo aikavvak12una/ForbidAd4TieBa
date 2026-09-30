@@ -6,6 +6,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EffectiveSettingsPolicyTest {
+    @Test fun lzlEarliestDefaultsOffAndRequiresItsOwnCapabilityWithoutRestrictedUnlock() {
+        val host = HostCapabilities(mapOf(HookFeatureKey.DEFAULT_LZL_EARLIEST to ScanFeatureAvailabilityState.AVAILABLE))
+        val choice = UserSettings(mapOf(ConfigManager.KEY_DEFAULT_LZL_EARLIEST to true))
+        val remote = RemoteSettingsPolicy(true)
+        assertFalse(EffectiveSettingsPolicy.derive(UserSettings(emptyMap<String, Any>()), host, remote)
+            .snapshot.isDefaultLzlEarliestEnabled)
+        assertTrue(EffectiveSettingsPolicy.derive(choice, host, remote).snapshot.isDefaultLzlEarliestEnabled)
+        assertFalse(EffectiveSettingsPolicy.derive(choice, HostCapabilities(emptyMap()), remote)
+            .snapshot.isDefaultLzlEarliestEnabled)
+        assertTrue(choice.getBoolean(ConfigManager.KEY_DEFAULT_LZL_EARLIEST, false))
+    }
+
     @Test fun policyInputsStayStableWhenTheirSourcesChange() {
         val values = mutableMapOf<String, Any>(
             ConfigManager.KEY_ENABLE_AUTO_SIGN_IN to true,

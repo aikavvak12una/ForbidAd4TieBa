@@ -33,6 +33,7 @@ import com.forbidad4tieba.hook.config.ConfigManager.KEY_CLEAN_SHARE_TRACKING_PAR
 import com.forbidad4tieba.hook.config.ConfigManager.KEY_CUSTOM_BOTTOM_TABS
 import com.forbidad4tieba.hook.config.ConfigManager.KEY_CUSTOM_HOME_TOP_TABS
 import com.forbidad4tieba.hook.config.ConfigManager.KEY_DEFAULT_NOTIFY_TAB
+import com.forbidad4tieba.hook.config.ConfigManager.KEY_DEFAULT_LZL_EARLIEST
 import com.forbidad4tieba.hook.config.ConfigManager.KEY_DISABLE_AD_SDK_COMPONENTS
 import com.forbidad4tieba.hook.config.ConfigManager.KEY_DISABLE_AI_COMPONENTS
 import com.forbidad4tieba.hook.config.ConfigManager.KEY_DISABLE_APSARAS_SCHEDULE
@@ -302,6 +303,7 @@ internal object EffectiveSettingsPolicy {
             ),
             isDefaultNotifyTabEnabled = featureBoolean(KEY_DEFAULT_NOTIFY_TAB, true),
             isDefaultOriginalImageEnabled = featureBoolean(KEY_ENABLE_DEFAULT_ORIGINAL_IMAGE),
+            isDefaultLzlEarliestEnabled = featureBoolean(KEY_DEFAULT_LZL_EARLIEST),
             isAutoSignInEnabled = restrictedBoolean(KEY_ENABLE_AUTO_SIGN_IN),
             isCleanShareTrackingParamsEnabled = featureBoolean(KEY_CLEAN_SHARE_TRACKING_PARAMS, true),
             isAiComponentsDisabled = performanceChildBoolean(

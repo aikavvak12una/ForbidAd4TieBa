@@ -56,6 +56,7 @@ data class SettingsSnapshot(
     val isPbScrollCoalesceEnabled: Boolean = false,
     val isDefaultNotifyTabEnabled: Boolean = true,
     val isDefaultOriginalImageEnabled: Boolean = false,
+    val isDefaultLzlEarliestEnabled: Boolean = false,
     val isAutoSignInEnabled: Boolean = false,
     val isCleanShareTrackingParamsEnabled: Boolean = true,
     val isAiComponentsDisabled: Boolean = false,

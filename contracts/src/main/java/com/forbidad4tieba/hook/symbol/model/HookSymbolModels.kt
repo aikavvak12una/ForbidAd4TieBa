@@ -59,6 +59,7 @@ object HookFeatureKey {
     const val FREE_COPY_COMMENT_DIALOG = "free_copy_comment_dialog"
     const val DEFAULT_NOTIFY_TAB = "default_notify_tab"
     const val DEFAULT_ORIGINAL_IMAGE = "enable_default_original_image"
+    const val DEFAULT_LZL_EARLIEST = "default_lzl_earliest"
     const val AUTO_SIGN_IN = "enable_auto_sign_in"
     const val PRIVATE_READ_RECEIPT_INVISIBLE = "private_read_receipt_invisible"
     const val CLEAN_SHARE_TRACKING_PARAMS = "clean_share_tracking_params"
@@ -108,6 +109,7 @@ object HookFeatureKey {
         FREE_COPY_COMMENT_DIALOG,
         DEFAULT_NOTIFY_TAB,
         DEFAULT_ORIGINAL_IMAGE,
+        DEFAULT_LZL_EARLIEST,
         AUTO_SIGN_IN,
         PRIVATE_READ_RECEIPT_INVISIBLE,
         CLEAN_SHARE_TRACKING_PARAMS,
