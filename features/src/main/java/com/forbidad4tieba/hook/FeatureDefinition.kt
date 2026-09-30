@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.config.SettingsSnapshot
+import com.forbidad4tieba.hook.config.SimpleToggle
 
 internal enum class FeaturePhase(val diagnosticName: String) {
     STATIC("static"), POST_ATTACH("postAttach"), SYMBOL("symbol"),
@@ -23,11 +24,15 @@ internal class FeatureDefinition(
     val id: String,
     val phase: FeaturePhase,
     val process: FeatureProcess,
+    val toggle: SimpleToggle? = null,
     private val factory: (HookInstallContext, SettingsSnapshot) -> List<HookInstallEntry>,
 ) {
     fun entries(context: HookInstallContext, settings: SettingsSnapshot): List<HookInstallEntry> {
         if (!process.accepts(context)) return emptyList()
         return try {
+            if (toggle != null && (!settings[toggle] || !context.available(toggle.capabilityKey))) {
+                return emptyList()
+            }
             factory(context, settings)
         } catch (failure: Exception) {
             planningFailure(failure)
@@ -49,8 +54,9 @@ internal class FeatureDefinition(
             phase: FeaturePhase,
             process: FeatureProcess,
             enabled: HookInstallContext.(SettingsSnapshot) -> Boolean = { true },
+            toggle: SimpleToggle? = null,
             install: HookInstallContext.(ClassLoader, SettingsSnapshot) -> InstallOutcome?,
-        ) = FeatureDefinition(id, phase, process) { context, settings ->
+        ) = FeatureDefinition(id, phase, process, toggle) { context, settings ->
             if (context.enabled(settings)) {
                 listOf(HookInstallEntry(id) { cl -> context.install(cl, settings) })
             } else emptyList()
@@ -61,8 +67,9 @@ internal class FeatureDefinition(
             phase: FeaturePhase,
             process: FeatureProcess,
             enabled: HookInstallContext.(SettingsSnapshot) -> Boolean = { true },
+            toggle: SimpleToggle? = null,
             install: HookInstallContext.(ClassLoader, SettingsSnapshot) -> Unit,
-        ) = single(id, phase, process, enabled) { cl, settings ->
+        ) = single(id, phase, process, enabled, toggle) { cl, settings ->
             install(cl, settings)
             null
         }

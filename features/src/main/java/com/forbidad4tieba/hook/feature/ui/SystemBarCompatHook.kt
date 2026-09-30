@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import android.app.Activity
 import android.app.Application
@@ -252,13 +253,13 @@ object SystemBarCompatHook {
         if (!isGestureNavigation(activity)) return false
         if (isHomeNativeGlassRuntimeActive()) return isSupportedActivity(activity)
         return (
-            ConfigManager.isHomeTabAutoHideEnabled
+            ConfigManager.snapshot().isHomeTabAutoHideEnabled
             ) && isMainTabActivity(activity)
     }
 
     private fun isHomeNativeGlassRuntimeActive(): Boolean {
-        return ConfigManager.isHomeNativeGlassEnabled &&
-            ConfigManager.hasAnyHomeNativeGlassBackgroundImage
+        return ConfigManager.snapshot().isHomeNativeGlassEnabled &&
+            HomeGlassPreferences.hasAnyHomeNativeGlassBackgroundImage
     }
 
 
@@ -386,7 +387,7 @@ object SystemBarCompatHook {
 
     private fun applyHomeBottomTabGestureBridge(activity: Activity, tabHost: View, wrapper: View) {
         val state = synchronized(bottomTabInsetStates) { bottomTabInsetStates[wrapper] } ?: return
-        if (!ConfigManager.isHomeTabAutoHideEnabled || isHomeNativeGlassRuntimeActive()) {
+        if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled || isHomeNativeGlassRuntimeActive()) {
             restoreGestureBridgeIfNeeded(wrapper, state)
             return
         }

@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
@@ -63,7 +64,7 @@ private val firstSettingsDialogBackgroundErrorLogged = AtomicBoolean(false)
 private const val SETTINGS_BRAND_TAG_VIEW_TAG = "settings_brand_tag"
 
 internal data class HomeNativeGlassDialogPreviewStyle(
-    val style: ConfigManager.HomeNativeGlassStyleConfig,
+    val style: HomeGlassPreferences.HomeNativeGlassStyleConfig,
     val darkMode: Boolean,
     val previewBitmap: Bitmap? = null,
 )
@@ -214,7 +215,7 @@ internal fun applyUnifiedDialogCardStyle(
     accountWatermark: Boolean = true,
 ) {
     val activeStyle = homeNativeGlassPreviewStyle?.style
-        ?: if (ConfigManager.isHomeNativeGlassEnabled) ConfigManager.activeHomeNativeGlassStyle() else null
+        ?: if (ConfigManager.snapshot().isHomeNativeGlassEnabled) HomeGlassPreferences.activeHomeNativeGlassStyle() else null
     val tokens = if (homeNativeGlassPreviewStyle != null) {
         UiStyle.homeNativeGlassPreviewTokens(
             window.context,
@@ -228,7 +229,7 @@ internal fun applyUnifiedDialogCardStyle(
         window = window,
         density = density,
         shadowStrengthPercent = activeStyle?.shadowStrengthPercent
-            ?: ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            ?: HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
     )
     refreshSettingsDialogTitle(window, tokens, density)
     tintSettingsDialogActionButtons(window, tokens.accent)
@@ -265,7 +266,7 @@ private fun createSettingsDialogCardBackground(
     return GradientDrawable().apply {
         setColor(tokens.surface)
         cornerRadius = tokens.cardCornerPx
-        if (ConfigManager.isHomeNativeGlassEnabled && ConfigManager.isHomeNativeGlassStrokeEnabled) {
+        if (ConfigManager.snapshot().isHomeNativeGlassEnabled && HomeGlassPreferences.isHomeNativeGlassStrokeEnabled) {
             setStroke((1 * density).toInt().coerceAtLeast(1), tokens.inputStroke)
         }
     }
@@ -363,8 +364,8 @@ private fun applySettingsDialogShadow(window: Window, density: Float, shadowStre
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
     val decor = window.decorView
     val shadowScale = shadowStrengthPercent.coerceIn(
-        ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-        ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+        HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+        HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
     ) / 100f
     decor.elevation = 10f * density * shadowScale
     decor.translationZ = 2f * density * shadowScale
@@ -378,7 +379,7 @@ private fun createSettingsDialogCustomBackground(
 ): Drawable? {
     val context = window.context
     val style = previewStyle?.style
-        ?: if (ConfigManager.isHomeNativeGlassEnabled) ConfigManager.activeHomeNativeGlassStyle() else null
+        ?: if (ConfigManager.snapshot().isHomeNativeGlassEnabled) HomeGlassPreferences.activeHomeNativeGlassStyle() else null
     val source = resolveSettingsDialogBackgroundImageSource(
         style = style,
         realtimePreviewEnabled = previewStyle != null,
@@ -386,12 +387,12 @@ private fun createSettingsDialogCustomBackground(
     ) ?: return null
     val overlayColor = Color.TRANSPARENT
     val cornerRadiusPx = previewStyle?.style?.cardRadiusDp?.coerceIn(
-        ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-        ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+        HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
+        HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
     )?.let { it * density } ?: tokens.cardCornerPx
-    val strokeEnabled = style?.strokeEnabled ?: ConfigManager.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
+    val strokeEnabled = style?.strokeEnabled ?: HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
     val shadowStrengthPercent = style?.shadowStrengthPercent
-        ?: ConfigManager.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
+        ?: HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT
 
     findSettingsDialogCustomBackgroundDrawable(window)?.let { existing ->
         if (existing.updateIfSameImage(
@@ -451,7 +452,7 @@ private data class SettingsDialogBackgroundImageSource(
 )
 
 private fun resolveSettingsDialogBackgroundImageSource(
-    style: ConfigManager.HomeNativeGlassStyleConfig?,
+    style: HomeGlassPreferences.HomeNativeGlassStyleConfig?,
     realtimePreviewEnabled: Boolean,
     previewBitmap: Bitmap?,
 ): SettingsDialogBackgroundImageSource? {
@@ -527,8 +528,8 @@ private class SettingsDialogCustomBackgroundDrawable(
     }
     private val strokeWidth = max(1f, density)
     private var shadowStrengthPercent = shadowStrengthPercent.coerceIn(
-        ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-        ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+        HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+        HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
     )
     private val src = Rect()
     private val dst = Rect()
@@ -553,8 +554,8 @@ private class SettingsDialogCustomBackgroundDrawable(
         this.strokeEnabled = strokeEnabled
         this.previewBitmap = previewBitmap
         this.shadowStrengthPercent = shadowStrengthPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT,
         )
         invalidateSelf()
         return true

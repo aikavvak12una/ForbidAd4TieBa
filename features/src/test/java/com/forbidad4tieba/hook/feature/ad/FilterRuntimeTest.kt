@@ -1,13 +1,13 @@
 package com.forbidad4tieba.hook.feature.ad
 
-import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.config.ModelScoreSettings
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import org.junit.Assert.*
 import org.junit.Test
 
 class FilterRuntimeTest {
     @Test fun snapshotPreparesRulesOnceAndCopyRebuildsOnlyTheNewSnapshot() {
-        val first = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostHelpFilterEnabled = true)
+        val first = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostHelpFilterEnabled = true)
         assertSame(first.customPostRules, first.customPostRules)
         assertTrue(first.customPostRules!!.help)
         val second = first.copy(isPostHelpFilterEnabled = false, isPostVoteFilterEnabled = true)
@@ -15,11 +15,11 @@ class FilterRuntimeTest {
         assertFalse(second.customPostRules!!.help)
         assertTrue(second.customPostRules.vote)
         assertNull(second.copy(isCustomPostFilterEnabled = false).customPostRules)
-        assertNull(SettingsSnapshot(isCustomPostFilterEnabled = true).customPostRules)
+        assertNull(SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true).customPostRules)
     }
 
     @Test fun unmatchedCardsShareKeepAndScoreMatchingOnlyReturnsObservations() {
-        val rules = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostHelpFilterEnabled = true).customPostRules!!
+        val rules = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostHelpFilterEnabled = true).customPostRules!!
         assertSame(CustomPostFilterMatcher.KEEP, CustomPostFilterMatcher.decideByTemplateKey("unknown", rules))
         assertSame(CustomPostFilterMatcher.KEEP, CustomPostFilterMatcher.decideByFeedHeadParams(null, rules))
         val scoreRules = scoreSettings().customPostRules!!
@@ -54,10 +54,10 @@ class FilterRuntimeTest {
             rules = null, recordModelScores = { error("Disabled rules must not produce observations") }))
     }
 
-    private fun scoreSettings() = SettingsSnapshot(
+    private fun scoreSettings() = SettingsSnapshot.bootstrap().copy(
         isCustomPostFilterEnabled = true,
         isPostModelScoreFilterEnabled = true,
-        postModelScoreThresholds = listOf(ConfigManager.ModelScoreThreshold("msd_score", 0.5)),
+        postModelScoreThresholds = listOf(ModelScoreSettings.ModelScoreThreshold("msd_score", 0.5)),
     )
 
     private val filter = CustomPostCardBlockHook.RuntimeFilter("dataList", "templateKey", "payload", "params", null, null)

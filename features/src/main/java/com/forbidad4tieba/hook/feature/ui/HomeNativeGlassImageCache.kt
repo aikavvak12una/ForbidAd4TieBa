@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -8,7 +9,6 @@ import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
-import com.forbidad4tieba.hook.config.ConfigManager
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
@@ -32,7 +32,7 @@ object HomeNativeGlassImageCache {
         context: Context,
         sourcePath: String,
         blurPercent: Int,
-        tintOffset: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        tintOffset: Int = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         appleMaterial: Boolean = true,
         cacheNamespace: String = "",
     ): String {
@@ -47,12 +47,12 @@ object HomeNativeGlassImageCache {
         if (!runCatching { cacheDir.exists() || cacheDir.mkdirs() }.getOrDefault(false)) return ""
 
         val normalizedBlur = blurPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
         )
         val normalizedTintOffset = tintOffset.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         )
         val cacheKey = cacheKey(
             path = path,
@@ -106,7 +106,7 @@ object HomeNativeGlassImageCache {
     fun createBlurPreviewBitmap(
         sourcePath: String,
         blurPercent: Int,
-        tintOffset: Int = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+        tintOffset: Int = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         appleMaterial: Boolean = true,
     ): Bitmap? {
         val path = sourcePath.trim()
@@ -122,12 +122,12 @@ object HomeNativeGlassImageCache {
             previewBitmap = createBlurredBitmap(
                 source = bitmap,
                 blurPercent = blurPercent.coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                    HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+                    HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
                 ),
                 tintOffset = tintOffset.coerceIn(
-                    ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-                    ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+                    HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                 ),
                 appleMaterial = appleMaterial,
             )
@@ -238,8 +238,8 @@ object HomeNativeGlassImageCache {
 
     private fun applyTintOffset(bitmap: Bitmap, tintOffset: Int): Bitmap {
         val offset = tintOffset.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
         )
         if (offset == 0) return bitmap
         val alpha = (kotlin.math.abs(offset) * 255 / 100).coerceIn(0, 255)
@@ -288,27 +288,27 @@ object HomeNativeGlassImageCache {
 
     private fun cardBlurRadius(blurPercent: Int): Int {
         val percent = blurPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
         )
         if (percent <= 0) return 0
         return (
             CARD_BLUR_MIN_RADIUS +
                 percent * (CARD_BLUR_MAX_RADIUS - CARD_BLUR_MIN_RADIUS) /
-                ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
+                HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
             ).coerceIn(CARD_BLUR_MIN_RADIUS, CARD_BLUR_MAX_RADIUS)
     }
 
     private fun cardBlurIterations(blurPercent: Int): Int {
         val percent = blurPercent.coerceIn(
-            ConfigManager.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
-            ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
+            HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT,
         )
         if (percent <= 0) return 0
         return (
             1 +
                 percent * (CARD_BLUR_MAX_ITERATIONS - 1) /
-                ConfigManager.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
+                HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT
             ).coerceIn(1, CARD_BLUR_MAX_ITERATIONS)
     }
 

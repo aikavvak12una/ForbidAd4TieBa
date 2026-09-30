@@ -17,7 +17,7 @@ object AiComponentDisableHook {
     private val imageViewerInstalled = AtomicBoolean(false)
 
     internal fun hook(targets: AiComponentSymbols) {
-        if (!ConfigManager.isAiComponentsDisabled) {
+        if (!ConfigManager.snapshot().isAiComponentsDisabled) {
             XposedCompat.log("[AiComponentDisableHook] skipped: config disabled")
             return
         }
@@ -47,7 +47,7 @@ object AiComponentDisableHook {
     }
 
     internal fun hookImageViewerJumpButton(targets: AiImageViewerJumpButtonSymbols) {
-        if (!ConfigManager.isAiComponentsDisabled) {
+        if (!ConfigManager.snapshot().isAiComponentsDisabled) {
             XposedCompat.log("[AiComponentDisableHook] image viewer skipped: config disabled")
             return
         }

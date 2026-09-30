@@ -69,7 +69,7 @@ object StrategyAdHook {
         val mod = XposedCompat.module ?: return
         try {
             RuntimeHooks.builder(mod, method, "StrategyAdHook", "hookReturnConstant:method").intercept { chain ->
-                if (ConfigManager.isStrategyAdBlockEnabled) {
+                if (ConfigManager.snapshot().isStrategyAdBlockEnabled) {
                     return@intercept value
                 }
                 chain.proceed()
@@ -87,7 +87,7 @@ object StrategyAdHook {
         }
         try {
             RuntimeHooks.builder(mod, method, "StrategyAdHook", "hookReturnConstant:method:2").intercept { chain ->
-                if (ConfigManager.isStrategyAdBlockEnabled) {
+                if (ConfigManager.snapshot().isStrategyAdBlockEnabled) {
                     return@intercept value
                 }
                 chain.proceed()
@@ -129,9 +129,9 @@ object StrategyAdHook {
             RuntimeHooks.builder(mod, method, "StrategyAdHook", "hookSwitchManager:method").intercept { chain ->
                 val key = chain.args.firstOrNull() as? String
                 val shouldBlock = when {
-                    ConfigManager.isStrategyAdBlockEnabled && key in adContentBlockedKeys -> true
-                    ConfigManager.isAdSdkComponentsDisabled && key in adRuntimeBlockedKeys -> true
-                    ConfigManager.isApsarasScheduleDisabled && key in apsarasBlockedKeys -> true
+                    ConfigManager.snapshot().isStrategyAdBlockEnabled && key in adContentBlockedKeys -> true
+                    ConfigManager.snapshot().isAdSdkComponentsDisabled && key in adRuntimeBlockedKeys -> true
+                    ConfigManager.snapshot().isApsarasScheduleDisabled && key in apsarasBlockedKeys -> true
                     else -> false
                 }
                 if (shouldBlock) {
@@ -153,7 +153,7 @@ object StrategyAdHook {
         for (method in methods.distinct()) {
             try {
                 RuntimeHooks.builder(mod, method, "StrategyAdHook", "hookZga:method").intercept { chain ->
-                    if (!ConfigManager.isStrategyAdBlockEnabled) return@intercept chain.proceed()
+                    if (!ConfigManager.snapshot().isStrategyAdBlockEnabled) return@intercept chain.proceed()
                     ""
                 }
                 installed++

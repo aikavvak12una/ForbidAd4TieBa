@@ -72,7 +72,7 @@ object HostPerformanceConfigHook {
                 )
             }) { method ->
                 RuntimeHooks.builder(mod, method, "HostPerformanceConfigHook", "install:method").intercept { chain ->
-                    if (!ConfigManager.isAdSdkComponentsDisabled) return@intercept chain.proceed()
+                    if (!ConfigManager.snapshot().isAdSdkComponentsDisabled) return@intercept chain.proceed()
                     val key = chain.args.firstOrNull() as? String
                     when (key) {
                         PREF_FUN_AD_SDK_ENABLE, PREF_SPLASH_PLG_ENABLE, PREF_SPLASH_PLG_CPC_ENABLE -> 0
@@ -86,7 +86,7 @@ object HostPerformanceConfigHook {
                 )
             }) { method ->
                 RuntimeHooks.builder(mod, method, "HostPerformanceConfigHook", "install:method:2").intercept { chain ->
-                    if (!ConfigManager.isAdSdkComponentsDisabled) return@intercept chain.proceed()
+                    if (!ConfigManager.snapshot().isAdSdkComponentsDisabled) return@intercept chain.proceed()
                     val key = chain.args.firstOrNull() as? String
                     if (key == PREF_SPLASH_SHAKE_AD_OPEN) return@intercept false
                     chain.proceed()
@@ -125,7 +125,7 @@ object HostPerformanceConfigHook {
                     MemberAccess.findMethodOrNull(INIT_FLUTTER_NPS_PLUGIN_TASK_CLASS, cl, methodName)
                 }) { method ->
                     RuntimeHooks.builder(mod, method, "HostPerformanceConfigHook", "install:method:4").intercept { chain ->
-                        if (ConfigManager.isFlutterPreinitDisabled) return@intercept null
+                        if (ConfigManager.snapshot().isFlutterPreinitDisabled) return@intercept null
                         chain.proceed()
                     }
                 }

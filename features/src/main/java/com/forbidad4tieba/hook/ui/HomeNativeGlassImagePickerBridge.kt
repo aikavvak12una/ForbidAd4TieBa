@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import android.app.Activity
 import android.content.Context
@@ -10,7 +11,6 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.ref.WeakReference
@@ -205,7 +205,7 @@ internal object HomeNativeGlassImagePickerBridge {
                     ).show()
                 } else {
                     pending.state.path = copiedPath
-                    pending.state.tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
+                    pending.state.tintColor = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
                     pending.state.paletteColors = imageAnalysis?.paletteColors.orEmpty()
                     pending.state.defaultTintColor = imageAnalysis?.defaultTintColor
                     pending.displayRef.get()?.text = HomeNativeGlassImageFiles.displayText(copiedPath)

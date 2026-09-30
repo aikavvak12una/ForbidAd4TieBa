@@ -1,9 +1,9 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.config.RemoteEnvironmentState
 import android.content.Context
 import android.widget.Toast
 import com.forbidad4tieba.hook.HookSymbolResolver
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.config.ModuleUserDataCleaner
 import com.forbidad4tieba.hook.contracts.Diagnostics
 import kotlin.concurrent.thread
@@ -33,7 +33,7 @@ internal object ScanController {
                 forceRescan = true,
             )
             if (symbols.source != "unsupported") {
-                ConfigManager.markPostScanEnvironmentWarningPending(appCtx)
+                RemoteEnvironmentState.markPostScanEnvironmentWarningPending(appCtx)
             }
             val versionWarning = ScanMessages.versionWarning(symbols)
             when {

@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.SimpleToggle
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.contracts.MemberAccess
 import android.view.View
@@ -126,7 +127,7 @@ object DefaultOriginalImageHook {
                     enterSetPrimaryDispatch()
                     val result = try { chain.proceed() } finally { exitSetPrimaryDispatch() }
 
-                    val enabled = ConfigManager.isDefaultOriginalImageEnabled
+                    val enabled = ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]
                     if (firstPrimaryCallbackLogged.compareAndSet(false, true)) {
                         XposedCompat.log("[DefaultOriginalImageHook] setPrimaryItem callback observed, enabled=$enabled")
                     }
@@ -164,7 +165,7 @@ object DefaultOriginalImageHook {
                 runCatching { ctor.isAccessible = true }
                 RuntimeHooks.builder(mod, ctor, "DefaultOriginalImageHook", "hookInternal:ctor").intercept { chain ->
                     val result = chain.proceed()
-                    if (!ConfigManager.isDefaultOriginalImageEnabled) return@intercept result
+                    if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return@intercept result
 
                     val view = chain.thisObject as? View ?: return@intercept result
                     if (firstCtorCallbackLogged.compareAndSet(false, true)) {
@@ -195,7 +196,7 @@ object DefaultOriginalImageHook {
             if (setAssistUrlMethod != null) {
                 RuntimeHooks.builder(mod, setAssistUrlMethod, "DefaultOriginalImageHook", "hookInternal:setAssistUrlMethod").intercept { chain ->
                     val result = chain.proceed()
-                    if (!ConfigManager.isDefaultOriginalImageEnabled) return@intercept result
+                    if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return@intercept result
                     val view = chain.thisObject as? View ?: return@intercept result
                     view.postDelayed({
                         try {
@@ -226,7 +227,7 @@ object DefaultOriginalImageHook {
         source: String,
         requireCurrentItem: Boolean,
     ) {
-        if (!ConfigManager.isDefaultOriginalImageEnabled) return
+        if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return
         val urlDragClass = urlDragImageViewClass ?: return
         if (!urlDragClass.isInstance(view)) return
         if (!isImageViewerScene(view)) return
@@ -443,7 +444,7 @@ object DefaultOriginalImageHook {
             return
         }
         if (retryCount == 0 && !markAutoTriggerPending(item)) return
-        if (!ConfigManager.isDefaultOriginalImageEnabled) {
+        if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) {
             clearAutoTriggerPending(item)
             return
         }
@@ -492,7 +493,7 @@ object DefaultOriginalImageHook {
     ) {
         val view = item as? View ?: return
         view.postDelayed({
-            if (!ConfigManager.isDefaultOriginalImageEnabled) return@postDelayed
+            if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return@postDelayed
             if (isOriginalProcessingOrReady(item)) return@postDelayed
 
             XposedCompat.log("[DefaultOriginalImageHook] retry ($source)")

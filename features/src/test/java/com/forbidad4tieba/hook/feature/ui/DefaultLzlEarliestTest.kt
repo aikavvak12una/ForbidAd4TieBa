@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.config.SimpleToggle
 import com.forbidad4tieba.hook.HookInstallContext
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.symbol.contract.LzlSortContract
@@ -20,12 +21,12 @@ class DefaultLzlEarliestTest {
     @Test fun installationRequiresAnEnabledSettingAResolvedTargetAndTheMainProcess() {
         val found = checkNotNull(HookSymbols.fromJson(
             JSONObject().put(LzlSortContract.defaultSortSetter.cacheKey, "fixture").toString()))
-        val enabled = SettingsSnapshot(isDefaultLzlEarliestEnabled = true)
+        val enabled = SettingsSnapshot.bootstrap().copy(simpleToggles = setOf(SimpleToggle.DEFAULT_LZL_EARLIEST))
         fun entries(process: String, settings: SettingsSnapshot, missing: Boolean = false) =
             DefaultLzlEarliestFeature.entries(HookInstallContext(process,
                 if (missing) HookSymbols.unsupported() else found), settings)
         assertEquals(1, entries("com.baidu.tieba", enabled).size)
-        assertTrue(entries("com.baidu.tieba", SettingsSnapshot()).isEmpty())
+        assertTrue(entries("com.baidu.tieba", SettingsSnapshot.bootstrap()).isEmpty())
         assertTrue(entries("com.baidu.tieba", enabled, missing = true).isEmpty())
         assertTrue(entries("com.baidu.tieba:remote", enabled).isEmpty())
         assertTrue(entries("com.android.systemui", enabled).isEmpty())

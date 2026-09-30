@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.ui.settings
 
+import com.forbidad4tieba.hook.config.SettingsDiagnostics
+import com.forbidad4tieba.hook.config.RemoteEnvironmentState
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
@@ -71,14 +73,14 @@ internal object SettingsScanController {
 
     fun ensurePostScanEnvironmentWarningHook() {
         PostScanEnvironmentWarningInstaller.ensureInstalled { activity ->
-            if (!ConfigManager.hasPendingPostScanEnvironmentWarning(activity)) {
+            if (!RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(activity)) {
                 return@ensureInstalled
             }
             ModuleDialogQueue.enqueue {
                 if (
                     activity.isFinishing ||
                     activity.isDestroyed ||
-                    !ConfigManager.consumePendingPostScanEnvironmentWarning(activity)
+                    !RemoteEnvironmentState.consumePendingPostScanEnvironmentWarning(activity)
                 ) {
                     ModuleDialogQueue.finishCurrent()
                     return@enqueue
@@ -95,7 +97,7 @@ internal object SettingsScanController {
         onConfirmed: () -> Unit,
     ) {
         try {
-            if (!ConfigManager.shouldShowEnvironmentWarningDialog(activity)) {
+            if (!RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(activity)) {
                 onConfirmed()
                 return
             }
@@ -475,7 +477,7 @@ internal object SettingsScanController {
                     refreshRuntime = true,
                 )
                 if (symbols.source != "unsupported") {
-                    ConfigManager.markPostScanEnvironmentWarningPending(activity)
+                    RemoteEnvironmentState.markPostScanEnvironmentWarningPending(activity)
                 }
                 source = symbols.source
                 scanSymbols = symbols
@@ -492,7 +494,7 @@ internal object SettingsScanController {
                 if (!scanLogContains("HookPoint[")) {
                     HookSymbolResolver.formatHookPointStatusLines(scanSymbols).forEach(::appendScanLog)
                 }
-                ConfigManager.formatPerformanceStatusLines(ConfigManager.snapshot()).forEach(::appendScanLog)
+                SettingsDiagnostics.formatPerformanceStatusLines(ConfigManager.snapshot()).forEach(::appendScanLog)
                 HookInstaller.snapshot().forEach { appendScanLog(it.formatLine()) }
                 runtimeEnvironmentJson = runCatching {
                     AboutInfoManager.runtimeEnvironmentJsonForSettings(activity)

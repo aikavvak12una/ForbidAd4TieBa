@@ -59,8 +59,8 @@ object PlainUrlDirectBrowserHook {
         targets: RuntimeTargets,
     ) {
         val mod = XposedCompat.module ?: return
-        val browserEnabled = ConfigManager.isOpenWebLinkInSystemBrowserEnabled
-        val profileEnabled = ConfigManager.isCommentAvatarDirectProfileEnabled
+        val browserEnabled = ConfigManager.snapshot().isOpenWebLinkInSystemBrowserEnabled
+        val profileEnabled = ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled
         if (!browserEnabled && !profileEnabled) {
             XposedCompat.logD("[PlainUrlDirectBrowserHook] skipped: shared navigation disabled")
             return
@@ -83,7 +83,7 @@ object PlainUrlDirectBrowserHook {
                         val view = chain.args.firstOrNull() as? View
                         val type = readIntField(spanTargets.typeField, span)
                         if (
-                            ConfigManager.isCommentAvatarDirectProfileEnabled &&
+                            ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled &&
                             type == USER_SPAN_TYPE
                         ) {
                             val userId = runCatching { spanTargets.urlField.get(span) as? String }.getOrNull()
@@ -92,7 +92,7 @@ object PlainUrlDirectBrowserHook {
                                 return@intercept null
                             }
                         }
-                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) {
+                        if (!ConfigManager.snapshot().isOpenWebLinkInSystemBrowserEnabled) {
                             return@intercept chain.proceed()
                         }
                         val normalizedUrl = resolveWebUrl(spanTargets.typeField, spanTargets.urlField, spanTargets.textField, span, view)
@@ -124,13 +124,13 @@ object PlainUrlDirectBrowserHook {
                     val rawUrl = runCatching { dataSymbols.urlField.get(data) as? String }.getOrNull()
                     val rawText = runCatching { dataSymbols.textField.get(data) as? String }.getOrNull()
                     if (
-                        ConfigManager.isCommentAvatarDirectProfileEnabled &&
+                        ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled &&
                         type == USER_SPAN_TYPE
                     ) {
                         val context = runCatching { messageTarget.getInstMethod.invoke(null) as? Context }.getOrNull()
                         if (targets.openUserProfile(context, rawUrl)) return@intercept null
                     }
-                    if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
+                    if (!ConfigManager.snapshot().isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
                     val normalizedUrl = chooseWebUrl(type, rawUrl, rawText, null)
                         ?: return@intercept chain.proceed()
                     val context = runCatching { messageTarget.getInstMethod.invoke(null) as? Context }.getOrNull()
@@ -145,7 +145,7 @@ object PlainUrlDirectBrowserHook {
                 for (startWebActivityMethod in browserHelperTargets.startWebActivityMethods) {
                     if (!installedMethodKeys.add(methodKey(startWebActivityMethod))) continue
                     RuntimeHooks.builder(mod, startWebActivityMethod, "PlainUrlDirectBrowserHook", "hook:startWebActivityMethod").intercept { chain ->
-                        if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
+                        if (!ConfigManager.snapshot().isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
                         val normalizedUrl = resolveBrowserHelperWebUrl(startWebActivityMethod, chain.args)
                             ?: return@intercept chain.proceed()
                         val context = resolveBrowserHelperContext(chain.args)
@@ -157,7 +157,7 @@ object PlainUrlDirectBrowserHook {
             val mountCardTargets = targets.mountCardTargets
             if (mountCardTargets != null && installedMethodKeys.add(methodKey(mountCardTargets.onClickMethod))) {
                 RuntimeHooks.builder(mod, mountCardTargets.onClickMethod, "PlainUrlDirectBrowserHook", "hook:mountCardTargets.onClickMethod").intercept { chain ->
-                    if (!ConfigManager.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
+                    if (!ConfigManager.snapshot().isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
                     val layout = chain.thisObject ?: return@intercept chain.proceed()
                     val view = chain.args.firstOrNull() as? View
                     val normalizedUrl = resolveMountCardWebUrl(mountCardTargets, layout)

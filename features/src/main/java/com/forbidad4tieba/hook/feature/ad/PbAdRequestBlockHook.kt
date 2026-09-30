@@ -21,7 +21,7 @@ object PbAdRequestBlockHook {
 
     @Synchronized
     internal fun hook(targets: PbAdRequestBlockSymbols): InstallOutcome {
-        if (!ConfigManager.isPbAdRequestBlockEnabled) {
+        if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) {
             return InstallOutcome.skipped("config disabled")
         }
         val mod = XposedCompat.module ?: return InstallOutcome.skipped("module unavailable")
@@ -52,7 +52,7 @@ object PbAdRequestBlockHook {
         val patches = targets.pbPageFieldPatches
         install("pb.encode", targets.pbPageEncodeMethod?.takeIf { patches.isNotEmpty() }) { method ->
             RuntimeHooks.builder(mod, method, "PbAdRequestBlockHook", "install:method").intercept { chain ->
-                if (ConfigManager.isPbAdRequestBlockEnabled) {
+                if (ConfigManager.snapshot().isPostPageAdBlockEnabled) {
                     clearPbPageAdRequestFields(chain.thisObject, patches)
                 }
                 chain.proceed()
@@ -61,7 +61,7 @@ object PbAdRequestBlockHook {
 
         install("pageBrowser.addAd", targets.pageBrowserAddAdMethod) { method ->
             RuntimeHooks.builder(mod, method, "PbAdRequestBlockHook", "install:method:2").intercept { chain ->
-                if (ConfigManager.isPbAdRequestBlockEnabled) return@intercept null
+                if (ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept null
                 chain.proceed()
             }
         }
@@ -72,7 +72,7 @@ object PbAdRequestBlockHook {
             for (startMethod in targets.commonAdBidStartMethods.distinct()) {
                 install("commonAdBid.${startMethod.name}", startMethod) { method ->
                     RuntimeHooks.builder(mod, method, "PbAdRequestBlockHook", "install:method:3").intercept { chain ->
-                        if (!ConfigManager.isPbAdRequestBlockEnabled) return@intercept chain.proceed()
+                        if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept chain.proceed()
                         val model = chain.thisObject
                         if (model == null || !commonModelClass.isInstance(model)) return@intercept chain.proceed()
                         notifyCommonAdBidFailure(model, notifyMethod)
@@ -88,7 +88,7 @@ object PbAdRequestBlockHook {
         if (pageBrowserModelClass != null) {
             install("pageBrowser.adBid", targets.pageBrowserAdBidRequestDataMethod) { method ->
                 RuntimeHooks.builder(mod, method, "PbAdRequestBlockHook", "install:method:4").intercept { chain ->
-                    if (!ConfigManager.isPbAdRequestBlockEnabled) return@intercept chain.proceed()
+                    if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept chain.proceed()
                     val model = chain.thisObject
                     if (model == null || !pageBrowserModelClass.isInstance(model)) return@intercept chain.proceed()
                     null

@@ -31,7 +31,7 @@ internal object HomeTabAutoHideLockController {
     @Volatile private var lockedHidden = false
 
     fun hook(cl: ClassLoader): Int {
-        if (!ConfigManager.isHomeTabAutoHideEnabled) return 0
+        if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) return 0
         if (!hooked.compareAndSet(false, true)) return 0
 
         return try {
@@ -57,7 +57,7 @@ internal object HomeTabAutoHideLockController {
     }
 
     fun isLockedHidden(): Boolean {
-        return lockedHidden && ConfigManager.isHomeTabAutoHideEnabled
+        return lockedHidden && ConfigManager.snapshot().isHomeTabAutoHideEnabled
     }
 
     fun unlockForTabSwitch(anchor: View): Boolean {
@@ -86,7 +86,7 @@ internal object HomeTabAutoHideLockController {
         RuntimeHooks.builder(mod, method, "HomeTabAutoHideLockController", "installPersonalizeTouchObserver:method").intercept { chain ->
             val page = chain.thisObject as? View
             val event = chain.args.getOrNull(0) as? MotionEvent
-            if (page != null && event != null && ConfigManager.isHomeTabAutoHideEnabled) {
+            if (page != null && event != null && ConfigManager.snapshot().isHomeTabAutoHideEnabled) {
                 handlePersonalizeTouch(page, event)
             }
             chain.proceed()
@@ -168,7 +168,7 @@ internal object HomeTabAutoHideLockController {
     }
 
     private fun lockFromGesture(anchor: View): Boolean {
-        if (!ConfigManager.isHomeTabAutoHideEnabled) return false
+        if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) return false
 
         val topApplied = HomeTopTabAutoHideHook.applyLockedHidden(anchor)
         val bottomApplied = HomeBottomTabAutoHideHook.applyLockedHidden(anchor)

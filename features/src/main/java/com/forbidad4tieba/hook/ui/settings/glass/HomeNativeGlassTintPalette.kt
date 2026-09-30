@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.ui.settings.glass
 
+import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
@@ -14,7 +15,6 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImageAnalyzer
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImageSelectionState
@@ -51,7 +51,7 @@ internal object HomeNativeGlassTintPalette {
             return null
         }
         val rgb = (hex.toLongOrNull(16) ?: return null) and 0xFFFFFFL
-        return ConfigManager.normalizeHomeNativeGlassTintColor(
+        return HomeGlassPreferences.normalizeHomeNativeGlassTintColor(
             Color.rgb(
                 ((rgb ushr 16) and 0xFFL).toInt(),
                 ((rgb ushr 8) and 0xFFL).toInt(),
@@ -118,7 +118,7 @@ internal object HomeNativeGlassTintPalette {
         lateinit var refresh: () -> Unit
         refresh = {
             swatchRow.removeAllViews()
-            val selectedAuto = state.tintColor == ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
+            val selectedAuto = state.tintColor == HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
             swatchRow.addView(
                 createHomeNativeGlassTintDefaultSwatch(
                     context,
@@ -127,7 +127,7 @@ internal object HomeNativeGlassTintPalette {
                     state.defaultTintColor,
                     selectedAuto,
                 ) {
-                    state.tintColor = ConfigManager.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
+                    state.tintColor = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
                     refresh()
                 },
                 LinearLayout.LayoutParams((36 * density).toInt(), (36 * density).toInt()).apply {

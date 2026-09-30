@@ -287,7 +287,7 @@ object FollowedTabWebHook {
     }
 
     private fun isFeatureEnabled(): Boolean {
-        return ConfigManager.isHomeTopTabsCustomEnabled && ConfigManager.isHomeTopTabFollowedEnabled
+        return ConfigManager.snapshot().isHomeTopTabsCustomEnabled && ConfigManager.snapshot().isHomeTopTabFollowedEnabled
     }
 
     private fun isScopedFollowedUrl(normalizedUrl: String): Boolean {

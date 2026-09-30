@@ -34,7 +34,7 @@ object ReplyVisibilityProbeHook {
         try {
             RuntimeHooks.builder(mod, targets.replyDecodeMethod, "ReplyVisibilityProbeHook", "hook:targets.replyDecodeMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (!runtimeDisabled && ConfigManager.isReplyVisibilityProbeEnabled) {
+                if (!runtimeDisabled && ConfigManager.snapshot().isReplyVisibilityProbeEnabled) {
                     runCatching { onReplyDecoded(targets, chain.thisObject) }
                         .onFailure { disableRuntime("reply handling failed", it) }
                 }
@@ -42,7 +42,7 @@ object ReplyVisibilityProbeHook {
             }
             RuntimeHooks.builder(mod, targets.agreeDecodeLogicMethod, "ReplyVisibilityProbeHook", "hook:targets.agreeDecodeLogicMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (!runtimeDisabled && ConfigManager.isReplyVisibilityProbeEnabled && pendingByTag.isNotEmpty()) {
+                if (!runtimeDisabled && ConfigManager.snapshot().isReplyVisibilityProbeEnabled && pendingByTag.isNotEmpty()) {
                     runCatching {
                         onAgreeDecoded(
                             targets = targets,
@@ -86,7 +86,7 @@ object ReplyVisibilityProbeHook {
         } else {
             AGREE_OBJ_TYPE_REPLY
         }
-        if (ConfigManager.shouldOutputDetailedLogs()) {
+        if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
             XposedCompat.logD {
                 "$TAG accepted reply pid=$pid tid=$tid fid=$fid " +
                     "quote_id=${quoteId.orEmpty()} " +
@@ -109,7 +109,7 @@ object ReplyVisibilityProbeHook {
 
     private fun dispatchProbe(targets: ReplyVisibilityProbeSymbols, request: ProbeRequest) {
         mainHandler.postDelayed({
-            if (runtimeDisabled || !ConfigManager.isReplyVisibilityProbeEnabled) return@postDelayed
+            if (runtimeDisabled || !ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return@postDelayed
             sendProbe(targets, request)
         }, probeIntervalMs())
     }
@@ -120,7 +120,7 @@ object ReplyVisibilityProbeHook {
 
     private fun sendCancel(targets: ReplyVisibilityProbeSymbols, request: ProbeRequest) {
         mainHandler.post {
-            if (runtimeDisabled || !ConfigManager.isReplyVisibilityProbeEnabled) return@post
+            if (runtimeDisabled || !ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return@post
             sendAgreeRequest(targets, request, AGREE_OP_TYPE_CANCEL, trackResponse = false)
         }
     }
@@ -160,7 +160,7 @@ object ReplyVisibilityProbeHook {
             targets.httpMessageAddParamMethod.invoke(message, "forum_id", request.fid)
             targets.httpMessageAddParamMethod.invoke(message, "post_id", request.pid)
             targets.httpMessageAddHeaderMethod.invoke(message, "needSig", "1")
-            if (ConfigManager.shouldOutputDetailedLogs()) {
+            if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
                 XposedCompat.logD {
                     "$TAG send ${if (trackResponse) "probe" else "cancel"} " +
                         "thread_id=${request.tid} post_id=${request.pid} forum_id=${request.fid} " +
@@ -213,7 +213,7 @@ object ReplyVisibilityProbeHook {
         val originalMessage = targets.getOriginalMessageMethod.invoke(response) ?: return
         val tag = targets.messageGetTagMethod.invoke(originalMessage) ?: return
         val request = pendingByTag.remove(tag) ?: return
-        if (!ConfigManager.isReplyVisibilityProbeEnabled) return
+        if (!ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return
         if (json == null) {
             handleProbeResult(
                 targets,
@@ -302,7 +302,7 @@ object ReplyVisibilityProbeHook {
 
     private fun scheduleRetry(targets: ReplyVisibilityProbeSymbols, request: ProbeRequest) {
         mainHandler.postDelayed({
-            if (runtimeDisabled || !ConfigManager.isReplyVisibilityProbeEnabled) return@postDelayed
+            if (runtimeDisabled || !ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return@postDelayed
             sendProbe(targets, request.copy(attempt = request.attempt + 1))
         }, probeIntervalMs())
     }
@@ -310,7 +310,7 @@ object ReplyVisibilityProbeHook {
     private fun scheduleResponseTimeout(targets: ReplyVisibilityProbeSymbols, tag: Any, request: ProbeRequest) {
         mainHandler.postDelayed({
             val pending = pendingByTag.remove(tag) ?: return@postDelayed
-            if (runtimeDisabled || !ConfigManager.isReplyVisibilityProbeEnabled) return@postDelayed
+            if (runtimeDisabled || !ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return@postDelayed
             handleProbeResult(
                 targets,
                 pending,
@@ -322,9 +322,9 @@ object ReplyVisibilityProbeHook {
         }, RESPONSE_TIMEOUT_MS)
     }
 
-    private fun maxAttempts(): Int = ConfigManager.replyVisibilityProbeMaxAttempts
+    private fun maxAttempts(): Int = ConfigManager.snapshot().replyVisibilityProbeMaxAttempts
 
-    private fun probeIntervalMs(): Long = ConfigManager.replyVisibilityProbeIntervalMs.toLong()
+    private fun probeIntervalMs(): Long = ConfigManager.snapshot().replyVisibilityProbeIntervalMs.toLong()
 
     private fun JSONObject.optText(key: String): String? {
         if (!has(key) || isNull(key)) return null

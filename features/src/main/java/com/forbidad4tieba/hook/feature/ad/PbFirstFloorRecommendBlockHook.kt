@@ -14,7 +14,7 @@ object PbFirstFloorRecommendBlockHook {
 
         try {
             RuntimeHooks.builder(mod, targets.method, "PbFirstFloorRecommendBlockHook", "hook:targets.method").intercept { chain ->
-                if (ConfigManager.isPostAdBlockEnabled) {
+                if (ConfigManager.snapshot().isPostPageAdBlockEnabled) {
                     false
                 } else {
                     chain.proceed()

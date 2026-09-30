@@ -1,12 +1,12 @@
 package com.forbidad4tieba.hook.ui.settings.forms
 
+import com.forbidad4tieba.hook.config.FreeCopyPreferences
 import android.app.AlertDialog
 import android.content.Context
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.Toast
-import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.ui.SwitchItem
@@ -71,13 +71,13 @@ internal object FreeCopyForm {
             }
 
             val postButtonSwitch = views.firstOrNull {
-                it.first.prefKey == ConfigManager.KEY_FREE_COPY_POST_BODY
+                it.first.prefKey == FreeCopyPreferences.KEY_FREE_COPY_POST_BODY
             }?.second
             val longPressSwitch = views.firstOrNull {
-                it.first.prefKey == ConfigManager.KEY_FREE_COPY_POST_LONG_PRESS
+                it.first.prefKey == FreeCopyPreferences.KEY_FREE_COPY_POST_LONG_PRESS
             }?.second
             if (postButtonSwitch != null && longPressSwitch != null) {
-                val normalized = ConfigManager.normalizeFreeCopyPostModes(
+                val normalized = FreeCopyPreferences.normalizeFreeCopyPostModes(
                     postButtonEnabled = postButtonSwitch.isChecked,
                     longPressEnabled = longPressSwitch.isChecked,
                 )

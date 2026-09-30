@@ -92,7 +92,7 @@ object VideoPreloadBlockHook {
     }
 
     private fun isEnabled(): Boolean {
-        return ConfigManager.isVideoComponentsDisabled
+        return ConfigManager.snapshot().isVideoComponentsDisabled
     }
 
     private fun installStaticVoidMethod(

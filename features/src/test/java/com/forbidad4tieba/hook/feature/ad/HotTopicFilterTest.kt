@@ -1,7 +1,7 @@
 package com.forbidad4tieba.hook.feature.ad
 
+import com.forbidad4tieba.hook.config.ModelScoreSettings
 import com.forbidad4tieba.hook.config.SettingsSnapshot
-import com.forbidad4tieba.hook.config.ConfigManager
 import org.json.JSONObject
 import java.net.URLEncoder
 import org.junit.Assert.assertEquals
@@ -23,7 +23,7 @@ class HotTopicFilterTest {
         val input = listOf(ordinary, topic, ordinary, null)
 
         val filtered = CustomPostCardBlockHook.filterList(input, filter, "hot-topic-regression",
-            rules = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules,
+            rules = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules,
             recordModelScores = { error("Hot filtering must not collect model scores") })
 
         assertEquals(listOf(ordinary, ordinary, null), filtered)
@@ -34,13 +34,13 @@ class HotTopicFilterTest {
         val data = Data(USER_TOPIC_SCHEMA, listOf(Component("feed_configurable_head")))
         val input = listOf(Card(data))
         assertSame(input, CustomPostCardBlockHook.filterList(input, filter, "hot-topic-disabled",
-            rules = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostVoteFilterEnabled = true).customPostRules,
+            rules = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostVoteFilterEnabled = true).customPostRules,
             recordModelScores = { error("Disabled hot filtering must not collect model scores") }))
         assertEquals(0, data.schemaReads)
     }
 
     @Test fun existingHotTemplatesAreFilteredThroughTheSameEntry() {
-        val rules = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules!!
+        val rules = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules!!
         assertTrue(rules.hot)
         for (key in listOf("recommend_info", "hot_card", "hot_topic_card", "multi_thread_card")) {
             val card = Card(Data("", emptyList()), key)
@@ -53,7 +53,7 @@ class HotTopicFilterTest {
         val input = listOf(Card(Data("tiebaapp://router/portal?params=%7B%22page%22%3A%22frs%2Ffrs%22%7D",
             listOf(Component("feed_configurable_head"), Component("feed_mount")))))
         assertSame(input, CustomPostCardBlockHook.filterList(input, filter, "ordinary-card-control",
-            rules = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules,
+            rules = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules,
             recordModelScores = {}))
     }
 
@@ -91,7 +91,7 @@ class HotTopicFilterTest {
     @Test fun missingOrFailingSchemaAccessKeepsCardWhileExistingTemplatesStillWork() {
         val data = Data(USER_TOPIC_SCHEMA, listOf(Component("feed_configurable_head")))
         val input = listOf(Card(data))
-        val rules = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules
+        val rules = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules
         assertSame(input, CustomPostCardBlockHook.filterList(input, filter.copy(schemaGetter = null),
             "missing-schema", rules = rules, recordModelScores = {}))
         val failing = filter.copy(schemaGetter = Data::class.java.getMethod("failingSchema"))
@@ -105,7 +105,7 @@ class HotTopicFilterTest {
         val input = listOf(Card(Data("https://tieba.baidu.com/p/123", listOf(
             Component("feed_configurable_head"), Component("feed_mount", schema = USER_TOPIC_SCHEMA)))))
         assertSame(input, CustomPostCardBlockHook.filterList(input, filter, "mount-link-control",
-            rules = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules,
+            rules = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true).customPostRules,
             recordModelScores = {}))
     }
 
@@ -113,9 +113,9 @@ class HotTopicFilterTest {
         val input = listOf(Card(Data(USER_TOPIC_SCHEMA,
             listOf(Component("feed_head", params = mapOf("extra" to "msd_score:0.8"))))))
         val observed = mutableListOf<Double>()
-        val rules = SettingsSnapshot(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true,
+        val rules = SettingsSnapshot.bootstrap().copy(isCustomPostFilterEnabled = true, isPostHotFilterEnabled = true,
             isPostModelScoreFilterEnabled = true,
-            postModelScoreThresholds = listOf(ConfigManager.ModelScoreThreshold("msd_score", 0.5))).customPostRules
+            postModelScoreThresholds = listOf(ModelScoreSettings.ModelScoreThreshold("msd_score", 0.5))).customPostRules
         assertEquals(emptyList<Card>(), CustomPostCardBlockHook.filterList(input, filter, "hot-score-observation",
             rules = rules, recordModelScores = { observed += it.getValue("msd_score") }))
         assertEquals(listOf(0.8), observed)

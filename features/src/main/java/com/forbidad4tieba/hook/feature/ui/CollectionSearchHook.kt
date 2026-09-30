@@ -31,7 +31,6 @@ import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
 import com.forbidad4tieba.hook.utils.ClearableInputRow
 import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 import java.util.ArrayDeque
 import java.util.ArrayList
 import java.util.Collections
@@ -136,13 +135,13 @@ object CollectionSearchHook {
     }
 
     private inline fun dbg(message: () -> String) {
-        if (ConfigManager.shouldOutputDetailedLogs()) {
+        if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
             XposedCompat.logD("[CollectionSearchHook][dbg] ${message()}")
         }
     }
 
     private fun dbg(message: String) {
-        if (ConfigManager.shouldOutputDetailedLogs()) {
+        if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
             XposedCompat.logD("[CollectionSearchHook][dbg] $message")
         }
     }

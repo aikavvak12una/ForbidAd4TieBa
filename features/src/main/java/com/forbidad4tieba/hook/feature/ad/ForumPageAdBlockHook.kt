@@ -25,7 +25,7 @@ object ForumPageAdBlockHook {
 
     @Synchronized
     internal fun hook(targets: ForumPageAdBlockSymbols): InstallOutcome {
-        if (!ConfigManager.isForumPageAdBlockEnabled) {
+        if (!ConfigManager.snapshot().isForumPageAdBlockEnabled) {
             return InstallOutcome.skipped("config disabled")
         }
         if (XposedCompat.module == null) return InstallOutcome.skipped("module unavailable")
@@ -75,7 +75,7 @@ object ForumPageAdBlockHook {
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installResponseSanitizer:method").intercept { chain ->
                 val result = chain.proceed()
-                if (ConfigManager.isForumPageAdBlockEnabled) {
+                if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
                     clearFields(chain.thisObject, fields, responseErrorLogged, "response fields")
                 }
                 result
@@ -93,7 +93,7 @@ object ForumPageAdBlockHook {
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installBottomDataSanitizer:method").intercept { chain ->
                 val result = chain.proceed()
-                if (ConfigManager.isForumPageAdBlockEnabled) {
+                if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
                     invokeNullSetters(result, setters, bottomErrorLogged, "bottom data")
                 }
                 result
@@ -108,7 +108,7 @@ object ForumPageAdBlockHook {
 
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installBottomGameBarBlocker:method").intercept { chain ->
-                if (ConfigManager.isForumPageAdBlockEnabled) {
+                if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
                     null
                 } else {
                     chain.proceed()
@@ -126,7 +126,7 @@ object ForumPageAdBlockHook {
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installHeaderRainSanitizer:method").intercept { chain ->
                 val result = chain.proceed()
-                if (ConfigManager.isForumPageAdBlockEnabled) {
+                if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
                     invokeNullSetters(result, listOf(setter), rainErrorLogged, "rain data")
                 }
                 result
@@ -141,7 +141,7 @@ object ForumPageAdBlockHook {
 
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installBusinessPromotDialogBlocker:method").intercept { chain ->
-                if (ConfigManager.isForumPageAdBlockEnabled) {
+                if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
                     BlockCountStats.recordAd()
                     false
                 } else {
@@ -161,7 +161,7 @@ object ForumPageAdBlockHook {
         if (method != null) {
             installedMethods.install(method) {
                 RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installFloatingBarBlocker:method").intercept { chain ->
-                    if (!ConfigManager.isForumPageAdBlockEnabled) {
+                    if (!ConfigManager.snapshot().isForumPageAdBlockEnabled) {
                         return@intercept chain.proceed()
                     }
                     hideFloatingBar(chain.thisObject, field)
@@ -179,7 +179,7 @@ object ForumPageAdBlockHook {
 
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installBusinessPromotBizBlocker:method").intercept { chain ->
-                if (ConfigManager.isForumPageAdBlockEnabled) {
+                if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
                     null
                 } else {
                     chain.proceed()

@@ -67,7 +67,7 @@ object HomeTopTabAutoHideHook {
 
     fun hook(cl: ClassLoader) {
         val mod = XposedCompat.module ?: return
-        if (!ConfigManager.isHomeTabAutoHideEnabled) {
+        if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) {
             XposedCompat.logD("[HomeTopTabAutoHideHook] disabled by config")
             return
         }
@@ -142,7 +142,7 @@ object HomeTopTabAutoHideHook {
         }
         RuntimeHooks.builder(mod, method, "HomeTopTabAutoHideHook", "installRecyclerViewPreScrollObserver:method").intercept { chain ->
             val result = chain.proceed()
-            if (!ConfigManager.isHomeTabAutoHideEnabled) return@intercept result
+            if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) return@intercept result
             val target = chain.thisObject as? View ?: return@intercept result
             val dy = (chain.args.getOrNull(1) as? Int) ?: return@intercept result
             if (dy == 0) return@intercept result
@@ -196,7 +196,7 @@ object HomeTopTabAutoHideHook {
         }
         RuntimeHooks.builder(mod, method, "HomeTopTabAutoHideHook", "installViewPagerPageSelectedObserver:method").intercept { chain ->
             val result = chain.proceed()
-            if (ConfigManager.isHomeTabAutoHideEnabled) {
+            if (ConfigManager.snapshot().isHomeTabAutoHideEnabled) {
                 val viewPager = chain.thisObject as? View
                 if (viewPager != null && isHomeViewPager(viewPager)) {
                     if (!HomeTabAutoHideLockController.unlockForTabSwitch(viewPager)) {
@@ -214,7 +214,7 @@ object HomeTopTabAutoHideHook {
     }
 
     private fun configureAppBar(appBar: ViewGroup) {
-        if (!ConfigManager.isHomeTabAutoHideEnabled) return
+        if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) return
         applyScrollFlagsToChildren(appBar)
         applyScrollingBehaviorToContentSibling(appBar)
         synchronized(appBarExpandedStates) {

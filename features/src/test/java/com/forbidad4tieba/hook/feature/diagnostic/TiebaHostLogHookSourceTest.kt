@@ -13,7 +13,7 @@ class TiebaHostLogHookSourceTest {
         )
 
         assertTrue(source.contains("DetailedLogSession.recordTieba("))
-        assertTrue(source.contains("ConfigManager.shouldOutputDetailedLogs()"))
+        assertTrue(source.contains("ConfigManager.snapshot().isDetailedLoggingEnabled"))
         assertFalse(source.contains("MediaStore"))
         assertFalse(source.contains("FileOutputStream"))
         assertFalse(source.contains("OutputStream"))

@@ -27,7 +27,7 @@ object HomeTopBarRightSlotHook {
             for (method in methods.distinctBy { it.name }) {
                 RuntimeHooks.builder(mod, method, "HomeTopBarRightSlotHook", "hook:method").intercept { chain ->
                     val result = chain.proceed()
-                    if (ConfigManager.shouldStabilizeHomeChrome()) {
+                    if (ConfigManager.snapshot().shouldStabilizeHomeChrome()) {
                         applySlotUiState(chain.thisObject, targets)
                     }
                     result

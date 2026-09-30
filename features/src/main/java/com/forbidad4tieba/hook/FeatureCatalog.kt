@@ -146,7 +146,7 @@ internal object FeatureCatalog {
         HookProcess.isMain(processName) || HookProcess.isImageViewerRemote(processName)
 
     fun staticPlan(processName: String): HookInstallPlan =
-        plan(FeaturePhase.STATIC, processName, null, SettingsSnapshot())
+        plan(FeaturePhase.STATIC, processName, null, SettingsSnapshot.bootstrap())
 
     fun postAttachPlan(processName: String, symbols: HookSymbols, settings: SettingsSnapshot): HookInstallPlan =
         plan(FeaturePhase.POST_ATTACH, processName, symbols, settings)

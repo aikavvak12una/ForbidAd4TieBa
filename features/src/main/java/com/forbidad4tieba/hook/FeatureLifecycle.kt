@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook
 
+import com.forbidad4tieba.hook.config.SettingsDiagnostics
+import com.forbidad4tieba.hook.config.RemoteEnvironmentState
 import com.forbidad4tieba.hook.symbol.contract.*
 
 import com.forbidad4tieba.hook.contracts.BuildIdentity
@@ -239,8 +241,8 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
                 scheduleAutoSignIn(app)
             }
         }
-        if (isMainProcess && ConfigManager.shouldOutputDetailedLogs()) {
-            ConfigManager.formatPerformanceStatusLines(settingsSnapshot).forEach { line ->
+        if (isMainProcess && ConfigManager.snapshot().isDetailedLoggingEnabled) {
+            SettingsDiagnostics.formatPerformanceStatusLines(settingsSnapshot).forEach { line ->
                 XposedCompat.log("[MainHook] > $line")
             }
         }
@@ -286,7 +288,7 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
         if (needsInitialScanDialog) {
             XposedCompat.log("[MainHook] > Symbols unavailable, installing initial scan dialog hook")
             SettingsScanController.ensureInitialScanDialogHook(cl)
-        } else if (ConfigManager.hasPendingPostScanEnvironmentWarning(appContext)) {
+        } else if (RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(appContext)) {
             XposedCompat.log("[MainHook] > Installing post-scan environment warning hook")
             SettingsScanController.ensurePostScanEnvironmentWarningHook()
         }
@@ -299,7 +301,7 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
                 if (symbolLoadResult.pendingScan) {
                     XposedCompat.log("[MainHook] > Scan availability skipped: no cached symbols yet")
                 }
-                if (ConfigManager.shouldOutputDetailedLogs()) {
+                if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
                     HookSymbolResolver.formatFeatureStatusLines(symbols).forEach { line ->
                         XposedCompat.log("[MainHook] > $line")
                     }

@@ -46,6 +46,17 @@ class ArchitectureBoundaryTest {
         assertEquals(emptyList<String>(), violations)
     }
 
+    @Test fun modelScoreFormatRulesStayOutsideTheSettingsPublisher() {
+        val configRoot = File(root, "features/src/main/java/com/forbidad4tieba/hook/config")
+        val publisher = File(configRoot, "ConfigManager.kt").readText()
+        val declarations = Regex("(?:fun (?:parse|serialize|round|format|normalize)ModelScore|data class ModelScoreThreshold)")
+        assertTrue("Model-score rules belong to ModelScoreSettings", declarations.find(publisher) == null)
+        val owner = Konsist.scopeFromExternalDirectory(configRoot.path).files.single { it.name == "ModelScoreSettings" || it.name == "ModelScoreSettings.kt" }
+        assertEquals(emptyList<String>(), owner.imports.filter {
+            it.name.startsWith("android.") || it.name.endsWith("ConfigManager") || it.name.contains(".ui.")
+        }.map { it.name })
+    }
+
     @Test fun settingsFormsDoNotInstallHooksOrDriveScanAndMenuControllers() {
         val files = Konsist.scopeFromExternalDirectory(File(root, "features/src/main").path).files
         assertEquals(emptyList<String>(), files.flatMap(::settingsFormViolations))

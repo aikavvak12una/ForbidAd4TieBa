@@ -13,7 +13,7 @@ object TrackingBlockHook {
     private val installed = AtomicBoolean(false)
 
     fun hook(methods: Map<TrackingTarget, Method>) {
-        if (!ConfigManager.isMonitorSyncComponentsDisabled) return
+        if (!ConfigManager.snapshot().isMonitorSyncComponentsDisabled) return
         if (!installed.compareAndSet(false, true)) return
         val mod = XposedCompat.module ?: run {
             installed.set(false)
@@ -32,7 +32,7 @@ object TrackingBlockHook {
             }
             try {
                 RuntimeHooks.builder(mod, method, "TrackingBlockHook", "hook:method").intercept { chain ->
-                    if (ConfigManager.isMonitorSyncComponentsDisabled) blockedResult else chain.proceed()
+                    if (ConfigManager.snapshot().isMonitorSyncComponentsDisabled) blockedResult else chain.proceed()
                 }
                 totalInstalled++
             } catch (t: Throwable) {

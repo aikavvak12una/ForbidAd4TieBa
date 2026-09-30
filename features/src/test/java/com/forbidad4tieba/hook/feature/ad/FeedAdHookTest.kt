@@ -16,11 +16,11 @@ class FeedAdHookTest {
         val otherBanner = Card("banner")
         val input = listOf(post, banner, feedAd, otherBanner)
         val cases = listOf(
-            Triple(SettingsSnapshot(), input, false),
-            Triple(SettingsSnapshot(isStrategyAdBlockEnabled = true), listOf(post, feedAd, otherBanner), true),
-            Triple(SettingsSnapshot(isFeedAdBlockEnabled = true), listOf(post, banner), true),
+            Triple(SettingsSnapshot.bootstrap(), input, false),
+            Triple(SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true), listOf(post, feedAd, otherBanner), true),
+            Triple(SettingsSnapshot.bootstrap().copy(isFeedAdBlockEnabled = true), listOf(post, banner), true),
             Triple(
-                SettingsSnapshot(isStrategyAdBlockEnabled = true, isFeedAdBlockEnabled = true),
+                SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true, isFeedAdBlockEnabled = true),
                 listOf(post),
                 true,
             ),
@@ -40,7 +40,7 @@ class FeedAdHookTest {
 
     @Test
     fun strategyRemovesOnlyExactBannerKeyAndPreservesUnknownItems() {
-        withSettings(SettingsSnapshot(isStrategyAdBlockEnabled = true)) {
+        withSettings(SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true)) {
             val input = listOf(Card("recommend_banner_extra"), Card("recommend"), Card(null), null, Any())
             for (runtimeFilter in listOf(null, customFilter)) {
                 assertSame(input, filter(input, runtimeFilter))
@@ -50,7 +50,7 @@ class FeedAdHookTest {
 
     @Test
     fun disabledFiltersDoNotReadTemplateKeys() {
-        withSettings(SettingsSnapshot()) {
+        withSettings(SettingsSnapshot.bootstrap()) {
             val banner = Card("recommend_banner")
             val input = listOf(banner)
             for (runtimeFilter in listOf(null, customFilter)) {
@@ -63,7 +63,7 @@ class FeedAdHookTest {
     @Test
     fun strategyAndCustomPostFilteringShareOnePassAndKeepFeedAds() {
         withSettings(
-            SettingsSnapshot(
+            SettingsSnapshot.bootstrap().copy(
                 isStrategyAdBlockEnabled = true,
                 isCustomPostFilterEnabled = true,
                 isPostHelpFilterEnabled = true,

@@ -95,8 +95,8 @@ class FeaturePlanningFailureTest {
 
     private fun plan(phase: FeaturePhase): HookInstallPlan = when (phase) {
         FeaturePhase.STATIC -> FeatureCatalog.staticPlan("com.baidu.tieba")
-        FeaturePhase.POST_ATTACH -> FeatureCatalog.postAttachPlan("com.baidu.tieba", HookSymbols.unsupported(), SettingsSnapshot())
-        FeaturePhase.SYMBOL -> FeatureCatalog.symbolPlan("com.baidu.tieba", HookSymbols.unsupported(), SettingsSnapshot())
+        FeaturePhase.POST_ATTACH -> FeatureCatalog.postAttachPlan("com.baidu.tieba", HookSymbols.unsupported(), SettingsSnapshot.bootstrap())
+        FeaturePhase.SYMBOL -> FeatureCatalog.symbolPlan("com.baidu.tieba", HookSymbols.unsupported(), SettingsSnapshot.bootstrap())
     }
 
     private fun withCatalog(definitions: List<FeatureDefinition>, action: () -> Unit) {
