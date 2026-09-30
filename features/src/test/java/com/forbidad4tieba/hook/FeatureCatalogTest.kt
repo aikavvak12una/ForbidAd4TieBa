@@ -7,6 +7,22 @@ import org.junit.Test
 import java.io.File
 
 class FeatureCatalogTest {
+    @Test fun launchPlaceholderIsInstalledOnlyInTheMainProcess() {
+        assertEquals(1, FeatureCatalog.staticPlan("com.baidu.tieba").entries.count { it.id == "LaunchSplashHook" })
+        for (process in listOf("com.baidu.tieba:remote", "com.android.systemui")) {
+            assertTrue(FeatureCatalog.staticPlan(process).entries.none { it.id == "LaunchSplashHook" })
+        }
+    }
+
+    @Test fun systemUiInstallsOnlyItsSplashFeatureWithoutHostBootstrap() {
+        val process = "com.android.systemui"
+        assertEquals(listOf("SystemSplashHook"), FeatureCatalog.staticPlan(process).entries.map { it.id })
+        assertTrue(!FeatureCatalog.shouldInstallAttachHook(process))
+        for (hostProcess in listOf("com.baidu.tieba", "com.baidu.tieba:remote")) {
+            assertTrue(FeatureCatalog.staticPlan(hostProcess).entries.none { it.id == "SystemSplashHook" })
+        }
+    }
+
     @Test fun everyDeclaredFeatureHasExactlyOneRegistration() {
         val root = File(checkNotNull(System.getProperty("project.root")), "features/src/main")
         val declaration = Regex("""FeatureDefinition(?:\.(?:single|observed))?\(\s*id\s*=\s*"([^"]+)"""")

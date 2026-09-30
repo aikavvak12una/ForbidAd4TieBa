@@ -8,7 +8,7 @@ object UiText {
         const val GROUP_EXTENSION = "扩展"
         const val GROUP_DEFAULT_ENABLED = "默认生效"
         const val DEFAULT_ENABLED_DESC = "默认启用的功能"
-
+        const val SYSTEM_SPLASH_DARK_LABEL = "启动画面跟随系统深色模式（需在启用系统界面作用域并重启系统界面或设备）"
         const val BLOCK_AD_LABEL = "屏蔽广告"
         const val BLOCK_AD_DESC = "屏蔽开屏、信息流、帖子详情页等推广广告"
         const val BLOCK_AD_DIALOG_TITLE = BLOCK_AD_LABEL
@@ -257,6 +257,7 @@ object UiText {
         const val BLOCK_FIRST_LIKE_POPUP_LABEL = "屏蔽首赞弹窗"
         const val BLOCK_NOTIFICATION_GUIDE_LABEL = "屏蔽开启通知引导"
         val DEFAULT_ENABLED_FEATURES = listOf(
+            SYSTEM_SPLASH_DARK_LABEL,
             HIDE_PB_BOTTOM_BANNER_LABEL,
             FREE_COPY_LABEL,
             DISABLE_PB_AUTO_EXPAND_LABEL,

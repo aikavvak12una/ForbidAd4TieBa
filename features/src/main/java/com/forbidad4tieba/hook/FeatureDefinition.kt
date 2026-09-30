@@ -7,13 +7,14 @@ internal enum class FeaturePhase(val diagnosticName: String) {
 }
 
 internal enum class FeatureProcess {
-    ANY, MAIN, IMAGE_VIEWER, IMAGE_VIEWER_REMOTE;
+    ANY, MAIN, IMAGE_VIEWER, IMAGE_VIEWER_REMOTE, SYSTEM_UI;
 
     fun accepts(context: HookInstallContext): Boolean = when (this) {
-        ANY -> true
+        ANY -> !context.isSystemUi
         MAIN -> context.isMain
         IMAGE_VIEWER -> context.isImageViewerProcess
         IMAGE_VIEWER_REMOTE -> context.isImageViewerRemote
+        SYSTEM_UI -> context.isSystemUi
     }
 }
 

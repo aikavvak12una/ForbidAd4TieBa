@@ -12,7 +12,7 @@ class MainHook : XposedModule() {
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         super.onModuleLoaded(param)
-        ModuleComposition.initialize(this)
+        ModuleComposition.initialize(this, param.processName)
         if (HookProcess.isImageViewerProcess(param.processName)) {
             HookSymbolResolver.prepareNativeRuntime()
         }
