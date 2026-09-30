@@ -228,6 +228,13 @@ internal object EffectiveSettingsPolicy {
             },
             postModelScoreStatsPostLimit = PostFilterPreferences.FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT.read(p).coerceAtLeast(MIN_MODEL_SCORE_STATS_POST_LIMIT),
             isDetailedLoggingEnabled = restrictedBoolean(AccountPreferences.ENABLE_DETAILED_LOGGING),
+            commentLevelFilter = CommentLevelFilterSettings(
+                enabled = featureBoolean(CommentFilterPreferences.ENABLE),
+                minimumLevel = CommentFilterPreferences.MINIMUM_LEVEL.read(p).coerceIn(
+                    CommentFilterPreferences.MIN_LEVEL, CommentFilterPreferences.MAX_LEVEL,
+                ),
+                keepWithReplies = CommentFilterPreferences.KEEP_WITH_REPLIES.read(p),
+            ),
         )
         return SettingsEvaluation(snapshot, normalizedBottomTabs)
     }

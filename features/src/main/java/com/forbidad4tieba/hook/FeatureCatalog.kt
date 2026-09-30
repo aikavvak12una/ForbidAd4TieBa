@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.config.SettingsSnapshot
+import com.forbidad4tieba.hook.feature.comment.CommentLevelFilterFeature
 import com.forbidad4tieba.hook.feature.account.AccountListDedupFeature
 import com.forbidad4tieba.hook.feature.ad.FeedAdFeature
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogFeature
@@ -139,6 +140,7 @@ internal object FeatureCatalog {
         AgreeServerResponseLogFeature,
         FeedInfoLogFeature,
         CommentAvatarDirectProfileFeature,
+        CommentLevelFilterFeature,
     )
 
     fun shouldHandleProcess(processName: String): Boolean =

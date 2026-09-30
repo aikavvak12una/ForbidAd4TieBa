@@ -10,10 +10,12 @@ import com.forbidad4tieba.hook.config.PerformancePreferences
 import com.forbidad4tieba.hook.config.TabPreferences
 import com.forbidad4tieba.hook.config.PostFilterPreferences
 import com.forbidad4tieba.hook.config.SimpleToggle
+import com.forbidad4tieba.hook.config.CommentFilterPreferences
 
 internal data class SettingsMenuGroupActions(
     val onAdBlock: (List<SwitchItem>) -> Unit,
     val onCustomPostFilter: (List<SwitchItem>) -> Unit,
+    val onCommentLevelFilter: (List<SwitchItem>) -> Unit,
     val onCustomPostModelScore: () -> Unit,
     val onCustomPostFilterKeyword: () -> Unit,
     val onPbLikeAutoReply: () -> Unit,
@@ -102,6 +104,11 @@ internal object SettingsMenuGroupBuilder {
         customPostFilterItems: List<SwitchItem>,
     ): List<SwitchItem> {
         val items = mutableListOf<SwitchItem>()
+        items.add(
+            SwitchItem(CommentFilterPreferences.ENABLE, actionIcon = UiText.Settings.ACTION_ICON_SETTINGS) {
+                actions.onCommentLevelFilter(listOf(SwitchItem(CommentFilterPreferences.KEEP_WITH_REPLIES)))
+            },
+        )
         if (restrictedFeaturesUnlocked) {
             items.add(
                 SwitchItem(AdPreferences.BLOCK_AD, actionIcon = UiText.Settings.ACTION_ICON_SETTINGS) {

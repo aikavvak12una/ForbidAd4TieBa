@@ -51,6 +51,7 @@ import com.forbidad4tieba.hook.ui.settings.SettingsScanController.showSymbolScan
 import com.forbidad4tieba.hook.ui.settings.forms.AdBlockForm.showAdBlockDialog
 import com.forbidad4tieba.hook.ui.settings.forms.BottomTabsForm.showBottomTabDialog
 import com.forbidad4tieba.hook.ui.settings.forms.CustomPostFilterForm.showCustomPostFilterDialog
+import com.forbidad4tieba.hook.ui.settings.forms.CommentLevelFilterForm.showCommentLevelFilterDialog
 import com.forbidad4tieba.hook.ui.settings.forms.FreeCopyForm.showFreeCopyDialog
 import com.forbidad4tieba.hook.ui.settings.forms.HomeTopTabsForm.showHomeTopTabDialog
 import com.forbidad4tieba.hook.ui.settings.forms.KeywordFilterForm.showCustomPostFilterKeywordDialog
@@ -97,6 +98,7 @@ internal object SettingsMenuController {
                 actions = SettingsMenuGroupActions(
                     onAdBlock = { items -> showAdBlockDialog(context, prefs, items, featureStatusMap) },
                     onCustomPostFilter = { items -> showCustomPostFilterDialog(context, prefs, items) },
+                    onCommentLevelFilter = { items -> showCommentLevelFilterDialog(context, prefs, items) },
                     onCustomPostModelScore = { showCustomPostModelScoreDialog(context, prefs) },
                     onCustomPostFilterKeyword = { showCustomPostFilterKeywordDialog(context, prefs) },
                     onPbLikeAutoReply = { showPbLikeAutoReplyDialog(context, prefs) },

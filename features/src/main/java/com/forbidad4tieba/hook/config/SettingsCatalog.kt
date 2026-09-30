@@ -16,6 +16,7 @@ internal object SettingsCatalog {
         AccountPreferences.preferences,
         PerformancePreferences.preferences,
         PostFilterPreferences.preferences,
+        CommentFilterPreferences.preferences,
     ).flatten() + SimpleToggle.entries.map { it.preference }
     private val byKey = preferences.associateBy { it.key }
 

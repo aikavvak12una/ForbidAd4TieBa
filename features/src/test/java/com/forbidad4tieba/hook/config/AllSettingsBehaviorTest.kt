@@ -115,7 +115,9 @@ class AllSettingsBehaviorTest {
             for (locked in listOf(false, true)) {
                 val host = HostCapabilities(HookFeatureKey.orderedKeys.associateWith { state })
                 val result = EffectiveSettingsPolicy.derive(UserSettings(values), host, RemoteSettingsPolicy(locked))
-                val text = result.snapshot.toString() + "/" + result.normalizedBottomTabs
+                // Keep the frozen matrix over its original fields. The appended feature has its own behavior tests.
+                val legacySnapshot = result.snapshot.toString().substringBefore(", commentLevelFilter=") + ")"
+                val text = legacySnapshot + "/" + result.normalizedBottomTabs
                 val hash = MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
                 results += "$name/$state/$locked=$hash"
             }

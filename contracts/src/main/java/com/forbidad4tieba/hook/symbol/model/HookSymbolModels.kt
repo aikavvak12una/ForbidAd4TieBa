@@ -19,6 +19,7 @@ object ScanSupportState {
 }
 
 object HookFeatureKey {
+    const val COMMENT_LEVEL_FILTER = "enable_comment_level_filter"
     const val BLOCK_AD = "block_ad"
     const val BLOCK_AD_FEED = "block_ad_feed"
     const val BLOCK_AD_POST_PAGE = "block_ad_post_page"
@@ -70,6 +71,7 @@ object HookFeatureKey {
     const val BLOCK_NOTIFICATION_GUIDE = "block_notification_guide"
 
     val orderedKeys = listOf(
+        COMMENT_LEVEL_FILTER,
         BLOCK_AD,
         BLOCK_AD_FEED,
         BLOCK_AD_POST_PAGE,
