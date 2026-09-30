@@ -10,6 +10,7 @@ internal class HookInstallContext(
 ) {
     val symbols: HookSymbols get() = checkNotNull(resolvedSymbols) { "Symbols unavailable during static installation" }
     val isMain: Boolean = HookProcess.isMain(processName)
+    val isSystemUi: Boolean = HookProcess.isSystemUi(processName)
     val isImageViewerRemote: Boolean = HookProcess.isImageViewerRemote(processName)
     val isImageViewerProcess: Boolean = HookProcess.isImageViewerProcess(processName)
 

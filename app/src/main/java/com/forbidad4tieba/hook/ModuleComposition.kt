@@ -11,7 +11,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import io.github.libxposed.api.XposedModule
 
 internal object ModuleComposition {
-    fun initialize(module: XposedModule) {
+    fun initialize(module: XposedModule, processName: String) {
         BuildIdentity.initialize(ModuleBuildInfo(
             BuildConfig.VERSION_NAME,
             BuildConfig.VERSION_CODE,
@@ -28,7 +28,9 @@ internal object ModuleComposition {
                 )
             }.getOrNull()
         }
-        XposedCompat.configureLogging { ConfigManager.shouldOutputDetailedLogs() }
+        XposedCompat.configureLogging {
+            !HookProcess.isSystemUi(processName) && ConfigManager.shouldOutputDetailedLogs()
+        }
         Diagnostics.initialize(object : DiagnosticSink {
             override fun info(message: String) = XposedCompat.log(message)
             override fun debug(message: String) = XposedCompat.logD(message)

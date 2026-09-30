@@ -55,6 +55,12 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
     override fun onPackageReady(packageName: String, classLoader: ClassLoader) {
         XposedCompat.log("[MainHook] onPackageReady: pkg=${packageName}, process=$processName")
 
+        if (packageName == HookProcess.SYSTEM_UI_PACKAGE && HookProcess.isSystemUi(processName)) {
+            // System splash screens precede the host Application. No host bootstrap or scan here.
+            installStaticHooks(classLoader)
+            return
+        }
+
         if (packageName != Constants.TARGET_PACKAGE) {
             XposedCompat.log("[MainHook] onPackageReady: SKIP - non-target package (${packageName})")
             return
