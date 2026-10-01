@@ -8,6 +8,7 @@ object CommentFilterPreferences {
     const val KEY_MINIMUM_LEVEL = "comment_filter_minimum_level"
     const val KEY_KEEP_WITH_REPLIES = "comment_filter_keep_with_replies"
     const val KEY_SKIP_NESTED = "comment_filter_skip_nested"
+    const val KEY_SHORTCUT = "comment_filter_shortcut"
     const val DEFAULT_MINIMUM_LEVEL = 5
     const val MIN_LEVEL = 1
     const val MAX_LEVEL = 18
@@ -27,7 +28,11 @@ object CommentFilterPreferences {
         KEY_SKIP_NESTED, false, PreferenceUse.SWITCH, HookFeatureKey.COMMENT_LEVEL_FILTER,
         SwitchPresentation(UiText.Settings.COMMENT_SKIP_NESTED_LABEL, UiText.Settings.COMMENT_SKIP_NESTED_DESC),
     )
-    internal val preferences: List<Preference<*>> = listOf(ENABLE, MINIMUM_LEVEL, KEEP_WITH_REPLIES, SKIP_NESTED)
+    internal val SHORTCUT = BooleanPreference(
+        KEY_SHORTCUT, true, PreferenceUse.SWITCH, HookFeatureKey.COMMENT_SHORTCUT,
+        SwitchPresentation(UiText.Settings.COMMENT_SHORTCUT_LABEL, UiText.Settings.COMMENT_SHORTCUT_DESC),
+    )
+    internal val preferences: List<Preference<*>> = listOf(ENABLE, MINIMUM_LEVEL, KEEP_WITH_REPLIES, SKIP_NESTED, SHORTCUT)
 }
 
 data class CommentLevelFilterSettings(

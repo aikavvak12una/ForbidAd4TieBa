@@ -5,6 +5,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CommentFilterSettingsTest {
+    @Test fun shortcutPreferenceIsIndependentOfMasterAndPreservesConfiguredRules() {
+        val host = HostCapabilities(mapOf(
+            HookFeatureKey.COMMENT_LEVEL_FILTER to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+            HookFeatureKey.COMMENT_SHORTCUT to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+        ))
+        for (master in listOf(false, true)) for (shortcut in listOf(false, true)) {
+            val result = EffectiveSettingsPolicy.derive(UserSettings(mapOf(
+                CommentFilterPreferences.KEY_ENABLE to master,
+                CommentFilterPreferences.KEY_SHORTCUT to shortcut,
+                CommentFilterPreferences.KEY_MINIMUM_LEVEL to 8,
+                CommentFilterPreferences.KEY_SKIP_NESTED to true,
+            )), host, RemoteSettingsPolicy(true)).snapshot
+            assertEquals(master, result.commentLevelFilter.enabled)
+            assertEquals(shortcut, result.isCommentShortcutEnabled)
+            assertEquals(8, result.commentLevelFilter.minimumLevel)
+            assertTrue(result.commentLevelFilter.skipNested)
+        }
+        assertTrue(EffectiveSettingsPolicy.derive(UserSettings(emptyMap<String, Any>()), host, RemoteSettingsPolicy(true)).snapshot.isCommentShortcutEnabled)
+    }
     @Test fun defaultsBoundsCapabilityAndSavedExceptionAreExplicit() {
         fun derive(values: Map<String, Any>, available: Boolean = true): CommentLevelFilterSettings {
             val states = if (available) mapOf(HookFeatureKey.COMMENT_LEVEL_FILTER to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE) else emptyMap()

@@ -62,6 +62,7 @@ object HookFeatureKey {
     const val DEFAULT_ORIGINAL_IMAGE = "enable_default_original_image"
     const val DEFAULT_LZL_EARLIEST = "default_lzl_earliest"
     const val INLINE_REPLY_REPAIR = "inline_reply_repair"
+    const val COMMENT_SHORTCUT = "comment_filter_shortcut"
     const val AUTO_SIGN_IN = "enable_auto_sign_in"
     const val PRIVATE_READ_RECEIPT_INVISIBLE = "private_read_receipt_invisible"
     const val CLEAN_SHARE_TRACKING_PARAMS = "clean_share_tracking_params"
@@ -114,6 +115,7 @@ object HookFeatureKey {
         DEFAULT_ORIGINAL_IMAGE,
         DEFAULT_LZL_EARLIEST,
         INLINE_REPLY_REPAIR,
+        COMMENT_SHORTCUT,
         AUTO_SIGN_IN,
         PRIVATE_READ_RECEIPT_INVISIBLE,
         CLEAN_SHARE_TRACKING_PARAMS,

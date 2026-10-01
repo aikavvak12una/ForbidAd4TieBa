@@ -11,7 +11,8 @@ internal val CommentLevelFilterFeature = FeatureDefinition.single(
     id = "CommentLevelFilter",
     phase = FeaturePhase.SYMBOL,
     process = FeatureProcess.MAIN,
-    enabled = { it.commentLevelFilter.enabled && available(HookFeatureKey.COMMENT_LEVEL_FILTER) },
+    enabled = { available(HookFeatureKey.COMMENT_LEVEL_FILTER) &&
+        (it.commentLevelFilter.enabled || (it.isCommentShortcutEnabled && available(HookFeatureKey.COMMENT_SHORTCUT))) },
 ) { cl, _ ->
     CommentFilterContract.resolve(cl, symbols)?.let(CommentLevelFilterHook::hook)
         ?: InstallOutcome.skipped("comment filter targets unavailable")
