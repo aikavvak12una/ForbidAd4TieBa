@@ -10,7 +10,7 @@ import java.util.Collections
 
 class CommentLevelFilterTest {
     private val filter = CommentLevelFilter(CommentProtocol(javaClass.classLoader!!))
-    private val settings = CommentLevelFilterSettings(true, 5, false)
+    private val settings = CommentLevelFilterSettings(true, 5, false, false)
     private fun user(id: Long, level: Int?) = User.Builder().apply { this.id = id; level_id = level }.build(false)
     private fun child(level: Int?) = SubPostList.Builder().apply { author = user(2, level); author_id = 2 }.build(false)
     private fun post(level: Int?, count: Int = 0, children: List<SubPostList> = emptyList()) = Post.Builder().apply {
@@ -21,6 +21,35 @@ class CommentLevelFilterTest {
         post_list = Collections.unmodifiableList(posts.toList()); page = Any()
     }.build(false)
     private fun apply(data: DataRes, s: CommentLevelFilterSettings = settings) = filter.filter(data, false, s) as DataRes
+
+    @Test fun everyThresholdFiltersNullAndLowerLevelsButKeepsEquality() {
+        for (minimum in 1..18) {
+            val data = page(post(null), *(1..18).map { post(it) }.toTypedArray())
+            assertEquals((minimum..18).toList(), apply(data, settings.copy(minimumLevel = minimum))
+                .post_list!!.map { it.author!!.level_id })
+        }
+    }
+
+    @Test fun skipNestedPreservesInlineAndExpandedRepliesWhileMainCommentsStillFilter() {
+        val replies = listOf(child(null), child(1), child(5))
+        val low = post(null, replies.size, replies)
+        val high = post(5, replies.size, replies)
+        val skip = settings.copy(skipNested = true)
+        val result = apply(page(low, high), skip)
+        assertEquals(listOf(high), result.post_list)
+        assertSame(high, result.post_list!!.single())
+        val body = Post.Builder(low).apply { floor = 1 }.build(false)
+        assertSame(body, apply(page(body), skip).post_list!!.single())
+        val exempt = page(low, high)
+        assertSame(exempt, apply(exempt, skip.copy(keepWithReplies = true)))
+        val expanded = tbclient.PbFloor.DataRes.Builder().apply {
+            post = low; subpost_list = replies; subpost_num = 40; page = Any()
+        }.build(false)
+        assertSame(expanded, filter.filter(expanded, true, skip))
+        assertEquals(listOf(5), (filter.filter(expanded, true, settings) as tbclient.PbFloor.DataRes)
+            .subpost_list!!.map { it.author!!.level_id })
+        for (level in listOf(null, 1, 5)) assertFalse(skip.hides(level, true, false))
+    }
 
     @Test fun equalitySurvivesUnknownLevelsAreHiddenAndDisabledPassKeepsIdentity() {
         val data = page(post(4), post(5), post(6), post(null), post(0), post(-1))

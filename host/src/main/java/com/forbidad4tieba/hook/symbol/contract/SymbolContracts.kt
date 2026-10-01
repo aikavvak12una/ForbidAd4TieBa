@@ -4,6 +4,7 @@ package com.forbidad4tieba.hook.symbol.contract
 internal object SymbolContracts {
     val all: List<SymbolContract> = listOf(
         CommentFilterContract,
+        InlineReplyContract,
         PerformanceContract,
         TrackingContract,
         CrashReportContract,

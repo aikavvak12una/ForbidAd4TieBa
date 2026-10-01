@@ -7,6 +7,7 @@ object CommentFilterPreferences {
     const val KEY_ENABLE = "enable_comment_level_filter"
     const val KEY_MINIMUM_LEVEL = "comment_filter_minimum_level"
     const val KEY_KEEP_WITH_REPLIES = "comment_filter_keep_with_replies"
+    const val KEY_SKIP_NESTED = "comment_filter_skip_nested"
     const val DEFAULT_MINIMUM_LEVEL = 5
     const val MIN_LEVEL = 1
     const val MAX_LEVEL = 18
@@ -22,15 +23,20 @@ object CommentFilterPreferences {
         KEY_KEEP_WITH_REPLIES, false, PreferenceUse.SWITCH, HookFeatureKey.COMMENT_LEVEL_FILTER,
         SwitchPresentation(UiText.Settings.COMMENT_KEEP_REPLIES_LABEL, UiText.Settings.COMMENT_KEEP_REPLIES_DESC),
     )
-    internal val preferences: List<Preference<*>> = listOf(ENABLE, MINIMUM_LEVEL, KEEP_WITH_REPLIES)
+    internal val SKIP_NESTED = BooleanPreference(
+        KEY_SKIP_NESTED, false, PreferenceUse.SWITCH, HookFeatureKey.COMMENT_LEVEL_FILTER,
+        SwitchPresentation(UiText.Settings.COMMENT_SKIP_NESTED_LABEL, UiText.Settings.COMMENT_SKIP_NESTED_DESC),
+    )
+    internal val preferences: List<Preference<*>> = listOf(ENABLE, MINIMUM_LEVEL, KEEP_WITH_REPLIES, SKIP_NESTED)
 }
 
 data class CommentLevelFilterSettings(
     val enabled: Boolean,
     val minimumLevel: Int,
     val keepWithReplies: Boolean,
+    val skipNested: Boolean,
 ) {
     fun hides(level: Int?, isNested: Boolean, hasReplies: Boolean): Boolean =
-        enabled && (level ?: 0) < minimumLevel &&
+        enabled && !(isNested && skipNested) && (level == null || level < minimumLevel) &&
             (isNested || !keepWithReplies || !hasReplies)
 }

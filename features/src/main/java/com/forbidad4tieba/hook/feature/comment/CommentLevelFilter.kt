@@ -7,7 +7,7 @@ import com.forbidad4tieba.hook.symbol.model.CommentProtocol
 /** One response-local pass. Original counts/cursors survive; only changed branches are copied. */
 internal class CommentLevelFilter(private val p: CommentProtocol) {
     fun filter(response: Any, nestedPage: Boolean, settings: CommentLevelFilterSettings): Any {
-        if (!settings.enabled) return response
+        if (!settings.enabled || (nestedPage && settings.skipNested)) return response
         return if (nestedPage) floor(response, settings) else page(response, settings)
     }
 
@@ -77,6 +77,7 @@ internal class CommentLevelFilter(private val p: CommentProtocol) {
     }
 
     private fun filterChildren(post: Any, users: Map<Long, Any>, settings: CommentLevelFilterSettings): Any {
+        if (settings.skipNested) return post
         val group = p.postChildren.get(post) ?: return post
         val original = p.childList.list(group)
         val updated = filterList(original) { child ->

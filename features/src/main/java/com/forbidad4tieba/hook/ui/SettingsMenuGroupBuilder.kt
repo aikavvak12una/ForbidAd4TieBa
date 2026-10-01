@@ -106,7 +106,10 @@ internal object SettingsMenuGroupBuilder {
         val items = mutableListOf<SwitchItem>()
         items.add(
             SwitchItem(CommentFilterPreferences.ENABLE, actionIcon = UiText.Settings.ACTION_ICON_SETTINGS) {
-                actions.onCommentLevelFilter(listOf(SwitchItem(CommentFilterPreferences.KEEP_WITH_REPLIES)))
+                actions.onCommentLevelFilter(listOf(
+                    SwitchItem(CommentFilterPreferences.KEEP_WITH_REPLIES),
+                    SwitchItem(CommentFilterPreferences.SKIP_NESTED),
+                ))
             },
         )
         if (restrictedFeaturesUnlocked) {

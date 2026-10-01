@@ -234,6 +234,7 @@ internal object EffectiveSettingsPolicy {
                     CommentFilterPreferences.MIN_LEVEL, CommentFilterPreferences.MAX_LEVEL,
                 ),
                 keepWithReplies = CommentFilterPreferences.KEEP_WITH_REPLIES.read(p),
+                skipNested = CommentFilterPreferences.SKIP_NESTED.read(p),
             ),
         )
         return SettingsEvaluation(snapshot, normalizedBottomTabs)
