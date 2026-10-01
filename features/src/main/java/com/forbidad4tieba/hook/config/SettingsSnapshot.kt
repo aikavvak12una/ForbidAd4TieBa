@@ -90,6 +90,7 @@ data class SettingsSnapshot(
     val postModelScoreStatsPostLimit: Int,
     val isDetailedLoggingEnabled: Boolean,
     val commentLevelFilter: CommentLevelFilterSettings,
+    val isCommentShortcutEnabled: Boolean,
 ) {
     companion object {
         /** Pre-initialization state; evaluated snapshots must supply every field explicitly. */
@@ -183,6 +184,7 @@ data class SettingsSnapshot(
             postModelScoreStatsPostLimit = ModelScoreSettings.DEFAULT_MODEL_SCORE_STATS_POST_LIMIT,
             isDetailedLoggingEnabled = false,
             commentLevelFilter = CommentLevelFilterSettings(false, CommentFilterPreferences.DEFAULT_MINIMUM_LEVEL, false, false),
+            isCommentShortcutEnabled = true,
         )
     }
 

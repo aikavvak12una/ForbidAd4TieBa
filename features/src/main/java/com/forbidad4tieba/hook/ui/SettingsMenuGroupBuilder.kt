@@ -109,6 +109,7 @@ internal object SettingsMenuGroupBuilder {
                 actions.onCommentLevelFilter(listOf(
                     SwitchItem(CommentFilterPreferences.KEEP_WITH_REPLIES),
                     SwitchItem(CommentFilterPreferences.SKIP_NESTED),
+                    SwitchItem(CommentFilterPreferences.SHORTCUT),
                 ))
             },
         )

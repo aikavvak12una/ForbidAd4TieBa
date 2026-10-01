@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.feature.comment.CommentLevelFilterFeature
+import com.forbidad4tieba.hook.feature.comment.CommentShortcutFeature
 import com.forbidad4tieba.hook.feature.comment.InlineReplyRepairFeature
 import com.forbidad4tieba.hook.feature.account.AccountListDedupFeature
 import com.forbidad4tieba.hook.feature.ad.FeedAdFeature
@@ -142,6 +143,7 @@ internal object FeatureCatalog {
         FeedInfoLogFeature,
         CommentAvatarDirectProfileFeature,
         CommentLevelFilterFeature,
+        CommentShortcutFeature,
         InlineReplyRepairFeature,
     )
 

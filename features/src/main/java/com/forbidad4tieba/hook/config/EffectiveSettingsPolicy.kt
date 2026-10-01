@@ -236,6 +236,8 @@ internal object EffectiveSettingsPolicy {
                 keepWithReplies = CommentFilterPreferences.KEEP_WITH_REPLIES.read(p),
                 skipNested = CommentFilterPreferences.SKIP_NESTED.read(p),
             ),
+            isCommentShortcutEnabled = featureBoolean(CommentFilterPreferences.SHORTCUT) &&
+                capabilities.isAvailable(CommentFilterPreferences.KEY_ENABLE),
         )
         return SettingsEvaluation(snapshot, normalizedBottomTabs)
     }

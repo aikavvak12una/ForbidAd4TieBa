@@ -4,13 +4,13 @@ object UiText {
     object Settings {
         const val COMMENT_LEVEL_FILTER_LABEL = "屏蔽评论"
         const val COMMENT_LEVEL_FILTER_DESC = "屏蔽低于指定等级的评论和楼中楼"
-        const val COMMENT_MINIMUM_LEVEL_LABEL = "最低保留等级"
-        const val COMMENT_MINIMUM_LEVEL_DESC = "范围 1–18，屏蔽无等级或低于指定等级的评论；设为 1 级时仅屏蔽无等级评论（通常为未关注本吧的用户）"
+        const val COMMENT_MINIMUM_LEVEL_LABEL = "最低吧等级限制"
+        const val COMMENT_MINIMUM_LEVEL_DESC = "屏蔽低于指定吧等级的评论；设为 1 级时仅屏蔽未关注本吧的用户评论"
         fun commentMinimumLevel(value: Int): String = "$COMMENT_MINIMUM_LEVEL_LABEL：$value 级"
         const val COMMENT_KEEP_REPLIES_LABEL = "绕过含楼中楼的评论"
-        const val COMMENT_KEEP_REPLIES_DESC = "评论含有楼中楼时，不受等级限制；其中的楼中楼是否屏蔽由下方开关控制"
-        const val COMMENT_SKIP_NESTED_LABEL = "对楼中楼不生效"
-        const val COMMENT_SKIP_NESTED_DESC = "开启后不屏蔽楼中楼评论，包括内嵌预览和展开页；所属评论仍按其他设置处理"
+        const val COMMENT_KEEP_REPLIES_DESC = "对于含有楼中楼的评论不屏蔽"
+        const val COMMENT_SKIP_NESTED_LABEL = "对楼中楼评论不生效"
+        const val COMMENT_SKIP_NESTED_DESC = "开启后不屏蔽楼中楼评论，包括内嵌预览和展开页"
         const val COMMENT_LEVEL_SAVED = "评论等级屏蔽设置已保存"
         const val GROUP_CONTENT_BLOCK = "内容屏蔽"
         const val GROUP_UI_OPTIMIZE = "UI 净化"
@@ -201,7 +201,7 @@ object UiText {
         fun homeNativeGlassTintColorSwatch(index: Int): String = "动态取色色块 $index"
 
         const val AUTO_LOAD_MORE_LABEL = "预加载"
-        const val AUTO_LOAD_MORE_DESC = "信息流提前加载下一页，帖子评论每次最多连续预加载 2 页\n* 增加流量与内存占用，滑动卡顿时可关闭"
+        const val AUTO_LOAD_MORE_DESC = "提前加载推荐信息流和评论下一页\n* 滑动卡顿尝试关闭此功能"
         const val PB_LIKE_AUTO_REPLY_LABEL = "快捷回复"
         const val PB_LIKE_AUTO_REPLY_DESC = "点赞帖子后，自动发送预设回复内容"
         const val COMMENT_AVATAR_DIRECT_PROFILE_LABEL = "头像直达主页"
@@ -266,7 +266,13 @@ object UiText {
         const val CRASH_REPORT_BLOCK_LABEL = "阻断崩溃与异常上报"
         const val BLOCK_FIRST_LIKE_POPUP_LABEL = "屏蔽首赞弹窗"
         const val BLOCK_NOTIFICATION_GUIDE_LABEL = "屏蔽开启通知引导"
-        const val INLINE_REPLY_REPAIR_LABEL = "补全楼中楼预览，隐藏空回复入口"
+        const val INLINE_REPLY_REPAIR_LABEL = "优化楼中楼评论显示效果"
+        const val COMMENT_SHORTCUT_LABEL = "评论屏蔽快捷开关"
+        const val COMMENT_SHORTCUT_DESC = "在帖子排序栏显示目标屏蔽等级图标，点击后按配置项对当前帖子临时生效。\n* 该配置项不受上级屏蔽评论开关状态影响"
+        fun commentShortcutDescription(level: Int, enabled: Boolean) =
+            "屏蔽评论，等级 $level，${if (enabled) "已开启" else "已关闭"}"
+        const val COMMENT_SHORTCUT_UNAVAILABLE = "评论屏蔽暂不可用"
+        const val COMMENT_SHORTCUT_BUSY = "评论正在加载或暂不可刷新，请稍后重试"
         val DEFAULT_ENABLED_FEATURES = listOf(
             SYSTEM_SPLASH_DARK_LABEL,
             HIDE_PB_BOTTOM_BANNER_LABEL,
