@@ -13,12 +13,6 @@ internal object PbCommentInteractionSymbolScanner {
         val scroll = scanSubStep("PbScrollCoalesceHook", logger, PbCommentInteractionScanSymbols()) {
             scanScroll(candidates, cl, logger)
         }
-        val bottomList = scanSubStep("PbCommentAutoLoadHook.List", logger, PbCommentInteractionScanSymbols()) {
-            scanBottomList(candidates, cl, logger)
-        }
-        val bottomRecycler = scanSubStep("PbCommentAutoLoadHook.Recycler", logger, PbCommentInteractionScanSymbols()) {
-            scanBottomRecycler(candidates, cl, logger)
-        }
         val gesture = scanSubStep("PbDisableGestureFontScaleHook", logger, PbCommentInteractionScanSymbols()) {
             scanGesture(candidates, cl, logger)
         }
@@ -29,12 +23,6 @@ internal object PbCommentInteractionSymbolScanner {
             scrollFragmentField = scroll.scrollFragmentField,
             scrollBottomListenerField = scroll.scrollBottomListenerField,
             scrollBottomMethod = scroll.scrollBottomMethod,
-            bottomListScrollClass = bottomList.bottomListScrollClass,
-            bottomListScrollMethod = bottomList.bottomListScrollMethod,
-            bottomListOwnerField = bottomList.bottomListOwnerField,
-            bottomRecyclerScrollClass = bottomRecycler.bottomRecyclerScrollClass,
-            bottomRecyclerScrollMethod = bottomRecycler.bottomRecyclerScrollMethod,
-            bottomRecyclerOwnerField = bottomRecycler.bottomRecyclerOwnerField,
             gestureScaleManagerClass = gesture.gestureScaleManagerClass,
             gestureScaleDispatchMethod = gesture.gestureScaleDispatchMethod,
             gestureScaleListenerSetterMethod = gesture.gestureScaleListenerSetterMethod,
@@ -63,46 +51,6 @@ internal object PbCommentInteractionSymbolScanner {
             scrollFragmentField = fields[0],
             scrollBottomListenerField = fields[1],
             scrollBottomMethod = fields[2],
-        )
-    }
-
-    private fun scanBottomList(
-        candidates: List<String>,
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): PbCommentInteractionScanSymbols {
-        val match = ScanReflection.runRules(
-            candidates,
-            cl,
-            listOf(BdListViewBottomScrollRule(StableTiebaHookPoints.BD_LIST_VIEW_CLASS)),
-            logger,
-            "pbCommentBottomList",
-        ) ?: return PbCommentInteractionScanSymbols()
-
-        return PbCommentInteractionScanSymbols(
-            bottomListScrollClass = match.className,
-            bottomListScrollMethod = match.methodName,
-            bottomListOwnerField = match.fieldName,
-        )
-    }
-
-    private fun scanBottomRecycler(
-        candidates: List<String>,
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): PbCommentInteractionScanSymbols {
-        val match = ScanReflection.runRules(
-            candidates,
-            cl,
-            listOf(BdRecyclerViewBottomScrollRule(StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS)),
-            logger,
-            "pbCommentBottomRecycler",
-        ) ?: return PbCommentInteractionScanSymbols()
-
-        return PbCommentInteractionScanSymbols(
-            bottomRecyclerScrollClass = match.className,
-            bottomRecyclerScrollMethod = match.methodName,
-            bottomRecyclerOwnerField = match.fieldName,
         )
     }
 

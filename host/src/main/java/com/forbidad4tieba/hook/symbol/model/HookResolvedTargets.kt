@@ -335,28 +335,9 @@ data class PbScrollCoalesceSymbols(
     val scrollMethod: Method,
 )
 
-data class PbCommentBottomListSymbols(
-    val listClass: Class<*>,
-    val scrollMethod: Method,
-    val ownerField: Field,
-    val bottomListenerField: Field,
-    val bottomMethod: Method,
-)
-
-data class PbCommentBottomRecyclerSymbols(
-    val recyclerClass: Class<*>,
-    val scrollMethod: Method,
-    val ownerField: Field,
-    val bottomListenerField: Field,
-    val bottomMethod: Method,
-    val firstVisibleMethod: Method,
-    val lastVisibleMethod: Method,
-    val getAdapterMethod: Method,
-)
-
 data class PbCommentAutoLoadSymbols(
-    val listTargets: PbCommentBottomListSymbols?,
-    val recyclerTargets: PbCommentBottomRecyclerSymbols?,
+    val configMethod: Method,
+    val batch: PbCommentBatchSymbols?,
 )
 
 data class PbLikeAutoReplySymbols(

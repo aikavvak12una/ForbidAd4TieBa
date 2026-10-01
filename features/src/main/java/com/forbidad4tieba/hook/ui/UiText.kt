@@ -199,7 +199,7 @@ object UiText {
         fun homeNativeGlassTintColorSwatch(index: Int): String = "动态取色色块 $index"
 
         const val AUTO_LOAD_MORE_LABEL = "预加载"
-        const val AUTO_LOAD_MORE_DESC = "浏览信息流和帖子评论时自动静默加载下一页\n*滑动卡顿尝试关闭此功能"
+        const val AUTO_LOAD_MORE_DESC = "信息流提前加载下一页，帖子评论每次最多连续预加载 2 页\n* 增加流量与内存占用，滑动卡顿时可关闭"
         const val PB_LIKE_AUTO_REPLY_LABEL = "快捷回复"
         const val PB_LIKE_AUTO_REPLY_DESC = "点赞帖子后，自动发送预设回复内容"
         const val COMMENT_AVATAR_DIRECT_PROFILE_LABEL = "头像直达主页"

@@ -1,11 +1,8 @@
 package com.forbidad4tieba.hook.symbol.contract
 
-import android.widget.AbsListView
 import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.contracts.MemberAccess
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
-import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
-import com.forbidad4tieba.hook.symbol.contract.CacheTargetValidation.TAG
 import com.forbidad4tieba.hook.symbol.model.AutoLoadMoreConfigScanSymbols
 import com.forbidad4tieba.hook.symbol.model.AutoLoadMoreSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
@@ -14,25 +11,18 @@ import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.HookSymbolsBuilder
 import com.forbidad4tieba.hook.symbol.model.PbCommentAutoLoadSymbols
-import com.forbidad4tieba.hook.symbol.model.PbCommentBottomListSymbols
-import com.forbidad4tieba.hook.symbol.model.PbCommentBottomRecyclerSymbols
 import com.forbidad4tieba.hook.symbol.model.PbCommentInteractionScanSymbols
 import com.forbidad4tieba.hook.symbol.model.PbScrollCoalesceSymbols
+import com.forbidad4tieba.hook.symbol.scan.PbCommentPreloadSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.PbCommentBatchSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.AutoRefreshSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PbCommentInteractionSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
-import com.forbidad4tieba.hook.symbol.status.HookPointState
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
-import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 /** Owns the cached descriptors and host rules for this capability. */
 object AutoLoadMoreContract : SymbolContract("AutoLoadMore") {
-    internal override val candidateClasses = listOf(
-        StableTiebaHookPoints.BD_LIST_VIEW_CLASS,
-        StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS,
-    )
-
     val autoLoadMoreConfigClass = text("autoLoadMoreConfigClass")
     val autoLoadMoreConfigMethod = text("autoLoadMoreConfigMethod")
     val pbCommentScrollListenerClass = text("pbCommentScrollListenerClass")
@@ -40,12 +30,8 @@ object AutoLoadMoreContract : SymbolContract("AutoLoadMore") {
     val pbCommentScrollFragmentField = text("pbCommentScrollFragmentField")
     val pbCommentScrollBottomListenerField = text("pbCommentScrollBottomListenerField")
     val pbCommentScrollBottomMethod = text("pbCommentScrollBottomMethod")
-    val pbCommentBottomListScrollClass = text("pbCommentBottomListScrollClass")
-    val pbCommentBottomListScrollMethod = text("pbCommentBottomListScrollMethod")
-    val pbCommentBottomListOwnerField = text("pbCommentBottomListOwnerField")
-    val pbCommentBottomRecyclerScrollClass = text("pbCommentBottomRecyclerScrollClass")
-    val pbCommentBottomRecyclerScrollMethod = text("pbCommentBottomRecyclerScrollMethod")
-    val pbCommentBottomRecyclerOwnerField = text("pbCommentBottomRecyclerOwnerField")
+    val pbCommentPreloadConfigMethodSpec = text("pbCommentPreloadConfigMethodSpec")
+    val pbCommentBatchSpec = text("pbCommentBatchSpec")
 
     internal override fun scan(scan: SymbolScanContext, output: HookSymbolsBuilder) = with(scan) {
 
@@ -83,17 +69,9 @@ runScanStep(
 
         val pbCommentScrollBottomMethod: String? = pbCommentInteractionScan.scrollBottomMethod
 
-        val pbCommentBottomListScrollClass: String? = pbCommentInteractionScan.bottomListScrollClass
-
-        val pbCommentBottomListScrollMethod: String? = pbCommentInteractionScan.bottomListScrollMethod
-
-        val pbCommentBottomListOwnerField: String? = pbCommentInteractionScan.bottomListOwnerField
-
-        val pbCommentBottomRecyclerScrollClass: String? = pbCommentInteractionScan.bottomRecyclerScrollClass
-
-        val pbCommentBottomRecyclerScrollMethod: String? = pbCommentInteractionScan.bottomRecyclerScrollMethod
-
-        val pbCommentBottomRecyclerOwnerField: String? = pbCommentInteractionScan.bottomRecyclerOwnerField
+        val commentConfig = PbCommentPreloadSymbolScanner.scan(cl, logger)
+        output[pbCommentPreloadConfigMethodSpec] = commentConfig
+        output[pbCommentBatchSpec] = PbCommentBatchSymbolScanner.scan(cl, commentConfig, logger)
 
         output[AutoLoadMoreContract.autoLoadMoreConfigClass] = autoLoadMoreConfigClass
         output[AutoLoadMoreContract.autoLoadMoreConfigMethod] = autoLoadMoreConfigMethod
@@ -102,12 +80,6 @@ runScanStep(
         output[AutoLoadMoreContract.pbCommentScrollFragmentField] = pbCommentScrollFragmentField
         output[AutoLoadMoreContract.pbCommentScrollBottomListenerField] = pbCommentScrollBottomListenerField
         output[AutoLoadMoreContract.pbCommentScrollBottomMethod] = pbCommentScrollBottomMethod
-        output[AutoLoadMoreContract.pbCommentBottomListScrollClass] = pbCommentBottomListScrollClass
-        output[AutoLoadMoreContract.pbCommentBottomListScrollMethod] = pbCommentBottomListScrollMethod
-        output[AutoLoadMoreContract.pbCommentBottomListOwnerField] = pbCommentBottomListOwnerField
-        output[AutoLoadMoreContract.pbCommentBottomRecyclerScrollClass] = pbCommentBottomRecyclerScrollClass
-        output[AutoLoadMoreContract.pbCommentBottomRecyclerScrollMethod] = pbCommentBottomRecyclerScrollMethod
-        output[AutoLoadMoreContract.pbCommentBottomRecyclerOwnerField] = pbCommentBottomRecyclerOwnerField
     }
 
     fun resolveAutoLoadMoreSymbols(
@@ -198,162 +170,9 @@ runScanStep(
         }
     }
 
-    fun resolvePbCommentAutoLoadSymbols(
-        cl: ClassLoader,
-        symbols: HookSymbols?,
-    ): PbCommentAutoLoadSymbols? {
-        return try {
-            val resolvedSymbols = symbols ?: run {
-                Diagnostics.log("[PbCommentAutoLoadHook] skipped: scan symbols unavailable")
-                return null
-            }
-            val listTargets = resolvePbCommentBottomListTargets(cl, resolvedSymbols)
-            val recyclerTargets = resolvePbCommentBottomRecyclerTargets(cl, resolvedSymbols)
-            if (listTargets == null && recyclerTargets == null) {
-                Diagnostics.log("[PbCommentAutoLoadHook] skipped: bottom mechanism symbol missing")
-                return null
-            }
-            PbCommentAutoLoadSymbols(listTargets = listTargets, recyclerTargets = recyclerTargets)
-        } catch (t: Throwable) {
-            Diagnostics.log("[PbCommentAutoLoadHook] symbol resolve FAILED: ${t.message}")
-            Diagnostics.log(t)
-            null
-        }
-    }
-
-    private fun resolvePbCommentBottomListTargets(
-        cl: ClassLoader,
-        symbols: HookSymbols,
-    ): PbCommentBottomListSymbols? {
-        val scrollClassName = symbols[AutoLoadMoreContract.pbCommentBottomListScrollClass]?.takeIf { it.isNotBlank() } ?: return null
-        val scrollMethodName = symbols[AutoLoadMoreContract.pbCommentBottomListScrollMethod]?.takeIf { it.isNotBlank() } ?: return null
-        val ownerFieldName = symbols[AutoLoadMoreContract.pbCommentBottomListOwnerField]?.takeIf { it.isNotBlank() } ?: return null
-        return try {
-            val scrollClass = ScanReflection.safeFindClass(scrollClassName, cl) ?: return null
-            val listClass = ScanReflection.safeFindClass(StableTiebaHookPoints.BD_LIST_VIEW_CLASS, cl) ?: return null
-            val ownerField = MemberAccess.findField(scrollClass, ownerFieldName)
-            if (ownerField.type != listClass) return null
-            val bottomListenerField = MemberAccess.findField(listClass, PB_COMMENT_BOTTOM_LISTENER_FIELD)
-            val bottomMethod = resolvePbCommentBottomMethod(bottomListenerField.type) ?: return null
-            val scrollMethod = resolvePbCommentListScrollMethod(scrollClass, scrollMethodName) ?: return null
-            ownerField.isAccessible = true
-            bottomListenerField.isAccessible = true
-            PbCommentBottomListSymbols(
-                listClass = listClass,
-                scrollMethod = scrollMethod,
-                ownerField = ownerField,
-                bottomListenerField = bottomListenerField,
-                bottomMethod = bottomMethod,
-            )
-        } catch (t: Throwable) {
-            Diagnostics.log("[PbCommentAutoLoadHook] BdListView target resolve FAILED: ${t.message}")
-            Diagnostics.log(t)
-            null
-        }
-    }
-
-    private fun resolvePbCommentBottomRecyclerTargets(
-        cl: ClassLoader,
-        symbols: HookSymbols,
-    ): PbCommentBottomRecyclerSymbols? {
-        val scrollClassName = symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollClass]?.takeIf { it.isNotBlank() } ?: return null
-        val scrollMethodName = symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollMethod]?.takeIf { it.isNotBlank() } ?: return null
-        val ownerFieldName = symbols[AutoLoadMoreContract.pbCommentBottomRecyclerOwnerField]?.takeIf { it.isNotBlank() } ?: return null
-        return try {
-            val scrollClass = ScanReflection.safeFindClass(scrollClassName, cl) ?: return null
-            val recyclerClass = ScanReflection.safeFindClass(StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS, cl) ?: return null
-            val recyclerViewClass = ScanReflection.safeFindClass(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl) ?: return null
-            val ownerField = MemberAccess.findField(scrollClass, ownerFieldName)
-            if (ownerField.type != recyclerClass) return null
-            val bottomListenerField = MemberAccess.findField(recyclerClass, PB_COMMENT_BOTTOM_LISTENER_FIELD)
-            val bottomMethod = resolvePbCommentBottomMethod(bottomListenerField.type) ?: return null
-            val firstVisibleMethod = resolvePbCommentNoArgIntMethod(recyclerClass, "getFirstVisiblePosition") ?: return null
-            val lastVisibleMethod = resolvePbCommentNoArgIntMethod(recyclerClass, "getLastVisiblePosition") ?: return null
-            val getAdapterMethod = resolvePbCommentNoArgMethod(recyclerViewClass, "getAdapter") ?: return null
-            val scrollMethod = resolvePbCommentRecyclerScrolledMethod(
-                scrollClass = scrollClass,
-                methodName = scrollMethodName,
-                recyclerViewClass = recyclerViewClass,
-            ) ?: return null
-            ownerField.isAccessible = true
-            bottomListenerField.isAccessible = true
-            PbCommentBottomRecyclerSymbols(
-                recyclerClass = recyclerClass,
-                scrollMethod = scrollMethod,
-                ownerField = ownerField,
-                bottomListenerField = bottomListenerField,
-                bottomMethod = bottomMethod,
-                firstVisibleMethod = firstVisibleMethod,
-                lastVisibleMethod = lastVisibleMethod,
-                getAdapterMethod = getAdapterMethod,
-            )
-        } catch (t: Throwable) {
-            Diagnostics.log("[PbCommentAutoLoadHook] BdRecyclerView target resolve FAILED: ${t.message}")
-            Diagnostics.log(t)
-            null
-        }
-    }
-
-    private fun resolvePbCommentListScrollMethod(clazz: Class<*>, methodName: String): Method? {
-        return clazz.declaredMethods.firstOrNull { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.name == methodName &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 4 &&
-                method.parameterTypes[0] == AbsListView::class.java &&
-                method.parameterTypes[1] == Int::class.javaPrimitiveType &&
-                method.parameterTypes[2] == Int::class.javaPrimitiveType &&
-                method.parameterTypes[3] == Int::class.javaPrimitiveType
-        }?.apply { isAccessible = true }
-    }
-
-    private fun resolvePbCommentRecyclerScrolledMethod(
-        scrollClass: Class<*>,
-        methodName: String,
-        recyclerViewClass: Class<*>,
-    ): Method? {
-        return scrollClass.declaredMethods.firstOrNull { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.name == methodName &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.size == 3 &&
-                method.parameterTypes[0] == recyclerViewClass &&
-                method.parameterTypes[1] == Int::class.javaPrimitiveType &&
-                method.parameterTypes[2] == Int::class.javaPrimitiveType
-        }?.apply { isAccessible = true }
-    }
-
-    private fun resolvePbCommentNoArgMethod(clazz: Class<*>, methodName: String): Method? {
-        var current: Class<*>? = clazz
-        while (current != null) {
-            val method = current.declaredMethods.firstOrNull {
-                !Modifier.isStatic(it.modifiers) &&
-                    it.name == methodName &&
-                    it.parameterTypes.isEmpty()
-            }
-            if (method != null) return method.apply { isAccessible = true }
-            current = current.superclass
-        }
-        return null
-    }
-
-    private fun resolvePbCommentNoArgIntMethod(clazz: Class<*>, methodName: String): Method? {
-        return resolvePbCommentNoArgMethod(clazz, methodName)
-            ?.takeIf { it.returnType == Int::class.javaPrimitiveType }
-    }
-
-    private fun resolvePbCommentBottomMethod(clazz: Class<*>): Method? {
-        return clazz.declaredMethods.firstOrNull { method ->
-            !Modifier.isStatic(method.modifiers) &&
-                method.name == PB_COMMENT_BOTTOM_METHOD &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.isEmpty()
-        }?.apply { isAccessible = true }
-    }
-
-    private const val PB_COMMENT_BOTTOM_LISTENER_FIELD = "mOnScrollToBottomListener"
-
-    private const val PB_COMMENT_BOTTOM_METHOD = "onScrollToBottom"
+    fun resolvePbCommentAutoLoadSymbols(cl: ClassLoader, symbols: HookSymbols?): PbCommentAutoLoadSymbols? =
+        PbCommentPreloadSymbolScanner.restore(cl, symbols?.get(pbCommentPreloadConfigMethodSpec))
+            ?.let { PbCommentAutoLoadSymbols(it, PbCommentBatchSymbolScanner.restore(cl, symbols?.get(pbCommentBatchSpec))) }
 
     internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> {
         val out = linkedMapOf<String, HookFeatureStatus>()
@@ -364,16 +183,11 @@ runScanStep(
         if (symbols[AutoLoadMoreContract.autoLoadMoreConfigMethod].isNullOrBlank()) {
             autoLoadMoreOptional.add("autoLoadMoreConfigMethod")
         }
-        val hasListBottomMechanism =
-            !symbols[AutoLoadMoreContract.pbCommentBottomListScrollClass].isNullOrBlank() &&
-                !symbols[AutoLoadMoreContract.pbCommentBottomListScrollMethod].isNullOrBlank() &&
-                !symbols[AutoLoadMoreContract.pbCommentBottomListOwnerField].isNullOrBlank()
-        val hasRecyclerBottomMechanism =
-            !symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollClass].isNullOrBlank() &&
-                !symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollMethod].isNullOrBlank() &&
-                !symbols[AutoLoadMoreContract.pbCommentBottomRecyclerOwnerField].isNullOrBlank()
-        if (!hasListBottomMechanism && !hasRecyclerBottomMechanism) {
-            autoLoadMoreOptional.add("pbCommentBottomMechanism")
+        if (symbols[pbCommentPreloadConfigMethodSpec].isNullOrBlank()) {
+            autoLoadMoreOptional.add(pbCommentPreloadConfigMethodSpec.cacheKey)
+        }
+        if (symbols[pbCommentBatchSpec].isNullOrBlank()) {
+            autoLoadMoreOptional.add(pbCommentBatchSpec.cacheKey)
         }
         out[HookFeatureKey.AUTO_LOAD_MORE] = if (autoLoadMoreOptional.isEmpty()) {
             HookFeatureStatus(state = HookFeatureState.FULL)
@@ -442,41 +256,13 @@ runScanStep(
                 AutoLoadMoreContract.pbCommentScrollBottomMethod.check(symbols),
             ),
         )
-        run {
-            val listChecks = listOf(
-                AutoLoadMoreContract.pbCommentBottomListScrollClass.check(symbols),
-                AutoLoadMoreContract.pbCommentBottomListScrollMethod.check(symbols),
-                AutoLoadMoreContract.pbCommentBottomListOwnerField.check(symbols),
-            )
-            val recyclerChecks = listOf(
-                AutoLoadMoreContract.pbCommentBottomRecyclerScrollClass.check(symbols),
-                AutoLoadMoreContract.pbCommentBottomRecyclerScrollMethod.check(symbols),
-                AutoLoadMoreContract.pbCommentBottomRecyclerOwnerField.check(symbols),
-            )
-            val listFound = listChecks.all { it.second }
-            val recyclerFound = recyclerChecks.all { it.second }
-            val anyBottomSymbol = (listChecks + recyclerChecks).any { it.second }
-            val missing = when {
-                listFound || recyclerFound -> emptyList()
-                anyBottomSymbol -> (listChecks + recyclerChecks).filter { !it.second }.map { it.first }
-                else -> listOf("pbCommentBottomMechanism")
-            }
-            val state = when {
-                listFound || recyclerFound -> HookPointState.FOUND
-                anyBottomSymbol -> HookPointState.PARTIAL
-                else -> HookPointState.MISSING
-            }
-            addStatus(
-                HookPointStatus(
-                    name = "PbCommentAutoLoadHook",
-                    state = state,
-                    missing = missing,
-                    target =
-                        "${symbols[AutoLoadMoreContract.pbCommentBottomListScrollClass]}.${symbols[AutoLoadMoreContract.pbCommentBottomListScrollMethod]} / " +
-                            "${symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollClass]}.${symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollMethod]}",
-                ),
-            )
-        }
+        add(
+            "PbCommentAutoLoadHook",
+            symbols[pbCommentPreloadConfigMethodSpec].orEmpty(),
+            listOf(pbCommentPreloadConfigMethodSpec.check(symbols)),
+        )
+        addOptional("PbCommentAutoLoadHook.Batch", symbols[pbCommentBatchSpec].orEmpty(),
+            listOf(pbCommentPreloadConfigMethodSpec.check(symbols), pbCommentBatchSpec.check(symbols)))
     }.build()
 
     internal override val pointOwners = listOf(
@@ -497,14 +283,10 @@ runScanStep(
                 symbols[AutoLoadMoreContract.pbCommentScrollBottomListenerField] != null ||
                 symbols[AutoLoadMoreContract.pbCommentScrollBottomMethod] != null
         if (hasPbCommentScrollSymbols && !isPbCommentScrollValid(symbols, cl)) return false
-        val hasPbCommentBottomSymbols =
-            symbols[AutoLoadMoreContract.pbCommentBottomListScrollClass] != null ||
-                symbols[AutoLoadMoreContract.pbCommentBottomListScrollMethod] != null ||
-                symbols[AutoLoadMoreContract.pbCommentBottomListOwnerField] != null ||
-                symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollClass] != null ||
-                symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollMethod] != null ||
-                symbols[AutoLoadMoreContract.pbCommentBottomRecyclerOwnerField] != null
-        if (hasPbCommentBottomSymbols && !isPbCommentBottomMechanismValid(symbols, cl)) return false
+        val commentConfig = symbols[pbCommentPreloadConfigMethodSpec]
+        if (commentConfig != null && PbCommentPreloadSymbolScanner.restore(cl, commentConfig) == null) return false
+        val commentBatch = symbols[pbCommentBatchSpec]
+        if (commentBatch != null && PbCommentBatchSymbolScanner.restore(cl, commentBatch) == null) return false
         return true
     }
 
@@ -573,67 +355,4 @@ runScanStep(
         }
     }
 
-    private fun isPbCommentBottomMechanismValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-        val listOk = isListBottomScrollValid(
-            symbols[AutoLoadMoreContract.pbCommentBottomListScrollClass],
-            symbols[AutoLoadMoreContract.pbCommentBottomListScrollMethod],
-            symbols[AutoLoadMoreContract.pbCommentBottomListOwnerField],
-            StableTiebaHookPoints.BD_LIST_VIEW_CLASS,
-            cl,
-        ) { method ->
-            method.parameterTypes.size == 4 &&
-                method.parameterTypes[0] == android.widget.AbsListView::class.java &&
-                method.parameterTypes[1] == Int::class.javaPrimitiveType &&
-                method.parameterTypes[2] == Int::class.javaPrimitiveType &&
-                method.parameterTypes[3] == Int::class.javaPrimitiveType
-        }
-        val recyclerOk = isListBottomScrollValid(
-            symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollClass],
-            symbols[AutoLoadMoreContract.pbCommentBottomRecyclerScrollMethod],
-            symbols[AutoLoadMoreContract.pbCommentBottomRecyclerOwnerField],
-            StableTiebaHookPoints.BD_RECYCLER_VIEW_CLASS,
-            cl,
-        ) { method ->
-            val recyclerViewClass = ScanReflection.safeFindClass(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl)
-            method.parameterTypes.size == 3 &&
-                recyclerViewClass != null &&
-                method.parameterTypes[0] == recyclerViewClass &&
-                method.parameterTypes[1] == Int::class.javaPrimitiveType &&
-                method.parameterTypes[2] == Int::class.javaPrimitiveType
-        }
-        return listOk || recyclerOk
-    }
-
-    private fun isListBottomScrollValid(
-        className: String?,
-        methodName: String?,
-        ownerFieldName: String?,
-        ownerClassName: String,
-        cl: ClassLoader,
-        parameterCheck: (Method) -> Boolean,
-    ): Boolean {
-        if (className.isNullOrBlank() || methodName.isNullOrBlank() || ownerFieldName.isNullOrBlank()) {
-            return false
-        }
-        return try {
-            val targetClass = ScanReflection.safeFindClass(className, cl)
-            val ownerClass = ScanReflection.safeFindClass(ownerClassName, cl)
-            if (targetClass == null || ownerClass == null) return false
-            val ownerField = targetClass.declaredFields.firstOrNull { field ->
-                !Modifier.isStatic(field.modifiers) &&
-                    field.name == ownerFieldName &&
-                    field.type == ownerClass
-            } ?: return false
-            ownerField.isAccessible = true
-            targetClass.declaredMethods.any { method ->
-                !Modifier.isStatic(method.modifiers) &&
-                    method.name == methodName &&
-                    method.returnType == Void.TYPE &&
-                    parameterCheck(method)
-            }
-        } catch (t: Throwable) {
-            Diagnostics.logD("$TAG: pbCommentBottom validate failed: ${HookSymbolScanDiagnostics.sanitizeScanStatusText(HookSymbolScanDiagnostics.formatScanException(t))}")
-            false
-        }
-    }
 }

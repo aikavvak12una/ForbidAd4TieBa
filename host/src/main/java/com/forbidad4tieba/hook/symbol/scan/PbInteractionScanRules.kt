@@ -2,7 +2,6 @@ package com.forbidad4tieba.hook.symbol.scan
 
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
-import android.widget.AbsListView
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 import java.lang.reflect.Modifier
@@ -37,54 +36,6 @@ internal class PbCommentScrollRule(private val pbFragmentClassName: String) : Sc
         }
         return ScanMatch(cls.name, scroll.name, listOf(owner.name, bottom?.name.orEmpty(), bottomMethod?.name.orEmpty()).joinToString(","), 140)
     }
-}
-
-internal class BdListViewBottomScrollRule(private val listViewClassName: String) : ScanRule() {
-    override fun candidateNames(candidates: List<String>, cl: ClassLoader, logger: ScanLogger?) =
-        ScanDexQueries.classesWithFieldType(listViewClassName, logger)
-
-    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
-        val listView = ScanReflection.safeFindClass(listViewClassName, cl) ?: return null
-        if (!AbsListView.OnScrollListener::class.java.isAssignableFrom(cls) || cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
-        if (!ownerRegistersScrollListener(listViewClassName, cls.name, AbsListView.OnScrollListener::class.java.name, "setOnScrollListener", logger)) return null
-        val owner = cls.declaredFields.singleOrNull { !Modifier.isStatic(it.modifiers) && it.type == listView } ?: return null
-        val scroll = cls.declaredMethods.singleOrNull {
-                it.name == "onScroll" && it.returnType == Void.TYPE && it.parameterTypes.contentEquals(arrayOf(
-                    AbsListView::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
-                ))
-        } ?: return null
-        return ScanMatch(cls.name, scroll.name, owner.name, 140)
-    }
-}
-
-internal class BdRecyclerViewBottomScrollRule(private val recyclerViewClassName: String) : ScanRule() {
-    override fun candidateNames(candidates: List<String>, cl: ClassLoader, logger: ScanLogger?) =
-        ScanDexQueries.classesWithFieldType(recyclerViewClassName, logger)
-
-    override fun match(cls: Class<*>, cl: ClassLoader, logger: ScanLogger?): ScanMatch? {
-        val ownerClass = ScanReflection.safeFindClass(recyclerViewClassName, cl) ?: return null
-        val recycler = ScanReflection.safeFindClass(StableTiebaHookPoints.RECYCLER_VIEW_CLASS, cl) ?: return null
-        val listener = ScanReflection.safeFindClass("${StableTiebaHookPoints.RECYCLER_VIEW_CLASS}\$OnScrollListener", cl) ?: return null
-        if (!listener.isAssignableFrom(cls) || cls.isInterface || Modifier.isAbstract(cls.modifiers)) return null
-        if (!ownerRegistersScrollListener(recyclerViewClassName, cls.name, listener.name, "addOnScrollListener", logger)) return null
-        val owner = cls.declaredFields.singleOrNull { !Modifier.isStatic(it.modifiers) && it.type == ownerClass } ?: return null
-        val scroll = cls.declaredMethods.singleOrNull {
-                it.name == "onScrolled" && it.returnType == Void.TYPE &&
-                    it.parameterTypes.contentEquals(arrayOf(recycler, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType))
-        } ?: return null
-        return ScanMatch(cls.name, scroll.name, owner.name, 140)
-    }
-}
-
-private fun ownerRegistersScrollListener(
-    owner: String,
-    listener: String,
-    listenerApi: String,
-    registrationMethod: String,
-    logger: ScanLogger?,
-): Boolean = ScanDexQueries.methods(owner, logger).any { setup ->
-    setup.invokes.any { it.isConstructor && it.declaredClassName == listener && it.paramTypeNames == listOf(owner) } &&
-        setup.invokes.any { it.methodName == registrationMethod && it.paramTypeNames == listOf(listenerApi) }
 }
 
 internal class PbGestureScaleRule : ScanRule() {
