@@ -6,7 +6,6 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.symbol.model.AutoLoadMoreConfigScanSymbols
 import com.forbidad4tieba.hook.symbol.model.AutoLoadMoreSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
-import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.HookSymbolsBuilder
@@ -33,6 +32,16 @@ object AutoLoadMoreContract : SymbolContract("AutoLoadMore") {
     val pbCommentScrollBottomMethod = text("pbCommentScrollBottomMethod")
     val pbCommentPreloadConfigMethodSpec = text("pbCommentPreloadConfigMethodSpec")
     val pbCommentBatchSpec = text("pbCommentBatchSpec")
+
+    private val feedConfig = SymbolDependencies(autoLoadMoreConfigClass, autoLoadMoreConfigMethod)
+    private val scrollTarget = SymbolDependencies(pbCommentScrollListenerClass, pbCommentScrollMethod)
+    private val scrollEvidence = SymbolDependencies(
+        pbCommentScrollFragmentField, pbCommentScrollBottomListenerField, pbCommentScrollBottomMethod,
+    )
+    private val scrollCache = scrollTarget + scrollEvidence
+    private val commentConfig = SymbolDependencies(pbCommentPreloadConfigMethodSpec)
+    private val commentBatch = commentConfig + SymbolDependencies(pbCommentBatchSpec)
+    private val autoLoadMoreOptional = feedConfig + commentBatch
 
     internal override fun scan(scan: SymbolScanContext, output: HookSymbolsBuilder) = with(scan) {
 
@@ -96,14 +105,12 @@ runScanStep(
                 method.parameterTypes.isEmpty() && ScanReflection.isBooleanType(method.returnType)
             }?.apply { isAccessible = true }
 
-            val configClassName = symbols?.get(AutoLoadMoreContract.autoLoadMoreConfigClass)
-                ?.takeIf { it.isNotBlank() }
-            val configMethodName = symbols?.get(AutoLoadMoreContract.autoLoadMoreConfigMethod)
-                ?.takeIf { it.isNotBlank() }
-            val configMethod = if (configClassName == null || configMethodName == null) {
+            val configClassName = symbols?.get(autoLoadMoreConfigClass)
+            val configMethodName = symbols?.get(autoLoadMoreConfigMethod)
+            val configMethod = if (symbols == null || feedConfig.missing(symbols).isNotEmpty()) {
                 null
             } else {
-                MemberAccess.findMethodOrNull(configClassName, cl, configMethodName)
+                MemberAccess.findMethodOrNull(configClassName!!, cl, configMethodName!!)
                     ?.takeIf { method ->
                         method.parameterTypes.isEmpty() && ScanReflection.isIntType(method.returnType)
                     }
@@ -139,14 +146,13 @@ runScanStep(
                 Diagnostics.log("[PbScrollCoalesceHook] skipped: scan symbols unavailable")
                 return null
             }
-            val listenerClassName = resolvedSymbols[AutoLoadMoreContract.pbCommentScrollListenerClass]?.takeIf { it.isNotBlank() } ?: run {
-                Diagnostics.log("[PbScrollCoalesceHook] skipped: missing pbCommentScrollListenerClass")
+            val missing = scrollTarget.missing(resolvedSymbols)
+            if (missing.isNotEmpty()) {
+                Diagnostics.log("[PbScrollCoalesceHook] skipped: missing ${missing.joinToString()}")
                 return null
             }
-            val methodName = resolvedSymbols[AutoLoadMoreContract.pbCommentScrollMethod]?.takeIf { it.isNotBlank() } ?: run {
-                Diagnostics.log("[PbScrollCoalesceHook] skipped: missing pbCommentScrollMethod")
-                return null
-            }
+            val listenerClassName = resolvedSymbols[pbCommentScrollListenerClass]!!
+            val methodName = resolvedSymbols[pbCommentScrollMethod]!!
             val listenerClass = ScanReflection.safeFindClass(listenerClassName, cl) ?: run {
                 Diagnostics.log("[PbScrollCoalesceHook] skipped: class not found: $listenerClassName")
                 return null
@@ -175,70 +181,31 @@ runScanStep(
         PbCommentPreloadSymbolScanner.restore(cl, symbols?.get(pbCommentPreloadConfigMethodSpec))
             ?.let { PbCommentAutoLoadSymbols(it, PbCommentBatchSymbolScanner.restore(cl, symbols?.get(pbCommentBatchSpec))) }
 
-    internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> {
-        val out = linkedMapOf<String, HookFeatureStatus>()
-        val autoLoadMoreOptional = ArrayList<String>(8)
-        if (symbols[AutoLoadMoreContract.autoLoadMoreConfigClass].isNullOrBlank()) {
-            autoLoadMoreOptional.add("autoLoadMoreConfigClass")
-        }
-        if (symbols[AutoLoadMoreContract.autoLoadMoreConfigMethod].isNullOrBlank()) {
-            autoLoadMoreOptional.add("autoLoadMoreConfigMethod")
-        }
-        if (symbols[pbCommentPreloadConfigMethodSpec].isNullOrBlank()) {
-            autoLoadMoreOptional.add(pbCommentPreloadConfigMethodSpec.cacheKey)
-        }
-        if (symbols[pbCommentBatchSpec].isNullOrBlank()) {
-            autoLoadMoreOptional.add(pbCommentBatchSpec.cacheKey)
-        }
-        out[HookFeatureKey.AUTO_LOAD_MORE] = if (autoLoadMoreOptional.isEmpty()) {
-            HookFeatureStatus(state = HookFeatureState.FULL)
-        } else {
-            HookFeatureStatus(
-                state = HookFeatureState.PARTIAL,
-                missingOptional = autoLoadMoreOptional,
-            )
-        }
-        val pbScrollCoalesceCritical = ArrayList<String>(2)
-        if (symbols[AutoLoadMoreContract.pbCommentScrollListenerClass].isNullOrBlank()) {
-            pbScrollCoalesceCritical.add("pbCommentScrollListenerClass")
-        }
-        if (symbols[AutoLoadMoreContract.pbCommentScrollMethod].isNullOrBlank()) {
-            pbScrollCoalesceCritical.add("pbCommentScrollMethod")
-        }
-        out[HookFeatureKey.ENABLE_PB_SCROLL_COALESCE] = when {
-            pbScrollCoalesceCritical.isNotEmpty() -> HookFeatureStatus(
-                state = HookFeatureState.DISABLED,
-                missingCritical = pbScrollCoalesceCritical,
-            )
-            else -> HookFeatureStatus(state = HookFeatureState.FULL)
-        }
-        return out
-    }
+    internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> = linkedMapOf(
+        HookFeatureKey.AUTO_LOAD_MORE to CapabilityPolicy.statusFromMissing(
+            emptyList(), autoLoadMoreOptional.missing(symbols),
+        ),
+        HookFeatureKey.ENABLE_PB_SCROLL_COALESCE to scrollTarget.requiredStatus(symbols),
+    )
 
     internal override fun points(symbols: HookSymbols): List<HookPointStatus> = SymbolPointCollector().apply {
         add(
             "AutoLoadMoreHook.Config",
             "${symbols[AutoLoadMoreContract.autoLoadMoreConfigClass]}.${symbols[AutoLoadMoreContract.autoLoadMoreConfigMethod]}",
-            listOf(
-                AutoLoadMoreContract.autoLoadMoreConfigClass.check(symbols),
-                AutoLoadMoreContract.autoLoadMoreConfigMethod.check(symbols),
-            ),
+            feedConfig.checks(symbols),
         )
         add(
             "PbScrollCoalesceHook",
             "${symbols[AutoLoadMoreContract.pbCommentScrollListenerClass]}.${symbols[AutoLoadMoreContract.pbCommentScrollMethod]}",
-            listOf(
-                AutoLoadMoreContract.pbCommentScrollListenerClass.check(symbols),
-                AutoLoadMoreContract.pbCommentScrollMethod.check(symbols),
-            ),
+            scrollTarget.checks(symbols),
         )
         add(
             "PbCommentAutoLoadHook",
             symbols[pbCommentPreloadConfigMethodSpec].orEmpty(),
-            listOf(pbCommentPreloadConfigMethodSpec.check(symbols)),
+            commentConfig.checks(symbols),
         )
         addOptional("PbCommentAutoLoadHook.Batch", symbols[pbCommentBatchSpec].orEmpty(),
-            listOf(pbCommentPreloadConfigMethodSpec.check(symbols), pbCommentBatchSpec.check(symbols)))
+            commentBatch.checks(symbols))
     }.build()
 
     internal override val pointOwners = listOf(
@@ -248,29 +215,21 @@ runScanStep(
     )
 
     internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-        val hasAutoLoadMoreSymbols =
-            symbols[AutoLoadMoreContract.autoLoadMoreConfigClass] != null ||
-                symbols[AutoLoadMoreContract.autoLoadMoreConfigMethod] != null
-        if (hasAutoLoadMoreSymbols && !isAutoLoadMoreConfigValid(symbols, cl)) return false
-        val hasPbCommentScrollSymbols =
-            symbols[AutoLoadMoreContract.pbCommentScrollListenerClass] != null ||
-                symbols[AutoLoadMoreContract.pbCommentScrollMethod] != null ||
-                symbols[AutoLoadMoreContract.pbCommentScrollFragmentField] != null ||
-                symbols[AutoLoadMoreContract.pbCommentScrollBottomListenerField] != null ||
-                symbols[AutoLoadMoreContract.pbCommentScrollBottomMethod] != null
-        if (hasPbCommentScrollSymbols && !isPbCommentScrollValid(symbols, cl)) return false
-        val commentConfig = symbols[pbCommentPreloadConfigMethodSpec]
-        if (commentConfig != null && PbCommentPreloadSymbolScanner.restore(cl, commentConfig) == null) return false
-        val commentBatch = symbols[pbCommentBatchSpec]
-        if (commentBatch != null && PbCommentBatchSymbolScanner.restore(cl, commentBatch) == null) return false
+        if (feedConfig.anyPresent(symbols) && !isAutoLoadMoreConfigValid(symbols, cl)) return false
+        if (scrollCache.anyPresent(symbols) && !isPbCommentScrollValid(symbols, cl)) return false
+        val configSpec = symbols[pbCommentPreloadConfigMethodSpec]
+        if (configSpec != null && PbCommentPreloadSymbolScanner.restore(cl, configSpec) == null) return false
+        val batchSpec = symbols[pbCommentBatchSpec]
+        if (batchSpec != null && PbCommentBatchSymbolScanner.restore(cl, batchSpec) == null) return false
         return true
     }
 
     private const val PB_FRAGMENT_CLASS = StableTiebaHookPoints.PB_FRAGMENT_CLASS
 
     private fun isAutoLoadMoreConfigValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-        val className = symbols[AutoLoadMoreContract.autoLoadMoreConfigClass] ?: return false
-        val methodName = symbols[AutoLoadMoreContract.autoLoadMoreConfigMethod] ?: return false
+        if (feedConfig.missing(symbols).isNotEmpty()) return false
+        val className = symbols[autoLoadMoreConfigClass]!!
+        val methodName = symbols[autoLoadMoreConfigMethod]!!
         return try {
             val targetClass = ScanReflection.safeFindClass(className, cl) ?: return false
             targetClass.declaredMethods.any { method ->
@@ -285,8 +244,9 @@ runScanStep(
     }
 
     private fun isPbCommentScrollValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-        val listenerClassName = symbols[AutoLoadMoreContract.pbCommentScrollListenerClass] ?: return false
-        val scrollMethodName = symbols[AutoLoadMoreContract.pbCommentScrollMethod] ?: return false
+        if (scrollTarget.missing(symbols).isNotEmpty()) return false
+        val listenerClassName = symbols[pbCommentScrollListenerClass]!!
+        val scrollMethodName = symbols[pbCommentScrollMethod]!!
         return try {
             val listenerClass = ScanReflection.safeFindClass(listenerClassName, cl) ?: return false
             val hasScrollMethod = listenerClass.declaredMethods.any { method ->
@@ -303,13 +263,7 @@ runScanStep(
             val fragmentFieldName = symbols[AutoLoadMoreContract.pbCommentScrollFragmentField]
             val bottomListenerFieldName = symbols[AutoLoadMoreContract.pbCommentScrollBottomListenerField]
             val bottomMethodName = symbols[AutoLoadMoreContract.pbCommentScrollBottomMethod]
-            if (
-                fragmentFieldName.isNullOrBlank() ||
-                bottomListenerFieldName.isNullOrBlank() ||
-                bottomMethodName.isNullOrBlank()
-            ) {
-                return true
-            }
+            if (scrollEvidence.missing(symbols).isNotEmpty()) return true
 
             val fragmentField = listenerClass.declaredFields.firstOrNull { field ->
                 !java.lang.reflect.Modifier.isStatic(field.modifiers) &&
