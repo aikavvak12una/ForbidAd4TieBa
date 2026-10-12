@@ -9,6 +9,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import io.github.libxposed.api.XposedInterface
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.Locale
 import java.util.zip.ZipFile
 
@@ -69,7 +70,13 @@ internal object RuntimeEnvironmentProvider {
         val module = XposedCompat.module
         val frameworkProperties = runCatching { module?.frameworkProperties }.getOrNull()
         val frameworkName = runCatching { module?.frameworkName }.getOrNull().orUnknown()
-        val patchMode = collectPatchMode(context)
+        val moduleInfo = runCatching { module?.moduleApplicationInfo }.getOrNull()
+        val ratingEvidence = EnvironmentRatingEvidence(
+            modulePackageName = moduleInfo?.packageName,
+            moduleApk = moduleInfo?.sourceDir?.let(::File),
+            hostCacheDir = runCatching { context.cacheDir }.getOrNull(),
+        )
+        val patchMode = collectPatchMode(context, ratingEvidence)
 
         return RuntimeEnvironment(
             tiebaVersionName = collectTiebaVersionName(context),
@@ -81,7 +88,7 @@ internal object RuntimeEnvironmentProvider {
             xposedFrameworkVersionCode = runCatching { module?.frameworkVersionCode }.getOrNull()?.toString().orUnknown(),
             xposedFrameworkProperties = frameworkProperties?.toString().orUnknown(),
             xposedFrameworkCapabilities = formatFrameworkCapabilities(frameworkProperties),
-            environmentRatingLevel = classifyEnvironmentRatingLevel(frameworkProperties, patchMode),
+            environmentRatingLevel = ratingEvidence.level(frameworkProperties),
             runtimeKind = classifyRuntimeKind(frameworkName),
             patchMode = patchMode,
         )
@@ -120,14 +127,6 @@ internal object RuntimeEnvironmentProvider {
         return out
     }
 
-    private fun classifyEnvironmentRatingLevel(properties: Long?, patchMode: String): Int {
-        return when {
-            properties != null && (properties and XposedInterface.PROP_CAP_SYSTEM) != 0L -> 0
-            patchMode == "integrated" -> 2
-            else -> 1
-        }
-    }
-
     private fun classifyHostSource(sourceDir: String?): String {
         val value = sourceDir?.replace('\\', '/')?.lowercase(Locale.ROOT).orEmpty()
         return when {
@@ -139,8 +138,8 @@ internal object RuntimeEnvironmentProvider {
         }
     }
 
-    private fun collectPatchMode(context: Context): String {
-        val detection = detectPatchMode(context)
+    private fun collectPatchMode(context: Context, ratingEvidence: EnvironmentRatingEvidence): String {
+        val detection = detectPatchMode(context, ratingEvidence)
         return when {
             detection.embeddedModulesFound -> "integrated"
             detection.configFound && detection.sourceChecked -> "local"
@@ -149,8 +148,8 @@ internal object RuntimeEnvironmentProvider {
         }
     }
 
-    private fun detectPatchMode(context: Context): PatchModeDetection {
-        var configFound = findPatchConfigFromManifest(context) != null
+    private fun detectPatchMode(context: Context, ratingEvidence: EnvironmentRatingEvidence): PatchModeDetection {
+        var configFound = findPatchConfigFromManifest(context, ratingEvidence) != null
         var embeddedModulesFound = false
         var sourceChecked = false
         var sourceLooksPatched = false
@@ -160,14 +159,14 @@ internal object RuntimeEnvironmentProvider {
             if (normalizedPath.contains("/npatch/") || normalizedPath.contains("-npatched.apk")) {
                 sourceLooksPatched = true
             }
-            val result = inspectPatchZipSource(sourcePath) ?: continue
+            val result = inspectPatchZipSource(sourcePath, ratingEvidence) ?: continue
             sourceChecked = true
             configFound = configFound || result.configFound
             embeddedModulesFound = embeddedModulesFound || result.embeddedModulesFound
             sourceLooksPatched = sourceLooksPatched || result.sourceLooksPatched
         }
 
-        val assetResult = inspectPatchAssets(context)
+        val assetResult = inspectPatchAssets(context, ratingEvidence)
         if (assetResult != null) {
             sourceChecked = true
             configFound = configFound || assetResult.configFound
@@ -213,28 +212,32 @@ internal object RuntimeEnvironmentProvider {
         }.getOrNull()
     }
 
-    private fun findPatchConfigFromManifest(context: Context): JSONObject? {
+    private fun findPatchConfigFromManifest(context: Context, ratingEvidence: EnvironmentRatingEvidence): JSONObject? {
         val appInfos = listOfNotNull(
             context.applicationInfo,
             getApplicationInfoCompat(context),
         )
+        var firstConfig: JSONObject? = null
         for (appInfo in appInfos) {
-            val encoded = appInfo.metaData?.getString(PATCH_MANIFEST_META_KEY)
-                ?.takeIf { it.isNotBlank() }
-                ?: continue
-            decodePatchConfig(encoded)?.let { return it }
+            val metadata = appInfo.metaData ?: continue
+            if (!metadata.containsKey(PATCH_MANIFEST_META_KEY)) continue
+            val encoded = runCatching { metadata.getString(PATCH_MANIFEST_META_KEY) }.getOrNull()
+            val config = encoded?.takeIf { it.isNotBlank() }?.let(::decodePatchConfig)
+            ratingEvidence.observeConfig(config)
+            if (firstConfig == null) firstConfig = config
         }
-        return null
+        return firstConfig
     }
 
     private fun decodePatchConfig(encoded: String): JSONObject? {
         return runCatching {
+            require(encoded.length <= EnvironmentRatingEvidence.MAX_CONFIG_BYTES * 2)
             val decoded = Base64.decode(encoded, Base64.DEFAULT)
             JSONObject(String(decoded, Charsets.UTF_8))
         }.getOrNull()
     }
 
-    private fun inspectPatchZipSource(sourcePath: String): PatchModeDetection? {
+    private fun inspectPatchZipSource(sourcePath: String, ratingEvidence: EnvironmentRatingEvidence): PatchModeDetection? {
         return runCatching {
             ZipFile(sourcePath).use { zip ->
                 var embeddedModulesFound = false
@@ -249,7 +252,16 @@ internal object RuntimeEnvironmentProvider {
                         break
                     }
                 }
-                val configFound = zip.getEntry(PATCH_CONFIG_ASSET_PATH) != null
+                val configEntry = zip.getEntry(PATCH_CONFIG_ASSET_PATH)
+                val configFound = configEntry != null
+                if (configEntry != null) {
+                    try {
+                        zip.getInputStream(configEntry).use(ratingEvidence::observeConfigStream)
+                    } catch (_: Exception) {
+                        ratingEvidence.observeConfig(null)
+                    }
+                }
+                if (configFound || embeddedModulesFound) ratingEvidence.observePatchedArchive(zip)
                 PatchModeDetection(
                     configFound = configFound,
                     embeddedModulesFound = embeddedModulesFound,
@@ -260,16 +272,17 @@ internal object RuntimeEnvironmentProvider {
         }.getOrNull()
     }
 
-    private fun inspectPatchAssets(context: Context): PatchModeDetection? {
+    private fun inspectPatchAssets(context: Context, ratingEvidence: EnvironmentRatingEvidence): PatchModeDetection? {
         return runCatching {
             val configFound = runCatching {
-                context.assets.open("npatch/config.json").close()
+                context.assets.open("npatch/config.json").use(ratingEvidence::observeConfigStream)
                 true
             }.getOrDefault(false)
-            val embeddedModulesFound = runCatching {
-                context.assets.list("npatch/modules")
-                    ?.any { it.endsWith(".apk", ignoreCase = true) }
-            }.getOrNull() == true
+            val embeddedModuleNames = runCatching { context.assets.list("npatch/modules") }.getOrNull()
+            val embeddedModulesFound = embeddedModuleNames?.any { it.endsWith(".apk", ignoreCase = true) } == true
+            if ((configFound || embeddedModulesFound) && embeddedModuleNames != null) {
+                ratingEvidence.observePatchedAssetModules(embeddedModuleNames)
+            }
             if (!configFound && !embeddedModulesFound) {
                 null
             } else {
