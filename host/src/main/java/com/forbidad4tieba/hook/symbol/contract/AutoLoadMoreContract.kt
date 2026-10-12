@@ -27,6 +27,7 @@ object AutoLoadMoreContract : SymbolContract("AutoLoadMore") {
     val autoLoadMoreConfigMethod = text("autoLoadMoreConfigMethod")
     val pbCommentScrollListenerClass = text("pbCommentScrollListenerClass")
     val pbCommentScrollMethod = text("pbCommentScrollMethod")
+    // Discovery and full-cache structural evidence; the runtime hook only consumes the scroll method.
     val pbCommentScrollFragmentField = text("pbCommentScrollFragmentField")
     val pbCommentScrollBottomListenerField = text("pbCommentScrollBottomListenerField")
     val pbCommentScrollBottomMethod = text("pbCommentScrollBottomMethod")
@@ -204,25 +205,10 @@ runScanStep(
         if (symbols[AutoLoadMoreContract.pbCommentScrollMethod].isNullOrBlank()) {
             pbScrollCoalesceCritical.add("pbCommentScrollMethod")
         }
-        val pbScrollCoalesceOptional = ArrayList<String>(3)
-        if (symbols[AutoLoadMoreContract.pbCommentScrollFragmentField].isNullOrBlank()) {
-            pbScrollCoalesceOptional.add("pbCommentScrollFragmentField")
-        }
-        if (symbols[AutoLoadMoreContract.pbCommentScrollBottomListenerField].isNullOrBlank()) {
-            pbScrollCoalesceOptional.add("pbCommentScrollBottomListenerField")
-        }
-        if (symbols[AutoLoadMoreContract.pbCommentScrollBottomMethod].isNullOrBlank()) {
-            pbScrollCoalesceOptional.add("pbCommentScrollBottomMethod")
-        }
         out[HookFeatureKey.ENABLE_PB_SCROLL_COALESCE] = when {
             pbScrollCoalesceCritical.isNotEmpty() -> HookFeatureStatus(
                 state = HookFeatureState.DISABLED,
                 missingCritical = pbScrollCoalesceCritical,
-                missingOptional = pbScrollCoalesceOptional,
-            )
-            pbScrollCoalesceOptional.isNotEmpty() -> HookFeatureStatus(
-                state = HookFeatureState.PARTIAL,
-                missingOptional = pbScrollCoalesceOptional,
             )
             else -> HookFeatureStatus(state = HookFeatureState.FULL)
         }
@@ -244,16 +230,6 @@ runScanStep(
             listOf(
                 AutoLoadMoreContract.pbCommentScrollListenerClass.check(symbols),
                 AutoLoadMoreContract.pbCommentScrollMethod.check(symbols),
-            ),
-        )
-        addOptional(
-            "PbScrollCoalesceHook.BottomGuard",
-            "${symbols[AutoLoadMoreContract.pbCommentScrollListenerClass]}[${symbols[AutoLoadMoreContract.pbCommentScrollFragmentField]}]." +
-                "${symbols[AutoLoadMoreContract.pbCommentScrollBottomListenerField]}.${symbols[AutoLoadMoreContract.pbCommentScrollBottomMethod]}",
-            listOf(
-                AutoLoadMoreContract.pbCommentScrollFragmentField.check(symbols),
-                AutoLoadMoreContract.pbCommentScrollBottomListenerField.check(symbols),
-                AutoLoadMoreContract.pbCommentScrollBottomMethod.check(symbols),
             ),
         )
         add(
