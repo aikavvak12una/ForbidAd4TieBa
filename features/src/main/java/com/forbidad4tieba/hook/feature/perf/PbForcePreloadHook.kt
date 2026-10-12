@@ -18,7 +18,7 @@ object PbForcePreloadHook {
     private val hooked = AtomicBoolean(false)
 
     fun hook(targets: PbPreloadTargets, abMethods: Map<String, Method>) {
-        if (!ConfigManager.snapshot().isPbPreloadForced) return
+        if (!PbPerformancePolicy.from(ConfigManager.snapshot()).forcePreload) return
         val mod = XposedCompat.module ?: return
         val hybrid = abMethods[PerformanceAbTarget.HYBRID_PB.methodName] ?: run {
             XposedCompat.log("$TAG hybrid gate unresolved, installation skipped")
@@ -32,7 +32,7 @@ object PbForcePreloadHook {
             // Retain early cache results before enabling the cooperating preload gates.
             handles += RuntimeHooks.builder(mod, targets.pageState.constructor, "PbForcePreloadHook", "hook:targets.pageState.constructor").intercept { chain ->
                 val original = chain.proceed()
-                if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) {
+                if (!disabled.get() && PbPerformancePolicy.from(ConfigManager.snapshot()).forcePreload) {
                     try {
                         retainPageState(targets.pageState, requireNotNull(chain.thisObject))
                     } catch (failure: Throwable) {
@@ -47,10 +47,10 @@ object PbForcePreloadHook {
             handles += RuntimeHooks.builder(mod, targets.body.hybrid, "PbForcePreloadHook", "hook:targets.body.hybrid").intercept { chain ->
                 val model = chain.args.firstOrNull()
                 // Keep already accepted native models consistent if a later preload operation fails.
-                if (ConfigManager.snapshot().isPbPreloadForced && model != null && continuity.isNative(model)) false else chain.proceed()
+                if (PbPerformancePolicy.from(ConfigManager.snapshot()).forcePreload && model != null && continuity.isNative(model)) false else chain.proceed()
             }
             handles += RuntimeHooks.builder(mod, targets.body.commit, "PbForcePreloadHook", "hook:targets.body.commit").intercept { chain ->
-                if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) {
+                if (!disabled.get() && PbPerformancePolicy.from(ConfigManager.snapshot()).forcePreload) {
                     try {
                         retainNativeBody(targets, continuity, requireNotNull(chain.thisObject), requireNotNull(chain.args.firstOrNull()))
                     } catch (failure: Throwable) {
@@ -63,14 +63,15 @@ object PbForcePreloadHook {
                 chain.proceed()
             }
             handles += RuntimeHooks.builder(mod, targets.preloadSwitch, "PbForcePreloadHook", "hook:targets.preloadSwitch").intercept { chain ->
-                if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) true else chain.proceed()
+                if (!disabled.get() && PbPerformancePolicy.from(ConfigManager.snapshot()).forcePreload) true else chain.proceed()
             }
             handles += RuntimeHooks.builder(mod, hybrid, "PbForcePreloadHook", "hook:hybrid").intercept { chain ->
-                if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) false else chain.proceed()
+                val policy = PbPerformancePolicy.from(ConfigManager.snapshot())
+                if (!disabled.get() && policy.forcePreload) policy.enableHybridOptimization else chain.proceed()
             }
             handles += RuntimeHooks.builder(mod, targets.provider, "PbForcePreloadHook", "hook:targets.provider").intercept { chain ->
                 val original = chain.proceed()
-                if (original != null || disabled.get() || !ConfigManager.snapshot().isPbPreloadForced) return@intercept original
+                if (original != null || disabled.get() || !PbPerformancePolicy.from(ConfigManager.snapshot()).forcePreload) return@intercept original
                 val tid = chain.args.firstOrNull() as? String ?: return@intercept original
                 try {
                     val card = targets.cardGetter.invoke(null) ?: return@intercept original

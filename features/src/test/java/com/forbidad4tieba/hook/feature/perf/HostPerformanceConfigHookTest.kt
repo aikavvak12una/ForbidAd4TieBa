@@ -20,13 +20,13 @@ class HostPerformanceConfigHookTest {
     @Test
     fun lowEndWithoutPreloadRetainsServerPolicyAndAddsMissingModuleBlocksOnlyOnce() {
         val original = """["remote_only","disable_webview_proxy"]"""
-        val actual = LowEndConfigPolicy.blockList(original, forcePbPreload = false)
+        val actual = LowEndConfigPolicy.blockList(original, preserveWebViewProxy = false)
 
         assertEquals(
             listOf("remote_only", "disable_webview_proxy", "disable_preload_feed_image"),
             items(actual),
         )
-        assertEquals(actual, LowEndConfigPolicy.blockList(actual, forcePbPreload = false))
+        assertEquals(actual, LowEndConfigPolicy.blockList(actual, preserveWebViewProxy = false))
     }
 
     @Test
@@ -39,7 +39,7 @@ class HostPerformanceConfigHookTest {
     }
 
     private fun merge(original: String, forcePreload: Boolean): List<String> =
-        items(LowEndConfigPolicy.blockList(original, forcePbPreload = forcePreload))
+        items(LowEndConfigPolicy.blockList(original, preserveWebViewProxy = forcePreload))
 
     private fun items(raw: String): List<String> {
         val array = JSONArray(raw)

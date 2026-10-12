@@ -23,7 +23,7 @@ internal val PerformanceFeature = FeatureDefinition(
     if (settings.isPbPerformanceModeEnabled || settings.isPostPageAdBlockEnabled) {
         entries += HookInstallEntry.observed("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(abSymbols(cl)) }
     }
-    if (settings.isPbPreloadForced) {
+    if (PbPerformancePolicy.from(settings).forcePreload) {
         entries += HookInstallEntry.observed("PbForcePreloadHook") { cl ->
             PbPreloadContract.resolvePbPreloadTargets(cl, symbols)?.let { targets ->
                 PbForcePreloadHook.hook(targets, abSymbols(cl))
