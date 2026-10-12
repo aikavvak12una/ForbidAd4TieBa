@@ -167,7 +167,9 @@ object PbForcePreloadHook {
         t.responsePage.set(response, t.pageBuilder.finish(page))
         t.responseFirstFloor.set(response, first)
         t.responseFirstFloorPost.set(response, first)
-        t.responsePosts.set(response, listOf(first))
+        // The first-floor fields render the preview. A nonempty post list constrains the host's
+        // full-response merge and would drop comments if that response arrives before firstPage.
+        t.responsePosts.set(response, emptyList<Any>())
         t.author.get(thread)?.let { t.responseUsers.set(response, listOf(it)) }
         return t.responseBuilder.finish(response)
     }
