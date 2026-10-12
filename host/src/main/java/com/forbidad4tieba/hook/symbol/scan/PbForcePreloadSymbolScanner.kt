@@ -63,8 +63,9 @@ internal object PbForcePreloadSymbolScanner {
                 it.paramTypeNames.isEmpty() && it.returnTypeName == THREAD_DATA
         }, logger) ?: return PbPreloadSymbols()
         val pageState = PbPreloadPageStateResolver.scan(bridge, logger) ?: return PbPreloadSymbols()
-        val symbols = PbPreloadSymbols(spec(provider), spec(card), pageState.first, pageState.second)
-        check(restore(cl, symbols.providerMethodSpec, symbols.cardGetterMethodSpec, symbols.pageStateMutableField, symbols.pageStateFlowField) != null) {
+        val body = PbPreloadBodyResolver.scan(bridge, logger) ?: return PbPreloadSymbols()
+        val symbols = PbPreloadSymbols(spec(provider), spec(card), pageState.first, pageState.second, body)
+        check(restore(cl, symbols) != null) {
             "preload provider/card protocol failed reflection validation"
         }
         return symbols
@@ -75,8 +76,10 @@ internal object PbForcePreloadSymbolScanner {
 
     private fun spec(method: MethodData): String = "${method.declaredClassName}#${method.methodName}"
 
-    fun restore(cl: ClassLoader, providerSpec: String?, cardGetterSpec: String?, mutableField: String?, flowField: String?): PbPreloadTargets? {
+    fun restore(cl: ClassLoader, symbols: PbPreloadSymbols): PbPreloadTargets? {
+        val (providerSpec, cardGetterSpec, mutableField, flowField, body) = symbols
         if (providerSpec.isNullOrBlank() || cardGetterSpec.isNullOrBlank() || mutableField.isNullOrBlank() || flowField.isNullOrBlank()) return null
+        if (body.descriptors().any { it.isNullOrBlank() }) return null
         return scanSubStep("PbForcePreloadHook.Restore", null, null as PbPreloadTargets?) {
             val singleton = Class.forName(StableTiebaHookPoints.TB_SINGLETON_CLASS, false, cl)
             val switch = singleton.getDeclaredMethod("isPbPreloadSwitchOn")
@@ -87,13 +90,13 @@ internal object PbForcePreloadSymbolScanner {
                 restoreSpec(cl, cardGetterSpec, THREAD_DATA, true),
                 PbPreloadProtocolResolver.resolve(cl),
                 PbPreloadPageStateResolver.restore(cl, mutableField, flowField),
+                PbPreloadBodyResolver.restore(cl, body),
             )
         }
     }
 
-    fun isCacheValid(cl: ClassLoader, providerSpec: String?, cardGetterSpec: String?, mutableField: String?, flowField: String?): Boolean =
-        (providerSpec == null && cardGetterSpec == null && mutableField == null && flowField == null) ||
-            restore(cl, providerSpec, cardGetterSpec, mutableField, flowField) != null
+    fun isCacheValid(cl: ClassLoader, symbols: PbPreloadSymbols): Boolean =
+        symbols == PbPreloadSymbols() || restore(cl, symbols) != null
 
     private fun restoreSpec(cl: ClassLoader, spec: String, result: String, static: Boolean, vararg params: Class<*>): Method {
         val parts = spec.split('#')

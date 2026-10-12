@@ -1,7 +1,7 @@
 package com.forbidad4tieba.hook.feature.perf
 
-import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.PbPreloadCardTargets
 import com.forbidad4tieba.hook.symbol.model.PbPreloadProtoBuilder
@@ -12,7 +12,7 @@ import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Supply the clicked ordinary card through the native PB provider, so PageBrowser receives it too. */
+/** Present available card content early and keep its native body within the owning page. */
 object PbForcePreloadHook {
     private const val TAG = "[PbForcePreloadHook]"
     private val hooked = AtomicBoolean(false)
@@ -25,15 +25,11 @@ object PbForcePreloadHook {
             return
         }
         if (!hooked.compareAndSet(false, true)) return
-        val handles = ArrayList<XposedInterface.HookHandle>(4)
+        val handles = ArrayList<XposedInterface.HookHandle>(6)
         val disabled = AtomicBoolean(false)
+        val continuity = PbPreloadBodyContinuity()
         try {
-            handles += RuntimeHooks.builder(mod, targets.preloadSwitch, "PbForcePreloadHook", "hook:targets.preloadSwitch").intercept { chain ->
-                if (ConfigManager.snapshot().isPbPreloadForced && !disabled.get()) true else chain.proceed()
-            }
-            handles += RuntimeHooks.builder(mod, hybrid, "PbForcePreloadHook", "hook:hybrid").intercept { chain ->
-                if (ConfigManager.snapshot().isPbPreloadForced && !disabled.get()) false else chain.proceed()
-            }
+            // Retain early cache results before enabling the cooperating preload gates.
             handles += RuntimeHooks.builder(mod, targets.pageState.constructor, "PbForcePreloadHook", "hook:targets.pageState.constructor").intercept { chain ->
                 val original = chain.proceed()
                 if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) {
@@ -47,6 +43,30 @@ object PbForcePreloadHook {
                     }
                 }
                 original
+            }
+            handles += RuntimeHooks.builder(mod, targets.body.hybrid, "PbForcePreloadHook", "hook:targets.body.hybrid").intercept { chain ->
+                val model = chain.args.firstOrNull()
+                // Keep already accepted native models consistent if a later preload operation fails.
+                if (ConfigManager.snapshot().isPbPreloadForced && model != null && continuity.isNative(model)) false else chain.proceed()
+            }
+            handles += RuntimeHooks.builder(mod, targets.body.commit, "PbForcePreloadHook", "hook:targets.body.commit").intercept { chain ->
+                if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) {
+                    try {
+                        retainNativeBody(targets, continuity, requireNotNull(chain.thisObject), requireNotNull(chain.args.firstOrNull()))
+                    } catch (failure: Throwable) {
+                        if (disabled.compareAndSet(false, true)) {
+                            XposedCompat.log("$TAG body continuity FAILED, new previews disabled: ${failure.message}")
+                            XposedCompat.log(failure)
+                        }
+                    }
+                }
+                chain.proceed()
+            }
+            handles += RuntimeHooks.builder(mod, targets.preloadSwitch, "PbForcePreloadHook", "hook:targets.preloadSwitch").intercept { chain ->
+                if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) true else chain.proceed()
+            }
+            handles += RuntimeHooks.builder(mod, hybrid, "PbForcePreloadHook", "hook:hybrid").intercept { chain ->
+                if (!disabled.get() && ConfigManager.snapshot().isPbPreloadForced) false else chain.proceed()
             }
             handles += RuntimeHooks.builder(mod, targets.provider, "PbForcePreloadHook", "hook:targets.provider").intercept { chain ->
                 val original = chain.proceed()
@@ -63,8 +83,9 @@ object PbForcePreloadHook {
                     original
                 }
             }
-            XposedCompat.log("$TAG hooks INSTALLED: count=${handles.size}/4")
+            XposedCompat.log("$TAG hooks INSTALLED: count=${handles.size}/6")
         } catch (t: Throwable) {
+            disabled.set(true)
             var removed = true
             for (handle in handles.asReversed()) {
                 try {
@@ -80,10 +101,31 @@ object PbForcePreloadHook {
         }
     }
 
+    private fun retainNativeBody(t: PbPreloadTargets, continuity: PbPreloadBodyContinuity, page: Any, result: Any) {
+        val b = t.body
+        if (b.success.get(result) != true) return
+        val model = requireNotNull(b.model.get(result))
+        val thread = requireNotNull(b.thread.get(model))
+        val tid = t.card.getTid.invoke(thread) as? String ?: return
+        val response = b.response.get(result)
+        val data = response?.let(b.responseData::get)
+        val first = data?.let(b.firstFloor::get)
+        val rawThread = data?.let(b.protocolThread::get)
+        val content = first?.let(b.postContent::get) as? List<*>
+        val postId = first?.let(b.postId::get) as? Long ?: 0L
+        val nativeBody = data != null && first != null && rawThread != null &&
+            t.card.isNormal.invoke(thread) == true && t.card.isPreloadType.invoke(null, thread) == true &&
+            t.card.threadId.get(rawThread)?.toString() == tid &&
+            b.postFloor.get(first) == 1 && !content.isNullOrEmpty() && content.all { t.card.contentType.isInstance(it) } &&
+            b.forumBot.get(data) == null && b.shopGoods.get(data) == null
+        continuity.accept(page, model, tid, postId, b.stage.get(result) == b.preloadStage,
+            b.webView.get(model) != null, nativeBody) { b.webView.set(model, null) }
+    }
+
     private fun retainPageState(t: PbPreloadPageStateTargets, viewModel: Any) {
         val original = requireNotNull(t.mutableField.get(viewModel))
         check(original === t.flowField.get(viewModel)) { "page state flow alias mismatch" }
-        // The host already retains its latest page state. Replay it to a UI that subscribes after preload.
+        // A complete preload result may arrive before the UI starts collecting page state.
         val flow = t.createFlow.invoke(null, 1, 0, t.suspendOverflow)
         t.flowField.set(viewModel, flow)
         try {

@@ -31,7 +31,7 @@ class PerformanceAbStatusTest {
     }
 
     @Test
-    fun preloadNeedsCardProviderEvenWhenRetiredGatesExistInCache() {
+    fun preloadNeedsPageStateEvenWhenRetiredGatesExistInCache() {
         val abOnly = buildHookSymbols {
             this[PerformanceContract.performanceAbMethods] = PerformanceAbTarget.entries.map { it.methodName }
         }
@@ -49,17 +49,17 @@ class PerformanceAbStatusTest {
     }
 
     @Test
-    fun currentPreloadSurvivesCacheRoundTripAndRequiresPageStateReplay() {
+    fun currentPreloadSurvivesCacheRoundTripAndRequiresItsWholePipeline() {
         val symbols = buildHookSymbols {
             this[PerformanceContract.performanceAbMethods] = listOf(PerformanceAbTarget.HYBRID_PB.methodName)
-            this[PbPreloadContract.pbPreloadProviderMethodSpec] = "test.Provider#load"
-            this[PbPreloadContract.pbPreloadCardGetterMethodSpec] = "test.CardCache#current"
+            for (field in PbPreloadContract.required.fields) {
+                @Suppress("UNCHECKED_CAST")
+                this[field as SymbolField<String?>] = "fixture"
+            }
             this[PbPreloadContract.pbPreloadPageStateMutableField] = "mutablePageState"
             this[PbPreloadContract.pbPreloadPageStateFlowField] = "pageState"
         }
         val restored = requireNotNull(HookSymbols.fromJson(symbols.toJson()))
-        assertEquals("test.Provider#load", restored[PbPreloadContract.pbPreloadProviderMethodSpec])
-        assertEquals("test.CardCache#current", restored[PbPreloadContract.pbPreloadCardGetterMethodSpec])
         assertEquals("mutablePageState", restored[PbPreloadContract.pbPreloadPageStateMutableField])
         assertEquals("pageState", restored[PbPreloadContract.pbPreloadPageStateFlowField])
         assertTrue(!JSONObject(restored.toJson()).has("pbPreloadRenderGateMethod"))
@@ -68,7 +68,7 @@ class PerformanceAbStatusTest {
             HookFeatureState.FULL,
             PerformanceAbStatus.features(restored).getValue(HookFeatureKey.FORCE_PB_PRELOAD).state,
         )
-        for (missing in listOf("pbPreloadProviderMethodSpec", "pbPreloadCardGetterMethodSpec", "pbPreloadPageStateMutableField", "pbPreloadPageStateFlowField", "performanceAbMethods")) {
+        for (missing in PbPreloadContract.required.fields.map { it.cacheKey } + "performanceAbMethods") {
             val incomplete = JSONObject(restored.toJson()).apply { remove(missing) }
             assertEquals(
                 missing,

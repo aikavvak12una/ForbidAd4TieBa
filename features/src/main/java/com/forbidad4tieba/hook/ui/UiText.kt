@@ -303,7 +303,7 @@ object UiText {
         const val PB_PERFORMANCE_MODE_LABEL = "帖子页性能优化"
         const val PB_PERFORMANCE_MODE_DESC = "启用帖子页轻量分支：hybrid 优化、关闭图片性能日志与 PB 广告实验。\n* 与强制帖子预加载同时开启时预加载优先，此开关的 hybrid 覆盖让位"
         const val PB_FORCE_PRELOAD_LABEL = "强制帖子预加载"
-        const val PB_FORCE_PRELOAD_DESC = "即使服务端关闭帖子预加载开关也强制开启：点击帖子用卡片数据秒开首屏、预取完整页数据，并放行 native 预加载渲染分支与 hybrid apiData 注入。\n* 更多后台预取流量；与帖子页性能优化同时开启时优先保证预加载"
+        const val PB_FORCE_PRELOAD_DESC = "优先使用已准备好的完整内容；缓存未命中时提前显示卡片已有正文，普通图文帖保持原生正文布局。\n* 特殊帖子或卡片无正文时正常加载；与帖子页性能优化同时开启时，预加载优先"
         const val PB_SCROLL_COALESCE_LABEL = "合并帖子页滚动回调"
         const val PB_SCROLL_COALESCE_DESC = "在评论列表滚动回调中合并过密的刷新请求，降低帖子页滑动时的主线程压力。\n* 极快滚动时「加载更多」可能略微滞后，近底部 20 条不合并"
         const val DETAILED_LOGGING_LABEL = "输出详细日志"

@@ -9,7 +9,21 @@ internal data class PbPreloadSymbols(
     val cardGetterMethodSpec: String? = null,
     val pageStateMutableField: String? = null,
     val pageStateFlowField: String? = null,
+    val body: PbPreloadBodySymbols = PbPreloadBodySymbols(),
 )
+
+internal data class PbPreloadBodySymbols(
+    val commit: String? = null,
+    val hybrid: String? = null,
+    val success: String? = null,
+    val model: String? = null,
+    val stage: String? = null,
+    val response: String? = null,
+    val thread: String? = null,
+    val webView: String? = null,
+) {
+    fun descriptors(): List<String?> = listOf(commit, hybrid, success, model, stage, response, thread, webView)
+}
 
 /** All host reflection is resolved and checked before installing the preload hooks. */
 data class PbPreloadTargets(
@@ -18,6 +32,27 @@ data class PbPreloadTargets(
     val cardGetter: Method,
     val card: PbPreloadCardTargets,
     val pageState: PbPreloadPageStateTargets,
+    val body: PbPreloadBodyTargets,
+)
+
+data class PbPreloadBodyTargets(
+    val commit: Method,
+    val hybrid: Method,
+    val success: Field,
+    val model: Field,
+    val stage: Field,
+    val response: Field,
+    val thread: Field,
+    val webView: Field,
+    val preloadStage: Any,
+    val responseData: Field,
+    val protocolThread: Field,
+    val firstFloor: Field,
+    val postId: Field,
+    val postFloor: Field,
+    val postContent: Field,
+    val forumBot: Field,
+    val shopGoods: Field,
 )
 
 data class PbPreloadPageStateTargets(
