@@ -1,0 +1,2 @@
+# The settings regression fixture compares explicitly serialized LF records.
+features/src/test/resources/settings-behavior-baseline.txt text eol=lf
