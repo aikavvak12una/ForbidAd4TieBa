@@ -88,6 +88,7 @@ internal object EffectiveSettingsPolicy {
             )
         }
         val bottomTabsCustomEnabled = tabCustomizationEnabled && featureBoolean(TabPreferences.CUSTOM_BOTTOM_TABS)
+        val floatingBottomBarEnabled = BottomTabLiquidGlassPreferences.isEnabled(p)
         var normalizedBottomTabs: BottomTabSelection? = null
         val bottomTabSelection = if (bottomTabsCustomEnabled) {
             val raw = BottomTabSelection(
@@ -138,6 +139,12 @@ internal object EffectiveSettingsPolicy {
             isBottomTabRetailStoreEnabled = bottomTabSelection.retailStoreEnabled,
             isBottomTabMessageEnabled = bottomTabSelection.messageEnabled,
             isBottomTabMineEnabled = bottomTabSelection.mineEnabled,
+            isFloatingBottomBarEnabled = floatingBottomBarEnabled,
+            bottomTabLiquidGlass = if (floatingBottomBarEnabled) {
+                BottomTabLiquidGlassPreferences.read(p)
+            } else {
+                BottomTabLiquidGlassConfig.DEFAULT
+            },
             isEnterForumWebFilterEnabled = featureBoolean(ExtensionPreferences.FILTER_ENTER_FORUM_WEB),
             isOpenWebLinkInSystemBrowserEnabled = featureBoolean(ExtensionPreferences.OPEN_WEB_LINK_IN_SYSTEM_BROWSER),
             isHomeNativeGlassEnabled = homeNativeGlassEnabled,

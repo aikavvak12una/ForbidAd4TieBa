@@ -522,6 +522,17 @@ class ConfigManagerTest {
         }
     }
 
+    @Test fun liquidGlassSnapshotUsesCustomSettingsOnlyWhenEnabled() {
+        val values = mapOf<String, Any?>(
+            TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
+            BottomTabLiquidGlassPreferences.BOTTOM_GAP to 40,
+            BottomTabLiquidGlassPreferences.LIQUID_GLASS to false,
+        )
+        assertEquals(BottomTabLiquidGlassConfig(40, liquidGlassEnabled = false),
+            buildSnapshot(values).bottomTabLiquidGlass)
+        assertEquals(BottomTabLiquidGlassConfig.DEFAULT,
+            buildSnapshot(values + (TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to false)).bottomTabLiquidGlass)
+    }
 
     @Test
     fun pbPerformanceMissingSubHookDisablesRuntimeDespiteEnabledPreference() {
@@ -555,20 +566,21 @@ class ConfigManagerTest {
                 TabPreferences.KEY_CUSTOM_HOME_TOP_TABS,
                 TabPreferences.KEY_CUSTOM_BOTTOM_TABS,
                 TabPreferences.KEY_AUTO_HIDE_HOME_TAB,
+                TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS,
             )
             keys.forEachIndexed { index, key ->
                 val snapshot = buildSnapshot(mapOf(key to true))
                 assertEquals(
                     keys.indices.map { it == index },
                     listOf(snapshot.isHomeTopTabsCustomEnabled, snapshot.isBottomTabsCustomEnabled,
-                        snapshot.isHomeTabAutoHideEnabled),
+                        snapshot.isHomeTabAutoHideEnabled, snapshot.isFloatingBottomBarEnabled),
                 )
             }
         }
     }
 
     @Test
-    fun tabCustomizationMasterOffSuppressesAllThreeChildrenAndTheirConfiguration() {
+    fun tabCustomizationMasterOffSuppressesAllFourChildrenAndTheirConfiguration() {
         withScanAvailability(
             mapOf(
                 HookFeatureKey.SIMPLIFY_HOME_TOP_TABS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
@@ -580,25 +592,31 @@ class ConfigManagerTest {
                 TabPreferences.KEY_CUSTOM_HOME_TOP_TABS to true,
                 TabPreferences.KEY_CUSTOM_BOTTOM_TABS to true,
                 TabPreferences.KEY_AUTO_HIDE_HOME_TAB to true,
+                TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
                 TabPreferences.KEY_HOME_TOP_TAB_DISABLED_KEYS to "code:material",
                 TabPreferences.KEY_BOTTOM_TAB_RETAIL_STORE to false,
+                BottomTabLiquidGlassPreferences.BOTTOM_GAP to 24,
                 TabPreferences.KEY_HIDE_HOME_TAB_RED_DOT to true,
             )
             val disabled = buildSnapshot(values)
             assertFalse(disabled.isHomeTopTabsCustomEnabled)
             assertFalse(disabled.isBottomTabsCustomEnabled)
             assertFalse(disabled.isHomeTabAutoHideEnabled)
+            assertFalse(disabled.isFloatingBottomBarEnabled)
             assertTrue(disabled.homeTopTabDisabledKeys.isEmpty())
             assertFalse(disabled.isBottomTabHomeEnabled)
+            assertEquals(BottomTabLiquidGlassConfig.DEFAULT, disabled.bottomTabLiquidGlass)
             assertTrue(disabled.isHomeTabRedDotHidden)
 
             val restored = buildSnapshot(values + (TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to true))
             assertTrue(restored.isHomeTopTabsCustomEnabled)
             assertTrue(restored.isBottomTabsCustomEnabled)
             assertTrue(restored.isHomeTabAutoHideEnabled)
+            assertTrue(restored.isFloatingBottomBarEnabled)
             assertFalse(restored.isHomeTopTabMaterialEnabled)
             assertTrue(restored.isBottomTabHomeEnabled)
             assertFalse(restored.isBottomTabRetailStoreEnabled)
+            assertEquals(24, restored.bottomTabLiquidGlass.bottomGapDp)
         }
     }
 
@@ -608,6 +626,7 @@ class ConfigManagerTest {
         assertFalse(snapshot.isHomeTopTabsCustomEnabled)
         assertFalse(snapshot.isBottomTabsCustomEnabled)
         assertFalse(snapshot.isHomeTabAutoHideEnabled)
+        assertFalse(snapshot.isFloatingBottomBarEnabled)
     }
 
     @Test
@@ -624,11 +643,13 @@ class ConfigManagerTest {
                     TabPreferences.KEY_CUSTOM_HOME_TOP_TABS to true,
                     TabPreferences.KEY_CUSTOM_BOTTOM_TABS to true,
                     TabPreferences.KEY_AUTO_HIDE_HOME_TAB to true,
+                    TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
                 ),
             )
             assertFalse(snapshot.isHomeTopTabsCustomEnabled)
             assertFalse(snapshot.isBottomTabsCustomEnabled)
             assertTrue(snapshot.isHomeTabAutoHideEnabled)
+            assertTrue(snapshot.isFloatingBottomBarEnabled)
         }
     }
 

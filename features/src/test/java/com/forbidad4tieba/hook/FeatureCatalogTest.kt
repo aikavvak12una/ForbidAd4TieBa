@@ -7,6 +7,17 @@ import org.junit.Test
 import java.io.File
 
 class FeatureCatalogTest {
+    @Test fun floatingSwitchControlsBothBarsOnlyInTheMainProcess() {
+        val settings = SettingsSnapshot.bootstrap()
+        val enabled = settings.copy(isFloatingBottomBarEnabled = true)
+        for (id in listOf("BottomTabLiquidGlassHook", "PostReplyLiquidGlassHook")) {
+            val definition = FeatureCatalog.definitions.single { it.id == id }
+            assertTrue(definition.entries(HookInstallContext("com.baidu.tieba", null), settings).isEmpty())
+            assertEquals(1, definition.entries(HookInstallContext("com.baidu.tieba", null), enabled).size)
+            assertTrue(definition.entries(HookInstallContext("com.baidu.tieba:remote", null), enabled).isEmpty())
+        }
+    }
+
     @Test fun launchPlaceholderIsInstalledOnlyInTheMainProcess() {
         assertEquals(1, FeatureCatalog.staticPlan("com.baidu.tieba").entries.count { it.id == "LaunchSplashHook" })
         for (process in listOf("com.baidu.tieba:remote", "com.android.systemui")) {

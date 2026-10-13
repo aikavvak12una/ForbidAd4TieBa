@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.ui
 
 import com.forbidad4tieba.hook.config.AccountPreferences
+import com.forbidad4tieba.hook.config.BottomTabLiquidGlassPreferences
 import com.forbidad4tieba.hook.config.FreeCopyPreferences
 import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import com.forbidad4tieba.hook.config.ReplyPreferences
@@ -28,6 +29,7 @@ internal data class SettingsMenuGroupActions(
     val onHomeTopTab: () -> Unit,
     val onHomeNativeGlass: () -> Unit,
     val onBottomTab: () -> Unit,
+    val onBottomTabLiquidGlass: () -> Unit,
 )
 
 internal object SettingsMenuGroupBuilder {
@@ -137,6 +139,12 @@ internal object SettingsMenuGroupBuilder {
         val freeCopyItems = freeCopyItems()
         val items = mutableListOf(
             SwitchItem(ExtensionPreferences.ENABLE_AUTO_LOAD_MORE),
+            SwitchItem(
+                BottomTabLiquidGlassPreferences.ENABLED_SETTING,
+                actionIcon = UiText.Settings.ACTION_ICON_SETTINGS,
+                actionContentDescription = UiText.Settings.BOTTOM_BAR_STYLE_TITLE,
+                onActionClick = actions.onBottomTabLiquidGlass,
+            ),
             SwitchItem(
                 FreeCopyPreferences.ENABLE_FREE_COPY,
                 actionIcon = UiText.Settings.ACTION_ICON_SETTINGS,

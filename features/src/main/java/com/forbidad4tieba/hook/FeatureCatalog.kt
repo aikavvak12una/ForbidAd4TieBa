@@ -63,6 +63,8 @@ import com.forbidad4tieba.hook.feature.ui.PbScrollCoalesceFeature
 import com.forbidad4tieba.hook.feature.ui.UpgradePopWindowBlockFeature
 import com.forbidad4tieba.hook.feature.ui.SystemSplashFeature
 import com.forbidad4tieba.hook.feature.ui.LaunchSplashFeature
+import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassFeature
+import com.forbidad4tieba.hook.feature.ui.liquidglass.PostReplyLiquidGlassFeature
 import com.forbidad4tieba.hook.feature.web.EnterForumWebFeature
 import com.forbidad4tieba.hook.feature.web.FollowedTabWebFeature
 import com.forbidad4tieba.hook.feature.web.HelpCenterFooterBlockFeature
@@ -89,6 +91,8 @@ internal object FeatureCatalog {
         HomeTopTabAutoHideFeature,
         HomeBottomTabAutoHideFeature,
         HomeTabRedDotBlockFeature,
+        BottomTabLiquidGlassFeature,
+        PostReplyLiquidGlassFeature,
         BottomTabTopLineFeature,
         PerformanceFeature,
         HelpCenterFooterBlockFeature,

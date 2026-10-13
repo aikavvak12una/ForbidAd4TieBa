@@ -6,6 +6,7 @@ import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 internal object SettingsCatalog {
     val preferences: List<Preference<*>> = listOf(
         RemoteEnvironmentState.preferences,
+        BottomTabLiquidGlassPreferences.preferences,
         AdPreferences.preferences,
         TabPreferences.preferences,
         ExtensionPreferences.preferences,

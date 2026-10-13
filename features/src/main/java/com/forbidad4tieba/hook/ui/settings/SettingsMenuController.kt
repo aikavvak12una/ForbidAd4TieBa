@@ -20,6 +20,7 @@ import com.forbidad4tieba.hook.feature.ad.BlockCountStats
 import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
 import com.forbidad4tieba.hook.feature.ui.HomeTabHook
 import com.forbidad4tieba.hook.ui.AboutInfoManager
+import com.forbidad4tieba.hook.ui.BottomTabLiquidGlassDialog
 import com.forbidad4tieba.hook.ui.SETTINGS_ROOT_GROUP_GAP_DP
 import com.forbidad4tieba.hook.ui.SETTINGS_ROOT_SECTION_BOTTOM_PADDING_RATIO
 import com.forbidad4tieba.hook.ui.SETTINGS_ROOT_SECTION_TOP_PADDING_RATIO
@@ -114,6 +115,7 @@ internal object SettingsMenuController {
                     onHomeTopTab = { showHomeTopTabDialog(context, prefs) },
                     onHomeNativeGlass = { showHomeNativeGlassDialog(context, prefs) },
                     onBottomTab = { showBottomTabDialog(context, prefs) },
+                    onBottomTabLiquidGlass = { BottomTabLiquidGlassDialog.show(context, prefs) },
                 ),
             )
 

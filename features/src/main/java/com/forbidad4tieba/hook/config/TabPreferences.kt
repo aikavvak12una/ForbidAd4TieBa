@@ -46,6 +46,7 @@ object TabPreferences {
 
     const val KEY_BOTTOM_TAB_MINE = "bottom_tab_mine"
 
+    const val KEY_BOTTOM_TAB_LIQUID_GLASS = "bottom_tab_liquid_glass"
 
     @Volatile private var homeTopTabCatalogJsonCache: String? = null
 
@@ -492,6 +493,9 @@ object TabPreferences {
     internal val BOTTOM_TAB_MINE = BooleanPreference(
         KEY_BOTTOM_TAB_MINE, true, PreferenceUse.FORM, null,
     )
+    internal val BOTTOM_TAB_LIQUID_GLASS = BooleanPreference(
+        KEY_BOTTOM_TAB_LIQUID_GLASS, false, PreferenceUse.LEGACY, null,
+    )
 
     internal val preferences: List<Preference<*>> = listOf(
         ENABLE_TAB_CUSTOMIZATION,
@@ -510,6 +514,7 @@ object TabPreferences {
         BOTTOM_TAB_RETAIL_STORE,
         BOTTOM_TAB_MESSAGE,
         BOTTOM_TAB_MINE,
+        BOTTOM_TAB_LIQUID_GLASS,
     )
 
     internal fun saveBottomTabSelection(p: SharedPreferences, selection: BottomTabSelection) {

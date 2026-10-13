@@ -8,7 +8,7 @@ internal val BottomTabTopLineFeature = FeatureDefinition.observed(
     id = "BottomTabTopLineHook",
     phase = FeaturePhase.POST_ATTACH,
     process = FeatureProcess.ANY,
-    enabled = { settings -> canInstallHomeNativeGlass(settings) },
+    enabled = { settings -> canInstallHomeNativeGlass(settings) && !settings.isFloatingBottomBarEnabled },
 ) { cl, settings ->
     BottomTabTopLineHook.hook(cl)
 }

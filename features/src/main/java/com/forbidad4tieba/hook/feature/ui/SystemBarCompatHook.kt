@@ -18,6 +18,7 @@ import android.view.WindowManager
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassHook
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Collections
@@ -50,6 +51,9 @@ object SystemBarCompatHook {
     @Volatile
     private var secureNavigationMode: Int? = null
 
+    @Volatile
+    private var postReplyActivityClass: Class<*>? = null
+
     private data class NoArgViewMethodLookup(
         val method: Method?,
     )
@@ -65,6 +69,12 @@ object SystemBarCompatHook {
         var insetBottom: Int = 0,
         var layoutGuardInstalled: Boolean = false,
     )
+
+    /** The validated post Activity opts in for its whole lifetime, including loading/editor states. */
+    fun registerPostReply(app: Application, activityClass: Class<*>) {
+        postReplyActivityClass = activityClass
+        register(app)
+    }
 
     fun register(app: Application) {
         if (!registered.compareAndSet(false, true)) return
@@ -252,16 +262,29 @@ object SystemBarCompatHook {
     private fun shouldApply(activity: Activity): Boolean {
         if (!isGestureNavigation(activity)) return false
         if (isHomeNativeGlassRuntimeActive()) return isSupportedActivity(activity)
+        if (isFloatingPostReplyActivity(activity)) return true
         return (
-            ConfigManager.snapshot().isHomeTabAutoHideEnabled
+            ConfigManager.snapshot().isHomeTabAutoHideEnabled ||
+                isBottomTabLiquidGlassRuntimeActive()
             ) && isMainTabActivity(activity)
     }
+
+    private fun isFloatingPostReplyActivity(activity: Activity): Boolean = isFloatingPostReplyActivity(
+        activity.javaClass, postReplyActivityClass, ConfigManager.snapshot().isFloatingBottomBarEnabled)
+
+    internal fun isFloatingPostReplyActivity(
+        activityClass: Class<*>, validatedPostClass: Class<*>?, enabled: Boolean,
+    ): Boolean = enabled && validatedPostClass?.isAssignableFrom(activityClass) == true
 
     private fun isHomeNativeGlassRuntimeActive(): Boolean {
         return ConfigManager.snapshot().isHomeNativeGlassEnabled &&
             HomeGlassPreferences.hasAnyHomeNativeGlassBackgroundImage
     }
 
+    private fun isBottomTabLiquidGlassRuntimeActive(): Boolean {
+        return ConfigManager.snapshot().isFloatingBottomBarEnabled &&
+            BottomTabLiquidGlassHook.isRuntimeActive()
+    }
 
     @Suppress("DEPRECATION")
     private fun applyGestureNavigationCompat(activity: Activity) {
@@ -278,7 +301,7 @@ object SystemBarCompatHook {
         ) {
             window.navigationBarColor = Color.TRANSPARENT
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && window.isNavigationBarContrastEnforced) {
             window.isNavigationBarContrastEnforced = false
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -387,6 +410,10 @@ object SystemBarCompatHook {
 
     private fun applyHomeBottomTabGestureBridge(activity: Activity, tabHost: View, wrapper: View) {
         val state = synchronized(bottomTabInsetStates) { bottomTabInsetStates[wrapper] } ?: return
+        if (BottomTabLiquidGlassHook.ownsBottomBar(wrapper)) {
+            clearGestureBridgeForLiquidGlass(wrapper, state)
+            return
+        }
         if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled || isHomeNativeGlassRuntimeActive()) {
             restoreGestureBridgeIfNeeded(wrapper, state)
             return
@@ -411,6 +438,11 @@ object SystemBarCompatHook {
         state.gestureBridgeColor = color
     }
 
+    private fun clearGestureBridgeForLiquidGlass(wrapper: View, state: BottomTabInsetState) {
+        if (state.gestureBridgeColor == null) return
+        wrapper.background = null
+        state.gestureBridgeColor = null
+    }
 
     private fun restoreGestureBridgeIfNeeded(wrapper: View, state: BottomTabInsetState) {
         if (state.gestureBridgeColor == null) return

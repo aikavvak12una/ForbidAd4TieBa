@@ -65,7 +65,7 @@ class SettingsCompletenessTest {
             if (setting === HomeGlassPreferences.ENABLE_HOME_TAB_DYNAMIC_TINT) continue
             // This obsolete key is deliberately ignored: dynamic tint is always enabled.
             val uses = sources.filterKeys { it != "SettingsCatalog.kt" }.map { (file, source) ->
-                if (file == "$owner.kt") {
+                if (file == "$owner.kt" || file == "BottomTabLiquidGlassConfig.kt") {
                     source.replace(Regex("(?:internal )?val \\w+ = (?:Boolean|Int|String)Preference\\([\\s\\S]*?\\n    \\)"), "")
                         .replace(Regex("(?:internal )?val preferences: List<Preference<\\*>> = listOf\\([\\s\\S]*?\\)"), "")
                 } else source
@@ -137,6 +137,7 @@ class SettingsCompletenessTest {
             onFreeCopy = ::collect, onPerformanceOptimization = { groups -> groups.forEach { collect(it.items) } },
             onAutoSignIn = {}, onReplyVisibilityProbe = {}, onDetailedLogSave = {},
             onTabCustomization = ::collect, onHomeTopTab = {}, onHomeNativeGlass = {}, onBottomTab = {},
+            onBottomTabLiquidGlass = {},
         )
         SettingsMenuGroupBuilder.build(unlocked, actions).forEach { collect(it.items) }
         return rows

@@ -108,6 +108,6 @@ class SimpleToggleIntegrationTest {
         onCommentLevelFilter = {},
         onPbLikeAutoReply = {}, onFreeCopy = {}, onPerformanceOptimization = {}, onAutoSignIn = {},
         onReplyVisibilityProbe = {}, onDetailedLogSave = {}, onTabCustomization = {}, onHomeTopTab = {},
-        onHomeNativeGlass = {}, onBottomTab = {},
+        onHomeNativeGlass = {}, onBottomTab = {}, onBottomTabLiquidGlass = {},
     )
 }

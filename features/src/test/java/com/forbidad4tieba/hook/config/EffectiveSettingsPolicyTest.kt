@@ -6,6 +6,72 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EffectiveSettingsPolicyTest {
+    @Test fun slidersReachThePublishedFloatingStyleWithoutEnablingIt() {
+        for (enabled in listOf(false, true)) {
+            val values = mapOf<String, Any>(
+                BottomTabLiquidGlassPreferences.ENABLED to enabled,
+                BottomTabLiquidGlassPreferences.DROPLET_WIDTH to 200,
+                BottomTabLiquidGlassPreferences.BLUR_PERCENT to 0,
+            )
+            val state = EffectiveSettingsPolicy.derive(UserSettings(values),
+                HostCapabilities(emptyMap()), RemoteSettingsPolicy(false)).snapshot
+            assertEquals(enabled, state.isFloatingBottomBarEnabled)
+            assertEquals(if (enabled) BottomTabLiquidGlassConfig(dropletWidthPercent = 200, blurPercent = 0)
+                else BottomTabLiquidGlassConfig.DEFAULT, state.bottomTabLiquidGlass)
+        }
+    }
+
+    @Test fun floatingIsIndependentOfTabCustomizationAndLegacySwitchesInEveryMaterialMode() {
+        for (master in listOf(false, true)) for (tab in listOf(false, true)) for (reply in listOf(false, true)) {
+            for (floating in listOf(false, true)) for (blur in listOf(false, true)) for (glass in listOf(false, true)) {
+                val values = mapOf<String, Any>(
+                    TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to master,
+                    TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to tab,
+                    BottomTabLiquidGlassPreferences.POST_REPLY_BAR to reply,
+                    BottomTabLiquidGlassPreferences.FLOATING to !floating,
+                    BottomTabLiquidGlassPreferences.ENABLED to floating,
+                    BottomTabLiquidGlassPreferences.BLUR to blur,
+                    BottomTabLiquidGlassPreferences.LIQUID_GLASS to glass,
+                    BottomTabLiquidGlassPreferences.BOTTOM_GAP to 24,
+                )
+                val user = UserSettings(values)
+                val state = EffectiveSettingsPolicy.derive(user, HostCapabilities(emptyMap()), RemoteSettingsPolicy(false)).snapshot
+                assertEquals(floating, state.isFloatingBottomBarEnabled)
+                if (floating) {
+                    assertEquals(BottomTabLiquidGlassConfig(24, blur, glass), state.bottomTabLiquidGlass)
+                } else assertEquals(BottomTabLiquidGlassConfig.DEFAULT, state.bottomTabLiquidGlass)
+                assertEquals(reply, user.getBoolean(BottomTabLiquidGlassPreferences.POST_REPLY_BAR, false))
+                assertEquals(glass, user.getBoolean(BottomTabLiquidGlassPreferences.LIQUID_GLASS, false))
+            }
+        }
+    }
+
+    @Test fun eitherPreviouslyEnabledBarMigratesToTheSharedFloatingFeature() {
+        val choices = mapOf<String, Any>(
+            TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to true,
+            TabPreferences.BOTTOM_TAB_LIQUID_GLASS.key to false,
+            BottomTabLiquidGlassPreferences.POST_REPLY_BAR to true,
+            BottomTabLiquidGlassPreferences.BOTTOM_GAP to 20,
+            BottomTabLiquidGlassPreferences.BLUR to false,
+        )
+        fun evaluate(values: Map<String, Any>) = EffectiveSettingsPolicy.derive(UserSettings(values),
+            HostCapabilities(emptyMap()), RemoteSettingsPolicy(false)).snapshot
+        val replyOnly = evaluate(choices)
+        assertTrue(replyOnly.isFloatingBottomBarEnabled)
+        assertEquals(BottomTabLiquidGlassConfig(bottomGapDp = 20,
+            blurEnabled = false), replyOnly.bottomTabLiquidGlass)
+        val both = evaluate(choices + (TabPreferences.BOTTOM_TAB_LIQUID_GLASS.key to true))
+        assertTrue(both.isFloatingBottomBarEnabled)
+        assertEquals(replyOnly.bottomTabLiquidGlass, both.bottomTabLiquidGlass)
+        assertEquals(BottomTabLiquidGlassConfig.DEFAULT,
+            evaluate(choices + (TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to false)).bottomTabLiquidGlass)
+        assertEquals(BottomTabLiquidGlassConfig.DEFAULT,
+            evaluate(choices + (BottomTabLiquidGlassPreferences.POST_REPLY_BAR to false)).bottomTabLiquidGlass)
+        assertEquals(replyOnly.bottomTabLiquidGlass,
+            evaluate(choices + (BottomTabLiquidGlassPreferences.ENABLED to true) +
+                (TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to false)).bottomTabLiquidGlass)
+    }
+
     @Test fun lzlEarliestDefaultsOffAndRequiresItsOwnCapabilityWithoutRestrictedUnlock() {
         val host = HostCapabilities(mapOf(HookFeatureKey.DEFAULT_LZL_EARLIEST to ScanFeatureAvailabilityState.AVAILABLE))
         val choice = UserSettings(mapOf(SimpleToggle.DEFAULT_LZL_EARLIEST.prefKey to true))

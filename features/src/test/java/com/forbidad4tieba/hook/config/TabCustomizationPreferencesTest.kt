@@ -22,16 +22,25 @@ class TabCustomizationPreferencesTest {
         }
     }
 
+    @Test fun glassChoicesDoNotImplicitlyEnableTabCustomization() {
+        for (key in listOf(TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS,
+            BottomTabLiquidGlassPreferences.POST_REPLY_BAR, BottomTabLiquidGlassPreferences.ENABLED)) {
+            val values = mutableMapOf<String, Any>(key to true)
+            TabCustomizationPreferences.ensureInitialized(preferences(values))
+            assertEquals(false, values[TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION])
+        }
+    }
+
     @Test
     fun preconfiguringChildrenOnAFreshInstallDoesNotSilentlyEnableTheMaster() {
         val values = mutableMapOf<String, Any>()
         val prefs = preferences(values)
         TabCustomizationPreferences.ensureInitialized(prefs)
         assertEquals(mapOf(TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to false), values)
-        values[TabPreferences.KEY_AUTO_HIDE_HOME_TAB] = true
+        values[TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS] = true
         TabCustomizationPreferences.ensureInitialized(prefs)
         assertFalse(TabCustomizationPreferences.isEnabled(prefs))
-        assertEquals(true, values[TabPreferences.KEY_AUTO_HIDE_HOME_TAB])
+        assertEquals(true, values[TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS])
     }
 
     @Test

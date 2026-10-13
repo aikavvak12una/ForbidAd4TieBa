@@ -25,6 +25,7 @@ class AllSettingsBehaviorTest {
             "block_titan_patch",
             "bottom_tab_enter_forum",
             "bottom_tab_home",
+            "bottom_tab_liquid_glass",
             "bottom_tab_message",
             "bottom_tab_mine",
             "bottom_tab_retail_store",
@@ -103,6 +104,9 @@ class AllSettingsBehaviorTest {
             "filter_post_model_score_auto_percentiles" to "alpha=P5;beta=20;bad=7",
             "filter_post_model_score_stats_post_limit" to 1,
             "home_top_tab_disabled_keys" to "[\"code:recommend\",\"module:followed\"]",
+            "bottom_tab_liquid_glass_height_dp" to 999,
+            "bottom_tab_liquid_glass_width_percent" to 5,
+            "bottom_tab_liquid_glass_bottom_gap_dp" to -9,
         )
         val random = Random(101)
         repeat(32) { i -> cases["mixed/$i"] = keys.filter { random.nextBoolean() }.associateWith { random.nextBoolean() } }
@@ -111,8 +115,23 @@ class AllSettingsBehaviorTest {
             for (locked in listOf(false, true)) {
                 val host = HostCapabilities(HookFeatureKey.orderedKeys.associateWith { state })
                 val result = EffectiveSettingsPolicy.derive(UserSettings(values), host, RemoteSettingsPolicy(locked))
-                // Keep the frozen matrix over its original fields. The appended feature has its own behavior tests.
-                val legacySnapshot = result.snapshot.toString().substringBefore(", commentLevelFilter=") + ")"
+                // Project the renamed shared gate and retired material fields into the frozen baseline.
+                // The new gate's migration and independence are covered by the domain/feature-plan tests.
+                assertEquals(true, result.snapshot.bottomTabLiquidGlass.liquidGlassEnabled)
+                assertEquals(135, result.snapshot.bottomTabLiquidGlass.dropletWidthPercent)
+                assertEquals(20, result.snapshot.bottomTabLiquidGlass.blurPercent)
+                val legacyHeight = if (result.snapshot.isFloatingBottomBarEnabled)
+                    ((values["bottom_tab_liquid_glass_height_dp"] as? Int) ?: 64).coerceIn(48, 120) else 64
+                val legacyWidth = if (result.snapshot.isFloatingBottomBarEnabled)
+                    ((values["bottom_tab_liquid_glass_width_percent"] as? Int) ?: 0)
+                        .let { if (it == 0) 0 else it.coerceIn(60, 100) } else 0
+                val legacySnapshot = result.snapshot.toString().substringBefore(", commentLevelFilter=")
+                    .replace("isFloatingBottomBarEnabled=", "isBottomTabLiquidGlassEnabled=")
+                    .replace(", dropletWidthPercent=135, blurPercent=20", "")
+                    .replace(", liquidGlassEnabled=true",
+                        ", refractionEnabled=true, highlightEnabled=true, shadowEnabled=true, tiltEnabled=true, pressEffectEnabled=true")
+                    .replace("BottomTabLiquidGlassConfig(",
+                        "BottomTabLiquidGlassConfig(heightDp=$legacyHeight, widthPercent=$legacyWidth, ") + ")"
                 val text = legacySnapshot + "/" + result.normalizedBottomTabs
                 val hash = MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
                 results += "$name/$state/$locked=$hash"
@@ -121,6 +140,6 @@ class AllSettingsBehaviorTest {
         val actual = results.joinToString("\n", postfix = "\n")
         val file = File(System.getProperty("project.root"), "features/src/test/resources/settings-behavior-baseline.txt")
         assertEquals("Settings behavior changed", file.readText(), actual)
-        assertEquals(2032, results.size)
+        assertEquals(2056, results.size)
     }
 }

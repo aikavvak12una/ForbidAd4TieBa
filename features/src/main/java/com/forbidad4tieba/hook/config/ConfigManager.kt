@@ -53,6 +53,7 @@ object ConfigManager {
             appContext = appCtx
             prefs = localPrefs
             ensureUserSettingsVersion(localPrefs)
+            BottomTabLiquidGlassPreferences.ensureInitialized(localPrefs)
             TabCustomizationPreferences.ensureInitialized(localPrefs)
 
             RemoteEnvironmentState.initialize(appCtx, localPrefs)
