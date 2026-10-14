@@ -25,10 +25,9 @@ internal object AutoSignInResultDialog {
                 .setPositiveButton(if (report == null) UiText.AutoSignIn.BUTTON_START else UiText.AutoSignIn.BUTTON_RETRY) { _, _ -> onSignIn() }
                 .create()
             dialog.setOnShowListener {
-                dialog.window?.let { applyUnifiedDialogCardStyle(it, context.resources.displayMetrics.density) }
                 dialog.findViewById<TextView>(android.R.id.message)?.setTextIsSelectable(true)
             }
-            dialog.show()
+            dialog.showSettingsDialog(context.resources.displayMetrics.density)
         } catch (t: Throwable) {
             XposedCompat.logW("[AutoSignIn] result dialog unavailable: ${t.javaClass.simpleName}")
         }

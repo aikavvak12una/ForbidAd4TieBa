@@ -8,9 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
 import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassImageCache
@@ -23,6 +21,7 @@ import com.forbidad4tieba.hook.ui.MaxHeightScrollView
 import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDivider
 import com.forbidad4tieba.hook.ui.dialogThemeFor
 import com.forbidad4tieba.hook.ui.setSettingsTitle
@@ -45,6 +44,8 @@ import com.forbidad4tieba.hook.utils.ReflectionUtils
 import kotlin.concurrent.thread
 
 internal object HomeNativeGlassForm {
+    private val blurCacheLock = Any()
+
     fun showHomeNativeGlassDialog(
         context: Context,
         prefs: android.content.SharedPreferences,
@@ -88,6 +89,10 @@ internal object HomeNativeGlassForm {
             }
             var loadingVisibleModeState = false
             var refreshVisibleModePreview: (() -> Unit)? = null
+            var persistVisibleModeChanges: (() -> Unit)? = null
+            fun commitVisibleModeChanges() {
+                if (!loadingVisibleModeState) persistVisibleModeChanges?.invoke()
+            }
             var refreshModeSelector: ((Boolean) -> Unit)? = null
             var homeNativeGlassDialog: AlertDialog? = null
             val mainHandler = Handler(Looper.getMainLooper())
@@ -207,11 +212,16 @@ internal object HomeNativeGlassForm {
                 context = context,
                 state = visibleImageState,
                 density = density,
+                onTintChanged = {
+                    requestVisibleModePreviewRefresh()
+                    commitVisibleModeChanges()
+                },
             )
             val tintColorRefresh = tintColorRowAndRefresh.second
             fun refreshTintColorAndPreview() {
                 tintColorRefresh()
                 requestVisibleModePreviewRefresh()
+                commitVisibleModeChanges()
             }
 
             val tintAlphaRowAndSeekBar = createSeekBarRow(
@@ -223,7 +233,10 @@ internal object HomeNativeGlassForm {
                 value = currentModeState().tintAlphaPercent,
                 suffix = "",
                 density = density,
-                onStopTrackingTouch = { requestVisibleModePreviewRefresh() },
+                onValueCommitted = {
+                    requestVisibleModePreviewRefresh()
+                    commitVisibleModeChanges()
+                },
             )
             val tintAlphaSeekBar = tintAlphaRowAndSeekBar.second
             val backgroundImageImportCallback: (HomeNativeGlassImageAnalysis) -> Unit = { analysis ->
@@ -231,7 +244,6 @@ internal object HomeNativeGlassForm {
                     HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                     HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT,
                 ) - HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT
-                requestVisibleModePreviewRefresh()
             }
             val backgroundImageRowAndDisplay = createHomeNativeGlassImagePickerRow(
                 context = context,
@@ -252,7 +264,10 @@ internal object HomeNativeGlassForm {
                 value = currentModeState().cardBlurPercent,
                 suffix = "%",
                 density = density,
-                onStopTrackingTouch = { requestVisibleModePreviewRefresh() },
+                onValueCommitted = {
+                    requestVisibleModePreviewRefresh()
+                    commitVisibleModeChanges()
+                },
             )
             val blurSeekBar = blurRowAndSeekBar.second
 
@@ -266,6 +281,7 @@ internal object HomeNativeGlassForm {
                 suffix = "dp",
                 density = density,
                 onValueChanged = { requestVisibleModePreviewRefresh() },
+                onValueCommitted = { commitVisibleModeChanges() },
             )
             val radiusSeekBar = radiusRowAndSeekBar.second
 
@@ -287,6 +303,7 @@ internal object HomeNativeGlassForm {
                 suffix = "%",
                 density = density,
                 onValueChanged = { requestVisibleModePreviewRefresh() },
+                onValueCommitted = { commitVisibleModeChanges() },
             )
             val shadowSeekBar = shadowRowAndSeekBar.second
 
@@ -330,6 +347,44 @@ internal object HomeNativeGlassForm {
                 }
             }
 
+            persistVisibleModeChanges = persist@{
+                captureVisibleModeState()
+                val lightStyle = homeNativeGlassPreviewStyleFromModeState(lightModeState)
+                val darkStyle = homeNativeGlassPreviewStyleFromModeState(darkModeState)
+                if (lightStyle == HomeGlassPreferences.readHomeNativeGlassStyle(prefs, HomeGlassPreferences.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS) &&
+                    darkStyle == HomeGlassPreferences.readHomeNativeGlassStyle(prefs, HomeGlassPreferences.HOME_NATIVE_GLASS_DARK_STYLE_KEYS)
+                ) return@persist
+                val editor = prefs.edit()
+                putHomeNativeGlassStyle(editor, HomeGlassPreferences.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS, lightStyle)
+                putHomeNativeGlassStyle(editor, HomeGlassPreferences.HOME_NATIVE_GLASS_DARK_STYLE_KEYS, darkStyle)
+                editor
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_COLOR)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_PALETTE)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_STROKE_ENABLED)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED)
+                    .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT)
+                    .remove(HomeGlassPreferences.KEY_ENABLE_HOME_TAB_DYNAMIC_TINT)
+                    .putBoolean(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED, true)
+                    .apply()
+                fun updateCache(state: HomeNativeGlassModeConfigState, style: HomeGlassPreferences.HomeNativeGlassStyleConfig, path: String) {
+                    if (homeNativeGlassPreviewBitmapKey(homeNativeGlassPreviewStyleFromModeState(state)) == homeNativeGlassPreviewBitmapKey(style)) {
+                        state.blurCacheImagePath = path
+                    }
+                }
+                ensureSavedBlurCache(context, prefs, HomeGlassPreferences.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS, lightStyle, "light") {
+                    updateCache(lightModeState, lightStyle, it)
+                }
+                ensureSavedBlurCache(context, prefs, HomeGlassPreferences.HOME_NATIVE_GLASS_DARK_STYLE_KEYS, darkStyle, "dark") {
+                    updateCache(darkModeState, darkStyle, it)
+                }
+            }
+
             fun loadVisibleModeState(darkMode: Boolean) {
                 val state = if (darkMode) darkModeState else lightModeState
                 loadingVisibleModeState = true
@@ -366,10 +421,12 @@ internal object HomeNativeGlassForm {
             }
             strokeSwitch.second.setOnCheckedChangeListener { _, _ ->
                 requestVisibleModePreviewRefresh()
+                commitVisibleModeChanges()
             }
 
             fun selectMode(darkMode: Boolean) {
                 if (selectedDarkMode == darkMode) return
+                HomeNativeGlassImagePickerBridge.clearIfState(visibleImageState)
                 captureVisibleModeState()
                 selectedDarkMode = darkMode
                 loadVisibleModeState(darkMode)
@@ -415,16 +472,21 @@ internal object HomeNativeGlassForm {
                 ),
             )
 
+            val initialPreviewStyle = currentDialogPreviewStyle()
+            refreshHomeNativeGlassStyledViews(
+                dialogRoot,
+                UiStyle.homeNativeGlassPreviewTokens(context, initialPreviewStyle.style, initialPreviewStyle.darkMode),
+                density,
+            )
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.HOME_NATIVE_GLASS_DIALOG_TITLE)
                 .setView(dialogRoot)
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setNeutralButton(UiText.Settings.HOME_NATIVE_GLASS_RESTORE_DEFAULTS, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
             homeNativeGlassDialog = dialog
             dialog.setOnShowListener {
-                refreshHomeNativeGlassDialogPreview()
+                scheduleVisibleModeBlurPreview(initialPreviewStyle)
                 dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
                     loadingVisibleModeState = true
                     try {
@@ -446,83 +508,8 @@ internal object HomeNativeGlassForm {
                     } finally {
                         loadingVisibleModeState = false
                     }
-                    captureVisibleModeState()
-                    refreshModeSelector?.invoke(selectedDarkMode)
-                    refreshHomeNativeGlassDialogPreview()
-                }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener { buttonView ->
-                    val positiveButton = buttonView as? Button
-                    positiveButton?.isEnabled = false
-                    captureVisibleModeState()
-                    val lightStyle = homeNativeGlassStyleFromModeState(lightModeState, blurCacheImagePath = "")
-                    val darkStyle = homeNativeGlassStyleFromModeState(darkModeState, blurCacheImagePath = "")
-                    thread(name = "tbhook-home-native-glass-blur-cache", isDaemon = true) {
-                        fun ensureBlurCache(
-                            modeName: String,
-                            style: HomeGlassPreferences.HomeNativeGlassStyleConfig,
-                        ): String {
-                            if (style.backgroundImagePath.isBlank()) return ""
-                            return runCatching {
-                                HomeNativeGlassImageCache.ensureBlurCache(
-                                    context = context,
-                                    sourcePath = style.backgroundImagePath,
-                                    blurPercent = style.cardBlurPercent,
-                                    tintOffset = style.tintAlphaPercent,
-                                    appleMaterial = true,
-                                    cacheNamespace = modeName,
-                                )
-                            }.onFailure {
-                                XposedCompat.logW(
-                                    "[SettingsMenuHook] home native blur cache failed: " +
-                                        "$modeName: ${it.message}"
-                                )
-                            }.getOrDefault("")
-                        }
-                        val savedLightStyle = lightStyle.copy(
-                            blurCacheImagePath = ensureBlurCache("light", lightStyle)
-                        )
-                        val savedDarkStyle = darkStyle.copy(
-                            blurCacheImagePath = ensureBlurCache("dark", darkStyle)
-                        )
-                        Handler(Looper.getMainLooper()).post {
-                            if (!dialog.isShowing) return@post
-                            val editor = prefs.edit()
-                            putHomeNativeGlassStyle(
-                                editor,
-                                HomeGlassPreferences.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS,
-                                savedLightStyle,
-                            )
-                            putHomeNativeGlassStyle(
-                                editor,
-                                HomeGlassPreferences.HOME_NATIVE_GLASS_DARK_STYLE_KEYS,
-                                savedDarkStyle,
-                            )
-                            editor
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_BACKGROUND_IMAGE_PATH)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_BLUR_CACHE_IMAGE_PATH)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_COLOR)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_AUTO_TINT_COLOR)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_PALETTE)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_PERCENT)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_CARD_BLUR_PERCENT)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_CARD_RADIUS_DP)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_STROKE_ENABLED)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_SHADOW_ENABLED)
-                                .remove(HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT)
-                                .remove(HomeGlassPreferences.KEY_ENABLE_HOME_TAB_DYNAMIC_TINT)
-                                .putBoolean(
-                                    HomeGlassPreferences.KEY_HOME_NATIVE_GLASS_TINT_ALPHA_OFFSET_MIGRATED,
-                                    true,
-                                )
-                                .apply()
-                            Toast.makeText(
-                                context,
-                                UiText.Settings.HOME_NATIVE_GLASS_SAVED,
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            dialog.dismiss()
-                        }
-                    }
+                    requestVisibleModePreviewRefresh()
+                    commitVisibleModeChanges()
                 }
             }
             dialog.setOnDismissListener {
@@ -531,9 +518,52 @@ internal object HomeNativeGlassForm {
                 clearVisiblePreviewBitmap()
                 homeNativeGlassDialog = null
             }
-            dialog.show()
+            dialog.showSettingsDialog(density, homeNativeGlassPreviewStyle = initialPreviewStyle)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showHomeNativeGlassDialog failed: ${t.message}")
         }
     }
+
+    private fun ensureSavedBlurCache(
+        context: Context,
+        prefs: android.content.SharedPreferences,
+        keys: HomeGlassPreferences.HomeNativeGlassStyleKeys,
+        style: HomeGlassPreferences.HomeNativeGlassStyleConfig,
+        modeName: String,
+        onReady: (String) -> Unit,
+    ) {
+        if (style.backgroundImagePath.isBlank() || style.blurCacheImagePath.isNotBlank()) return
+        val requestKey = homeNativeGlassPreviewBitmapKey(style)
+        val appContext = context.applicationContext ?: context
+        fun isCurrentRequest(): Boolean = homeNativeGlassPreviewBitmapKey(
+            HomeGlassPreferences.readHomeNativeGlassStyle(prefs, keys),
+        ) == requestKey
+        thread(name = "tbhook-home-native-glass-blur-cache", isDaemon = true) {
+            // The cache writer removes older files, so generations must never run concurrently.
+            val path = synchronized(blurCacheLock) {
+                if (!isCurrentRequest()) return@synchronized ""
+                runCatching {
+                    HomeNativeGlassImageCache.ensureBlurCache(
+                        context = appContext,
+                        sourcePath = style.backgroundImagePath,
+                        blurPercent = style.cardBlurPercent,
+                        tintOffset = style.tintAlphaPercent,
+                        appleMaterial = true,
+                        cacheNamespace = modeName,
+                    )
+                }.onFailure {
+                    XposedCompat.logW("[SettingsMenuHook] home native blur cache failed: $modeName: ${it.message}")
+                }.getOrDefault("")
+            }
+            if (path.isBlank()) return@thread
+            Handler(Looper.getMainLooper()).post {
+                if (!isCurrentRequest()) return@post
+                if (keys.blurCacheImagePath.read(prefs) != path) {
+                    prefs.edit().putString(keys.blurCacheImagePath.key, path).apply()
+                }
+                onReady(path)
+            }
+        }
+    }
+
 }

@@ -19,7 +19,7 @@ import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applySettingsMessageStyle
 import com.forbidad4tieba.hook.ui.applySettingsRowTitleStyle
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.dialogThemeFor
 import com.forbidad4tieba.hook.ui.setSettingsTitle
@@ -253,15 +253,9 @@ internal object ModelScoreStatsViews {
         dialog = AlertDialog.Builder(context, dialogThemeFor(context))
             .setSettingsTitle(context, UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_AUTO_PERCENTILE_DIALOG_TITLE)
             .setView(createDialogScrollContainer(context, root))
-            .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
+            .setPositiveButton(UiText.Settings.DONE, null)
             .create()
-        dialog.setOnShowListener {
-            dialog.window?.let { window ->
-                applyUnifiedDialogCardStyle(window, density)
-                UiStyle.animateDialogEntry(window.decorView, density)
-            }
-        }
-        dialog.show()
+        dialog.showSettingsDialog(density)
     }
 
     private fun createModelScoreExpandedStatsBackground(context: Context, density: Float): GradientDrawable {

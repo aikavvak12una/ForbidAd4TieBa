@@ -10,10 +10,8 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.InsetDrawable
 import android.util.TypedValue
 import android.view.View
-import android.view.Window
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.view.animation.PathInterpolator
@@ -31,7 +29,7 @@ import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
  * state behind.
  */
 internal object UiStyle {
-    private const val CARD_CORNER_DP = 22f
+    private const val CARD_CORNER_DP = 28f
     private const val CARD_INSET_DP = 14f
 
     internal class Tokens(
@@ -161,18 +159,6 @@ internal object UiStyle {
         chartBar = 0x557FB0FF,
         chartBarHighlight = 0xCC7FB0FF.toInt(),
     )
-
-    internal fun applyDialogCard(window: Window, tokens: Tokens) {
-        val bg = GradientDrawable().apply {
-            setColor(tokens.surface)
-            cornerRadius = tokens.cardCornerPx
-            if (ConfigManager.snapshot().isHomeNativeGlassEnabled && HomeGlassPreferences.isHomeNativeGlassStrokeEnabled) {
-                val density = window.context.resources.displayMetrics.density
-                setStroke((1 * density).toInt().coerceAtLeast(1), tokens.inputStroke)
-            }
-        }
-        window.setBackgroundDrawable(InsetDrawable(bg, tokens.dialogInsetPx))
-    }
 
     private fun Tokens.withHomeNativeGlassOverrides(
         density: Float,
@@ -304,33 +290,6 @@ internal object UiStyle {
         button.alpha = if (enabled) 1f else 0.4f
     }
 
-    internal fun animateDialogEntry(root: View, density: Float) {
-        root.alpha = 0f
-        root.translationY = 10f * density
-        root.animate()
-            .alpha(1f)
-            .translationY(0f)
-            .setDuration(220)
-            .setInterpolator(DecelerateInterpolator(1.2f))
-            .start()
-    }
-
-    internal fun animateSectionHeadersReveal(headers: List<View>, density: Float) {
-        if (headers.isEmpty()) return
-        val interp = PathInterpolator(0.2f, 0f, 0f, 1f)
-        headers.forEachIndexed { index, view ->
-            view.alpha = 0f
-            view.translationX = 6f * density
-            view.animate()
-                .alpha(1f)
-                .translationX(0f)
-                .setStartDelay(40L + index * 36L)
-                .setDuration(200)
-                .setInterpolator(interp)
-                .start()
-        }
-    }
-
     internal fun animateResultReveal(view: View) {
         view.alpha = 0f
         view.scaleX = 0.94f
@@ -353,22 +312,6 @@ internal object UiStyle {
     }
 
     /**
-     * Brief accent pulse for a switched settings row.
-     */
-    internal fun animateSwitchPulse(row: View, tokens: Tokens) {
-        val from = 0x00000000
-        val peak = tokens.accentSoft
-        val animator = ValueAnimator.ofArgb(from, peak, from).apply {
-            duration = 360
-            interpolator = DecelerateInterpolator(1.5f)
-            addUpdateListener { v ->
-                row.setBackgroundColor(v.animatedValue as Int)
-            }
-        }
-        animator.start()
-    }
-
-    /**
      * Pop-in animation when a button becomes enabled.
      */
     internal fun animateButtonEnable(button: View) {
@@ -382,25 +325,6 @@ internal object UiStyle {
             .setDuration(300)
             .setInterpolator(OvershootInterpolator(2.0f))
             .start()
-    }
-
-    /**
-     * Staggered entrance animation for switch rows in subdialogs.
-     */
-    internal fun animateListItemsStagger(items: List<View>, density: Float) {
-        if (items.isEmpty()) return
-        val interp = DecelerateInterpolator(1.4f)
-        items.forEachIndexed { index, view ->
-            view.alpha = 0f
-            view.translationY = 8f * density
-            view.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setStartDelay(30L + index * 28L)
-                .setDuration(180)
-                .setInterpolator(interp)
-                .start()
-        }
     }
 
     /**
@@ -441,21 +365,6 @@ internal object UiStyle {
                     .setDuration(420)
                     .start()
             }
-            .start()
-    }
-
-    /**
-     * Dialog exit animation used before dismiss callbacks run.
-     */
-    internal fun animateDialogExit(root: View, density: Float, onEnd: () -> Unit) {
-        root.animate()
-            .alpha(0f)
-            .translationY(6f * density)
-            .scaleX(0.97f)
-            .scaleY(0.97f)
-            .setDuration(160)
-            .setInterpolator(DecelerateInterpolator(1.5f))
-            .withEndAction { onEnd() }
             .start()
     }
 
@@ -539,6 +448,10 @@ internal object UiStyle {
 
     internal fun createPlainInputUnderlineBackground(tokens: Tokens, density: Float): Drawable {
         return UnderlineDrawable(density, tokens.inputStroke)
+    }
+
+    internal fun dialogCornerRadius(tokens: Tokens, density: Float): Float {
+        return maxOf(tokens.cardCornerPx, CARD_CORNER_DP * density)
     }
 
     internal fun createMetricCellBackground(

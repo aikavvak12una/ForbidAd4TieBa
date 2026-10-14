@@ -2,12 +2,39 @@ package com.forbidad4tieba.hook.ui.settings
 
 import android.content.Context
 import android.graphics.drawable.Drawable
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.Gravity
 import android.view.View
-import android.view.Window
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import com.forbidad4tieba.hook.ui.SETTINGS_INPUT_TEXT_SP
 import com.forbidad4tieba.hook.ui.UiStyle
 
 internal object SettingsInputViews {
+    fun EditText.styleMultilineInput(tokens: UiStyle.Tokens, density: Float) {
+        setSingleLine(false)
+        setHorizontallyScrolling(false)
+        minLines = 1
+        maxLines = 6
+        minimumHeight = (48 * density).toInt()
+        gravity = Gravity.TOP or Gravity.START
+        textSize = SETTINGS_INPUT_TEXT_SP
+        includeFontPadding = false
+        setTextColor(tokens.textPrimary)
+        setHintTextColor(tokens.textMuted)
+        background = createSettingsInputBackground(tokens, density)
+        setPadding((4 * density).toInt(), (10 * density).toInt(), (4 * density).toInt(), (10 * density).toInt())
+    }
+
+    fun EditText.doAfterTextChanged(onChanged: (String) -> Unit) {
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) = onChanged(s?.toString().orEmpty())
+        })
+    }
+
     fun createSettingsInputBackground(context: Context, density: Float): Drawable {
         val tokens = UiStyle.tokens(context)
         return createSettingsInputBackground(tokens, density)

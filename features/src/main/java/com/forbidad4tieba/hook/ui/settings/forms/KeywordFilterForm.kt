@@ -8,17 +8,18 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
-import com.forbidad4tieba.hook.ui.SETTINGS_INPUT_TEXT_SP
 import com.forbidad4tieba.hook.ui.SETTINGS_ROW_DESC_SP
+import com.forbidad4tieba.hook.ui.SETTINGS_ROW_TITLE_SP
 import com.forbidad4tieba.hook.ui.SETTINGS_SECTION_TITLE_SP
 import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.dialogThemeFor
 import com.forbidad4tieba.hook.ui.setSettingsTitle
+import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.doAfterTextChanged
+import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.styleMultilineInput
 import com.forbidad4tieba.hook.ui.settingsDialogContentTopPadding
 import com.forbidad4tieba.hook.ui.settingsDialogPadding
 
@@ -44,50 +45,67 @@ internal object KeywordFilterForm {
 
             val guideView = TextView(context).apply {
                 text = UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_GUIDE
+                textSize = SETTINGS_ROW_TITLE_SP
+                setTextColor(tokens.textPrimary)
+                includeFontPadding = false
+                setLineSpacing(3f * density, 1f)
+                setPadding(0, 0, 0, (8 * density).toInt())
+            }
+            val inputLabel = TextView(context).apply {
+                text = UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_INPUT_LABEL
+                textSize = SETTINGS_SECTION_TITLE_SP
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(tokens.textPrimary)
+                includeFontPadding = false
+            }
+            val counterView = TextView(context).apply {
                 textSize = SETTINGS_ROW_DESC_SP
                 setTextColor(tokens.textSecondary)
                 includeFontPadding = false
-                setLineSpacing(1f * density, 1f)
-                setPadding(0, 0, 0, (8 * density).toInt())
-            }
-            val counterView = TextView(context).apply {
-                textSize = SETTINGS_SECTION_TITLE_SP
-                typeface = Typeface.DEFAULT_BOLD
-                setTextColor(tokens.accent)
-                includeFontPadding = false
-                setPadding(0, 0, 0, (8 * density).toInt())
+                gravity = Gravity.END
+                setPadding((8 * density).toInt(), 0, 0, 0)
             }
             fun refreshCounter(raw: String) {
                 counterView.text = UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_COUNT_PREFIX + keywordCount(raw)
             }
 
             val input = android.widget.EditText(context).apply {
-                setSingleLine(false)
-                maxLines = 6
-                minLines = 4
-                gravity = Gravity.TOP or Gravity.START
-                hint = UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_HINT
+                styleMultilineInput(tokens, density)
                 setText(initialRaw)
-                setTextColor(tokens.textPrimary)
-                setHintTextColor(tokens.textMuted)
-                textSize = SETTINGS_INPUT_TEXT_SP
-                includeFontPadding = false
-                background = UiStyle.createPlainInputUnderlineBackground(tokens, density)
-                setPadding(
-                    0,
-                    (2 * density).toInt(),
-                    0,
-                    (8 * density).toInt()
-                )
             }
             refreshCounter(initialRaw)
-            input.addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(s: android.text.Editable?) {
-                    refreshCounter(s?.toString().orEmpty())
+            input.doAfterTextChanged { raw ->
+                refreshCounter(raw)
+                val value = raw.trim()
+                if (PostFilterPreferences.FILTER_POST_FORUM_KEYWORD_LIST.read(prefs) != value) {
+                    prefs.edit().putString(PostFilterPreferences.KEY_FILTER_POST_FORUM_KEYWORD_LIST, value).apply()
                 }
-            })
+            }
+
+            val inputHeader = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, (8 * density).toInt())
+                addView(
+                    inputLabel,
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                )
+                addView(
+                    counterView,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            }
+            val formatGuideView = TextView(context).apply {
+                text = UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_FORMAT_GUIDE
+                textSize = SETTINGS_ROW_DESC_SP
+                setTextColor(tokens.textSecondary)
+                includeFontPadding = false
+                setLineSpacing(2f * density, 1f)
+                setPadding(0, (8 * density).toInt(), 0, 0)
+            }
 
             val container = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -101,7 +119,7 @@ internal object KeywordFilterForm {
                     )
                 )
                 addView(
-                    counterView,
+                    inputHeader,
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT
@@ -114,30 +132,20 @@ internal object KeywordFilterForm {
                         ViewGroup.LayoutParams.WRAP_CONTENT
                     )
                 )
+                addView(
+                    formatGuideView,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                )
             }
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, container))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
-            dialog.setOnShowListener {
-                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val raw = input.text?.toString().orEmpty().trim()
-                    prefs.edit()
-                        .putString(PostFilterPreferences.KEY_FILTER_POST_FORUM_KEYWORD_LIST, raw)
-                        .apply()
-                    val toastText = if (raw.isEmpty()) {
-                        UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_EMPTY
-                    } else {
-                        UiText.Settings.CUSTOM_POST_FILTER_KEYWORD_SAVED
-                    }
-                    Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
-                    dialog.dismiss()
-                }
-            }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showCustomPostFilterKeywordDialog failed: ${t.message}")
         }

@@ -120,12 +120,6 @@ internal object RemoteCustomDialogInstaller {
             val dialog = builder.create()
             dialog.setCancelable(false)
             dialog.setCanceledOnTouchOutside(false)
-            dialog.setOnShowListener {
-                dialog.window?.let { window ->
-                    applyUnifiedDialogCardStyle(window, density)
-                    UiStyle.animateDialogEntry(window.decorView, density)
-                }
-            }
             dialog.setOnDismissListener {
                 if (AboutInfoManager.hasPendingRemoteCustomDialogs() && !activity.isFinishing && !activity.isDestroyed) {
                     showNext(activity)
@@ -135,7 +129,7 @@ internal object RemoteCustomDialogInstaller {
                     if (AboutInfoManager.hasPendingRemoteCustomDialogs()) ensureInstalled()
                 }
             }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[RemoteCustomDialogInstaller] show failed: ${t.message}")
             finishSession()

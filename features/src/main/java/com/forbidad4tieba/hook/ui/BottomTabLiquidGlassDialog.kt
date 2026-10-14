@@ -11,13 +11,13 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
-import android.widget.Toast
 import com.forbidad4tieba.hook.config.BottomTabLiquidGlassConfig
 import com.forbidad4tieba.hook.config.BottomTabLiquidGlassPreferences
 import com.forbidad4tieba.hook.config.BooleanPreference
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.ui.settings.SettingsSliderChangeListener
 
-/** Edits a local draft, just like the other configurable module settings. */
+/** Saves switches immediately and slider values after the user releases them. */
 internal object BottomTabLiquidGlassDialog {
     fun show(context: Context, prefs: SharedPreferences) {
         try {
@@ -25,6 +25,14 @@ internal object BottomTabLiquidGlassDialog {
             val padding = settingsDialogPadding(density)
             val initial = BottomTabLiquidGlassPreferences.read(prefs)
             val defaults = BottomTabLiquidGlassConfig.DEFAULT
+            var savedConfig = initial
+            var restoringDefaults = false
+            fun save(config: BottomTabLiquidGlassConfig) {
+                val normalized = config.normalized()
+                if (normalized == savedConfig) return
+                savedConfig = normalized
+                BottomTabLiquidGlassPreferences.save(prefs, normalized)
+            }
             val root = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
@@ -43,19 +51,22 @@ internal object BottomTabLiquidGlassDialog {
                 root, UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_BLUR_AMOUNT,
                 UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_BLUR_AMOUNT_DESC,
                 0, BottomTabLiquidGlassConfig.MAX_BLUR_PERCENT, initial.blurPercent,
-                UiText.Settings::liquidGlassPercent,
+                onValueCommitted = { save(savedConfig.copy(blurPercent = it)) },
+                format = UiText.Settings::liquidGlassPercent,
             )
             val width = slider(
                 root, UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_TAB_WIDTH,
                 UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_TAB_WIDTH_DESC,
                 BottomTabLiquidGlassConfig.MIN_DROPLET_WIDTH_PERCENT,
                 BottomTabLiquidGlassConfig.MAX_DROPLET_WIDTH_PERCENT, initial.dropletWidthPercent,
-                UiText.Settings::liquidGlassPercent,
+                onValueCommitted = { save(savedConfig.copy(dropletWidthPercent = it)) },
+                format = UiText.Settings::liquidGlassPercent,
             )
             val gap = slider(
                 root, UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_BOTTOM_GAP,
                 UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_BOTTOM_GAP_DESC,
                 -1, BottomTabLiquidGlassConfig.MAX_BOTTOM_GAP_DP, initial.bottomGapDp,
+                onValueCommitted = { save(savedConfig.copy(bottomGapDp = it)) },
             ) { value ->
                 if (value < 0) UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_AUTO
                 else UiText.Settings.liquidGlassDp(value)
@@ -67,41 +78,39 @@ internal object BottomTabLiquidGlassDialog {
                 blurAmount.isEnabled = blur.isChecked || liquidGlass.isChecked
                 (blurAmount.parent as? android.view.View)?.alpha = if (blurAmount.isEnabled) 1f else 0.5f
             }
-            blur.setOnCheckedChangeListener { _, _ -> updateAvailability() }
-            liquidGlass.setOnCheckedChangeListener { _, _ -> updateAvailability() }
+            blur.setOnCheckedChangeListener { _, checked ->
+                updateAvailability()
+                if (!restoringDefaults) save(savedConfig.copy(blurEnabled = checked))
+            }
+            liquidGlass.setOnCheckedChangeListener { _, checked ->
+                updateAvailability()
+                if (!restoringDefaults) save(savedConfig.copy(liquidGlassEnabled = checked))
+            }
             updateAvailability()
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.BOTTOM_BAR_STYLE_TITLE)
                 .setView(createDialogScrollContainer(context, root))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setNeutralButton(UiText.Settings.HOME_NATIVE_GLASS_RESTORE_DEFAULTS, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
             dialog.setOnShowListener {
-                dialog.window?.let { applyUnifiedDialogCardStyle(it, density) }
                 dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-                    gap.progress = 0
-                    blur.isChecked = defaults.blurEnabled
-                    liquidGlass.isChecked = defaults.liquidGlassEnabled
-                    blurAmount.progress = defaults.blurPercent
-                    width.progress = defaults.dropletWidthPercent - BottomTabLiquidGlassConfig.MIN_DROPLET_WIDTH_PERCENT
-                }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                    BottomTabLiquidGlassPreferences.save(prefs, BottomTabLiquidGlassConfig(
-                        bottomGapDp = gap.progress - 1,
-                        blurEnabled = blur.isChecked,
-                        liquidGlassEnabled = liquidGlass.isChecked,
-                        dropletWidthPercent = width.progress + BottomTabLiquidGlassConfig.MIN_DROPLET_WIDTH_PERCENT,
-                        blurPercent = blurAmount.progress,
-                    ))
-                    Toast.makeText(context,
-                        UiText.Settings.withRestartTiebaHint(UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_SAVED),
-                        Toast.LENGTH_SHORT).show()
-                    dialog.dismiss()
+                    restoringDefaults = true
+                    try {
+                        gap.progress = defaults.bottomGapDp + 1
+                        blur.isChecked = defaults.blurEnabled
+                        liquidGlass.isChecked = defaults.liquidGlassEnabled
+                        blurAmount.progress = defaults.blurPercent
+                        width.progress = defaults.dropletWidthPercent - BottomTabLiquidGlassConfig.MIN_DROPLET_WIDTH_PERCENT
+                    } finally {
+                        restoringDefaults = false
+                    }
+                    updateAvailability()
+                    save(defaults)
                 }
             }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[BottomTabLiquidGlassDialog] show failed: ${t.message}")
         }
@@ -114,6 +123,7 @@ internal object BottomTabLiquidGlassDialog {
         min: Int,
         max: Int,
         value: Int,
+        onValueCommitted: (Int) -> Unit,
         format: (Int) -> String,
     ): SeekBar {
         val context = parent.context
@@ -152,11 +162,10 @@ internal object BottomTabLiquidGlassDialog {
         }
         fun update(progress: Int) { valueText.text = format(progress + min) }
         update(slider.progress)
-        slider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) = update(progress)
-            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
-        })
+        slider.setOnSeekBarChangeListener(SettingsSliderChangeListener(
+            onValueChanged = ::update,
+            onValueCommitted = { onValueCommitted(it + min) },
+        ))
         row.addView(slider, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
         ))

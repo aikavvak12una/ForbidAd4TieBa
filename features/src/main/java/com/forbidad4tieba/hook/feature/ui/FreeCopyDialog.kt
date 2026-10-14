@@ -19,7 +19,7 @@ import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applySettingsMessageStyle
 import com.forbidad4tieba.hook.ui.applySettingsRowTitleStyle
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.createSettingsDialogTitleView
 import com.forbidad4tieba.hook.ui.dialogThemeFor
@@ -131,14 +131,13 @@ internal object FreeCopyDialog {
                 .setPositiveButton(UiText.FreeCopy.BUTTON_COPY_ALL, null)
                 .create()
             dialog.setOnShowListener {
-                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
                     if (copyText(activity, plainText, UiText.FreeCopy.TOAST_COPIED)) {
                         dialog.dismiss()
                     }
                 }
             }
-            dialog.show()
+            dialog.showSettingsDialog(density)
             true
         } catch (t: Throwable) {
             XposedCompat.logW("[FreeCopyDialog] show failed: ${t.message}")

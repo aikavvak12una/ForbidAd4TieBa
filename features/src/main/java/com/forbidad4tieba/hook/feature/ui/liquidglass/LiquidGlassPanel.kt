@@ -185,9 +185,9 @@ internal class LiquidGlassPanel(
             val p = parameters(height)
             val margin = LiquidGlassStyle.margin(p)
             if (canvas.isHardwareAccelerated && ensureBackdrop(margin) && updateSampling()) {
-                if (!renderer.draw(canvas, width, height, p, materialRevision, recordMaterial)) drawFallback(canvas)
-            } else drawFallback(canvas)
-        } else drawFallback(canvas)
+                if (!renderer.draw(canvas, width, height, p, materialRevision, recordMaterial)) drawSurfaceTint(canvas)
+            } else drawSurfaceTint(canvas)
+        } else drawSurfaceTint(canvas, parameters(height).tint)
         canvas.restoreToCount(save)
     }
 
@@ -360,8 +360,8 @@ internal class LiquidGlassPanel(
         try { block() } finally { isCapturing = previous }
     }
 
-    private fun drawFallback(canvas: Canvas) {
-        paint.color = LiquidGlassStyle.surfaceTint(night, translucent = false)
+    private fun drawSurfaceTint(canvas: Canvas, tint: Int = LiquidGlassStyle.surfaceTint(night, translucent = false)) {
+        paint.color = tint
         val split = inputWidth > 0 && actionsLeft < width
         val w = if (split) inputWidth.toFloat() else width.toFloat()
         val r = min(w, height.toFloat()) / 2f

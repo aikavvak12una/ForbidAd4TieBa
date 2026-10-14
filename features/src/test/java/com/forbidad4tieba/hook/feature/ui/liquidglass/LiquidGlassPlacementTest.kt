@@ -19,12 +19,13 @@ class LiquidGlassPlacementTest {
         assertEquals(0f, LiquidGlassGeom.samplingResidual(1.25f, 1), 0f)
     }
 
-    @Test fun explicitGapIncludesConsumedInsetsOnlyOnce() {
+    @Test fun explicitCenterGapIncludesConsumedInsetsOnlyOnceAndKeepsTheBarInside() {
         for (gap in listOf(0, 20, 80, 120)) {
             val full = LiquidGlassBarMetrics.floatingTop(1280, 1280, 1280, 96, 160, 2f, gap)
             val inset = LiquidGlassBarMetrics.floatingTop(1184, 1184, 1280, 96, 160, 2f, gap)
             assertEquals(full, inset)
-            assertEquals(gap * 2, 1184 - full - 160)
+            assertEquals(maxOf(gap * 2, 80), 1184 - full - 80)
+            assertTrue(full + 160 <= 1184)
         }
     }
 
@@ -74,10 +75,10 @@ class LiquidGlassPlacementTest {
         }
     }
 
-    @Test fun visibleNavigationAreaHasEightDpClearance() {
+    @Test fun visibleNavigationAreaUsesTheSharedThirtyEightDpCenter() {
         for (navigation in listOf(48, 96)) {
             val top = LiquidGlassBarMetrics.floatingTop(1280, 1280, 1280, navigation, 128, 2f)
-            assertEquals(16, 1280 - navigation - top - 128)
+            assertEquals(76, 1280 - navigation - top - 64)
         }
     }
 
@@ -87,10 +88,10 @@ class LiquidGlassPlacementTest {
         assertEquals(edgeToEdge, alreadyInset)
     }
 
-    @Test fun statusBarOffsetAndLargerTextKeepTheSameBottomEdge() {
+    @Test fun statusBarOffsetAndLargerTextKeepTheSameCenter() {
         val top = LiquidGlassBarMetrics.floatingTop(1232, 1280, 1280, 0, 128, 2f)
         val taller = LiquidGlassBarMetrics.floatingTop(1232, 1280, 1280, 0, 192, 2f)
-        assertEquals(56, 1280 - (48 + top + 128))
-        assertEquals(top + 128, taller + 192)
+        assertEquals(116, 1280 - (48 + top + 64))
+        assertEquals(top + 64, taller + 96)
     }
 }

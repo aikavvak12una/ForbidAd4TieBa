@@ -24,6 +24,7 @@ import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applySettingsRowDescriptionStyle
 import com.forbidad4tieba.hook.ui.applySettingsRowTitleStyle
 import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.createSettingsInputBackground
+import com.forbidad4tieba.hook.ui.settings.SettingsSliderChangeListener
 import com.forbidad4tieba.hook.ui.settings.glass.HomeNativeGlassFormState.homeNativeGlassDialogTokens
 import com.forbidad4tieba.hook.ui.settingsRowVerticalPadding
 import kotlin.math.max
@@ -413,7 +414,7 @@ internal object HomeNativeGlassFormViews {
         suffix: String,
         density: Float,
         onValueChanged: ((Int) -> Unit)? = null,
-        onStopTrackingTouch: ((Int) -> Unit)? = null,
+        onValueCommitted: (Int) -> Unit,
     ): Pair<View, android.widget.SeekBar> {
         val tokens = UiStyle.tokens(context)
         val root = LinearLayout(context).apply {
@@ -469,17 +470,13 @@ internal object HomeNativeGlassFormViews {
             valueText.text = "${progress + minValue}$suffix"
         }
         updateValueText(seekBar.progress)
-        seekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+        seekBar.setOnSeekBarChangeListener(SettingsSliderChangeListener(
+            onValueChanged = { progress ->
                 updateValueText(progress)
                 onValueChanged?.invoke(progress + minValue)
-            }
-            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) = Unit
-            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {
-                val progress = seekBar?.progress ?: return
-                onStopTrackingTouch?.invoke(progress + minValue)
-            }
-        })
+            },
+            onValueCommitted = { onValueCommitted(it + minValue) },
+        ))
         root.addView(
             seekBar,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),

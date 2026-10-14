@@ -22,3 +22,13 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.konsist)
 }
+
+val featureBuildDirectory = layout.buildDirectory
+tasks.withType<Test>().configureEach {
+    doFirst {
+        val outputPath = featureBuildDirectory.get().asFile.toPath()
+        systemProperty("features.production.classpath", classpath.filter {
+            it.toPath().startsWith(outputPath) && it !in testClassesDirs.files
+        }.asPath)
+    }
+}

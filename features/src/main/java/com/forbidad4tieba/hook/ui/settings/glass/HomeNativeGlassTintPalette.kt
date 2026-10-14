@@ -14,7 +14,6 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImageAnalyzer
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImageSelectionState
@@ -24,10 +23,12 @@ import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applySettingsRowDescriptionStyle
 import com.forbidad4tieba.hook.ui.applySettingsRowTitleStyle
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.dialogThemeFor
 import com.forbidad4tieba.hook.ui.setSettingsTitle
+import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.createSettingsInputBackground
+import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.doAfterTextChanged
 import com.forbidad4tieba.hook.ui.settingsDialogContentTopPadding
 import com.forbidad4tieba.hook.ui.settingsDialogPadding
 import com.forbidad4tieba.hook.ui.settingsRowVerticalPadding
@@ -64,6 +65,7 @@ internal object HomeNativeGlassTintPalette {
         context: Context,
         state: HomeNativeGlassImageSelectionState,
         density: Float,
+        onTintChanged: () -> Unit,
     ): Pair<View, () -> Unit> {
         val tokens = UiStyle.tokens(context)
         val root = LinearLayout(context).apply {
@@ -129,6 +131,7 @@ internal object HomeNativeGlassTintPalette {
                 ) {
                     state.tintColor = HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_TINT_COLOR
                     refresh()
+                    onTintChanged()
                 },
                 LinearLayout.LayoutParams((36 * density).toInt(), (36 * density).toInt()).apply {
                     rightMargin = (8 * density).toInt()
@@ -147,6 +150,7 @@ internal object HomeNativeGlassTintPalette {
                     ) {
                         state.tintColor = color
                         refresh()
+                        onTintChanged()
                     },
                     LinearLayout.LayoutParams((36 * density).toInt(), (36 * density).toInt()).apply {
                         rightMargin = (8 * density).toInt()
@@ -164,7 +168,7 @@ internal object HomeNativeGlassTintPalette {
                             context = context,
                             state = state,
                             density = density,
-                            refreshPalette = refresh,
+                            refreshPalette = { refresh(); onTintChanged() },
                         )
                     },
                     LinearLayout.LayoutParams((36 * density).toInt(), (36 * density).toInt()).apply {
@@ -213,13 +217,23 @@ internal object HomeNativeGlassTintPalette {
                 setHintTextColor(tokens.textMuted)
                 textSize = SETTINGS_INPUT_TEXT_SP
                 includeFontPadding = false
-                background = UiStyle.createPlainInputUnderlineBackground(tokens, density)
+                background = createSettingsInputBackground(tokens, density)
                 setPadding(
-                    0,
-                    (2 * density).toInt(),
-                    0,
-                    (8 * density).toInt(),
+                    (4 * density).toInt(),
+                    (10 * density).toInt(),
+                    (4 * density).toInt(),
+                    (10 * density).toInt(),
                 )
+            }
+            val initialPalette = state.paletteColors
+            input.doAfterTextChanged { raw ->
+                val color = parseHomeNativeGlassUserTintColor(raw)
+                input.error = if (color == null) UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_INVALID else null
+                if (color != null) {
+                    state.paletteColors = if (color in initialPalette) initialPalette else initialPalette + color
+                    state.tintColor = color
+                    refreshPalette()
+                }
             }
             val container = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -235,41 +249,16 @@ internal object HomeNativeGlassTintPalette {
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, container))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
             dialog.setOnShowListener {
-                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val color = parseHomeNativeGlassUserTintColor(input.text?.toString().orEmpty())
-                    if (color == null) {
-                        input.error = UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADD_INVALID
-                        return@setOnClickListener
-                    }
-                    val existed = state.paletteColors.any { it == color }
-                    if (!existed) {
-                        state.paletteColors = state.paletteColors + color
-                    }
-                    state.tintColor = color
-                    refreshPalette()
-                    Toast.makeText(
-                        context,
-                        if (existed) {
-                            UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_DUPLICATED
-                        } else {
-                            UiText.Settings.HOME_NATIVE_GLASS_TINT_COLOR_ADDED
-                        },
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                    dialog.dismiss()
-                }
                 input.post {
                     input.requestFocus()
                     (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
                         ?.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
                 }
             }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showHomeNativeGlassAddTintColorDialog failed: ${t.message}")
         }

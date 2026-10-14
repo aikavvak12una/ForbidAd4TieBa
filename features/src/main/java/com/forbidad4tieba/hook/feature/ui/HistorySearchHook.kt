@@ -16,8 +16,10 @@ import com.forbidad4tieba.hook.symbol.model.HistorySearchSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
 import com.forbidad4tieba.hook.utils.ReflectionUtils
+import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.dialogThemeFor
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.utils.ClearableInputRow
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -280,7 +282,8 @@ object HistorySearchHook {
         onClear: () -> Unit,
     ) {
         val density = activity.resources.displayMetrics.density
-        val hPad = (18 * density).toInt()
+        val tokens = UiStyle.tokens(activity)
+        val hPad = (24 * density).toInt()
         val vPad = (10 * density).toInt()
         val input = EditText(activity).apply {
             hint = UiText.HistorySearch.DIALOG_HINT
@@ -290,8 +293,8 @@ object HistorySearchHook {
             setSelection(text?.length ?: 0)
             setPadding(0, vPad, 0, vPad)
             textSize = 14.5f
-            setTextColor(0xFF1F2937.toInt())
-            setHintTextColor(0xFF9AA4B2.toInt())
+            setTextColor(tokens.textPrimary)
+            setHintTextColor(tokens.textMuted)
             background = null
         }
         val inputRow = ClearableInputRow.create(
@@ -303,7 +306,7 @@ object HistorySearchHook {
             onClear = onClear
         )
         val underline = View(activity).apply {
-            setBackgroundColor(0xFF2F7DFF.toInt())
+            setBackgroundColor(tokens.accent)
             alpha = 0.72f
         }
         input.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
@@ -325,7 +328,7 @@ object HistorySearchHook {
             )
         }
 
-        val dialog = AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+        val dialog = AlertDialog.Builder(activity, dialogThemeFor(activity))
             .setTitle(UiText.HistorySearch.DIALOG_TITLE)
             .setView(inputContainer)
             .setPositiveButton(UiText.HistorySearch.DIALOG_ACTION_SEARCH) { _, _ ->
@@ -335,17 +338,16 @@ object HistorySearchHook {
             .create()
 
         dialog.setOnShowListener {
-            dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
                 isAllCaps = false
-                setTextColor(0xFF4C87F7.toInt())
+                setTextColor(tokens.accent)
             }
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.apply {
                 isAllCaps = false
-                setTextColor(0xFF6B7280.toInt())
+                setTextColor(tokens.textSecondary)
             }
         }
-        dialog.show()
+        dialog.showSettingsDialog(density)
     }
 
     private fun applyFilter(activity: Activity, query: String, fromUser: Boolean) {

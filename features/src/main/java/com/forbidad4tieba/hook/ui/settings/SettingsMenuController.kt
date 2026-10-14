@@ -38,7 +38,8 @@ import com.forbidad4tieba.hook.ui.applySettingsBrandTagStyle
 import com.forbidad4tieba.hook.ui.applySettingsCodeTextStyle
 import com.forbidad4tieba.hook.ui.applySettingsMessageStyle
 import com.forbidad4tieba.hook.ui.applySettingsSectionTitleStyle
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
+import com.forbidad4tieba.hook.ui.dialogThemeFor
 import com.forbidad4tieba.hook.ui.createAboutItem
 import com.forbidad4tieba.hook.ui.createDivider
 import com.forbidad4tieba.hook.ui.createSwitchRow
@@ -373,26 +374,17 @@ internal object SettingsMenuController {
                 UiStyle.animateBrandTagShimmer(brandTag)
             }
 
-            val dialogTheme = if (tokensTitle.night) {
-                android.R.style.Theme_DeviceDefault_Dialog_Alert
-            } else {
-                android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
-            }
-            val builder = AlertDialog.Builder(context, dialogTheme)
+            val builder = AlertDialog.Builder(context, dialogThemeFor(context))
             builder.setCustomTitle(titleView)
             builder.setView(scrollContainer)
-            builder.setPositiveButton(UiText.Settings.SAVE_AND_RESTART) { _, _ ->
-                Toast.makeText(context, UiText.Settings.SETTINGS_SAVED_RESTARTING, Toast.LENGTH_SHORT).show()
+            builder.setPositiveButton(UiText.Settings.DONE_AND_RESTART) { _, _ ->
+                Toast.makeText(context, UiText.Settings.APP_RESTARTING, Toast.LENGTH_SHORT).show()
                 restartHostApp(context)
             }
 
             val dialog = builder.create()
             settingsDialog = dialog
-            dialog.show()
-            dialog.window?.let { window ->
-                applyUnifiedDialogCardStyle(window, density)
-                UiStyle.animateDialogEntry(window.decorView, density)
-            }
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.log("[SettingsMenuHook] FAILED to show settings dialog: ${t.message}")
             XposedCompat.log(t)
@@ -424,28 +416,18 @@ internal object SettingsMenuController {
 
             val handler = Handler(Looper.getMainLooper())
             var countdownRunnable: Runnable? = null
-            val dialogTheme = if (tokens.night) {
-                android.R.style.Theme_DeviceDefault_Dialog_Alert
-            } else {
-                android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
-            }
-            val dialog = AlertDialog.Builder(context, dialogTheme)
+            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.RESTRICTED_FEATURE_WARNING_TITLE)
                 .setView(scroll)
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
                 .setPositiveButton(
                     UiText.Settings.restrictedFeatureConfirmWaiting(RESTRICTED_FEATURE_CONFIRM_DELAY_SECONDS),
                     null
                 )
                 .create()
-            dialog.setCancelable(false)
-            dialog.setCanceledOnTouchOutside(false)
+            dialog.setCancelable(true)
+            dialog.setCanceledOnTouchOutside(true)
 
             dialog.setOnShowListener {
-                dialog.window?.let { window ->
-                    applyUnifiedDialogCardStyle(window, density)
-                    UiStyle.animateDialogEntry(window.decorView, density)
-                }
                 val confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 confirmButton.setTextColor(tokens.danger)
                 var secondsLeft = RESTRICTED_FEATURE_CONFIRM_DELAY_SECONDS
@@ -476,7 +458,7 @@ internal object SettingsMenuController {
             dialog.setOnDismissListener {
                 countdownRunnable?.let { handler.removeCallbacks(it) }
             }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showRestrictedFeatureWarningDialog failed: ${t.message}")
         }
@@ -502,21 +484,12 @@ internal object SettingsMenuController {
                     )
                 )
             }
-            val dialogTheme = if (tokens.night) {
-                android.R.style.Theme_DeviceDefault_Dialog_Alert
-            } else {
-                android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
-            }
-            val dialog = AlertDialog.Builder(context, dialogTheme)
+            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.RUNTIME_ENVIRONMENT)
                 .setView(scroll)
                 .setPositiveButton(UiText.Settings.BUTTON_OK, null)
                 .create()
-            dialog.show()
-            dialog.window?.let { window ->
-                applyUnifiedDialogCardStyle(window, density)
-                UiStyle.animateDialogEntry(window.decorView, density)
-            }
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showRuntimeEnvironmentDialog failed: ${t.message}")
         }

@@ -15,21 +15,20 @@ import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
 import com.forbidad4tieba.hook.ui.CustomPostModelScoreUiCatalog
-import com.forbidad4tieba.hook.ui.ModelScoreUiItem
 import com.forbidad4tieba.hook.ui.SETTINGS_ROW_DESC_SP
 import com.forbidad4tieba.hook.ui.SETTINGS_VALUE_TEXT_SP
 import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applySettingsRowDescriptionStyle
 import com.forbidad4tieba.hook.ui.applySettingsRowTitleStyle
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDivider
 import com.forbidad4tieba.hook.ui.dialogThemeFor
 import com.forbidad4tieba.hook.ui.setSettingsTitle
 import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.createSettingsInputBackground
+import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.doAfterTextChanged
 import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.prepareSettingsDialogWindowForInput
 import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.prepareSettingsInputForKeyboard
-import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.showSettingsKeyboard
 import com.forbidad4tieba.hook.ui.settings.modelscore.ModelScoreStatsViews.createModelScoreStatsContent
 import com.forbidad4tieba.hook.ui.settingsDialogContentTopPadding
 import com.forbidad4tieba.hook.ui.settingsDialogPadding
@@ -50,7 +49,6 @@ internal object ModelScoreForm {
                 PostFilterPreferences.FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES.read(prefs)
             ).toMutableMap()
             val modelScoreUiItems = CustomPostModelScoreUiCatalog.items
-            val inputRows = ArrayList<Pair<ModelScoreUiItem, android.widget.EditText>>(modelScoreUiItems.size)
             val statsRefreshers = ArrayList<() -> Unit>(modelScoreUiItems.size)
             val initialStatsPostLimit = PostFilterPreferences.FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT.read(prefs).coerceAtLeast(ModelScoreSettings.MIN_MODEL_SCORE_STATS_POST_LIMIT)
 
@@ -178,6 +176,13 @@ internal object ModelScoreForm {
                 )
                 prepareSettingsInputForKeyboard(this)
             }
+            statsLimitInput.doAfterTextChanged { raw ->
+                val value = raw.trim().toIntOrNull()?.takeIf { it >= ModelScoreSettings.MIN_MODEL_SCORE_STATS_POST_LIMIT }
+                statsLimitInput.error = if (value == null) UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_STATS_LIMIT_INVALID else null
+                if (value != null && PostFilterPreferences.FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT.read(prefs) != value) {
+                    prefs.edit().putInt(PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT, value).apply()
+                }
+            }
             statsLimitRow.addView(
                 statsLimitInput,
                 LinearLayout.LayoutParams((50 * density).toInt(), (34 * density).toInt())
@@ -235,6 +240,17 @@ internal object ModelScoreForm {
                     visibility = View.GONE
                 }
                 lateinit var input: android.widget.EditText
+                var updatingThresholdInput = false
+                fun updateThresholdInput(value: String) {
+                    updatingThresholdInput = true
+                    try {
+                        input.setText(value)
+                        input.error = null
+                        input.setSelection(input.text?.length ?: 0)
+                    } finally {
+                        updatingThresholdInput = false
+                    }
+                }
                 var expanded = false
                 lateinit var refreshStatsContent: () -> Unit
 
@@ -243,11 +259,10 @@ internal object ModelScoreForm {
                     val valueText = formatModelScoreThreshold(roundedValue)
                     val applyThreshold = sampleCount > ModelScoreSettings.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT
                     if (applyThreshold) {
-                        input.setText(valueText)
-                        input.setSelection(input.text?.length ?: 0)
+                        updateThresholdInput(valueText)
                         thresholdByKey[item.key] = roundedValue
                     } else {
-                        input.setText("")
+                        updateThresholdInput("")
                         thresholdByKey.remove(item.key)
                     }
                     persistModelScoreAutoThreshold(item.key, percentile, roundedValue, applyThreshold)
@@ -270,7 +285,7 @@ internal object ModelScoreForm {
                 fun disableAutoPercentile(percentile: Int) {
                     autoPercentiles.remove(item.key)
                     thresholdByKey.remove(item.key)
-                    input.setText("")
+                    updateThresholdInput("")
                     persistModelScoreAutoDisabled(item.key)
                     Toast.makeText(
                         context,
@@ -352,7 +367,41 @@ internal object ModelScoreForm {
                     )
                     prepareSettingsInputForKeyboard(this)
                 }
-                inputRows.add(item to input)
+                input.doAfterTextChanged { text ->
+                    if (updatingThresholdInput) return@doAfterTextChanged
+                    val raw = text.trim()
+                    val value = raw.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+                    input.error = if (raw.isNotEmpty() && value == null) UiText.Settings.modelScoreThresholdInvalid(item.label) else null
+                    if (raw.isNotEmpty() && value == null) return@doAfterTextChanged
+                    val merged = ModelScoreSettings.parseModelScoreThresholds(
+                        PostFilterPreferences.FILTER_POST_MODEL_SCORE_THRESHOLDS.read(prefs),
+                    ).associate { it.key to it.threshold }.toMutableMap()
+                    if (raw.isEmpty()) {
+                        if (thresholdByKey[item.key] != null) autoPercentiles.remove(item.key)
+                        merged.remove(item.key)
+                    } else if (autoPercentiles.containsKey(item.key) &&
+                        CustomPostModelScoreStats.summary(item.key).sampleCount <= ModelScoreSettings.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT
+                    ) {
+                        merged.remove(item.key)
+                    } else {
+                        merged[item.key] = checkNotNull(value)
+                    }
+                    thresholdByKey.clear()
+                    thresholdByKey.putAll(merged)
+                    prefs.edit()
+                        .putString(
+                            PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
+                            ModelScoreSettings.serializeModelScoreThresholds(merged.map { (key, threshold) ->
+                                ModelScoreSettings.ModelScoreThreshold(key, threshold)
+                            }),
+                        )
+                        .putString(
+                            PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
+                            ModelScoreSettings.serializeModelScoreAutoPercentiles(autoPercentiles),
+                        )
+                        .apply()
+                    if (expanded) refreshStatsContent()
+                }
                 row.addView(
                     input,
                     LinearLayout.LayoutParams((50 * density).toInt(), (34 * density).toInt())
@@ -382,95 +431,17 @@ internal object ModelScoreForm {
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_DIALOG_TITLE)
                 .setView(scroll)
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
             dialog.setOnShowListener {
-                dialog.window?.let { window ->
-                    prepareSettingsDialogWindowForInput(window)
-                    applyUnifiedDialogCardStyle(window, density)
-                }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val statsPostLimit = statsLimitInput.text?.toString().orEmpty().trim().toIntOrNull()
-                    if (
-                        statsPostLimit == null ||
-                        statsPostLimit < ModelScoreSettings.MIN_MODEL_SCORE_STATS_POST_LIMIT
-                    ) {
-                        Toast.makeText(
-                            context,
-                            UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_STATS_LIMIT_INVALID,
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        statsLimitInput.requestFocus()
-                        showSettingsKeyboard(statsLimitInput)
-                        return@setOnClickListener
-                    }
-                    val nextAutoPercentiles = autoPercentiles.toMutableMap()
-                    val thresholds = ArrayList<ModelScoreSettings.ModelScoreThreshold>(inputRows.size)
-                    for ((item, input) in inputRows) {
-                        val raw = input.text?.toString().orEmpty().trim()
-                        if (raw.isEmpty()) {
-                            if (nextAutoPercentiles.containsKey(item.key) && thresholdByKey[item.key] == null) {
-                                continue
-                            }
-                            nextAutoPercentiles.remove(item.key)
-                            continue
-                        }
-                        val threshold = raw.toDoubleOrNull()
-                        if (
-                            threshold == null ||
-                            threshold < 0.0 ||
-                            threshold.isNaN() ||
-                            threshold.isInfinite()
-                        ) {
-                            Toast.makeText(
-                                context,
-                                UiText.Settings.modelScoreThresholdInvalid(item.label),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            input.requestFocus()
-                            showSettingsKeyboard(input)
-                            return@setOnClickListener
-                        }
-                        if (
-                            nextAutoPercentiles.containsKey(item.key) &&
-                            CustomPostModelScoreStats.summary(item.key).sampleCount <=
-                            ModelScoreSettings.MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT
-                        ) {
-                            thresholdByKey.remove(item.key)
-                            continue
-                        }
-                        thresholds.add(ModelScoreSettings.ModelScoreThreshold(item.key, threshold))
-                    }
-                    prefs.edit()
-                        .putInt(
-                            PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT,
-                            statsPostLimit
-                        )
-                        .putString(
-                            PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS,
-                            ModelScoreSettings.serializeModelScoreThresholds(thresholds)
-                        )
-                        .putString(
-                            PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
-                            ModelScoreSettings.serializeModelScoreAutoPercentiles(nextAutoPercentiles)
-                        )
-                        .apply()
-                    CustomPostModelScoreStats.trimToPostLimitAsync(statsPostLimit)
-                    val toastText = if (thresholds.isEmpty()) {
-                        UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_EMPTY
-                    } else {
-                        UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_SAVED
-                    }
-                    Toast.makeText(
-                        context,
-                        UiText.Settings.withRestartHint(toastText),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    dialog.dismiss()
-                }
+                dialog.window?.let { window -> prepareSettingsDialogWindowForInput(window) }
             }
-            dialog.show()
+            // Trimming removes samples, so wait until editing has ended instead of using intermediate numbers.
+            dialog.setOnDismissListener {
+                val limit = PostFilterPreferences.FILTER_POST_MODEL_SCORE_STATS_POST_LIMIT.read(prefs)
+                if (limit != initialStatsPostLimit) CustomPostModelScoreStats.trimToPostLimitAsync(limit)
+            }
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showCustomPostModelScoreDialog failed: ${t.message}")
         }

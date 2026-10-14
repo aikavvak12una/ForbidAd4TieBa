@@ -6,12 +6,11 @@ import android.content.Context
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Switch
-import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.ui.SwitchItem
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.createSwitchRow
 import com.forbidad4tieba.hook.ui.dialogThemeFor
@@ -83,14 +82,26 @@ internal object FreeCopyForm {
                 )
                 postButtonSwitch.isChecked = normalized.postButtonEnabled
                 longPressSwitch.isChecked = normalized.longPressEnabled
-                postButtonSwitch.setOnCheckedChangeListener { _, isChecked ->
-                    if (isChecked && longPressSwitch.isEnabled && longPressSwitch.isChecked) {
-                        longPressSwitch.isChecked = false
-                    }
-                }
-                longPressSwitch.setOnCheckedChangeListener { _, isChecked ->
-                    if (isChecked && postButtonSwitch.isEnabled && postButtonSwitch.isChecked) {
-                        postButtonSwitch.isChecked = false
+            }
+            var updatingSelection = false
+            for ((item, switchView) in views) {
+                switchView.setOnCheckedChangeListener { _, isChecked ->
+                    if (updatingSelection || !switchView.isEnabled) return@setOnCheckedChangeListener
+                    updatingSelection = true
+                    try {
+                        val otherMode = when (item.prefKey) {
+                            FreeCopyPreferences.KEY_FREE_COPY_POST_BODY -> longPressSwitch
+                            FreeCopyPreferences.KEY_FREE_COPY_POST_LONG_PRESS -> postButtonSwitch
+                            else -> null
+                        }
+                        if (isChecked && otherMode?.isEnabled == true) otherMode.isChecked = false
+                        val editor = prefs.edit()
+                        for ((changedItem, changedSwitch) in views) {
+                            if (changedSwitch.isEnabled) editor.putBoolean(changedItem.prefKey, changedSwitch.isChecked)
+                        }
+                        editor.apply()
+                    } finally {
+                        updatingSelection = false
                     }
                 }
             }
@@ -98,28 +109,9 @@ internal object FreeCopyForm {
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.FREE_COPY_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, root))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
-            dialog.setOnShowListener {
-                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val editor = prefs.edit()
-                    for ((item, switchView) in views) {
-                        if (switchView.isEnabled) {
-                            editor.putBoolean(item.prefKey, switchView.isChecked)
-                        }
-                    }
-                    editor.apply()
-                    Toast.makeText(
-                        context,
-                        UiText.Settings.withRestartHint(UiText.Settings.FREE_COPY_SAVED),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                    dialog.dismiss()
-                }
-            }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showFreeCopyDialog failed: ${t.message}")
         }

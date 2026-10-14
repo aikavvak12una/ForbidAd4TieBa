@@ -26,8 +26,10 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
 import com.forbidad4tieba.hook.utils.ReflectionUtils
+import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.dialogThemeFor
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.utils.ClearableInputRow
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -1314,7 +1316,8 @@ object CollectionSearchHook {
         onRefresh: () -> Unit,
     ) {
         val density = activity.resources.displayMetrics.density
-        val hPad = (18 * density).toInt()
+        val tokens = UiStyle.tokens(activity)
+        val hPad = (24 * density).toInt()
         val vPad = (10 * density).toInt()
         val input = EditText(activity).apply {
             hint = UiText.CollectionSearch.DIALOG_HINT
@@ -1324,8 +1327,8 @@ object CollectionSearchHook {
             setSelection(text?.length ?: 0)
             setPadding(0, vPad, 0, vPad)
             textSize = 14.5f
-            setTextColor(0xFF1F2937.toInt())
-            setHintTextColor(0xFF9AA4B2.toInt())
+            setTextColor(tokens.textPrimary)
+            setHintTextColor(tokens.textMuted)
             background = null
         }
         val inputRow = ClearableInputRow.create(
@@ -1337,7 +1340,7 @@ object CollectionSearchHook {
             onClear = onClearQuery
         )
         val underline = View(activity).apply {
-            setBackgroundColor(0xFF2F7DFF.toInt())
+            setBackgroundColor(tokens.accent)
             alpha = 0.64f
         }
         input.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
@@ -1364,7 +1367,7 @@ object CollectionSearchHook {
             )
         }
 
-        val dialog = AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+        val dialog = AlertDialog.Builder(activity, dialogThemeFor(activity))
             .setTitle(UiText.CollectionSearch.DIALOG_TITLE)
             .setView(inputContainer)
             .setPositiveButton(UiText.CollectionSearch.DIALOG_ACTION_SEARCH) { _, _ ->
@@ -1377,18 +1380,17 @@ object CollectionSearchHook {
             .create()
 
         dialog.setOnShowListener {
-            dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
             val positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             val neutral = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
             val negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
             positive?.isAllCaps = false
             neutral?.isAllCaps = false
             negative?.isAllCaps = false
-            positive?.setTextColor(0xFF4C87F7.toInt())
-            neutral?.setTextColor(0xFF4C87F7.toInt())
-            negative?.setTextColor(0xFF6B7280.toInt())
+            positive?.setTextColor(tokens.accent)
+            neutral?.setTextColor(tokens.accent)
+            negative?.setTextColor(tokens.textSecondary)
         }
-        dialog.show()
+        dialog.showSettingsDialog(density)
     }
 
     private fun applyFilter(fragment: Any, query: String, fromUser: Boolean) {

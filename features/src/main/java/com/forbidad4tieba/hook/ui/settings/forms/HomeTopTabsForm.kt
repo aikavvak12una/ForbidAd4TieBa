@@ -9,7 +9,7 @@ import android.widget.Switch
 import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.createSwitchRow
 import com.forbidad4tieba.hook.ui.dialogThemeFor
@@ -65,19 +65,20 @@ internal object HomeTopTabsForm {
                 root.addView(row)
             }
 
-            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setSettingsTitle(context, UiText.Settings.HOME_TOP_TAB_DIALOG_TITLE)
-                .setView(createDialogScrollContainer(context, root))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
-                .create()
-            dialog.setOnShowListener {
-                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val hasHostCatalog = rows.any { it.entry.source == TabPreferences.HOME_TOP_TAB_SOURCE_HOST }
+            val hasHostCatalog = rows.any { it.entry.source == TabPreferences.HOME_TOP_TAB_SOURCE_HOST }
+            var updatingSelection = false
+            rows.forEach { row ->
+                row.switchView.setOnCheckedChangeListener { _, _ ->
+                    if (updatingSelection) return@setOnCheckedChangeListener
                     if (hasHostCatalog && rows.none { it.switchView.isChecked }) {
+                        updatingSelection = true
+                        try {
+                            row.switchView.isChecked = true
+                        } finally {
+                            updatingSelection = false
+                        }
                         Toast.makeText(context, UiText.Settings.HOME_TOP_TAB_AT_LEAST_ONE, Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener
+                        return@setOnCheckedChangeListener
                     }
                     val nextDisabledKeys = rows.asSequence()
                         .filter { !it.switchView.isChecked }
@@ -119,15 +120,14 @@ internal object HomeTopTabsForm {
                             ),
                         )
                         .apply()
-                    Toast.makeText(
-                        context,
-                        UiText.Settings.withRestartTiebaHint(UiText.Settings.HOME_TOP_TAB_SAVED),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    dialog.dismiss()
                 }
             }
-            dialog.show()
+            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
+                .setSettingsTitle(context, UiText.Settings.HOME_TOP_TAB_DIALOG_TITLE)
+                .setView(createDialogScrollContainer(context, root))
+                .setPositiveButton(UiText.Settings.DONE, null)
+                .create()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showHomeTopTabDialog failed: ${t.message}")
         }

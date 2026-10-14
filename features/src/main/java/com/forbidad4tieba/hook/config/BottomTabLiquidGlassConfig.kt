@@ -3,9 +3,9 @@ package com.forbidad4tieba.hook.config
 import android.content.SharedPreferences
 import com.forbidad4tieba.hook.ui.UiText
 
-/** Shared material and clearance; the droplet width applies only to the home Tab bar. */
+/** Shared material and center placement; the droplet width applies only to the home Tab bar. */
 data class BottomTabLiquidGlassConfig(
-    /** -1 selects the navigation-aware default, otherwise measured above the navigation area. */
+    /** Center distance above the navigation area, subject to safe clearance; -1 selects the default. */
     val bottomGapDp: Int = -1,
     val blurEnabled: Boolean = true,
     val liquidGlassEnabled: Boolean = true,
@@ -93,7 +93,7 @@ internal object BottomTabLiquidGlassPreferences {
         ).normalized()
     }
 
-    /** The extension menu owns enablement; this form only saves its style draft. */
+    /** The extension menu owns enablement; the form commits style changes as they are made. */
     fun save(prefs: SharedPreferences, config: BottomTabLiquidGlassConfig) {
         val value = config.normalized()
         prefs.edit()

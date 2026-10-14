@@ -86,7 +86,28 @@ class LiquidGlassStyleTest {
         }
     }
 
-    @Test fun surfaceOverlayPreservesEachSkinAndBecomesOpaqueWithoutBackdrop() {
+    @Test fun zeroBlurKeepsBothBarsTranslucentWithoutCapturingThePage() {
+        val clear = config.copy(blurEnabled = true, liquidGlassEnabled = false, blurPercent = 0)
+        assertFalse(clear.needsBackdrop)
+        for (night in listOf(false, true)) for (split in listOf(false, true)) {
+            fun material(percent: Int) = LiquidGlassStyle.params(
+                672, 96, 2f, night, clear.copy(blurPercent = percent),
+                inputWidth = if (split) 394 else 0,
+                actionsLeft = if (split) 410 else 0,
+            )
+            val zero = material(0)
+            assertTrue("Zero blur must still show the page through the surface", (zero.tint ushr 24) in 1..254)
+            assertEquals(material(1).tint, zero.tint)
+            assertEquals(material(100).tint, zero.tint)
+            assertEquals(0f, zero.blurRadius, 0f)
+            assertEquals(0f, zero.refractionAmount, 0f)
+            assertEquals(1f, zero.saturation, 0f)
+            assertEquals(1f, zero.contrast, 0f)
+            assertEquals(0, LiquidGlassStyle.margin(zero))
+        }
+    }
+
+    @Test fun surfaceOverlayPreservesEachSkinAndSupportsAnOpaqueFallback() {
         assertEquals(0xB3FFFFFF.toInt(), LiquidGlassStyle.surfaceTint(night = false, translucent = true))
         assertEquals(0xB3000000.toInt(), LiquidGlassStyle.surfaceTint(night = true, translucent = true))
         assertEquals(0xFFFFFFFF.toInt(), LiquidGlassStyle.surfaceTint(night = false, translucent = false))

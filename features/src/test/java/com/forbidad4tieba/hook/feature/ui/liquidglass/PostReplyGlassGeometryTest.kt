@@ -32,9 +32,9 @@ class PostReplyGlassGeometryTest {
         PostReplyGlassGeometry.calculate(width, height, hostLeft, 0, 0, windowRight, 1280,
             safeLeft, safeRight, navigation, 136, 3, controlHeight, 2f, config.bottomGapDp)
 
-    @Test fun replyUsesItsOwnHeightAndMarginsWithTheSharedBottomGap() {
-        assertEquals(PostReplyGlassGeometry.Bounds(48, 1128, 624, 96), bounds())
-        assertEquals(168, PostReplyGlassGeometry.contentBottomPadding(0, 1280, 1128, 2f))
+    @Test fun replyUsesItsOwnHeightAndMarginsWithTheSharedCenter() {
+        assertEquals(PostReplyGlassGeometry.Bounds(48, 1116, 624, 96), bounds())
+        assertEquals(180, PostReplyGlassGeometry.contentBottomPadding(0, 1280, 1116, 2f))
         assertEquals(240, PostReplyGlassGeometry.contentBottomPadding(240, 1280, 1120, 2f))
     }
 
@@ -64,10 +64,33 @@ class PostReplyGlassGeometryTest {
         assertNull(bounds(height = 200))
     }
 
-    @Test fun largerControlsExpandHeightWhileKeepingBottomClearance() {
+    @Test fun largerControlsExpandAroundTheSameCenter() {
         val large = bounds(controlHeight = 144)!!
         assertEquals(156, large.height)
-        assertEquals(56, 1280 - large.top - large.height)
+        val normal = bounds()!!
+        assertEquals(normal.top + normal.height / 2, large.top + large.height / 2)
+    }
+
+    @Test fun homeAndReplyCentersMatchAcrossGapsDensitiesAndConsumedInsets() {
+        for (density in listOf(1f, 1.25f, 2f, 2.625f, 3f, 4f)) {
+            fun px(dp: Int) = (dp * density).roundToInt()
+            for (navigation in listOf(0, px(24))) for (gap in listOf(-1, 0, 20, 40, 80, 120)) {
+                val windowHeight = px(800)
+                val homeHeight = px(60)
+                val homeTop = LiquidGlassBarMetrics.floatingTop(windowHeight, windowHeight, windowHeight,
+                    navigation, homeHeight, density, gap)
+                for (consumed in listOf(0, navigation)) {
+                    val hostTop = px(24)
+                    val reply = PostReplyGlassGeometry.calculate(
+                        px(411), windowHeight - hostTop - consumed, 0, hostTop,
+                        0, px(411), windowHeight, 0, 0, navigation,
+                        px(68), 3, px(42), density, gap, nativeHeight = px(48),
+                    )!!
+                    assertEquals(homeTop + homeHeight / 2f, hostTop + reply.top + reply.height / 2f, 0.5f)
+                    assertTrue(hostTop + reply.top + reply.height <= windowHeight - navigation)
+                }
+            }
+        }
     }
 
     @Test fun densityAndWindowChangesKeepTheRatioWithoutShrinkingButtonsBelowTheirMinimum() {

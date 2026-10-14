@@ -209,8 +209,8 @@ internal object HomeNativeGlassImagePickerBridge {
                     pending.state.paletteColors = imageAnalysis?.paletteColors.orEmpty()
                     pending.state.defaultTintColor = imageAnalysis?.defaultTintColor
                     pending.displayRef.get()?.text = HomeNativeGlassImageFiles.displayText(copiedPath)
-                    pending.refreshPalette?.invoke()
                     imageAnalysis?.let { pending.onImportedAnalysis?.invoke(it) }
+                    pending.refreshPalette?.invoke()
                     Toast.makeText(
                         context,
                         UiText.Settings.HOME_NATIVE_GLASS_BACKGROUND_IMAGE_IMPORTED,

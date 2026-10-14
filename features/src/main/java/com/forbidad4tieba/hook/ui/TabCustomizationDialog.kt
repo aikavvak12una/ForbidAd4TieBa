@@ -4,8 +4,6 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.SharedPreferences
 import android.widget.LinearLayout
-import android.widget.Switch
-import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 
@@ -23,7 +21,6 @@ internal object TabCustomizationDialog {
                 orientation = LinearLayout.VERTICAL
                 setPadding(padding, settingsDialogContentTopPadding(padding), padding, 0)
             }
-            val switches = ArrayList<Pair<SwitchItem, Switch>>(items.size)
             for (item in items) {
                 val support = SettingsSwitchSupportResolver.resolve(
                     item.prefKey, item.supported, featureStatusMap,
@@ -39,7 +36,7 @@ internal object TabCustomizationDialog {
                     prefs = prefs,
                     label = label,
                     description = SettingsSwitchSupportResolver.mergeDescription(item.description, support.note),
-                    prefKey = null,
+                    prefKey = item.prefKey,
                     padding = padding,
                     enabled = support.supported,
                     defaultValue = support.supported && prefs.getBoolean(item.prefKey, item.defaultValue),
@@ -50,35 +47,15 @@ internal object TabCustomizationDialog {
                 val switchView = checkNotNull(findSwitchView(row)) {
                     "Switch view missing for ${item.prefKey}"
                 }
-                switches.add(item to switchView)
                 root.addView(row)
             }
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.TAB_CUSTOMIZATION_LABEL)
                 .setView(createDialogScrollContainer(context, root))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
-            dialog.setOnShowListener {
-                dialog.window?.let { applyUnifiedDialogCardStyle(it, density) }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                    val editor = prefs.edit()
-                    for ((item, switchView) in switches) {
-                        if (switchView.isEnabled) {
-                            editor.putBoolean(item.prefKey, switchView.isChecked)
-                        }
-                    }
-                    editor.apply()
-                    Toast.makeText(
-                        context,
-                        UiText.Settings.withRestartTiebaHint(UiText.Settings.TAB_CUSTOMIZATION_SAVED),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                    dialog.dismiss()
-                }
-            }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[TabCustomizationDialog] show failed: ${t.message}")
         }

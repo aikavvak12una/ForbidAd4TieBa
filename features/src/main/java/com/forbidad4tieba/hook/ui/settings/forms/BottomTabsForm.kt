@@ -8,7 +8,7 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.createSwitchRow
 import com.forbidad4tieba.hook.ui.dialogThemeFor
@@ -114,44 +114,37 @@ internal object BottomTabsForm {
                 return
             }
 
-            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
-                .setSettingsTitle(context, UiText.Settings.BOTTOM_TAB_DIALOG_TITLE)
-                .setView(createDialogScrollContainer(context, root))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
-                .create()
-            dialog.setOnShowListener {
-                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val rawSelection = TabPreferences.BottomTabSelection(
+            var updatingSelection = false
+            val switches = listOf(homeSwitch, enterForumSwitch, retailStoreSwitch, messageSwitch, mineSwitch)
+            switches.forEach { switchView ->
+                switchView.setOnCheckedChangeListener { _, _ ->
+                    if (updatingSelection) return@setOnCheckedChangeListener
+                    val selection = TabPreferences.BottomTabSelection(
                         homeEnabled = homeSwitch.isChecked,
                         enterForumEnabled = enterForumSwitch.isChecked,
                         retailStoreEnabled = retailStoreSwitch.isChecked,
                         messageEnabled = messageSwitch.isChecked,
                         mineEnabled = mineSwitch.isChecked,
                     )
-                    if (!rawSelection.hasEnabledTab()) {
+                    if (!selection.hasEnabledTab()) {
+                        updatingSelection = true
+                        try {
+                            switchView.isChecked = true
+                        } finally {
+                            updatingSelection = false
+                        }
                         Toast.makeText(context, UiText.Settings.BOTTOM_TAB_AT_LEAST_ONE, Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener
+                        return@setOnCheckedChangeListener
                     }
-                    val normalized = TabPreferences.normalizeBottomTabSelection(rawSelection)
-
-                    prefs.edit()
-                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_HOME, normalized.homeEnabled)
-                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_ENTER_FORUM, normalized.enterForumEnabled)
-                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_RETAIL_STORE, normalized.retailStoreEnabled)
-                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_MESSAGE, normalized.messageEnabled)
-                        .putBoolean(TabPreferences.KEY_BOTTOM_TAB_MINE, normalized.mineEnabled)
-                        .apply()
-                    Toast.makeText(
-                        context,
-                        UiText.Settings.withRestartTiebaHint(UiText.Settings.BOTTOM_TAB_SAVED),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    dialog.dismiss()
+                    TabPreferences.saveBottomTabSelection(prefs, TabPreferences.normalizeBottomTabSelection(selection))
                 }
             }
-            dialog.show()
+            val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
+                .setSettingsTitle(context, UiText.Settings.BOTTOM_TAB_DIALOG_TITLE)
+                .setView(createDialogScrollContainer(context, root))
+                .setPositiveButton(UiText.Settings.DONE, null)
+                .create()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showBottomTabDialog failed: ${t.message}")
         }

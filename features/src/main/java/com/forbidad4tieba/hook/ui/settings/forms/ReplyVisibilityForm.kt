@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.ui.settings.forms
 
 import com.forbidad4tieba.hook.config.ReplyPreferences
+import com.forbidad4tieba.hook.config.IntPreference
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Typeface
@@ -9,24 +10,23 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.SETTINGS_VALUE_TEXT_SP
 import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.applySettingsRowDescriptionStyle
 import com.forbidad4tieba.hook.ui.applySettingsRowTitleStyle
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.createDivider
 import com.forbidad4tieba.hook.ui.dialogThemeFor
 import com.forbidad4tieba.hook.ui.setSettingsTitle
 import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.createSettingsInputBackground
+import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.doAfterTextChanged
 import com.forbidad4tieba.hook.ui.settings.SettingsInputViews.prepareSettingsInputForKeyboard
 import com.forbidad4tieba.hook.ui.settingsDialogContentTopPadding
 import com.forbidad4tieba.hook.ui.settingsDialogPadding
 import com.forbidad4tieba.hook.ui.settingsRowVerticalPadding
-import kotlin.math.max
 
 internal object ReplyVisibilityForm {
     fun showReplyVisibilityProbeDialog(
@@ -140,51 +140,29 @@ internal object ReplyVisibilityForm {
             root.addView(createDivider(context, padding))
             root.addView(intervalRow.first)
 
-            fun parseNumber(input: android.widget.EditText, min: Int, max: Int): Int? {
-                val value = input.text?.toString()?.trim()?.toIntOrNull() ?: return null
-                return value.takeIf { it in min..max }
+            fun bindNumberInput(input: android.widget.EditText, preference: IntPreference, min: Int, max: Int) {
+                input.doAfterTextChanged { raw ->
+                    val value = raw.trim().toIntOrNull()?.takeIf { it in min..max }
+                    input.error = if (value == null) UiText.Settings.REPLY_VISIBILITY_PROBE_CONFIG_INVALID else null
+                    if (value != null && preference.read(prefs) != value) {
+                        prefs.edit().putInt(preference.key, value).apply()
+                    }
+                }
             }
-
+            bindNumberInput(
+                maxAttemptsRow.second, ReplyPreferences.REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+                ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS, ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
+            )
+            bindNumberInput(
+                intervalRow.second, ReplyPreferences.REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+                ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS, ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
+            )
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.REPLY_VISIBILITY_PROBE_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, root))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
-            dialog.setOnShowListener {
-                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val maxAttempts = parseNumber(
-                        maxAttemptsRow.second,
-                        ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
-                        ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS,
-                    )
-                    val intervalMs = parseNumber(
-                        intervalRow.second,
-                        ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
-                        ReplyPreferences.MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
-                    )
-                    if (maxAttempts == null || intervalMs == null) {
-                        Toast.makeText(
-                            context,
-                            UiText.Settings.REPLY_VISIBILITY_PROBE_CONFIG_INVALID,
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                        return@setOnClickListener
-                    }
-                    prefs.edit()
-                        .putInt(ReplyPreferences.KEY_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS, maxAttempts)
-                        .putInt(ReplyPreferences.KEY_REPLY_VISIBILITY_PROBE_INTERVAL_MS, intervalMs)
-                        .apply()
-                    Toast.makeText(
-                        context,
-                        UiText.Settings.REPLY_VISIBILITY_PROBE_CONFIG_SAVED,
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                    dialog.dismiss()
-                }
-            }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showReplyVisibilityProbeDialog failed: ${t.message}")
         }

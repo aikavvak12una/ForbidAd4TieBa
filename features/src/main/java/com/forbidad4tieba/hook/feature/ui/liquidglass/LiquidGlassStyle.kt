@@ -90,7 +90,8 @@ internal object LiquidGlassStyle {
             refractionAmount = amount,
             dispersion = if (droplet && refract) 0.5f else 0f,
             depthEffect = droplet,
-            tint = if (droplet) selectionTint(night, progress) else surfaceTint(night, config.needsBackdrop),
+            // Zero-radius blur remains translucent even though it needs no page capture.
+            tint = if (droplet) selectionTint(night, progress) else surfaceTint(night, refract || config.blurEnabled),
             pressedTint = if (droplet) ((0.03f * progress * 255f).roundToInt() shl 24) else 0,
             highlightAlpha = if (refract && drawHighlight) (if (droplet) progress else 0.75f) else 0f,
             lightAngle = lightAngle + (if (droplet) PI / 2 else -PI / 4).toFloat(),

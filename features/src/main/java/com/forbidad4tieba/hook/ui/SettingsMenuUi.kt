@@ -26,6 +26,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -207,12 +208,45 @@ internal fun AlertDialog.Builder.setSettingsTitle(
     return setCustomTitle(createSettingsDialogTitleView(context, title))
 }
 
+internal fun AlertDialog.showSettingsDialog(
+    density: Float,
+    homeNativeGlassPreviewStyle: HomeNativeGlassDialogPreviewStyle? = null,
+) {
+    // Inflate the panels before styling so the first layout uses the final geometry.
+    create()
+    window?.let { window ->
+        window.setWindowAnimations(0)
+        applyUnifiedDialogCardStyle(
+            window,
+            density,
+            homeNativeGlassPreviewStyle = homeNativeGlassPreviewStyle,
+        )
+        clearSystemDialogCustomPanelPadding(window)
+        applyStableDialogWindowLayout(window, density)
+        window.decorView.alpha = 0f
+    }
+    show()
+    window?.decorView?.let { decor ->
+        // Keep the first frame transparent until the existing OnShow setup has run.
+        decor.post {
+            if (isShowing) {
+                decor.animate().cancel()
+                decor.alpha = 0f
+                decor.animate()
+                    .alpha(1f)
+                    .setStartDelay(0)
+                    .setDuration(160)
+                    .setInterpolator(DecelerateInterpolator(1.2f))
+                    .start()
+            }
+        }
+    }
+}
+
 internal fun applyUnifiedDialogCardStyle(
     window: Window,
     density: Float,
-    useCustomBackground: Boolean = true,
     homeNativeGlassPreviewStyle: HomeNativeGlassDialogPreviewStyle? = null,
-    accountWatermark: Boolean = true,
 ) {
     val activeStyle = homeNativeGlassPreviewStyle?.style
         ?: if (ConfigManager.snapshot().isHomeNativeGlassEnabled) HomeGlassPreferences.activeHomeNativeGlassStyle() else null
@@ -233,30 +267,19 @@ internal fun applyUnifiedDialogCardStyle(
     )
     refreshSettingsDialogTitle(window, tokens, density)
     tintSettingsDialogActionButtons(window, tokens.accent)
-    val background = if (useCustomBackground) {
-        createSettingsDialogCustomBackground(
-            window = window,
-            tokens = tokens,
-            density = density,
-            previewStyle = homeNativeGlassPreviewStyle,
-        )
-    } else {
-        null
-    }
-    val cardBackground = background ?: createSettingsDialogCardBackground(tokens, density)
-    val finalBackground = if (accountWatermark) {
-        createAccountIdWatermarkedBackground(
-            context = window.context,
-            sourceBackground = cardBackground,
-            density = density,
-            cornerRadiusPx = tokens.cardCornerPx,
-        )
-    } else {
-        cardBackground
-    }
+    val cardBackground = createSettingsDialogCustomBackground(
+        window = window,
+        tokens = tokens,
+        density = density,
+        previewStyle = homeNativeGlassPreviewStyle,
+    ) ?: createSettingsDialogCardBackground(tokens, density)
+    val finalBackground = createAccountIdWatermarkedBackground(
+        context = window.context,
+        sourceBackground = cardBackground,
+        density = density,
+        cornerRadiusPx = UiStyle.dialogCornerRadius(tokens, density),
+    )
     window.setBackgroundDrawable(NoIntrinsicInsetDrawable(finalBackground, tokens.dialogInsetPx))
-    clearSystemDialogCustomPanelPadding(window)
-    applyStableDialogWindowLayout(window, density)
 }
 
 private fun createSettingsDialogCardBackground(
@@ -265,7 +288,7 @@ private fun createSettingsDialogCardBackground(
 ): Drawable {
     return GradientDrawable().apply {
         setColor(tokens.surface)
-        cornerRadius = tokens.cardCornerPx
+        cornerRadius = UiStyle.dialogCornerRadius(tokens, density)
         if (ConfigManager.snapshot().isHomeNativeGlassEnabled && HomeGlassPreferences.isHomeNativeGlassStrokeEnabled) {
             setStroke((1 * density).toInt().coerceAtLeast(1), tokens.inputStroke)
         }
@@ -316,7 +339,6 @@ private fun applyStableDialogWindowLayout(window: Window, density: Float) {
         .coerceAtMost(maxWidth)
         .coerceAtLeast(minWidth)
 
-    window.setGravity(Gravity.CENTER)
     val attrs = window.attributes
     attrs.gravity = Gravity.CENTER
     attrs.x = 0
@@ -324,7 +346,6 @@ private fun applyStableDialogWindowLayout(window: Window, density: Float) {
     attrs.width = targetWidth
     attrs.height = ViewGroup.LayoutParams.WRAP_CONTENT
     window.attributes = attrs
-    window.setLayout(targetWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
 }
 
 private class NoIntrinsicInsetDrawable(
@@ -386,10 +407,7 @@ private fun createSettingsDialogCustomBackground(
         previewBitmap = previewStyle?.previewBitmap,
     ) ?: return null
     val overlayColor = Color.TRANSPARENT
-    val cornerRadiusPx = previewStyle?.style?.cardRadiusDp?.coerceIn(
-        HomeGlassPreferences.MIN_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-        HomeGlassPreferences.MAX_HOME_NATIVE_GLASS_CARD_RADIUS_DP,
-    )?.let { it * density } ?: tokens.cardCornerPx
+    val cornerRadiusPx = UiStyle.dialogCornerRadius(tokens, density)
     val strokeEnabled = style?.strokeEnabled ?: HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_STROKE_ENABLED
     val shadowStrengthPercent = style?.shadowStrengthPercent
         ?: HomeGlassPreferences.DEFAULT_HOME_NATIVE_GLASS_SHADOW_STRENGTH_PERCENT

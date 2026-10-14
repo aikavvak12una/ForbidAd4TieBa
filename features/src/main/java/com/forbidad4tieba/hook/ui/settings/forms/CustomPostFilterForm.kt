@@ -5,12 +5,11 @@ import android.app.AlertDialog
 import android.content.Context
 import android.view.ViewGroup
 import android.widget.LinearLayout
-import android.widget.Switch
 import android.widget.Toast
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.SwitchItem
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.createSwitchRow
 import com.forbidad4tieba.hook.ui.dialogThemeFor
@@ -38,7 +37,6 @@ internal object CustomPostFilterForm {
                 )
             }
 
-            val views = ArrayList<Pair<SwitchItem, Switch>>(items.size)
             var modelScoreStatsStartToastShown = false
             for (item in items) {
                 val actionClick = if (item.prefKey == PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE) {
@@ -51,7 +49,7 @@ internal object CustomPostFilterForm {
                     prefs = prefs,
                     label = item.label,
                     description = null,
-                    prefKey = null,
+                    prefKey = item.prefKey,
                     padding = padding,
                     enabled = true,
                     defaultValue = prefs.getBoolean(item.prefKey, item.defaultValue),
@@ -66,6 +64,7 @@ internal object CustomPostFilterForm {
                 }
                 if (item.prefKey == PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE) {
                     switchView.setOnCheckedChangeListener { _, isChecked ->
+                        prefs.edit().putBoolean(item.prefKey, isChecked).apply()
                         if (
                             isChecked &&
                             !modelScoreStatsStartToastShown
@@ -79,46 +78,15 @@ internal object CustomPostFilterForm {
                         }
                     }
                 }
-                views.add(item to switchView)
                 root.addView(row)
             }
 
             val dialog = AlertDialog.Builder(context, dialogThemeFor(context))
                 .setSettingsTitle(context, UiText.Settings.CUSTOM_POST_FILTER_DIALOG_TITLE)
                 .setView(createDialogScrollContainer(context, root))
-                .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-                .setPositiveButton(UiText.Settings.SAVE, null)
+                .setPositiveButton(UiText.Settings.DONE, null)
                 .create()
-            dialog.setOnShowListener {
-                dialog.window?.let { window -> applyUnifiedDialogCardStyle(window, density) }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val editor = prefs.edit()
-                    var modelScoreStatsStarted = false
-                    for ((item, switchView) in views) {
-                        if (
-                            item.prefKey == PostFilterPreferences.KEY_FILTER_POST_MODEL_SCORE &&
-                            !prefs.getBoolean(item.prefKey, item.defaultValue) &&
-                            switchView.isChecked &&
-                            !modelScoreStatsStartToastShown
-                        ) {
-                            modelScoreStatsStarted = true
-                        }
-                        editor.putBoolean(item.prefKey, switchView.isChecked)
-                    }
-                    editor.apply()
-                    Toast.makeText(
-                        context,
-                        if (modelScoreStatsStarted) {
-                            UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_STATS_STARTED
-                        } else {
-                            UiText.Settings.withRestartHint(UiText.Settings.CUSTOM_POST_FILTER_SAVED)
-                        },
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    dialog.dismiss()
-                }
-            }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showCustomPostFilterDialog failed: ${t.message}")
         }

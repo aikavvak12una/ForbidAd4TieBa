@@ -30,8 +30,18 @@ internal object LiquidGlassBarMetrics {
     ): Int {
         val navigation = navigationBottom.coerceAtLeast(0)
         val overlap = (hostBottomInWindow - (windowBottom - navigation)).coerceIn(0, hostHeight)
-        val gapDp = if (bottomGapDp >= 0) bottomGapDp.toFloat() else if (navigation > 0) 8f else 28f
-        return (hostHeight - overlap - (gapDp * density).roundToInt() - pillHeight).coerceAtLeast(0)
+        // Both surfaces share a center, even though the reply controls are shorter than the tabs.
+        // Automatic placement preserves the normal 60dp home bar's existing position.
+        val minimumCenterGapDp = TAB_HEIGHT_DP / 2f
+        val centerGapDp = if (bottomGapDp >= 0) {
+            maxOf(bottomGapDp.toFloat(), minimumCenterGapDp)
+        } else {
+            minimumCenterGapDp + if (navigation > 0) 8f else 28f
+        }
+        val safeBottom = hostHeight - overlap
+        val top = (safeBottom - centerGapDp * density - pillHeight / 2f).roundToInt()
+        // Very large controls or short windows still have to fit above the navigation area.
+        return top.coerceIn(0, (safeBottom - pillHeight).coerceAtLeast(0))
     }
 
     /** Per-bar scratch; measuring a settled tab set allocates no lists, boxes or bounds arrays. */

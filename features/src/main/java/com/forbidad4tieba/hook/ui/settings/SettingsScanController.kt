@@ -43,7 +43,7 @@ import com.forbidad4tieba.hook.ui.applySettingsCodeTextStyle
 import com.forbidad4tieba.hook.ui.applySettingsDialogTitleStyle
 import com.forbidad4tieba.hook.ui.applySettingsMessageStyle
 import com.forbidad4tieba.hook.ui.applySettingsRowTitleStyle
-import com.forbidad4tieba.hook.ui.applyUnifiedDialogCardStyle
+import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
 import com.forbidad4tieba.hook.ui.createDivider
 import com.forbidad4tieba.hook.ui.dialogThemeFor
@@ -136,10 +136,6 @@ internal object SettingsScanController {
             dialog.setCanceledOnTouchOutside(false)
 
             dialog.setOnShowListener {
-                dialog.window?.let { window ->
-                    applyUnifiedDialogCardStyle(window, density)
-                    UiStyle.animateDialogEntry(window.decorView, density)
-                }
                 val confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 confirmButton.setTextColor(tokens.danger)
                 var secondsLeft = INITIAL_SCAN_ENVIRONMENT_WARNING_DELAY_SECONDS
@@ -167,7 +163,7 @@ internal object SettingsScanController {
                 countdownRunnable?.let { handler.removeCallbacks(it) }
                 onConfirmed()
             }
-            dialog.show()
+            dialog.showSettingsDialog(density)
         } catch (t: Throwable) {
             XposedCompat.logW("[SettingsMenuHook] showEnvironmentWarningDialog failed: ${t.message}")
             onConfirmed()
@@ -370,12 +366,7 @@ internal object SettingsScanController {
         buttonRow.addView(restartBtn)
         root.addView(buttonRow)
 
-        val dialogTheme = if (tokens.night) {
-            android.R.style.Theme_DeviceDefault_Dialog_Alert
-        } else {
-            android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
-        }
-        val dialog = AlertDialog.Builder(activity, dialogTheme)
+        val dialog = AlertDialog.Builder(activity, dialogThemeFor(activity))
             .setView(root)
             .create()
         dialog.setCancelable(false)
@@ -393,16 +384,7 @@ internal object SettingsScanController {
         dialog.setOnDismissListener {
             stopScanPulse()
         }
-        dialog.setOnShowListener {
-            dialog.window?.let { window ->
-                applyUnifiedDialogCardStyle(window, density)
-                window.attributes = window.attributes.apply {
-                    height = ViewGroup.LayoutParams.WRAP_CONTENT
-                }
-                UiStyle.animateDialogEntry(window.decorView, density)
-            }
-        }
-        dialog.show()
+        dialog.showSettingsDialog(density)
 
         restartBtn.setOnClickListener {
             if (!finished) return@setOnClickListener
@@ -651,12 +633,6 @@ internal object SettingsScanController {
             .setView(createDialogScrollContainer(activity, root))
             .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
             .create()
-        dialog.setOnShowListener {
-            dialog.window?.let { window ->
-                applyUnifiedDialogCardStyle(window, density)
-                UiStyle.animateDialogEntry(window.decorView, density)
-            }
-        }
-        dialog.show()
+        dialog.showSettingsDialog(density)
     }
 }
