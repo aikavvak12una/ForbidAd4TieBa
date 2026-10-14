@@ -92,11 +92,27 @@ class PostReplyGlassGeometryTest {
         }
     }
 
-    @Test fun loadingInputDoesNotWaitForActionWidthsOrChangeHeightWhenTheyArrive() {
-        val loading = PostReplyGlassGeometry.calculate(720, 1280, 0, 0, 0, 720, 1280,
+    @Test fun inputOnlyBarsKeepNativeHeightWithoutAnEmptyActionSurface() {
+        val inputOnly = PostReplyGlassGeometry.calculate(720, 1280, 0, 0, 0, 720, 1280,
             0, 0, 0, 136, 0, 63, 2f, -1, nativeHeight = 96)!!
-        assertEquals(bounds(), loading)
-        assertNull(PostReplyGlassGeometry.separate(loading.width, 0, 2f))
+        assertEquals(bounds(), inputOnly)
+        assertNull(PostReplyGlassGeometry.separate(inputOnly.width, 0, 2f))
+    }
+
+    @Test fun pendingAndNativeActionsShareBothSurfacesBeforeControlMeasurement() {
+        for (width in listOf(480, 720, 1080)) {
+            fun box(actions: Int, controlHeight: Int) = PostReplyGlassGeometry.calculate(
+                width, 1280, 0, 0, 0, width, 1280, 0, 0, 0, 136,
+                actions, controlHeight, 2f, -1, nativeHeight = 95)!!
+            val pending = box(PostReplyPendingActions.ACTION_COUNT, 63)
+            val ready = box(3, 83)
+            assertEquals(ready, pending)
+            assertEquals(95, pending.height)
+            val split = PostReplyGlassGeometry.separate(pending.width, PostReplyPendingActions.ACTION_COUNT, 2f)!!
+            assertEquals(PostReplyGlassGeometry.separate(ready.width, 3, 2f), split)
+            assertEquals(16, split.actionsLeft - split.inputWidth)
+            assertTrue(split.actionsContentWidth / PostReplyPendingActions.ACTION_COUNT >= 80)
+        }
     }
 
     @Test fun smallerManualHeightKeepsTheNativeReservationThroughControlReplacement() {

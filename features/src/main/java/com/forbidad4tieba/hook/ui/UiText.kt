@@ -1,6 +1,12 @@
 package com.forbidad4tieba.hook.ui
 
 object UiText {
+    object PostReplyBar {
+        const val COMMENT = "评论"
+        const val LIKE = "赞"
+        const val COLLECT = "收藏"
+    }
+
     object Settings {
         const val COMMENT_LEVEL_FILTER_LABEL = "屏蔽评论"
         const val COMMENT_LEVEL_FILTER_DESC = "屏蔽低于指定等级的评论和楼中楼"
@@ -132,7 +138,7 @@ object UiText {
         const val BOTTOM_BAR_STYLE_TITLE = "悬浮底栏"
         const val BOTTOM_TAB_LIQUID_GLASS_BOTTOM_GAP = "底部间距"
         const val BOTTOM_TAB_LIQUID_GLASS_BOTTOM_GAP_DESC =
-            "底栏与系统导航区的距离，无导航区时距屏幕底部"
+            "底栏与屏幕底部间距"
         const val BOTTOM_TAB_LIQUID_GLASS_AUTO = "自动"
         const val BOTTOM_TAB_LIQUID_GLASS_BLUR = "模糊"
         const val BOTTOM_TAB_LIQUID_GLASS_BLUR_DESC = "关闭液态玻璃时，模糊底栏后方的内容"
@@ -141,9 +147,9 @@ object UiText {
         const val BOTTOM_TAB_LIQUID_GLASS_EFFECT = "液态玻璃"
         const val BOTTOM_TAB_LIQUID_GLASS_EFFECT_DESC = "启用玻璃折射，Tab 支持液滴按压与拖拽"
         const val BOTTOM_TAB_LIQUID_GLASS_BLUR_AMOUNT = "模糊程度"
-        const val BOTTOM_TAB_LIQUID_GLASS_BLUR_AMOUNT_DESC = "调节两种底栏的背景模糊，0% 不模糊"
+        const val BOTTOM_TAB_LIQUID_GLASS_BLUR_AMOUNT_DESC = "调节底栏的背景模糊，0% 不模糊"
         const val BOTTOM_TAB_LIQUID_GLASS_TAB_WIDTH = "Tab 栏宽度"
-        const val BOTTOM_TAB_LIQUID_GLASS_TAB_WIDTH_DESC = "100% 为圆形，受屏幕宽度限制；不影响回复栏"
+        const val BOTTOM_TAB_LIQUID_GLASS_TAB_WIDTH_DESC = "受屏幕宽度限制，不影响回复栏"
         fun liquidGlassPercent(value: Int): String = "$value%"
         const val BOTTOM_TAB_LIQUID_GLASS_SAVED = "悬浮底栏配置已保存"
         fun liquidGlassDp(value: Int): String = "$value dp"

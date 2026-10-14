@@ -38,7 +38,7 @@ internal class PostReplyGlassSession(
     private var comments: CommentState? = null
     private var bounds: PostReplyGlassGeometry.Bounds? = null
     private var layoutDirty = true
-    private var pendingVisibility: Int? = null
+    private var pendingActions: PostReplyPendingActions? = null
     private var disposed = false
     private var lift = 0f
     private var horizontalShift = 0f
@@ -95,7 +95,6 @@ internal class PostReplyGlassSession(
         // Prepare before the first host measure, including before the window first receives focus.
         configureRow(native, null, PostReplyGlassGeometry.height(0, density, native.minimumHeight), null)
         clearChrome(native)
-        awaitControls(page.actions.isEmpty())
         page.root.viewTreeObserver.apply {
             addOnPreDrawListener(this@PostReplyGlassSession)
             addOnGlobalLayoutListener(this@PostReplyGlassSession)
@@ -173,14 +172,6 @@ internal class PostReplyGlassSession(
             original = it
             layoutDirty = true
         }
-        // The host first builds an input-only loading row, then replaces it with its real
-        // controls. Keep that incomplete subtree out of the first frame and task snapshots.
-        // Existing action views that are GONE are a valid, already-built input-only bar.
-        if (page.actions.isEmpty()) {
-            clearChrome(native)
-            awaitControls(true)
-            return
-        }
         if (layoutDirty) {
             layoutDirty = false
             if (!updateLayout(native, insets)) return
@@ -192,6 +183,7 @@ internal class PostReplyGlassSession(
         }
         followPlacement()
         panel.setContainerAlpha(page.row.alpha)
+        pendingActions?.alpha = page.row.alpha
         updatePress()
         if (config.needsBackdrop && panel.visibility == View.VISIBLE && page.backdrop.isDirty) {
             panel.refreshBackdrop()
@@ -208,7 +200,7 @@ internal class PostReplyGlassSession(
             return false
         }
         val safe = insets?.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-        val actionCount = page.actions.count { it.visibility != View.GONE }
+        val actionCount = displayedActionCount()
         fun calculate(controlHeight: Int) = PostReplyGlassGeometry.calculate(
             page.root.width, page.root.height, hostPosition[0], hostPosition[1],
             windowPosition[0], windowPosition[0] + window.width, windowPosition[1] + window.height,
@@ -224,6 +216,7 @@ internal class PostReplyGlassSession(
         bounds = geometry
         clearChrome(native)
         changed = configureRow(native, geometry.width, geometry.height, surfaces) || changed
+        changed = updatePendingActions(geometry, surfaces) || changed
         // Settle only the bar subtree. Never cancel a window draw or remeasure the comment page.
         if (page.slot.isLayoutRequested || page.slot.width != geometry.width || page.slot.height != geometry.height) {
             page.slot.measure(View.MeasureSpec.makeMeasureSpec(geometry.width, View.MeasureSpec.EXACTLY),
@@ -233,7 +226,6 @@ internal class PostReplyGlassSession(
             changed = true
         }
         changed = panel.setSeparatedSurfaces(surfaces?.inputWidth ?: 0, surfaces?.actionsLeft ?: 0) || changed
-        awaitControls(false)
         changed = alignArtwork(native) || changed
         changed = updateCommentReserve(geometry) || changed
         if (panel.visibility != View.VISIBLE) {
@@ -244,17 +236,36 @@ internal class PostReplyGlassSession(
         return true
     }
 
-    /** INVISIBLE preserves native measurement without exposing untappable loading controls. */
-    private fun awaitControls(waiting: Boolean) {
-        if (waiting) {
-            if (page.slot.visibility == View.VISIBLE) {
-                pendingVisibility = View.VISIBLE
-                page.slot.visibility = View.INVISIBLE
-            }
-        } else {
-            pendingVisibility?.let { if (page.slot.visibility == View.INVISIBLE) page.slot.visibility = it }
-            pendingVisibility = null
+    // An empty row is still loading. Existing GONE actions are an intentional input-only bar.
+    private fun displayedActionCount(): Int = if (page.actions.isEmpty()) PostReplyPendingActions.ACTION_COUNT
+        else page.actions.count { it.visibility != View.GONE }
+
+    private fun updatePendingActions(geometry: PostReplyGlassGeometry.Bounds,
+        surfaces: PostReplyGlassGeometry.Surfaces?): Boolean {
+        if (page.actions.isNotEmpty() || surfaces == null) return removePendingActions()
+        val width = geometry.width - surfaces.actionsLeft
+        val pending = pendingActions ?: PostReplyPendingActions(page.root.context, density, night).also {
+            pendingActions = it
+            // Above the clickable native row, below its mask; never add fake native actions.
+            page.slot.addView(it, page.slot.indexOfChild(page.row) + 1,
+                FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                    leftMargin = surfaces.actionsLeft
+                })
+            return true
         }
+        val params = pending.layoutParams as FrameLayout.LayoutParams
+        if (params.width == width && params.leftMargin == surfaces.actionsLeft) return false
+        params.width = width
+        params.leftMargin = surfaces.actionsLeft
+        pending.layoutParams = params
+        return true
+    }
+
+    private fun removePendingActions(): Boolean {
+        val pending = pendingActions ?: return false
+        (pending.parent as? ViewGroup)?.removeView(pending)
+        pendingActions = null
+        return true
     }
 
     private fun nativeControlHeight(native: NativeState, width: Int,
@@ -299,7 +310,7 @@ internal class PostReplyGlassSession(
             page.row.layoutParams = row
             changed = true
         }
-        val hasActions = page.actions.any { it.visibility != View.GONE }
+        val hasActions = displayedActionCount() > 0
         val pad = if (hasActions) dp(PostReplyGlassGeometry.ACTION_PADDING_DP) else 0
         if (page.row.paddingLeft != 0 || page.row.paddingRight != pad ||
             page.row.paddingTop != 0 || page.row.paddingBottom != 0) {
@@ -421,6 +432,7 @@ internal class PostReplyGlassSession(
         if (current != night) {
             night = current
             panel.setTheme(night)
+            pendingActions?.setTheme(night)
         }
     }
 
@@ -465,7 +477,7 @@ internal class PostReplyGlassSession(
 
     private fun restore() {
         if (panel.visibility != View.GONE) panel.visibility = View.GONE
-        awaitControls(false)
+        removePendingActions()
         comments?.restore()
         comments = null
         bounds = null
