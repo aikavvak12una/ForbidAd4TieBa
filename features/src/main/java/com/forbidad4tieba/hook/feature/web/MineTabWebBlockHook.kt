@@ -4,18 +4,18 @@ import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.symbol.contract.*
 
 import com.forbidad4tieba.hook.contracts.MemberAccess
-import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.webkit.WebView
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.utils.ReflectionUtils
+import java.lang.ref.WeakReference
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
-import java.util.Collections
 import java.util.WeakHashMap
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Hides ad and promotion blocks in the verified Mine tab WebView.
@@ -26,8 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
 object MineTabWebBlockHook {
     private const val MINE_TAB_PATH = "/mo/q/hybrid-main-forumtab/mineTab"
 
-    private val INJECT_DELAYS_MS = longArrayOf(0L, 80L, 260L, 900L, 1800L)
-    private const val SCHEDULE_DEDUPE_WINDOW_MS = 1200L
+    private const val REVEAL_TIMEOUT_MS = 1800L
 
     private const val HIDE_PROMO_JS = """
         (function () {
@@ -42,43 +41,27 @@ object MineTabWebBlockHook {
             rootSelector + ' .vip-banner,' +
             rootSelector + ' .game-zone';
 
-          function ensureStyle() {
-            if (document.getElementById(styleId)) return true;
-            var host = document.head || document.documentElement;
-            if (!host) return false;
+          var host = document.head || document.documentElement;
+          if (!host) return false;
+          if (!document.getElementById(styleId)) {
             var style = document.createElement('style');
             style.id = styleId;
             style.textContent = hideSelector +
               '{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;max-height:0!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important;pointer-events:none!important;}';
             host.appendChild(style);
-            return true;
           }
-
-          function run() {
-            ensureStyle();
-            return !!document.querySelector(rootSelector);
-          }
-
-          return run();
+          return !!document.querySelector(rootSelector);
         })();
     """
 
-    private data class RuntimeTargets(
+    private class RuntimeTargets(
         val getUrlMethod: Method,
         val getInnerWebViewMethod: Method,
     )
 
-    private data class ScheduleStamp(
-        val url: String,
-        val uptimeMs: Long,
-    )
-
-    private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
-    private val scheduledStamp = Collections.synchronizedMap(WeakHashMap<Any, ScheduleStamp>())
-    private val lastLoggedUrl = Collections.synchronizedMap(WeakHashMap<Any, String>())
-
-    @Volatile
-    private var runtimeTargets: RuntimeTargets? = null
+    // WebView loads and their callbacks run on the UI thread. Values retain no view strongly.
+    private val pending = WeakHashMap<View, RevealGate>()
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
 
     fun hook(classLoader: ClassLoader, symbols: HookSymbols) {
         val mod = XposedCompat.module ?: return
@@ -135,24 +118,28 @@ object MineTabWebBlockHook {
                 return
             }
 
-            val key = ReflectionUtils.methodSignature(loadUrlMethod)
-            if (!installedMethodKeys.add(key)) return
-
-            runtimeTargets = RuntimeTargets(
+            val targets = RuntimeTargets(
                 getUrlMethod = getUrlMethod,
                 getInnerWebViewMethod = getInnerWebViewMethod,
             )
 
             RuntimeHooks.builder(mod, loadUrlMethod, "MineTabWebBlockHook", "hook:loadUrlMethod").intercept { chain ->
-                val target = chain.thisObject
+                val view = chain.thisObject as? View ?: return@intercept chain.proceed()
                 val url = chain.args.firstOrNull() as? String
-
-                val result = chain.proceed()
-
-                val view = target as? View
-                if (view != null && isMineTabUrl(url) && ConfigManager.snapshot().isMineTabWebAdBlockEnabled) {
-                    scheduleInjection(target, view, url.orEmpty())
+                pending[view]?.close()
+                val gate = if (isMineTabUrl(url) && ConfigManager.snapshot().isMineTabWebAdBlockEnabled) {
+                    RevealGate(view, targets).also {
+                        pending[view] = it
+                        it.hold()
+                    }
+                } else null
+                val result = try {
+                    chain.proceed()
+                } catch (failure: Throwable) {
+                    gate?.close()
+                    throw failure
                 }
+                gate?.run()
                 result
             }
 
@@ -163,87 +150,96 @@ object MineTabWebBlockHook {
         }
     }
 
-    private fun scheduleInjection(target: Any, hostView: View, triggerUrl: String) {
-        val now = SystemClock.uptimeMillis()
-        val shouldSkip = synchronized(scheduledStamp) {
-            val previous = scheduledStamp[target]
-            if (previous != null &&
-                previous.url == triggerUrl &&
-                now - previous.uptimeMs <= SCHEDULE_DEDUPE_WINDOW_MS
-            ) {
-                true
-            } else {
-                scheduledStamp[target] = ScheduleStamp(triggerUrl, now)
-                false
+    /** Owns just one load, including cached common pages that emit no page-finished callback. */
+    private class RevealGate(view: View, private val targets: RuntimeTargets) :
+        Runnable, View.OnAttachStateChangeListener {
+        private val viewRef = WeakReference(view)
+        private val originalAlpha = view.alpha
+        private var closed = false
+        private var retryDelayMs = 80L
+        private val timeout = Runnable {
+            close()
+            XposedCompat.logD { "[MineTabWebBlockHook] first frame wait timed out" }
+        }
+
+        fun hold() = guarded {
+            // A Handler timeout also runs when the wrapper has not attached yet.
+            handler.postDelayed(timeout, REVEAL_TIMEOUT_MS)
+            viewRef.get()?.let { view ->
+                view.addOnAttachStateChangeListener(this)
+                // Keep layout and WebView rendering active while suppressing the unstyled frame.
+                view.alpha = 0f
             }
         }
-        if (shouldSkip) return
 
-        for (delay in INJECT_DELAYS_MS) {
-            hostView.postDelayed({
-                if (!ConfigManager.snapshot().isMineTabWebAdBlockEnabled) {
-                    clearState(target)
-                    return@postDelayed
+        override fun run() = withCurrentWebView { web ->
+            // Seed CSS during loading too, so timeout recovery retains any completed purification.
+            web.evaluateJavascript(HIDE_PROMO_JS) { result ->
+                withCurrentWebView { current ->
+                    if (current !== web || result != "true" || web.progress < 100) {
+                        retry()
+                    } else {
+                        // A JS result alone does not guarantee the renderer has applied the CSS.
+                        web.postVisualStateCallback(0L, object : WebView.VisualStateCallback() {
+                            override fun onComplete(requestId: Long) = withCurrentWebView { current ->
+                                if (current !== web || web.progress < 100) retry() else {
+                                    close()
+                                    XposedCompat.logD { "[MineTabWebBlockHook] purified first frame ready" }
+                                }
+                            }
+                        })
+                    }
                 }
+            }
+        }
 
-                val currentUrl = getCurrentUrl(target)
-                if (currentUrl == null || !isMineTabUrl(currentUrl)) {
-                    clearState(target)
-                    return@postDelayed
+        private fun withCurrentWebView(action: (WebView) -> Unit) = guarded {
+            val view = viewRef.get()
+            if (view == null || !ConfigManager.snapshot().isMineTabWebAdBlockEnabled) {
+                close()
+                return@guarded
+            }
+            val url = targets.getUrlMethod.invoke(view) as? String
+            val web = targets.getInnerWebViewMethod.invoke(view) as? WebView
+            if (!isMineTabUrl(url) || web == null) retry() else action(web)
+        }
+
+        private fun retry() {
+            // One pending retry, with bounded backoff while a slow page remains unready.
+            if (closed) return
+            handler.postDelayed(this, retryDelayMs)
+            retryDelayMs = (retryDelayMs * 2).coerceAtMost(640L)
+        }
+
+        private inline fun guarded(action: () -> Unit) {
+            if (closed) return
+            try {
+                action()
+            } catch (failure: Throwable) {
+                close()
+                XposedCompat.logD { "[MineTabWebBlockHook] first frame wait failed: ${failure.message}" }
+            }
+        }
+
+        fun close() {
+            if (closed) return
+            closed = true
+            handler.removeCallbacks(this)
+            handler.removeCallbacks(timeout)
+            viewRef.get()?.let { view ->
+                view.removeOnAttachStateChangeListener(this)
+                if (pending[view] === this) {
+                    pending.remove(view)
+                    if (view.alpha == 0f) view.alpha = originalAlpha
                 }
-
-                injectHideStyle(target)
-            }, delay)
-        }
-    }
-
-    private fun injectHideStyle(target: Any) {
-        val innerWebView = getInnerWebView(target) ?: return
-        try {
-            innerWebView.evaluateJavascript(HIDE_PROMO_JS) {
-                maybeLogInjected(target)
-            }
-        } catch (t: Throwable) {
-            XposedCompat.logD { "[MineTabWebBlockHook] inject ignored: ${t.message}" }
-        }
-    }
-
-    private fun maybeLogInjected(target: Any) {
-        val url = getCurrentUrl(target) ?: return
-        val shouldSkip = synchronized(lastLoggedUrl) {
-            val previous = lastLoggedUrl[target]
-            if (previous == url) {
-                true
-            } else {
-                lastLoggedUrl[target] = url
-                false
             }
         }
-        if (shouldSkip) return
-        XposedCompat.logD { "[MineTabWebBlockHook] promo blocks hidden for url=$url" }
-    }
 
-    private fun getCurrentUrl(target: Any): String? {
-        val method = runtimeTargets?.getUrlMethod ?: return null
-        return runCatching { normalizeUrl(method.invoke(target) as? String) }.getOrNull()
-    }
-
-    private fun getInnerWebView(target: Any): WebView? {
-        val method = runtimeTargets?.getInnerWebViewMethod ?: return null
-        return runCatching { method.invoke(target) as? WebView }.getOrNull()
-    }
-
-    private fun clearState(target: Any) {
-        scheduledStamp.remove(target)
-        lastLoggedUrl.remove(target)
+        override fun onViewAttachedToWindow(v: View) = Unit
+        override fun onViewDetachedFromWindow(v: View) = close()
     }
 
     private fun isMineTabUrl(url: String?): Boolean {
         return !url.isNullOrBlank() && url.contains(MINE_TAB_PATH, ignoreCase = true)
-    }
-
-    private fun normalizeUrl(url: String?): String? {
-        if (url.isNullOrBlank()) return null
-        return url.trim()
     }
 }
