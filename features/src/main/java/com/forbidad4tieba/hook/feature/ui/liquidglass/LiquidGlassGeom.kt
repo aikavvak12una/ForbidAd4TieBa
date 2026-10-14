@@ -1,3 +1,6 @@
+// samplingResidual adapts miuix LayerBackdrop's texel alignment (Apache-2.0).
+// Copyright 2026, compose-miuix-ui contributors
+// The other helpers use local native-layout rules; see app/src/main/assets/open-source-licenses.txt.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import android.graphics.Rect

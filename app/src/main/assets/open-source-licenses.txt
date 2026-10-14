@@ -1,46 +1,89 @@
 Liquid glass source notices
 
-miuix 0.9.4 — Apache License 2.0
+ForbidAd4TieBa is distributed under GPL-3.0; see LICENSE.txt in the repository
+and ForbidAd4TieBa-GPL-3.0.txt in the APK assets. The upstream notices below
+remain applicable to their respective portions. These are source adaptations
+and implementation references, not dependencies on the complete upstream apps
+or on the Compose/miuix runtime.
+
+1. Current renderer and interaction sources: miuix 0.9.4
+
 https://github.com/compose-miuix-ui/miuix
 Source revision: 39c40f99844227b853f0049a0933b1f3ae6c00ba
-
+https://github.com/compose-miuix-ui/miuix/tree/39c40f99844227b853f0049a0933b1f3ae6c00ba
 Copyright 2026, compose-miuix-ui contributors
 SPDX-License-Identifier: Apache-2.0
+Full Apache-2.0 license: included below.
 
-Source mapping (local files are under feature/ui/liquidglass):
-- miuix-blur Shaders.kt, BlurEffect.kt, DrawBackdropModifier.kt:
-  LiquidGlassShaders, LiquidGlassBlur, LiquidGlassRenderer — Gaussian blur,
+Local files are under:
+features/src/main/java/com/forbidad4tieba/hook/feature/ui/liquidglass/
+
+Upstream paths at the pinned revision and their local adaptations:
+- miuix-blur/src/commonMain/kotlin/top/yukonga/miuix/kmp/blur/internal/Shaders.kt
+  and BlurEffect.kt in that same directory; plus
+  miuix-blur/src/commonMain/kotlin/top/yukonga/miuix/kmp/blur/DrawBackdropModifier.kt:
+  LiquidGlassShaders, LiquidGlassBlur and LiquidGlassRenderer — Gaussian blur,
   downsampling, resolution transitions, color treatment and bloom.
-- example component/liquid/Lens.kt:
+- miuix-blur/src/commonMain/kotlin/top/yukonga/miuix/kmp/blur/LayerBackdrop.kt:
+  LiquidGlassGeom.samplingResidual — downsampled texel-grid alignment.
+- example/shared/src/commonMain/kotlin/component/liquid/Lens.kt:
   LiquidGlassShaders — refraction and dispersion, with the shape helper expanded.
-- LiquidGlassNavigationBar.kt, CombinedBackdrop.kt:
-  LiquidGlassPanel and DropletPanel — page, material and native artwork composition.
-- DampedDragAnimation.kt, InteractiveHighlight.kt:
-  DropletMotion, DropletController and the press-glow shader.
-- sensor/DeviceTilt.android.kt:
-  LiquidGlassLightSource — gravity projection and shared visible-owner subscription.
-
-The liquid-lens, combined-backdrop and animation examples contain this upstream
-attribution, retained verbatim:
-Adapted from Kyant0/AndroidLiquidGlass — https://github.com/Kyant0/AndroidLiquidGlass (Apache 2.0).
+- example/shared/src/commonMain/kotlin/component/liquid/LiquidGlassNavigationBar.kt
+  and CombinedBackdrop.kt in that same directory:
+  LiquidGlassPanel, DropletPanel and LiquidGlassStyle — layered page, material
+  and native artwork composition, selection effects and material policy;
+  LiquidGlassLightSource — quantized gravity-light direction.
+- example/shared/src/commonMain/kotlin/component/animation/DampedDragAnimation.kt
+  and InteractiveHighlight.kt in that same directory:
+  DropletMotion, DropletController and LiquidGlassShaders.GLOW — spring settings,
+  drag/release semantics and press glow.
+- miuix-blur/src/androidMain/kotlin/top/yukonga/miuix/kmp/blur/sensor/DeviceTilt.android.kt:
+  LiquidGlassLightSource — rotation-vector gravity projection and filtering.
 
 Local modifications: Android View/RenderNode integration without the Compose
 runtime; shared bounded page capture; native controls and hit testing; cached GPU
 parameters; lifecycle cleanup; user-configurable materials; navigation/IME-aware
-placement and split reply surfaces. The surfaces use the module's own sizing,
-color, press and shadow parameters. These modifications do not change the
-licenses of the referenced sources.
+placement and split reply surfaces. Spring channels use a local analytical
+solver. Sensor subscriptions are shared by visible View owners. Layout and
+content measurement use Android ViewGroup coordinate conversion and reusable
+artwork bounds. Sizing, color, press and shadow parameters are customized here.
 
-Native layout and content measurement are implemented by this project using
-Android ViewGroup coordinate conversion, reusable artwork bounds and the
-module's own tab sizing rules.
+2. Sources attributed by miuix: Kyant0/AndroidLiquidGlass
 
-Visual and interaction reference:
+https://github.com/Kyant0/AndroidLiquidGlass
+Copyright 2025 Kyant
+License: Apache-2.0; full text included below.
+The pinned miuix Lens, LiquidGlassNavigationBar, CombinedBackdrop,
+DampedDragAnimation and InteractiveHighlight files carry the following
+attribution, retained verbatim:
+Adapted from Kyant0/AndroidLiquidGlass — https://github.com/Kyant0/AndroidLiquidGlass (Apache 2.0).
+
+The source revision for these adaptations is the miuix revision above. No
+separate original Kyant0 revision was recorded; do not substitute its latest
+commit for the version actually used by miuix.
+
+3. Floating-bar implementation reference: KernelSU
+
+https://github.com/tiann/KernelSU
+Reference revision: 0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d
 https://github.com/tiann/KernelSU/blob/0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d/manager/app/src/main/java/me/weishu/kernelsu/ui/component/FloatingBottomBar.kt
-KernelSU source is GPL-3.0; this repository's GPL-3.0 license is in LICENSE.txt.
+KernelSU's repository license is GPL-3.0. The referenced file also retains
+this attribution, quoted verbatim:
+Adapted from compose-miuix-ui example (IosLiquidGlassNavigationBar) — Apache 2.0.
 
-The full Apache-2.0 license follows these notices. This file is included
-in the APK assets as open-source-licenses.txt.
+The floating-bar layout, material layering and press/drag interaction were
+used as implementation references. The shared Apache-licensed source lineage
+is identified above; KernelSU's repository license is not a reason to remove
+those upstream notices. This module has its own host integration and tuning.
+
+Distribution
+
+Keep the applicable copyright, license and attribution notices when copying or
+modifying these sources. Record modifications in the adapted source files and
+this mapping. README acknowledgements supplement the full license texts.
+These notices and the full Apache-2.0 text below are packaged as
+assets/open-source-licenses.txt. The GPL-3.0 text is packaged from the root
+LICENSE.txt without maintaining a second source copy.
 
 Full Apache License 2.0
 

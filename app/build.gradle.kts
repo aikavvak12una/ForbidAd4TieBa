@@ -1,5 +1,24 @@
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+
 plugins {
     alias(libs.plugins.android.application)
+}
+
+abstract class PackageProjectLicense : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val licenseFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun copyLicense() {
+        val output = outputDirectory.file("ForbidAd4TieBa-GPL-3.0.txt").get().asFile
+        output.parentFile.mkdirs()
+        licenseFile.get().asFile.copyTo(output, overwrite = true)
+    }
 }
 
 android {
@@ -123,6 +142,16 @@ dependencies {
 
 androidComponents {
     onVariants { variant ->
+        val packageProjectLicense = tasks.register<PackageProjectLicense>(
+            "package${variant.name.replaceFirstChar { it.uppercase() }}ProjectLicense"
+        ) {
+            licenseFile.set(rootProject.layout.projectDirectory.file("LICENSE.txt"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            packageProjectLicense,
+            PackageProjectLicense::outputDirectory,
+        )
+
         variant.outputs.forEach { output ->
 
             val versionName =

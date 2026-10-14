@@ -1,3 +1,8 @@
+// Copyright 2026, compose-miuix-ui contributors
+// SPDX-License-Identifier: Apache-2.0
+// Adapted from miuix DampedDragAnimation (itself adapted from Kyant0/AndroidLiquidGlass).
+// Local changes: native gesture state and analytical spring channels without Compose.
+// Source revisions and notices: app/src/main/assets/open-source-licenses.txt.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import kotlin.math.abs

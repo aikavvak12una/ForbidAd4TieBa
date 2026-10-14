@@ -1,3 +1,6 @@
+// Copyright 2026, compose-miuix-ui contributors
+// miuix/Kyant0 combined backdrop (Apache-2.0), adapted to native artwork and GPU layers.
+// Source revisions, local changes and full notices: app/src/main/assets/open-source-licenses.txt.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import android.annotation.TargetApi

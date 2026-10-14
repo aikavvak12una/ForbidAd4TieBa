@@ -1,6 +1,7 @@
 // Copyright 2026, compose-miuix-ui contributors
 // SPDX-License-Identifier: Apache-2.0
 // DeviceTilt and the floating bar's quantized gravity light, adapted to visible View owners.
+// miuix source revisions and local changes: app/src/main/assets/open-source-licenses.txt.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import android.content.Context

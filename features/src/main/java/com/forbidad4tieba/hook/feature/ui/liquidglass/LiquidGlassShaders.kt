@@ -1,6 +1,7 @@
 // Copyright 2026, compose-miuix-ui contributors
 // SPDX-License-Identifier: Apache-2.0
-// Shader source and adaptation details: app/src/main/assets/open-source-licenses.txt.
+// Adapted miuix shaders, including the lens and glow attributed to Kyant0/AndroidLiquidGlass.
+// Local View/AGSL changes and source mapping: app/src/main/assets/open-source-licenses.txt.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 internal object LiquidGlassShaders {

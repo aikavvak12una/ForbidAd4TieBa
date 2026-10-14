@@ -50,7 +50,10 @@ docs/
 
 # Workspace-local (fork dev)
 AGENTS.md
+AGENTS.local.md
 target_app/
 local_docs/
 .mcp.json
 CLAUDE.md
+.codex/
+.codegraph/

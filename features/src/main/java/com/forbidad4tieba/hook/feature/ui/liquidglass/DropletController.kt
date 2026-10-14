@@ -1,3 +1,6 @@
+// Copyright 2026, compose-miuix-ui contributors
+// miuix/Kyant0 drag semantics (Apache-2.0), adapted to native host touch dispatch.
+// Source revisions, local changes and full notices: app/src/main/assets/open-source-licenses.txt.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import android.animation.ValueAnimator

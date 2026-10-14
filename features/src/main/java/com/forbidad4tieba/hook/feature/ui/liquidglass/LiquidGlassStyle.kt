@@ -1,6 +1,7 @@
 // Copyright 2026, compose-miuix-ui contributors
 // SPDX-License-Identifier: Apache-2.0
-// Material of KernelSU's floating bar; source mapping: app/src/main/assets/open-source-licenses.txt.
+// Adapted miuix material policy, with KernelSU as a floating-bar reference and local tuning.
+// Source mapping and modification details: app/src/main/assets/open-source-licenses.txt.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import com.forbidad4tieba.hook.config.BottomTabLiquidGlassConfig
