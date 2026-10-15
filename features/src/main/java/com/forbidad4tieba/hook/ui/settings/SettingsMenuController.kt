@@ -56,6 +56,7 @@ import com.forbidad4tieba.hook.ui.settings.forms.CommentLevelFilterForm.showComm
 import com.forbidad4tieba.hook.ui.settings.forms.FreeCopyForm.showFreeCopyDialog
 import com.forbidad4tieba.hook.ui.settings.forms.HomeTopTabsForm.showHomeTopTabDialog
 import com.forbidad4tieba.hook.ui.settings.forms.KeywordFilterForm.showCustomPostFilterKeywordDialog
+import com.forbidad4tieba.hook.ui.settings.forms.UserIdFilterForm.showCustomPostFilterUserIdDialog
 import com.forbidad4tieba.hook.ui.settings.forms.PbLikeAutoReplyForm.showPbLikeAutoReplyDialog
 import com.forbidad4tieba.hook.ui.settings.forms.PerformanceForm.showPerformanceOptimizationDialog
 import com.forbidad4tieba.hook.ui.settings.forms.ReplyVisibilityForm.showReplyVisibilityProbeDialog
@@ -102,6 +103,7 @@ internal object SettingsMenuController {
                     onCommentLevelFilter = { items -> showCommentLevelFilterDialog(context, prefs, items) },
                     onCustomPostModelScore = { showCustomPostModelScoreDialog(context, prefs) },
                     onCustomPostFilterKeyword = { showCustomPostFilterKeywordDialog(context, prefs) },
+                    onCustomPostFilterUserId = { showCustomPostFilterUserIdDialog(context, prefs) },
                     onPbLikeAutoReply = { showPbLikeAutoReplyDialog(context, prefs) },
                     onFreeCopy = { items -> showFreeCopyDialog(context, prefs, items, featureStatusMap) },
                     onPerformanceOptimization = { groups ->

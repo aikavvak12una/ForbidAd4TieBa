@@ -505,6 +505,7 @@ object CustomPostCardBlockHook {
             if (map.containsKey("page_from")) score += 3
         }
         if (rules.forumKeyword && map.containsKey("forum_name")) score += 4
+        if (rules.userId && map.containsKey("user_id")) score += 4
         if (rules.modelScore && map.containsKey("extra")) score += 2
         return score
     }

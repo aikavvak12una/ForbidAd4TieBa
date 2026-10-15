@@ -38,6 +38,10 @@ object PostFilterPreferences {
 
     const val KEY_FILTER_POST_FORUM_KEYWORD_LIST = "filter_post_forum_keyword_list"
 
+    const val KEY_FILTER_POST_USER_ID = "filter_post_user_id"
+
+    const val KEY_FILTER_POST_USER_ID_LIST = "filter_post_user_id_list"
+
     const val KEY_FILTER_POST_MODEL_SCORE = "filter_post_model_score"
 
     const val KEY_FILTER_POST_MODEL_SCORE_THRESHOLDS = "filter_post_model_score_thresholds"
@@ -105,6 +109,13 @@ object PostFilterPreferences {
     internal val FILTER_POST_FORUM_KEYWORD_LIST = StringPreference(
         KEY_FILTER_POST_FORUM_KEYWORD_LIST, "", PreferenceUse.FORM,
     )
+    internal val FILTER_POST_USER_ID = BooleanPreference(
+        KEY_FILTER_POST_USER_ID, false, PreferenceUse.SWITCH, HookFeatureKey.ENABLE_CUSTOM_POST_FILTER,
+        SwitchPresentation(UiText.Settings.CUSTOM_POST_FILTER_USER_ID_LABEL, UiText.Settings.CUSTOM_POST_FILTER_USER_ID_DESC),
+    )
+    internal val FILTER_POST_USER_ID_LIST = StringPreference(
+        KEY_FILTER_POST_USER_ID_LIST, "", PreferenceUse.FORM,
+    )
     internal val FILTER_POST_MODEL_SCORE = BooleanPreference(
         KEY_FILTER_POST_MODEL_SCORE, false, PreferenceUse.SWITCH, HookFeatureKey.ENABLE_CUSTOM_POST_FILTER,
         SwitchPresentation(UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_LABEL, UiText.Settings.CUSTOM_POST_FILTER_MODEL_SCORE_DESC),
@@ -135,6 +146,8 @@ object PostFilterPreferences {
         FILTER_POST_UNFOLLOWED_FORUM,
         FILTER_POST_FORUM_KEYWORD,
         FILTER_POST_FORUM_KEYWORD_LIST,
+        FILTER_POST_USER_ID,
+        FILTER_POST_USER_ID_LIST,
         FILTER_POST_MODEL_SCORE,
         FILTER_POST_MODEL_SCORE_THRESHOLDS,
         FILTER_POST_MODEL_SCORE_AUTO_PERCENTILES,
@@ -149,5 +162,15 @@ object PostFilterPreferences {
             .filter { it.isNotEmpty() }
             .distinct()
             .toList()
+    }
+
+    internal fun parseUserIdList(raw: String?): Set<String> {
+        return PostUserFilterSettings.decode(raw).mapTo(linkedSetOf()) { it.userId }
+    }
+
+    internal fun normalizeUserId(raw: String?): String? {
+        val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (value.any { it !in '0'..'9' }) return null
+        return value.trimStart('0').takeIf { it.isNotEmpty() }
     }
 }

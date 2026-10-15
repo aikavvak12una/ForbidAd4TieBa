@@ -105,6 +105,7 @@ class SimpleToggleIntegrationTest {
 
     private val noActions = SettingsMenuGroupActions(
         onAdBlock = {}, onCustomPostFilter = {}, onCustomPostModelScore = {}, onCustomPostFilterKeyword = {},
+        onCustomPostFilterUserId = {},
         onCommentLevelFilter = {},
         onPbLikeAutoReply = {}, onFreeCopy = {}, onPerformanceOptimization = {}, onAutoSignIn = {},
         onReplyVisibilityProbe = {}, onDetailedLogSave = {}, onTabCustomization = {}, onHomeTopTab = {},

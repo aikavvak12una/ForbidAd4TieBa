@@ -351,6 +351,8 @@ class CustomPostFilterMatcherTest {
             unfollowedForum = false,
             forumKeyword = false,
             forumKeywords = emptyList(),
+            userId = false,
+            userIds = emptySet(),
             modelScore = thresholds.isNotEmpty(),
             modelScoreThresholds = thresholds,
         )

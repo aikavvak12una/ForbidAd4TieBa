@@ -91,6 +91,8 @@ data class SettingsSnapshot(
     val isDetailedLoggingEnabled: Boolean,
     val commentLevelFilter: CommentLevelFilterSettings,
     val isCommentShortcutEnabled: Boolean,
+    val isPostUserIdFilterEnabled: Boolean,
+    val postUserIdList: Set<String>,
 ) {
     companion object {
         /** Pre-initialization state; evaluated snapshots must supply every field explicitly. */
@@ -178,6 +180,8 @@ data class SettingsSnapshot(
             isPostUnfollowedForumFilterEnabled = false,
             isPostForumKeywordFilterEnabled = false,
             postForumKeywordList = emptyList(),
+            isPostUserIdFilterEnabled = false,
+            postUserIdList = emptySet(),
             isPostModelScoreFilterEnabled = false,
             postModelScoreThresholds = emptyList(),
             postModelScoreAutoPercentiles = emptyMap(),

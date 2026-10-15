@@ -54,6 +54,7 @@ internal object EffectiveSettingsPolicy {
         )
 
         val postForumKeywordFilterEnabled = customPostFilterChildBoolean(PostFilterPreferences.FILTER_POST_FORUM_KEYWORD)
+        val postUserIdFilterEnabled = customPostFilterChildBoolean(PostFilterPreferences.FILTER_POST_USER_ID)
         val postModelScoreFilterEnabled = customPostFilterEnabled &&
             restrictedBoolean(PostFilterPreferences.FILTER_POST_MODEL_SCORE)
         val homeNativeGlassLightStyle = p.lightGlassStyle
@@ -216,6 +217,12 @@ internal object EffectiveSettingsPolicy {
                 emptyList()
             },
             isPostModelScoreFilterEnabled = postModelScoreFilterEnabled,
+            isPostUserIdFilterEnabled = postUserIdFilterEnabled,
+            postUserIdList = if (postUserIdFilterEnabled) {
+                PostFilterPreferences.parseUserIdList(PostFilterPreferences.FILTER_POST_USER_ID_LIST.read(p))
+            } else {
+                emptySet()
+            },
             postModelScoreThresholds = if (postModelScoreFilterEnabled) {
                 parseModelScoreThresholds(PostFilterPreferences.FILTER_POST_MODEL_SCORE_THRESHOLDS.read(p))
             } else {

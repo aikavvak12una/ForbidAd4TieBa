@@ -15,6 +15,8 @@ internal data class CustomPostFilterRules(
     val unfollowedForum: Boolean,
     val forumKeyword: Boolean,
     val forumKeywords: List<String>,
+    val userId: Boolean,
+    val userIds: Set<String>,
     val modelScore: Boolean,
     val modelScoreThresholds: List<ModelScoreSettings.ModelScoreThreshold>,
 ) {
@@ -27,6 +29,7 @@ internal data class CustomPostFilterRules(
             live ||
             unfollowedForum ||
             forumKeyword ||
+            userId ||
             modelScore
 
     private val hasAnyRule: Boolean = vote ||
@@ -42,6 +45,7 @@ internal data class CustomPostFilterRules(
             recommendForum ||
             unfollowedForum ||
             forumKeyword ||
+            userId ||
             modelScore
 
     companion object {
@@ -64,6 +68,8 @@ internal data class CustomPostFilterRules(
                 unfollowedForum = settings.isPostUnfollowedForumFilterEnabled,
                 forumKeyword = forumKeyword,
                 forumKeywords = settings.postForumKeywordList,
+                userId = settings.isPostUserIdFilterEnabled && settings.postUserIdList.isNotEmpty(),
+                userIds = settings.postUserIdList,
                 modelScore = settings.isPostModelScoreFilterEnabled,
                 modelScoreThresholds = settings.postModelScoreThresholds,
             )

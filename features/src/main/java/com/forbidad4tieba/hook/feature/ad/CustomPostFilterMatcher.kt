@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.feature.ad
 
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.config.CustomPostFilterRules
+import com.forbidad4tieba.hook.config.PostFilterPreferences
 import org.json.JSONObject
 
 internal object CustomPostFilterMatcher {
@@ -174,6 +175,15 @@ internal object CustomPostFilterMatcher {
                 return Decision(
                     blocked = true,
                     reason = "custom_post_type:forum_keyword:forum_name=$forumName,hit=$hit",
+                )
+            }
+        }
+        if (rules.userId) {
+            val userId = PostFilterPreferences.normalizeUserId(params.stringValue("user_id"))
+            if (userId != null && userId in rules.userIds) {
+                return Decision(
+                    blocked = true,
+                    reason = "custom_post_type:user_id:user_id=$userId",
                 )
             }
         }

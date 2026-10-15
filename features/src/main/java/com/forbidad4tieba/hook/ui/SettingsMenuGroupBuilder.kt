@@ -19,6 +19,7 @@ internal data class SettingsMenuGroupActions(
     val onCommentLevelFilter: (List<SwitchItem>) -> Unit,
     val onCustomPostModelScore: () -> Unit,
     val onCustomPostFilterKeyword: () -> Unit,
+    val onCustomPostFilterUserId: () -> Unit,
     val onPbLikeAutoReply: () -> Unit,
     val onFreeCopy: (List<SwitchItem>) -> Unit,
     val onPerformanceOptimization: (List<SettingGroup>) -> Unit,
@@ -93,6 +94,13 @@ internal object SettingsMenuGroupBuilder {
                 PostFilterPreferences.FILTER_POST_FORUM_KEYWORD,
                 actionIcon = UiText.Settings.ACTION_ICON_SETTINGS,
                 onActionClick = actions.onCustomPostFilterKeyword,
+            )
+        )
+        items.add(
+            SwitchItem(
+                PostFilterPreferences.FILTER_POST_USER_ID,
+                actionIcon = UiText.Settings.ACTION_ICON_SETTINGS,
+                onActionClick = actions.onCustomPostFilterUserId,
             )
         )
         return items

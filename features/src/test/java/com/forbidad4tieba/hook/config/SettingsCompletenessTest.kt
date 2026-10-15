@@ -134,6 +134,7 @@ class SettingsCompletenessTest {
             onAdBlock = ::collect, onCustomPostFilter = ::collect,
             onCommentLevelFilter = ::collect,
             onCustomPostModelScore = {}, onCustomPostFilterKeyword = {}, onPbLikeAutoReply = {},
+            onCustomPostFilterUserId = {},
             onFreeCopy = ::collect, onPerformanceOptimization = { groups -> groups.forEach { collect(it.items) } },
             onAutoSignIn = {}, onReplyVisibilityProbe = {}, onDetailedLogSave = {},
             onTabCustomization = ::collect, onHomeTopTab = {}, onHomeNativeGlass = {}, onBottomTab = {},
