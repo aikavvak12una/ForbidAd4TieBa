@@ -1,12 +1,6 @@
 package com.forbidad4tieba.hook.ui
 
 object UiText {
-    object PostReplyBar {
-        const val COMMENT = "评论"
-        const val LIKE = "赞"
-        const val COLLECT = "收藏"
-    }
-
     object Settings {
         const val COMMENT_LEVEL_FILTER_LABEL = "屏蔽评论"
         const val COMMENT_LEVEL_FILTER_DESC = "屏蔽低于指定等级的评论和楼中楼"

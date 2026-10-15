@@ -12,7 +12,6 @@ import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
 import com.forbidad4tieba.hook.config.BottomTabLiquidGlassConfig
 import com.forbidad4tieba.hook.config.ConfigManager
@@ -38,7 +37,7 @@ internal class PostReplyGlassSession(
     private var comments: CommentState? = null
     private var bounds: PostReplyGlassGeometry.Bounds? = null
     private var layoutDirty = true
-    private var pendingActions: PostReplyPendingActions? = null
+    private var loadingGuard: View? = null
     private var disposed = false
     private var lift = 0f
     private var horizontalShift = 0f
@@ -46,11 +45,12 @@ internal class PostReplyGlassSession(
     private var pressProgress = 0f
     private var pressX = 0f
     private var animator: ValueAnimator? = null
+    private var actionsAlpha = 0f
+    private var revealFrame: Runnable? = null
     private val hostPosition = IntArray(2)
     private val windowPosition = IntArray(2)
     private val slotOffset = Rect()
     private val contentOffset = Rect()
-    private val artworkOffset = Rect()
     private val chrome = listOfNotNull(page.underlay, page.stack, page.slot, page.row, page.input, page.divider)
     private val unclipped = listOf(page.root, page.underlay, page.stack, page.slot, page.row)
 
@@ -65,7 +65,7 @@ internal class PostReplyGlassSession(
         val rowGravity = page.row.gravity
         val inputGravity = page.input.gravity
         val actionLayouts = linkedMapOf<View, LinearLayout.LayoutParams>()
-        val artworkTranslations = linkedMapOf<ImageView, Float>()
+        val actionContent = linkedMapOf<ViewGroup, PostReplyActionLayout>()
         val scaleX = page.slot.scaleX
         val scaleY = page.slot.scaleY
         val clips = groups.associateWith { it.clipChildren to it.clipToPadding }
@@ -89,6 +89,7 @@ internal class PostReplyGlassSession(
     fun start() {
         check(panel.isSupported) { "Liquid glass shader unavailable" }
         panel.visibility = View.INVISIBLE
+        panel.setActionsAlpha(0f)
         page.slot.addView(panel, 0, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val native = NativeState(page, unclipped, chrome).also { original = it }
@@ -110,7 +111,35 @@ internal class PostReplyGlassSession(
 
     override fun onPreDraw(): Boolean {
         updateSafely()
+        revealActionsAfterDraw()
         return true // Decorative work must never cancel the host's entire window draw.
+    }
+
+    /** Only a committed frame advances the whole group; loading stalls cannot skip its reveal. */
+    private fun revealActionsAfterDraw() {
+        val native = original ?: return
+        if (disposed || panel.isCapturing || actionsAlpha >= 1f ||
+            native.actionContent.isEmpty() || !panel.isShown || !page.root.hasWindowFocus() || page.row.alpha <= 0f) return
+        val scale = ValueAnimator.getDurationScale()
+        if (scale <= 0f) { setActionsAlpha(1f); return }
+        if (revealFrame != null) return
+        val frames = (0.4f * scale * (page.root.display?.refreshRate ?: 60f)).coerceAtLeast(1f)
+        val frame = Runnable {
+            if (disposed || original !== native) return@Runnable
+            revealFrame = null
+            if (!panel.isShown || !page.root.hasWindowFocus()) return@Runnable
+            setActionsAlpha((actionsAlpha + 1f / frames).coerceAtMost(1f))
+            panel.postInvalidateOnAnimation()
+        }
+        revealFrame = frame
+        if (page.slot.isHardwareAccelerated) page.root.viewTreeObserver.registerFrameCommitCallback(frame)
+        else page.slot.postOnAnimation(frame)
+    }
+
+    private fun setActionsAlpha(value: Float) {
+        actionsAlpha = value
+        panel.setActionsAlpha(value)
+        original?.actionContent?.values?.forEach { it.setAlpha(value) }
     }
 
     override fun onGlobalLayout() {
@@ -183,7 +212,6 @@ internal class PostReplyGlassSession(
         }
         followPlacement()
         panel.setContainerAlpha(page.row.alpha)
-        pendingActions?.alpha = page.row.alpha
         updatePress()
         if (config.needsBackdrop && panel.visibility == View.VISIBLE && page.backdrop.isDirty) {
             panel.refreshBackdrop()
@@ -210,13 +238,14 @@ internal class PostReplyGlassSession(
         val available = calculate(0) ?: run { restore(); return false }
         val surfaces = PostReplyGlassGeometry.separate(available.width, actionCount, density)
         if (actionCount > 0 && surfaces == null) { restore(); return false }
+        val content = prepareActionContent(native, surfaces)
         val geometry = calculate(nativeControlHeight(native, available.width, surfaces))
             ?: run { restore(); return false }
         var changed = bounds != geometry
         bounds = geometry
         clearChrome(native)
         changed = configureRow(native, geometry.width, geometry.height, surfaces) || changed
-        changed = updatePendingActions(geometry, surfaces) || changed
+        changed = updateLoadingGuard(geometry, surfaces) || changed
         // Settle only the bar subtree. Never cancel a window draw or remeasure the comment page.
         if (page.slot.isLayoutRequested || page.slot.width != geometry.width || page.slot.height != geometry.height) {
             page.slot.measure(View.MeasureSpec.makeMeasureSpec(geometry.width, View.MeasureSpec.EXACTLY),
@@ -226,7 +255,7 @@ internal class PostReplyGlassSession(
             changed = true
         }
         changed = panel.setSeparatedSurfaces(surfaces?.inputWidth ?: 0, surfaces?.actionsLeft ?: 0) || changed
-        changed = alignArtwork(native) || changed
+        content.forEach { it.layout() }
         changed = updateCommentReserve(geometry) || changed
         if (panel.visibility != View.VISIBLE) {
             panel.visibility = View.VISIBLE
@@ -237,35 +266,60 @@ internal class PostReplyGlassSession(
     }
 
     // An empty row is still loading. Existing GONE actions are an intentional input-only bar.
-    private fun displayedActionCount(): Int = if (page.actions.isEmpty()) PostReplyPendingActions.ACTION_COUNT
+    private fun displayedActionCount(): Int = if (page.actions.isEmpty()) PostReplyGlassGeometry.PENDING_ACTION_COUNT
         else page.actions.count { it.visibility != View.GONE }
 
-    private fun updatePendingActions(geometry: PostReplyGlassGeometry.Bounds,
+    /** Reserve the loading surface without letting its empty area trigger the native input. */
+    private fun updateLoadingGuard(geometry: PostReplyGlassGeometry.Bounds,
         surfaces: PostReplyGlassGeometry.Surfaces?): Boolean {
-        if (page.actions.isNotEmpty() || surfaces == null) return removePendingActions()
+        if (page.actions.isNotEmpty() || surfaces == null) return removeLoadingGuard()
         val width = geometry.width - surfaces.actionsLeft
-        val pending = pendingActions ?: PostReplyPendingActions(page.root.context, density, night).also {
-            pendingActions = it
-            // Above the clickable native row, below its mask; never add fake native actions.
+        val guard = loadingGuard ?: View(page.root.context).also {
+            it.isClickable = true
+            it.isEnabled = false
+            it.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            loadingGuard = it
             page.slot.addView(it, page.slot.indexOfChild(page.row) + 1,
                 FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT).apply {
                     leftMargin = surfaces.actionsLeft
                 })
             return true
         }
-        val params = pending.layoutParams as FrameLayout.LayoutParams
-        if (params.width == width && params.leftMargin == surfaces.actionsLeft) return false
-        params.width = width
-        params.leftMargin = surfaces.actionsLeft
-        pending.layoutParams = params
+        val layout = guard.layoutParams as FrameLayout.LayoutParams
+        if (layout.width == width && layout.leftMargin == surfaces.actionsLeft) return false
+        layout.width = width
+        layout.leftMargin = surfaces.actionsLeft
+        guard.layoutParams = layout
         return true
     }
 
-    private fun removePendingActions(): Boolean {
-        val pending = pendingActions ?: return false
-        (pending.parent as? ViewGroup)?.removeView(pending)
-        pendingActions = null
+    private fun removeLoadingGuard(): Boolean {
+        val guard = loadingGuard ?: return false
+        (guard.parent as? ViewGroup)?.removeView(guard)
+        loadingGuard = null
         return true
+    }
+
+    private fun prepareActionContent(native: NativeState,
+        surfaces: PostReplyGlassGeometry.Surfaces?): List<PostReplyActionLayout> {
+        if (surfaces == null || page.actions.isEmpty()) return emptyList()
+        val content = checkNotNull(targets.actionContent(page)) { "Invalid reply icon/label content" }
+        if (content.isEmpty()) return emptyList()
+        // The native static artwork defines the visible icon box, including host density scaling.
+        val size = content.filter { it.icon === it.artwork }.map {
+            val layout = it.icon.layoutParams
+            check(layout.width > 0 && layout.height == layout.width) { "Invalid reply icon size" }
+            layout.width
+        }.distinct().singleOrNull() ?: error("Ambiguous reply icon size")
+        val actions = page.actions.filter { it.visibility != View.GONE }
+        return content.map { item ->
+            val index = actions.indexOfFirst { it === item.body.parent }
+            check(index >= 0) { "Detached reply content" }
+            native.actionContent.getOrPut(item.body) { PostReplyActionLayout(item) }.also {
+                it.prepare(surfaces.columnWidth(index, actions.size), size, density)
+                it.setAlpha(actionsAlpha)
+            }
+        }
     }
 
     private fun nativeControlHeight(native: NativeState, width: Int,
@@ -281,8 +335,7 @@ internal class PostReplyGlassSession(
         var height = intrinsicHeight(page.input, native.inputLayout.height, surfaces?.inputWidth ?: width)
         val actions = page.actions.filter { it.visibility != View.GONE }
         for ((index, action) in actions.withIndex()) {
-            val columnWidth = checkNotNull(surfaces).actionsContentWidth / actions.size +
-                if (index < surfaces.actionsContentWidth % actions.size) 1 else 0
+            val columnWidth = checkNotNull(surfaces).columnWidth(index, actions.size)
             val params = native.actionLayouts[action] ?: action.layoutParams
             height = maxOf(height, intrinsicHeight(action, params.height, columnWidth))
         }
@@ -340,11 +393,12 @@ internal class PostReplyGlassSession(
             for ((index, action) in actions.withIndex()) {
                 val params = action.layoutParams as LinearLayout.LayoutParams
                 native.actionLayouts.getOrPut(action) { LinearLayout.LayoutParams(params) }
-                val columnWidth = surfaces.actionsContentWidth / actions.size +
-                    if (index < surfaces.actionsContentWidth % actions.size) 1 else 0
+                val columnWidth = surfaces.columnWidth(index, actions.size)
                 if (params.width != columnWidth || params.weight != 0f || params.gravity != Gravity.CENTER_VERTICAL ||
+                    params.height != ViewGroup.LayoutParams.MATCH_PARENT ||
                     params.leftMargin != 0 || params.rightMargin != 0 || params.topMargin != 0 || params.bottomMargin != 0) {
                     params.width = columnWidth
+                    params.height = ViewGroup.LayoutParams.MATCH_PARENT
                     params.weight = 0f
                     params.gravity = Gravity.CENTER_VERTICAL
                     params.setMargins(0, 0, 0, 0)
@@ -358,30 +412,6 @@ internal class PostReplyGlassSession(
         if (page.input.paddingLeft != inputLeft || page.input.paddingRight != inputRight) {
             page.input.setPadding(inputLeft, page.input.paddingTop, inputRight, page.input.paddingBottom)
             changed = true
-        }
-        return changed
-    }
-
-    /** The host offsets its larger like animation in pixels; align its centre with the static icons. */
-    private fun alignArtwork(native: NativeState): Boolean {
-        val artwork = targets.actionArtwork(page) ?: return false
-        val references = artwork.filter { !it.animated && it.view.isShown && it.view.height > 0 }
-        if (references.size < 2) return false
-        var centre = 0f
-        for (reference in references) {
-            if (!LiquidGlassGeom.layoutOffsetInAncestor(reference.view, page.row, artworkOffset)) return false
-            centre += artworkOffset.top + reference.view.height / 2f + reference.view.translationY
-        }
-        centre /= references.size
-        var changed = false
-        for (item in artwork) {
-            val icon = item.view
-            if (!item.animated || icon.height <= 0 ||
-                !LiquidGlassGeom.layoutOffsetInAncestor(icon, page.row, artworkOffset)) continue
-            val shift = centre - artworkOffset.top - icon.height / 2f
-            if (kotlin.math.abs(shift) > icon.height) continue
-            native.artworkTranslations.putIfAbsent(icon, icon.translationY)
-            if (icon.translationY != shift) { icon.translationY = shift; changed = true }
         }
         return changed
     }
@@ -432,7 +462,6 @@ internal class PostReplyGlassSession(
         if (current != night) {
             night = current
             panel.setTheme(night)
-            pendingActions?.setTheme(night)
         }
     }
 
@@ -476,8 +505,14 @@ internal class PostReplyGlassSession(
     }
 
     private fun restore() {
+        revealFrame?.let {
+            if (page.root.viewTreeObserver.isAlive) page.root.viewTreeObserver.unregisterFrameCommitCallback(it)
+            page.slot.removeCallbacks(it)
+        }
+        revealFrame = null
+        setActionsAlpha(0f)
         if (panel.visibility != View.GONE) panel.visibility = View.GONE
-        removePendingActions()
+        removeLoadingGuard()
         comments?.restore()
         comments = null
         bounds = null
@@ -498,7 +533,7 @@ internal class PostReplyGlassSession(
         page.row.layoutParams = native.rowLayout
         page.input.layoutParams = native.inputLayout
         for ((action, layout) in native.actionLayouts) action.layoutParams = layout
-        for ((artwork, translation) in native.artworkTranslations) artwork.translationY = translation
+        for (content in native.actionContent.values) content.restore()
         page.row.gravity = native.rowGravity
         page.input.gravity = native.inputGravity
         setPadding(page.row, native.rowPadding)

@@ -22,7 +22,12 @@ object PostReplyBarContract {
     private const val REPLY_MASK = "com.baidu.tbadk.util.MaskView"
     private const val AGREE_VIEW = "com.baidu.tbadk.core.view.AgreeView"
 
-    class Artwork internal constructor(val view: ImageView, val animated: Boolean)
+    class ActionContent internal constructor(
+        val body: ViewGroup,
+        val icon: View,
+        val label: TextView,
+        val artwork: ImageView,
+    )
 
     class Targets internal constructor(
         val onCreate: Method,
@@ -53,16 +58,17 @@ object PostReplyBarContract {
             return null
         }
 
-        /** Match artwork only inside the validated action row, never by button order or resource ID. */
-        fun actionArtwork(page: Page): List<Artwork>? {
-            val artwork = ArrayList<Artwork>()
+        /** Match complete icon/label pairs, never by button order or resource ID. */
+        fun actionContent(page: Page): List<ActionContent>? {
+            val content = ArrayList<ActionContent>()
             for (action in page.actions) {
                 if (action.visibility != View.VISIBLE) continue
                 val body = children(action as ViewGroup).singleOrNull() as? ViewGroup ?: return null
+                if (body.layoutParams !is FrameLayout.LayoutParams) return null
                 val label = children(body).filterIsInstance<TextView>().singleOrNull() ?: return null
                 val icon = children(body).filter { it !== label }.singleOrNull() ?: return null
-                if (icon is ImageView) {
-                    artwork.add(Artwork(icon, false))
+                val image = if (icon is ImageView) {
+                    icon
                 } else {
                     val wrapper = icon as? ViewGroup ?: return null
                     val agree = children(wrapper).singleOrNull { agreeType.isInstance(it) } ?: return null
@@ -70,10 +76,11 @@ object PostReplyBarContract {
                     var ancestor = image.parent
                     repeat(6) { if (ancestor !== agree) ancestor = ancestor?.parent }
                     if (ancestor !== agree) return null
-                    artwork.add(Artwork(image, true))
+                    image
                 }
+                content.add(ActionContent(body, icon, label, image))
             }
-            return artwork
+            return content
         }
 
         /** Called only during page attachment. The known page root bounds all structural matching. */

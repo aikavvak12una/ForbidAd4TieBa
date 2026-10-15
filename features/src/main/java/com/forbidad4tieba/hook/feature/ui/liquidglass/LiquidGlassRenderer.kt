@@ -77,6 +77,7 @@ internal class LiquidGlassRenderer(
         material: LiquidGlassStyle.Material,
         sourceRevision: Long,
         record: (Canvas, Float, Int, FloatArray) -> Unit,
+        actionsAlpha: Float = 1f,
     ): Boolean {
         if (!isAvailable || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         try {
@@ -90,7 +91,7 @@ internal class LiquidGlassRenderer(
             val split = material.inputWidth > 0
             drawShape(canvas, 0, 0, if (split) material.inputWidth else width, height, material, levels)
             if (split) drawShape(canvas, 1, material.actionsLeft, width - material.actionsLeft,
-                height, material, levels)
+                height, material, levels, actionsAlpha)
             return true
         } catch (failure: RuntimeException) {
             disable(failure)
@@ -106,9 +107,11 @@ internal class LiquidGlassRenderer(
         height: Int,
         p: LiquidGlassStyle.Material,
         levels: LiquidGlassBlur.Levels,
+        alpha: Float = 1f,
     ) {
         val save = canvas.save()
         canvas.translate(left.toFloat(), 0f)
+        if (alpha < 1f) canvas.saveLayerAlpha(0f, 0f, width.toFloat(), height.toFloat(), (alpha * 255f).roundToInt())
         val radius = min(width, height) / 2f
         clip.reset()
         clip.addRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, Path.Direction.CW)

@@ -7,16 +7,26 @@ import org.junit.Test
 import kotlin.math.roundToInt
 
 class PostReplyGlassGeometryTest {
+    @Test fun presetRatioSurvivesDensityChangesOnTheSameScreen() {
+        for (density in listOf(1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)) {
+            val box = PostReplyGlassGeometry.calculate(720, 1280, 0, 0, 0, 720,
+                1280, 0, 0, 0, 136, 3, (42 * density).roundToInt(), density, -1)!!
+            val split = PostReplyGlassGeometry.separate(box.width, 3, density)!!
+            val usable = box.width - (PostReplyGlassGeometry.SURFACE_GAP_DP * density).roundToInt()
+            assertEquals("density=$density", (usable * 0.618f).roundToInt(), split.inputWidth)
+        }
+    }
+
     @Test fun separateSurfacesKeepAnOpenGapAndSymmetricActionInsets() {
         val split = PostReplyGlassGeometry.separate(672, 3, 2f)!!
-        assertEquals(400, split.inputWidth)
-        assertEquals(416, split.actionsLeft)
+        assertEquals(405, split.inputWidth)
+        assertEquals(421, split.actionsLeft)
         assertEquals(16, split.actionsLeft - split.inputWidth)
-        assertEquals(240, split.actionsContentWidth)
+        assertEquals(235, split.actionsContentWidth)
         assertEquals(16, 672 - split.actionsLeft - split.actionsContentWidth)
-        assertEquals(464, PostReplyGlassGeometry.minimumWidth(3, 2f))
-        assertNull(PostReplyGlassGeometry.separate(463, 3, 2f))
-        assertNotNull(PostReplyGlassGeometry.separate(464, 3, 2f))
+        assertEquals(435, PostReplyGlassGeometry.minimumWidth(3, 2f))
+        assertNull(PostReplyGlassGeometry.separate(434, 3, 2f))
+        assertNotNull(PostReplyGlassGeometry.separate(435, 3, 2f))
     }
 
     @Test fun nativeNormalizedGravityMustSettleInsteadOfCancellingEveryDraw() {
@@ -59,7 +69,7 @@ class PostReplyGlassGeometryTest {
     }
 
     @Test fun narrowWindowsKeepControlsUsableAndImpossibleWindowsUseNativeLayout() {
-        assertEquals(464, bounds(width = 480)!!.width)
+        assertEquals(435, bounds(width = 480)!!.width)
         assertNull(bounds(width = 400))
         assertNull(bounds(height = 200))
     }
@@ -107,9 +117,9 @@ class PostReplyGlassGeometryTest {
                 assertTrue(rightMargin in (px(24) - 1)..px(24))
                 assertTrue(kotlin.math.abs(box.left - rightMargin) <= 1)
                 assertEquals(px(8), split.actionsLeft - split.inputWidth)
-                assertTrue(split.actionsContentWidth / 3 >= px(40))
+                assertTrue(split.actionsContentWidth / 3 >= px(24))
                 assertTrue(box.left >= 0 && box.left + box.width <= px(windowDp))
-                if (windowDp >= 411) assertEquals(0.618f,
+                assertEquals(0.618f,
                     split.inputWidth.toFloat() / (box.width - px(8)), 0.003f)
             }
         }
@@ -127,14 +137,14 @@ class PostReplyGlassGeometryTest {
             fun box(actions: Int, controlHeight: Int) = PostReplyGlassGeometry.calculate(
                 width, 1280, 0, 0, 0, width, 1280, 0, 0, 0, 136,
                 actions, controlHeight, 2f, -1, nativeHeight = 95)!!
-            val pending = box(PostReplyPendingActions.ACTION_COUNT, 63)
+            val pending = box(PostReplyGlassGeometry.PENDING_ACTION_COUNT, 63)
             val ready = box(3, 83)
             assertEquals(ready, pending)
             assertEquals(95, pending.height)
-            val split = PostReplyGlassGeometry.separate(pending.width, PostReplyPendingActions.ACTION_COUNT, 2f)!!
+            val split = PostReplyGlassGeometry.separate(pending.width, PostReplyGlassGeometry.PENDING_ACTION_COUNT, 2f)!!
             assertEquals(PostReplyGlassGeometry.separate(ready.width, 3, 2f), split)
             assertEquals(16, split.actionsLeft - split.inputWidth)
-            assertTrue(split.actionsContentWidth / PostReplyPendingActions.ACTION_COUNT >= 80)
+            assertTrue(split.actionsContentWidth / PostReplyGlassGeometry.PENDING_ACTION_COUNT >= 48)
         }
     }
 

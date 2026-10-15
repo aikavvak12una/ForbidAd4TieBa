@@ -37,6 +37,8 @@ internal class LiquidGlassPanel(
     private val alphaPaint = Paint()
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val shadowPath = Path()
+    private val actionsShadowPath = Path()
+    private val shadowMargin = (2 * LiquidGlassStyle.SHADOW_RADIUS_DP + LiquidGlassStyle.SHADOW_OFFSET_Y_DP) * density
     private var shadowDirty = true
     private val pagePosition = IntArray(2)
     private val anchor = Matrix()
@@ -61,6 +63,7 @@ internal class LiquidGlassPanel(
     private var captureMargin = 0
     private var inputWidth = 0
     private var actionsLeft = 0
+    private var actionsAlpha = 1f
     private var containerAlpha = 1f
     private var interaction = 0f
     private var interactionX = 0f
@@ -114,6 +117,13 @@ internal class LiquidGlassPanel(
         interaction = progress
         interactionX = centreX
         glowProgress = glow
+        invalidate()
+    }
+
+    fun setActionsAlpha(value: Float) {
+        val next = value.coerceIn(0f, 1f)
+        if (actionsAlpha == next) return
+        actionsAlpha = next
         invalidate()
     }
 
@@ -177,15 +187,14 @@ internal class LiquidGlassPanel(
         if (width <= 0 || height <= 0 || containerAlpha <= 0f || isCapturing) return
         val save = if (containerAlpha < 1f) {
             alphaPaint.alpha = (containerAlpha * 255f).roundToInt()
-            val margin = (2 * LiquidGlassStyle.SHADOW_RADIUS_DP + LiquidGlassStyle.SHADOW_OFFSET_Y_DP) * density
-            canvas.saveLayer(-margin, -margin, width + margin, height + margin, alphaPaint)
+            canvas.saveLayer(-shadowMargin, -shadowMargin, width + shadowMargin, height + shadowMargin, alphaPaint)
         } else canvas.save()
         drawShadow(canvas)
         if (config.needsBackdrop) {
             val p = parameters(height)
             val margin = LiquidGlassStyle.margin(p)
             if (canvas.isHardwareAccelerated && ensureBackdrop(margin) && updateSampling()) {
-                if (!renderer.draw(canvas, width, height, p, materialRevision, recordMaterial)) drawSurfaceTint(canvas)
+                if (!renderer.draw(canvas, width, height, p, materialRevision, recordMaterial, actionsAlpha)) drawSurfaceTint(canvas)
             } else drawSurfaceTint(canvas)
         } else drawSurfaceTint(canvas, parameters(height).tint)
         canvas.restoreToCount(save)
@@ -196,6 +205,7 @@ internal class LiquidGlassPanel(
         if (shadowDirty) {
             shadowDirty = false
             shadowPath.reset()
+            actionsShadowPath.reset()
             val split = inputWidth > 0 && actionsLeft < width
             val w = if (split) inputWidth.toFloat() else width.toFloat()
             val h = height.toFloat()
@@ -203,7 +213,7 @@ internal class LiquidGlassPanel(
             shadowPath.addRoundRect(0f, 0f, w, h, radius, radius, Path.Direction.CW)
             if (split) {
                 val rightRadius = min((width - actionsLeft).toFloat(), h) / 2f
-                shadowPath.addRoundRect(actionsLeft.toFloat(), 0f, width.toFloat(), h,
+                actionsShadowPath.addRoundRect(actionsLeft.toFloat(), 0f, width.toFloat(), h,
                     rightRadius, rightRadius, Path.Direction.CW)
             }
             shadowPaint.setShadowLayer(LiquidGlassStyle.SHADOW_RADIUS_DP * density, 0f,
@@ -213,7 +223,15 @@ internal class LiquidGlassPanel(
         val save = canvas.save()
         // Keep the translucent glass and the gap between reply capsules free of a solid underlay.
         canvas.clipOutPath(shadowPath)
+        canvas.clipOutPath(actionsShadowPath)
         canvas.drawPath(shadowPath, shadowPaint)
+        if (!actionsShadowPath.isEmpty && actionsAlpha > 0f) {
+            val actionSave = if (actionsAlpha < 1f) canvas.saveLayerAlpha(actionsLeft - shadowMargin,
+                -shadowMargin, width + shadowMargin, height + shadowMargin, (actionsAlpha * 255f).roundToInt())
+                else canvas.save()
+            canvas.drawPath(actionsShadowPath, shadowPaint)
+            canvas.restoreToCount(actionSave)
+        }
         canvas.restoreToCount(save)
     }
 
@@ -368,6 +386,7 @@ internal class LiquidGlassPanel(
         canvas.drawRoundRect(0f, 0f, w, height.toFloat(), r, r, paint)
         if (split) {
             val rr = min((width - actionsLeft).toFloat(), height.toFloat()) / 2f
+            paint.alpha = (paint.alpha * actionsAlpha).roundToInt()
             canvas.drawRoundRect(actionsLeft.toFloat(), 0f, width.toFloat(), height.toFloat(), rr, rr, paint)
         }
     }
