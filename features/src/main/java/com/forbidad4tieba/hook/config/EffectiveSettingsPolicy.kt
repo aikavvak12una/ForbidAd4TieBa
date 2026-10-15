@@ -245,6 +245,7 @@ internal object EffectiveSettingsPolicy {
             ),
             isCommentShortcutEnabled = featureBoolean(CommentFilterPreferences.SHORTCUT) &&
                 capabilities.isAvailable(CommentFilterPreferences.KEY_ENABLE),
+            isPbTopEnterBarHidden = featureBoolean(ExtensionPreferences.HIDE_PB_TOP_ENTER_BAR),
         )
         return SettingsEvaluation(snapshot, normalizedBottomTabs)
     }

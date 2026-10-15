@@ -93,6 +93,7 @@ data class SettingsSnapshot(
     val isCommentShortcutEnabled: Boolean,
     val isPostUserIdFilterEnabled: Boolean,
     val postUserIdList: Set<String>,
+    val isPbTopEnterBarHidden: Boolean,
 ) {
     companion object {
         /** Pre-initialization state; evaluated snapshots must supply every field explicitly. */
@@ -189,6 +190,7 @@ data class SettingsSnapshot(
             isDetailedLoggingEnabled = false,
             commentLevelFilter = CommentLevelFilterSettings(false, CommentFilterPreferences.DEFAULT_MINIMUM_LEVEL, false, false),
             isCommentShortcutEnabled = true,
+            isPbTopEnterBarHidden = false,
         )
     }
 

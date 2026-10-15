@@ -262,6 +262,7 @@ internal object SettingsMenuGroupBuilder {
         ),
         SwitchItem(TabPreferences.HIDE_HOME_TAB_RED_DOT),
         SwitchItem(ExtensionPreferences.HIDE_INPUT_MEME_BAR),
+        SwitchItem(ExtensionPreferences.HIDE_PB_TOP_ENTER_BAR),
         SwitchItem(
             HomeGlassPreferences.ENABLE_HOME_NATIVE_GLASS,
             actionIcon = UiText.Settings.ACTION_ICON_SETTINGS,

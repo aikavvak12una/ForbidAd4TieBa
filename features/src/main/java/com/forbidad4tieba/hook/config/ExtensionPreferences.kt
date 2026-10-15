@@ -6,6 +6,8 @@ import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 object ExtensionPreferences {
     const val KEY_HIDE_INPUT_MEME_BAR = "hide_input_meme_bar"
 
+    const val KEY_HIDE_PB_TOP_ENTER_BAR = "hide_pb_top_enter_bar"
+
     const val KEY_FILTER_ENTER_FORUM_WEB = "filter_enter_forum_web"
 
     const val KEY_OPEN_WEB_LINK_IN_SYSTEM_BROWSER = "open_web_link_in_system_browser"
@@ -23,6 +25,10 @@ object ExtensionPreferences {
     internal val HIDE_INPUT_MEME_BAR = BooleanPreference(
         KEY_HIDE_INPUT_MEME_BAR, false, PreferenceUse.SWITCH, HookFeatureKey.HIDE_INPUT_MEME_BAR,
         SwitchPresentation(UiText.Settings.HIDE_INPUT_MEME_BAR_LABEL, UiText.Settings.HIDE_INPUT_MEME_BAR_DESC),
+    )
+    internal val HIDE_PB_TOP_ENTER_BAR = BooleanPreference(
+        KEY_HIDE_PB_TOP_ENTER_BAR, false, PreferenceUse.SWITCH, HookFeatureKey.HIDE_PB_TOP_ENTER_BAR,
+        SwitchPresentation(UiText.Settings.HIDE_PB_TOP_ENTER_BAR_LABEL, UiText.Settings.HIDE_PB_TOP_ENTER_BAR_DESC),
     )
     internal val FILTER_ENTER_FORUM_WEB = BooleanPreference(
         KEY_FILTER_ENTER_FORUM_WEB, false, PreferenceUse.SWITCH, HookFeatureKey.FILTER_ENTER_FORUM_WEB,
@@ -53,6 +59,7 @@ object ExtensionPreferences {
 
     internal val preferences: List<Preference<*>> = listOf(
         HIDE_INPUT_MEME_BAR,
+        HIDE_PB_TOP_ENTER_BAR,
         FILTER_ENTER_FORUM_WEB,
         OPEN_WEB_LINK_IN_SYSTEM_BROWSER,
         DISABLE_AUTO_REFRESH,

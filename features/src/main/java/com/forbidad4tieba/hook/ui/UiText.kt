@@ -172,6 +172,8 @@ object UiText {
         const val BOTTOM_TAB_LIQUID_GLASS_SAVED = "悬浮底栏配置已保存"
         fun liquidGlassDp(value: Int): String = "$value dp"
         const val HIDE_PB_BOTTOM_BANNER_LABEL = "屏蔽帖子底部热点/进吧组件"
+        const val HIDE_PB_TOP_ENTER_BAR_LABEL = "屏蔽帖子顶部进吧组件"
+        const val HIDE_PB_TOP_ENTER_BAR_DESC = "移除帖子页顶部的吧头像、吧名和进吧入口"
         const val FILTER_ENTER_FORUM_WEB_LABEL = "净化进吧页面"
         const val FILTER_ENTER_FORUM_WEB_DESC = "替换进吧页面为关注的吧"
         const val OPEN_WEB_LINK_IN_SYSTEM_BROWSER_LABEL = "使用外置浏览器打开链接"

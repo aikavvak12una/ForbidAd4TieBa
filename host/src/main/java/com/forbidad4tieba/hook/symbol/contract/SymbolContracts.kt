@@ -25,6 +25,7 @@ internal object SymbolContracts {
         HomeRightSlotContract,
         PbFallingContract,
         PbBottomBannerContract,
+        PbTopEnterBarContract,
         InputMemeBarContract,
         PbEarlyAdContract,
         PbFirstFloorRecommendContract,

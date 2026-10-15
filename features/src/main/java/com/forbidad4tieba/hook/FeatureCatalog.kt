@@ -56,6 +56,7 @@ import com.forbidad4tieba.hook.feature.ui.MsgTabDefaultNotifyFeature
 import com.forbidad4tieba.hook.feature.ui.NotificationGuideBlockFeature
 import com.forbidad4tieba.hook.feature.ui.PbBottomEnterBarHotTopicGuideFeature
 import com.forbidad4tieba.hook.feature.ui.PbBottomEnterBarStableFeature
+import com.forbidad4tieba.hook.feature.ui.PbTopEnterBarBlockFeature
 import com.forbidad4tieba.hook.feature.ui.PbCommentAutoLoadFeature
 import com.forbidad4tieba.hook.feature.ui.PbDisableGestureFontScaleFeature
 import com.forbidad4tieba.hook.feature.ui.PbLikeAutoReplyFeature
@@ -109,6 +110,7 @@ internal object FeatureCatalog {
         HomeSideBarSettingsEntryFeature,
         PbBottomEnterBarStableFeature,
         PbBottomEnterBarHotTopicGuideFeature,
+        PbTopEnterBarBlockFeature,
         FeedAdFeature,
         PostAdFeature,
         ForumPageAdBlockFeature,
