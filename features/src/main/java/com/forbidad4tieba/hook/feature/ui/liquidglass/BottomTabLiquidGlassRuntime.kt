@@ -24,6 +24,7 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ui.SystemBarCompatHook
 import com.forbidad4tieba.hook.symbol.contract.BottomTabArtworkContract
+import com.forbidad4tieba.hook.symbol.contract.HomeTabContentContract
 import java.lang.reflect.Method
 import java.util.Collections
 import java.util.WeakHashMap
@@ -106,6 +107,7 @@ internal object BottomTabLiquidGlassRuntime {
         val getSkinType: Method?,
         val getCoreAppInst: Method?,
         val webContainerClass: Class<*>?,
+        val homeContent: HomeTabContentContract.Targets?,
         val tabArtwork: BottomTabArtworkContract.Targets?,
     )
 
@@ -117,7 +119,9 @@ internal object BottomTabLiquidGlassRuntime {
         val panel: LiquidGlassPanel,
         val density: Float,
         val config: BottomTabLiquidGlassConfig,
+        homeContent: HomeTabContentContract.Targets?,
     ) {
+        val homeContent = LiquidGlassHomeContent(homeContent)
         val rowOffset = Rect()
         val contentMeasure = LiquidGlassBarMetrics.ContentMeasure()
         val wrapperOverlappingRendering = wrapper.getHasOverlappingRendering()
@@ -221,6 +225,25 @@ internal object BottomTabLiquidGlassRuntime {
                     MemberAccess.findMethodOrNull(it, METHOD_GET_INST)
                 },
                 webContainerClass = webContainerClass,
+                homeContent = try {
+                    HomeTabContentContract.resolve(cl, webContainerClass).also { targets ->
+                        if (!targets.hasLiveContent) {
+                            XposedCompat.log("$TAG home live content support unavailable: LiveTabFeedView missing or invalid")
+                        }
+                        if (!targets.hasWebContent && webContainerClass != null) {
+                            XposedCompat.log("$TAG home web content support unavailable: invalid TbWebView structure")
+                        }
+                    }
+                } catch (failure: ReflectiveOperationException) {
+                    XposedCompat.log("$TAG home content support unavailable: ${failure.message}")
+                    null
+                } catch (failure: IllegalStateException) {
+                    XposedCompat.log("$TAG home content support invalid: ${failure.message}")
+                    null
+                } catch (failure: LinkageError) {
+                    XposedCompat.log("$TAG home content support unavailable: ${failure.message}")
+                    null
+                },
                 tabArtwork = try {
                     BottomTabArtworkContract.resolve(cl)
                 } catch (failure: ReflectiveOperationException) {
@@ -434,7 +457,7 @@ internal object BottomTabLiquidGlassRuntime {
                 return
             }
 
-            val state = GlassState(host, wrapper, widget, pager, panel, density, config)
+            val state = GlassState(host, wrapper, widget, pager, panel, density, config, api.homeContent)
             val index = host.indexOfChild(wrapper).takeIf { it >= 0 } ?: host.childCount
             // The first hug pass changes the host's child LayoutParams. Keep both overlays out of
             // the draw list until the following layout has committed those widths.
@@ -499,6 +522,7 @@ internal object BottomTabLiquidGlassRuntime {
 
     private fun detach(host: View) {
         val state = states.remove(host) ?: return
+        state.homeContent.restore()
         state.wrapper.forceHasOverlappingRendering(state.wrapperOverlappingRendering)
         state.touchOverlay?.cancelInteraction()
         state.controller?.cancelInteraction()
@@ -621,7 +645,9 @@ internal object BottomTabLiquidGlassRuntime {
      * is still reachable - while letting the rows draw behind the pill.
      */
     private fun relaxScrollContainerClipping(state: GlassState) {
-        if (!ConfigManager.snapshot().isFloatingBottomBarEnabled || state.panel.parent == null) return
+        if (!state.homeContent.beginPass(
+                ConfigManager.snapshot().isFloatingBottomBarEnabled && state.panel.parent === state.host,
+            )) return
         val pager = state.pager
         for (i in 0 until pager.childCount) {
             val page = pager.getChildAt(i) as? ViewGroup ?: continue
@@ -632,6 +658,10 @@ internal object BottomTabLiquidGlassRuntime {
 
     private fun unclipScrollContainer(state: GlassState, view: ViewGroup, depth: Int) {
         if (depth > SCROLL_CONTAINER_SEARCH_DEPTH) return
+        if (state.homeContent.expandIntoTabReserve(view, state.pager, state.widget.height)) {
+            markDirty(state)
+            return
+        }
         if (hostApi?.webContainerClass?.isInstance(view) == true) {
             if (LiquidGlassWebContent.expandIntoTabReserve(view, state.pager, state.widget.height)) {
                 XposedCompat.logD { "$TAG bottom-tab web content extended behind the tab row" }
