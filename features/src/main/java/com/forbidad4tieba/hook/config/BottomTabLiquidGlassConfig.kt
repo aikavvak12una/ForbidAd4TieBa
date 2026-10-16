@@ -5,7 +5,7 @@ import com.forbidad4tieba.hook.ui.UiText
 
 /** Shared material and center placement; the droplet width applies only to the home Tab bar. */
 data class BottomTabLiquidGlassConfig(
-    /** Center distance above the navigation area, subject to safe clearance; -1 selects the default. */
+    /** Center distance above the window bottom; -1 selects automatic navigation clearance. */
     val bottomGapDp: Int = -1,
     val blurEnabled: Boolean = true,
     val liquidGlassEnabled: Boolean = true,

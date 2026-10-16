@@ -48,14 +48,33 @@ class PostReplyGlassGeometryTest {
         assertEquals(240, PostReplyGlassGeometry.contentBottomPadding(240, 1280, 1120, 2f))
     }
 
-    @Test fun edgeToEdgeAndConsumedNavigationHaveTheSamePhysicalPosition() {
+    @Test fun edgeToEdgeAndConsumedNavigationHaveTheSamePositionWhenTheBarFits() {
         for (navigation in listOf(48, 96)) {
-            for (gap in listOf(-1, 0, 28, 120)) {
+            for (gap in listOf(-1, 120)) {
                 val config = BottomTabLiquidGlassConfig(bottomGapDp = gap)
                 assertEquals(bounds(navigation = navigation, config = config),
                     bounds(height = 1280 - navigation, navigation = navigation, config = config))
             }
         }
+    }
+
+    @Test fun manualReplyPlacementIgnoresNavigationWithoutRestoringNativeLayout() {
+        for (gap in listOf(0, 28, 60, 120)) {
+            val config = BottomTabLiquidGlassConfig(bottomGapDp = gap)
+            val withoutNavigation = bounds(config = config)!!
+            for (navigation in listOf(48, 96)) {
+                assertEquals(withoutNavigation, bounds(navigation = navigation, config = config))
+            }
+        }
+        val low = bounds(navigation = 96, config = BottomTabLiquidGlassConfig(bottomGapDp = 0))!!
+        assertEquals(1172, low.top)
+        assertTrue(low.top + low.height > 1280 - 96)
+    }
+
+    @Test fun manualReplyPlacementStillRespectsTheActualHostBounds() {
+        val box = bounds(height = 1184, navigation = 96,
+            config = BottomTabLiquidGlassConfig(bottomGapDp = 0))!!
+        assertEquals(1184, box.top + box.height)
     }
 
     @Test fun landscapeCutoutAndSideNavigationAreCountedOnlyOnce() {
@@ -81,7 +100,7 @@ class PostReplyGlassGeometryTest {
         assertEquals(normal.top + normal.height / 2, large.top + large.height / 2)
     }
 
-    @Test fun homeAndReplyCentersMatchAcrossGapsDensitiesAndConsumedInsets() {
+    @Test fun homeAndReplyCentersMatchWheneverTheHostCanFitThem() {
         for (density in listOf(1f, 1.25f, 2f, 2.625f, 3f, 4f)) {
             fun px(dp: Int) = (dp * density).roundToInt()
             for (navigation in listOf(0, px(24))) for (gap in listOf(-1, 0, 20, 40, 80, 120)) {
@@ -96,8 +115,15 @@ class PostReplyGlassGeometryTest {
                         0, px(411), windowHeight, 0, 0, navigation,
                         px(68), 3, px(42), density, gap, nativeHeight = px(48),
                     )!!
-                    assertEquals(homeTop + homeHeight / 2f, hostTop + reply.top + reply.height / 2f, 0.5f)
-                    assertTrue(hostTop + reply.top + reply.height <= windowHeight - navigation)
+                    val center = homeTop + homeHeight / 2f
+                    val hostBottom = windowHeight - consumed
+                    if (center + reply.height / 2f <= hostBottom) {
+                        assertEquals(center, hostTop + reply.top + reply.height / 2f, 0.5f)
+                    } else {
+                        assertEquals(hostBottom, hostTop + reply.top + reply.height)
+                    }
+                    val limit = if (gap < 0) windowHeight - navigation else hostBottom
+                    assertTrue(hostTop + reply.top + reply.height <= limit)
                 }
             }
         }

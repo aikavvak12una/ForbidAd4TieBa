@@ -144,11 +144,7 @@ internal class PostReplyGlassSession(
 
     override fun onGlobalLayout() {
         if (disposed || panel.isCapturing) return
-        if (!page.refreshEditor()) {
-            XposedCompat.logW("[PostReplyLiquidGlassHook] page disabled: ambiguous editor layout")
-            disable()
-            return
-        }
+        page.refreshEditors()
         layoutDirty = true
         // A local bar measure here settles geometry before this traversal's first draw.
         updateSafely()
@@ -192,7 +188,7 @@ internal class PostReplyGlassSession(
         if (!PostReplyGlassGeometry.shouldFloat(enabled,
                 page.row.visibility == View.VISIBLE && page.underlay.visibility == View.VISIBLE && page.underlay.alpha > 0f,
                 insets?.isVisible(WindowInsets.Type.ime()) == true,
-                page.editor?.let { it.isShown && it.height > 0 } == true)) {
+                page.isEditorShown())) {
             restore()
             return
         }

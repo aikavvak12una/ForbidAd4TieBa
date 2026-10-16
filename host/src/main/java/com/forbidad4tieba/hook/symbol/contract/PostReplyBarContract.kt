@@ -96,9 +96,6 @@ object PostReplyBarContract {
             visit(content, 4)
             val root = roots.singleOrNull() ?: return null
             val editors = children(root).filter { editorType.isInstance(it) }
-            // EditorTools is added lazily, after the native reply row has already been drawn.
-            if (editors.size > 1) return null
-            val editor = editors.singleOrNull()
             val backdrops = children(root).filterIsInstance<ViewGroup>().mapNotNull { group ->
                 val pages = children(group).filter { contentType.isInstance(it) }
                 pages.singleOrNull()?.let { group to (it as ViewGroup) }
@@ -122,7 +119,7 @@ object PostReplyBarContract {
                         val actions = children(row).drop(1)
                         if (actions.any { !actionType.isInstance(it) || it.layoutParams !is LinearLayout.LayoutParams }) continue
                         matches.add(Page(root, underlay, stack, slot, row, input, actions, dividerBefore(stack, slot),
-                            backdrop, recycler, editor, actionType, editorType))
+                            backdrop, recycler, editors, actionType, editorType))
                     }
                 }
             }
@@ -155,27 +152,24 @@ object PostReplyBarContract {
         val divider: View?,
         val backdrop: ViewGroup,
         val recycler: ViewGroup,
-        editor: View?,
+        editors: List<View>,
         private val actionType: Class<*>,
         private val editorType: Class<*>,
     ) {
         var actions: List<View> = actions
             private set
-        var editor: View? = editor
-            private set
+        private val editors = editors.toMutableList()
 
-        /** Only layout changes can add the lazy editor; absence is valid, ambiguity is not. */
-        fun refreshEditor(): Boolean {
-            var current: View? = null
+        /** Help posts own separate editors. Track all of them, including lazy additions/removals. */
+        fun refreshEditors() {
+            editors.clear()
             for (index in 0 until root.childCount) {
                 val child = root.getChildAt(index)
-                if (!editorType.isInstance(child)) continue
-                if (current != null) return false
-                current = child
+                if (editorType.isInstance(child)) editors.add(child)
             }
-            editor = current
-            return true
         }
+
+        fun isEditorShown(): Boolean = editors.any { it.isShown && it.height > 0 }
 
         /** Only the already-matched row can supply newly populated native action views. */
         fun refreshActions(): Boolean {
@@ -190,7 +184,7 @@ object PostReplyBarContract {
             (divider == null || divider.parent === stack) &&
             slot.parent === stack && row.parent === slot && input.parent === row &&
             row.childCount == actions.size + 1 && actions.all { it.parent === row } &&
-            recycler.parent === backdrop && backdrop.parent === root && (editor == null || editor?.parent === root)
+            recycler.parent === backdrop && backdrop.parent === root && editors.all { it.parent === root }
     }
 
     fun resolve(classLoader: ClassLoader): Targets {

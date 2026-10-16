@@ -71,7 +71,8 @@ internal object PostReplyGlassGeometry {
         val top = LiquidGlassBarMetrics.floatingTop(hostHeight, hostTop + hostHeight,
             windowBottom, navigationBottom, height, density, bottomGapDp)
             .coerceAtLeast(contentTop)
-        val bottom = minOf(hostHeight, windowBottom - navigationBottom - hostTop)
+        val bottom = minOf(hostHeight, LiquidGlassBarMetrics.placementBottom(
+            hostHeight, hostTop + hostHeight, windowBottom, navigationBottom, bottomGapDp))
         if (top + height > bottom) return null
         return Bounds(left + (available - width) / 2, top, width, height)
     }

@@ -11,13 +11,26 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Host tab dimensions and safe placement. */
+/** Host tab dimensions and automatic/manual placement. */
 internal object LiquidGlassBarMetrics {
     const val TAB_HEIGHT_DP = 60f
     const val DROPLET_INSET_DP = 3.5f
     const val HORIZONTAL_PADDING_DP = DROPLET_INSET_DP
     const val VERTICAL_PADDING_DP = DROPLET_INSET_DP + 4f
     private const val SCREEN_EDGE_MARGIN_DP = 24f
+
+    /** Center placement origin in host coordinates; only automatic placement avoids navigation. */
+    fun placementBottom(
+        hostHeight: Int,
+        hostBottomInWindow: Int,
+        windowBottom: Int,
+        navigationBottom: Int,
+        bottomGapDp: Int,
+    ): Int {
+        val windowBottomInHost = hostHeight + windowBottom - hostBottomInWindow
+        return if (bottomGapDp >= 0) windowBottomInHost
+        else (windowBottomInHost - navigationBottom.coerceAtLeast(0)).coerceIn(0, hostHeight)
+    }
 
     fun floatingTop(
         hostHeight: Int,
@@ -29,7 +42,7 @@ internal object LiquidGlassBarMetrics {
         bottomGapDp: Int = -1,
     ): Int {
         val navigation = navigationBottom.coerceAtLeast(0)
-        val overlap = (hostBottomInWindow - (windowBottom - navigation)).coerceIn(0, hostHeight)
+        val bottom = placementBottom(hostHeight, hostBottomInWindow, windowBottom, navigation, bottomGapDp)
         // Both surfaces share a center, even though the reply controls are shorter than the tabs.
         // Automatic placement preserves the normal 60dp home bar's existing position.
         val minimumCenterGapDp = TAB_HEIGHT_DP / 2f
@@ -38,10 +51,9 @@ internal object LiquidGlassBarMetrics {
         } else {
             minimumCenterGapDp + if (navigation > 0) 8f else 28f
         }
-        val safeBottom = hostHeight - overlap
-        val top = (safeBottom - centerGapDp * density - pillHeight / 2f).roundToInt()
-        // Very large controls or short windows still have to fit above the navigation area.
-        return top.coerceIn(0, (safeBottom - pillHeight).coerceAtLeast(0))
+        val top = (bottom - centerGapDp * density - pillHeight / 2f).roundToInt()
+        // Manual placement may enter the navigation area, but both modes must fit the host.
+        return top.coerceIn(0, (minOf(hostHeight, bottom) - pillHeight).coerceAtLeast(0))
     }
 
     /** Per-bar scratch; measuring a settled tab set allocates no lists, boxes or bounds arrays. */

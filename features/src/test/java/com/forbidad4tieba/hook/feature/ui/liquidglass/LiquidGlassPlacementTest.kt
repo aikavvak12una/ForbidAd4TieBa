@@ -19,14 +19,24 @@ class LiquidGlassPlacementTest {
         assertEquals(0f, LiquidGlassGeom.samplingResidual(1.25f, 1), 0f)
     }
 
-    @Test fun explicitCenterGapIncludesConsumedInsetsOnlyOnceAndKeepsTheBarInside() {
-        for (gap in listOf(0, 20, 80, 120)) {
-            val full = LiquidGlassBarMetrics.floatingTop(1280, 1280, 1280, 96, 160, 2f, gap)
-            val inset = LiquidGlassBarMetrics.floatingTop(1184, 1184, 1280, 96, 160, 2f, gap)
-            assertEquals(full, inset)
-            assertEquals(maxOf(gap * 2, 80), 1184 - full - 80)
-            assertTrue(full + 160 <= 1184)
+    @Test fun manualCenterGapUsesTheWindowBottomRegardlessOfNavigationInsets() {
+        for ((gap, expectedTop) in listOf(0 to 1120, 20 to 1120, 80 to 1040, 120 to 960)) {
+            for (navigation in listOf(0, 48, 96)) {
+                assertEquals(expectedTop, LiquidGlassBarMetrics.floatingTop(
+                    1280, 1280, 1280, navigation, 160, 2f, gap))
+            }
         }
+    }
+
+    @Test fun manualWindowAnchorSurvivesHostOffsetsWhenTheBarFits() {
+        val full = LiquidGlassBarMetrics.floatingTop(1280, 1280, 1280, 96, 160, 2f, 120)
+        val inset = LiquidGlassBarMetrics.floatingTop(1136, 1184, 1280, 96, 160, 2f, 120)
+        assertEquals(full, 48 + inset)
+    }
+
+    @Test fun manualPlacementStillKeepsTheBarInsideAnInsetHost() {
+        val top = LiquidGlassBarMetrics.floatingTop(1136, 1184, 1280, 96, 160, 2f, 0)
+        assertEquals(1136, top + 160)
     }
 
     @Test fun configuredWidthKeepsCirclesAndAdaptsToDensityWindowAndTabCount() {
