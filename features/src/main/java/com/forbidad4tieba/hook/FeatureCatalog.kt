@@ -52,6 +52,7 @@ import com.forbidad4tieba.hook.feature.ui.HomeTopTabAutoHideFeature
 import com.forbidad4tieba.hook.feature.ui.ImageViewerSwipeEnterForumBlockFeature
 import com.forbidad4tieba.hook.feature.ui.InputMemeBarBlockFeature
 import com.forbidad4tieba.hook.feature.ui.MainTabBottomFeature
+import com.forbidad4tieba.hook.feature.ui.PublishEntryFeature
 import com.forbidad4tieba.hook.feature.ui.MsgTabDefaultNotifyFeature
 import com.forbidad4tieba.hook.feature.ui.NotificationGuideBlockFeature
 import com.forbidad4tieba.hook.feature.ui.PbBottomEnterBarHotTopicGuideFeature
@@ -88,6 +89,7 @@ internal object FeatureCatalog {
         FirstLikePopupBlockFeature,
         NotificationGuideBlockFeature,
         TiebaHostLogFeature,
+        PublishEntryFeature,
         StrategyAdStaticFeature,
         HomeTopTabAutoHideFeature,
         HomeBottomTabAutoHideFeature,

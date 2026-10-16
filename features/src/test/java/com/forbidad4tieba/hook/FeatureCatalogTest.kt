@@ -7,6 +7,29 @@ import org.junit.Test
 import java.io.File
 
 class FeatureCatalogTest {
+    @Test fun publishEntryOverrideUsesEitherBottomBarSwitchInTheMainProcess() {
+        val id = "PublishEntryHook"
+        val definition = FeatureCatalog.definitions.single { it.id == id }
+        assertEquals(FeaturePhase.POST_ATTACH, definition.phase)
+        assertEquals(null, definition.toggle)
+        val context = HookInstallContext("com.baidu.tieba", null)
+        val settings = SettingsSnapshot.bootstrap()
+        for (snapshot in listOf(settings, settings.copy(isAdBlockEnabled = true, isCustomPostFilterEnabled = true))) {
+            for ((customTabs, floatingBar, expected) in listOf(
+                Triple(false, false, 0), Triple(true, false, 1),
+                Triple(false, true, 1), Triple(true, true, 1),
+            )) {
+                assertEquals(expected, definition.entries(context, snapshot.copy(
+                    isBottomTabsCustomEnabled = customTabs, isFloatingBottomBarEnabled = floatingBar,
+                )).size)
+            }
+        }
+        for (process in listOf("com.baidu.tieba:remote", "com.baidu.tieba:push", "com.android.systemui")) {
+            assertTrue(definition.entries(HookInstallContext(process, null),
+                settings.copy(isBottomTabsCustomEnabled = true, isFloatingBottomBarEnabled = true)).isEmpty())
+        }
+    }
+
     @Test fun floatingSwitchControlsBothBarsOnlyInTheMainProcess() {
         val settings = SettingsSnapshot.bootstrap()
         val enabled = settings.copy(isFloatingBottomBarEnabled = true)
