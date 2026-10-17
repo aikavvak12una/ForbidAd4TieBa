@@ -6,12 +6,28 @@ import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
-/** Framework-only targets, resolved once in SystemUI; no host DexKit or persisted symbol cache. */
+/** Framework and optional OEM targets, resolved once in SystemUI without host DexKit or persisted caches. */
 object SystemSplashContract {
     fun resolve(classLoader: ClassLoader): SystemSplashTargets = validate(
         Class.forName("android.window.SplashScreenView\$Builder", false, classLoader),
         Class.forName("android.window.SplashScreenView", false, classLoader),
     )
+
+    /** ColorOS queues a second background assignment after the framework Builder has finished. */
+    fun resolveColorOsBackground(classLoader: ClassLoader): Method? {
+        val manager = try {
+            Class.forName("com.android.wm.shell.startingsurface.OplusShellStartingWindowManager", false, classLoader)
+        } catch (_: ClassNotFoundException) {
+            return null
+        }
+        val view = Class.forName("android.window.SplashScreenView", false, classLoader)
+        return manager.getDeclaredMethod("setContentViewBackground", view, Drawable::class.java).apply {
+            check(!Modifier.isStatic(modifiers) && returnType == Void.TYPE) {
+                "Invalid ColorOS splash background method"
+            }
+            isAccessible = true
+        }
+    }
 
     internal fun validate(builder: Class<*>, view: Class<*>): SystemSplashTargets {
         fun field(name: String, type: Class<*>): Field = builder.getDeclaredField(name).apply {
