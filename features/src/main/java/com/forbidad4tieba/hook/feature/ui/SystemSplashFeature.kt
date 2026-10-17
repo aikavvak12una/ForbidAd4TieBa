@@ -3,7 +3,9 @@ package com.forbidad4tieba.hook.feature.ui
 import android.app.Activity
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.drawable.Drawable
 import android.os.Build
+import android.view.View
 import android.view.ViewGroup
 import com.forbidad4tieba.hook.FeatureDefinition
 import com.forbidad4tieba.hook.FeaturePhase
@@ -81,7 +83,42 @@ internal object SystemSplashHook {
             chain.proceed()
         }
         XposedCompat.log("[SystemSplashHook] system splash hook INSTALLED")
-        return null // RuntimeHooks measures actual handles, including duplicate installation.
+        return try {
+            val colorOsBackground = SystemSplashContract.resolveColorOsBackground(classLoader)
+                ?: return InstallOutcome(InstallState.INSTALLED, reason = "ColorOS background: SKIPPED (OEM class absent)")
+            val colorOsFailureLogged = AtomicBoolean(false)
+            RuntimeHooks.builder(module, colorOsBackground, "SystemSplashHook", "colorOsBackground").intercept { chain ->
+                val replacementArgs = try {
+                    val view = chain.args[0] as? View
+                    val original = chain.args[1] as? Drawable
+                    if (view != null && original != null) {
+                        val context = view.context
+                        val color = SystemSplashPolicy.background(
+                            context.applicationInfo.packageName,
+                        ) { Resources.getSystem().configuration.uiMode }
+                        if (color != null) {
+                            val replacement = checkNotNull(SplashBackground.recolor(original, color, context.resources, branding)) {
+                                "Unsupported ColorOS splash background: ${original.javaClass.name}"
+                            }
+                            // Replace the argument before ColorOS captures it in the queued setBackground task.
+                            arrayOf<Any?>(view, replacement)
+                        } else null
+                    } else null
+                } catch (failure: Throwable) {
+                    if (colorOsFailureLogged.compareAndSet(false, true)) {
+                        XposedCompat.logW("[SystemSplashHook] ColorOS instance skipped: ${failure.javaClass.name}: ${failure.message}")
+                    }
+                    null
+                }
+                // Keep downstream failures outside the preparation catch; proceed exactly once.
+                if (replacementArgs == null) chain.proceed() else chain.proceed(replacementArgs)
+            }
+            XposedCompat.log("[SystemSplashHook] ColorOS background hook INSTALLED")
+            InstallOutcome(InstallState.INSTALLED, reason = "ColorOS background: INSTALLED")
+        } catch (failure: Throwable) {
+            // The framework hook above remains installed if the optional OEM contract changes.
+            InstallOutcome(InstallState.PARTIAL, reason = "ColorOS background: ${failure.javaClass.name}: ${failure.message}")
+        } // RuntimeHooks measures actual handles, including duplicate installation.
     }
 
     fun installLaunchWindow(classLoader: ClassLoader): InstallOutcome? {
