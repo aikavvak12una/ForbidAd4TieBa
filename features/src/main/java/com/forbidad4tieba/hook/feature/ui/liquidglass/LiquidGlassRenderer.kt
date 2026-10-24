@@ -36,13 +36,11 @@ internal class LiquidGlassRenderer(
     private val passes = arrayOfNulls<Pass>(2)
     private var lens: RuntimeShader? = null
     private var dispersionLens: RuntimeShader? = null
-    private var bloom: RuntimeShader? = null
+    private var bloom: Bloom? = null
+    private var rightBloom: Bloom? = null
     private var glow: RuntimeShader? = null
-    private var bloomWidth = 0
-    private var bloomHeight = 0
-    private var bloomDensity = Float.NaN
-    private var bloomAlpha = Float.NaN
-    private var bloomAngle = Float.NaN
+    private var blurRadius = Float.NaN
+    private var blurLevels = LiquidGlassBlur.Levels(0, 0, 0f)
     var isAvailable = true
         private set
 
@@ -54,16 +52,7 @@ internal class LiquidGlassRenderer(
                     lens = RuntimeShader(LiquidGlassShaders.LENS)
                     glow = RuntimeShader(LiquidGlassShaders.GLOW)
                 }
-                if (drawHighlight) bloom = RuntimeShader(LiquidGlassShaders.BLOOM).apply {
-                    setColorUniform("strokeColor", Color.WHITE)
-                    setFloatUniform("strokeAlphaMul", 0.12f)
-                    setColorUniform("lightColor1", Color.WHITE)
-                    setFloatUniform("lightIntensity1", 1f)
-                    val secondLength = sqrt(0.1f * 0.1f + 0.5f * 0.5f)
-                    setFloatUniform("lightDir2", 0f, 0.1f / secondLength, -0.5f / secondLength)
-                    setColorUniform("lightColor2", Color.WHITE)
-                    setFloatUniform("lightIntensity2", 0.4f)
-                }
+                if (drawHighlight) bloom = Bloom()
             }
         } catch (failure: RuntimeException) {
             disable(failure)
@@ -77,11 +66,14 @@ internal class LiquidGlassRenderer(
         material: LiquidGlassStyle.Material,
         sourceRevision: Long,
         record: (Canvas, Float, Int, FloatArray) -> Unit,
-        actionsAlpha: Float = 1f,
     ): Boolean {
         if (!isAvailable || !canvas.isHardwareAccelerated || width <= 0 || height <= 0) return false
         try {
-            val levels = LiquidGlassBlur.levels(material.blurRadius)
+            if (blurRadius != material.blurRadius) {
+                blurRadius = material.blurRadius
+                blurLevels = LiquidGlassBlur.levels(blurRadius)
+            }
+            val levels = blurLevels
             val count = if (levels.low == levels.high) 1 else 2
             for (i in 0 until count) {
                 val level = if (i == 0) levels.low else levels.high
@@ -91,7 +83,7 @@ internal class LiquidGlassRenderer(
             val split = material.inputWidth > 0
             drawShape(canvas, 0, 0, if (split) material.inputWidth else width, height, material, levels)
             if (split) drawShape(canvas, 1, material.actionsLeft, width - material.actionsLeft,
-                height, material, levels, actionsAlpha)
+                height, material, levels)
             return true
         } catch (failure: RuntimeException) {
             disable(failure)
@@ -107,11 +99,9 @@ internal class LiquidGlassRenderer(
         height: Int,
         p: LiquidGlassStyle.Material,
         levels: LiquidGlassBlur.Levels,
-        alpha: Float = 1f,
     ) {
         val save = canvas.save()
         canvas.translate(left.toFloat(), 0f)
-        if (alpha < 1f) canvas.saveLayerAlpha(0f, 0f, width.toFloat(), height.toFloat(), (alpha * 255f).roundToInt())
         val radius = min(width, height) / 2f
         clip.reset()
         clip.addRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, Path.Direction.CW)
@@ -135,7 +125,7 @@ internal class LiquidGlassRenderer(
             canvas.drawPaint(surfacePaint)
         }
         if (p.glowProgress > 0f) drawGlow(canvas, width, height, left, p)
-        if (p.highlightAlpha > 0f) drawBloom(canvas, width, height, p)
+        if (p.highlightAlpha > 0f) drawBloom(canvas, index, width, height, p)
         canvas.restoreToCount(save)
     }
 
@@ -154,38 +144,61 @@ internal class LiquidGlassRenderer(
         lightPaint.shader = null
     }
 
-    private fun drawBloom(canvas: Canvas, width: Int, height: Int, p: LiquidGlassStyle.Material) {
-        val shader = bloom ?: return
-        // Uniforms cross JNI. Scroll/press frames usually change none of these inputs.
-        if (bloomWidth != width || bloomHeight != height || bloomDensity != p.density) {
-            val halfW = width / 2f
-            val halfH = height / 2f
-            val radius = min(halfW, halfH)
-            shader.setFloatUniform("halfView", halfW, halfH)
-            shader.setFloatUniform("halfViewFloor", floor(halfW), floor(halfH))
-            shader.setFloatUniform("cornerRadii", radius, radius, radius, radius)
-            shader.setFloatUniform("strokeWidth", min(p.density, radius))
-            val inner = 2f * p.density
-            shader.setFloatUniform("innerBlurRadius", inner)
-            shader.setFloatUniform("innerBlurRadiusSq", inner * inner)
-            bloomWidth = width
-            bloomHeight = height
-            bloomDensity = p.density
-        }
-        if (bloomAlpha != p.highlightAlpha) {
-            shader.setFloatUniform("highlightAlpha", p.highlightAlpha)
-            bloomAlpha = p.highlightAlpha
-        }
-        if (bloomAngle != p.lightAngle) {
-            val firstLength = sqrt(1f + 0.05f * 0.05f)
-            shader.setFloatUniform("lightDir1", cos(p.lightAngle) / firstLength, sin(p.lightAngle) / firstLength, -0.05f / firstLength)
-            bloomAngle = p.lightAngle
-        }
+    private fun drawBloom(canvas: Canvas, index: Int, width: Int, height: Int, p: LiquidGlassStyle.Material) {
+        val first = bloom ?: return
+        val current = if (index == 0) first else rightBloom ?: Bloom().also { rightBloom = it }
+        current.prepare(width, height, p)
         lightPaint.color = Color.WHITE
         lightPaint.alpha = 255
-        lightPaint.shader = shader
+        lightPaint.shader = current.shader
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), lightPaint)
         lightPaint.shader = null
+    }
+
+    /** Each capsule retains its own shader uniforms; alternating widths must not invalidate a peer. */
+    private class Bloom {
+        val shader = RuntimeShader(LiquidGlassShaders.BLOOM).apply {
+            setColorUniform("strokeColor", Color.WHITE)
+            setFloatUniform("strokeAlphaMul", 0.12f)
+            setColorUniform("lightColor1", Color.WHITE)
+            setFloatUniform("lightIntensity1", 1f)
+            val secondLength = sqrt(0.1f * 0.1f + 0.5f * 0.5f)
+            setFloatUniform("lightDir2", 0f, 0.1f / secondLength, -0.5f / secondLength)
+            setColorUniform("lightColor2", Color.WHITE)
+            setFloatUniform("lightIntensity2", 0.4f)
+        }
+        private var width = 0
+        private var height = 0
+        private var density = Float.NaN
+        private var alpha = Float.NaN
+        private var angle = Float.NaN
+
+        fun prepare(w: Int, h: Int, p: LiquidGlassStyle.Material) {
+            if (width != w || height != h || density != p.density) {
+                val halfW = w / 2f
+                val halfH = h / 2f
+                val radius = min(halfW, halfH)
+                shader.setFloatUniform("halfView", halfW, halfH)
+                shader.setFloatUniform("halfViewFloor", floor(halfW), floor(halfH))
+                shader.setFloatUniform("cornerRadii", radius, radius, radius, radius)
+                shader.setFloatUniform("strokeWidth", min(p.density, radius))
+                val inner = 2f * p.density
+                shader.setFloatUniform("innerBlurRadius", inner)
+                shader.setFloatUniform("innerBlurRadiusSq", inner * inner)
+                width = w
+                height = h
+                density = p.density
+            }
+            if (alpha != p.highlightAlpha) {
+                shader.setFloatUniform("highlightAlpha", p.highlightAlpha)
+                alpha = p.highlightAlpha
+            }
+            if (angle != p.lightAngle) {
+                val firstLength = sqrt(1f + 0.05f * 0.05f)
+                shader.setFloatUniform("lightDir1", cos(p.lightAngle) / firstLength, sin(p.lightAngle) / firstLength, -0.05f / firstLength)
+                angle = p.lightAngle
+            }
+        }
     }
 
     private inner class Pass {
@@ -273,15 +286,15 @@ internal class LiquidGlassRenderer(
         }
 
         private fun downsampleStep(slot: Int, input: RenderNode, output: RenderNode, factor: Int) {
-            val key = Triple(input.width, input.height, factor)
-            if (downsampleKeys[slot] != key) {
-                val shader = if (downsampleKeys[slot]?.third != factor) {
+            val previous = downsampleKeys[slot]
+            if (previous == null || previous.first != input.width || previous.second != input.height || previous.third != factor) {
+                val shader = if (previous?.third != factor) {
                     RuntimeShader(if (factor == 2) LiquidGlassShaders.DOWNSAMPLE_2X else LiquidGlassShaders.DOWNSAMPLE_4X)
                         .also { downsample[slot] = it }
                 } else requireNotNull(downsample[slot])
                 shader.setFloatUniform("maxCoord", input.width - 0.5f, input.height - 0.5f)
                 input.setRenderEffect(RenderEffect.createRuntimeShaderEffect(shader, "child"))
-                downsampleKeys[slot] = key
+                downsampleKeys[slot] = Triple(input.width, input.height, factor)
             }
             recordNode(output, input.width / factor, input.height / factor) { canvas ->
                 canvas.scale(1f / factor, 1f / factor)
@@ -341,8 +354,7 @@ internal class LiquidGlassRenderer(
                 } finally { node.endRecording() }
                 shapeOrigins[index] = origin
             }
-            val key = LensKey(w, h, padding, scale, p.refractionHeight, p.refractionAmount, p.dispersion, p.depthEffect)
-            if (shapeKeys[index] != key) {
+            if (shapeKeys[index]?.matches(w, h, padding, scale, p) != true) {
                 if (p.refractionHeight <= 0f || p.refractionAmount <= 0f) node.setRenderEffect(null)
                 else {
                     val shader = (if (p.dispersion > 0f) dispersionLens else this@LiquidGlassRenderer.lens)
@@ -357,7 +369,7 @@ internal class LiquidGlassRenderer(
                     if (p.dispersion > 0f) shader.setFloatUniform("chromaticAberration", p.dispersion)
                     node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(shader, "content"))
                 }
-                shapeKeys[index] = key
+                shapeKeys[index] = LensKey(w, h, padding, scale, p.refractionHeight, p.refractionAmount, p.dispersion, p.depthEffect)
             }
             return node
         }
@@ -371,7 +383,12 @@ internal class LiquidGlassRenderer(
     }
 
     private data class LensKey(val width: Int, val height: Int, val margin: Float, val scale: Int,
-        val refractionHeight: Float, val amount: Float, val dispersion: Float, val depth: Boolean)
+        val refractionHeight: Float, val amount: Float, val dispersion: Float, val depth: Boolean) {
+        fun matches(w: Int, h: Int, padding: Float, factor: Int, p: LiquidGlassStyle.Material): Boolean =
+            width == w && height == h && margin == padding && scale == factor &&
+                refractionHeight == p.refractionHeight && amount == p.refractionAmount &&
+                dispersion == p.dispersion && depth == p.depthEffect
+    }
 
     private fun disable(failure: RuntimeException) {
         isAvailable = false
