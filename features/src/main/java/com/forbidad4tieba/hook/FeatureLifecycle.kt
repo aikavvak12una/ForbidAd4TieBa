@@ -9,7 +9,9 @@ import android.app.Application
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.widget.Toast
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.config.ModuleUserDataCleaner
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.core.Constants
 import com.forbidad4tieba.hook.core.DetailedLogSession
@@ -22,6 +24,7 @@ import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
 import com.forbidad4tieba.hook.feature.ui.AutoRefreshHook
 import com.forbidad4tieba.hook.ui.AboutInfoManager
 import com.forbidad4tieba.hook.ui.ModuleForegroundActivityTracker
+import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.settings.SettingsScanController
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 
@@ -37,6 +40,8 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
     @Volatile private var sPostAttachStaticHooksInstalled = false
     @Volatile private var sSymbolHooksInstalled = false
     @Volatile private var sTitanStartupLogged = false
+    private var sResetChecked = false
+    private var sPendingReset: ModuleUserDataCleaner.Result? = null
     private var processName: String = ""
 
     override fun onModuleLoaded(processName: String) {
@@ -128,7 +133,7 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
 
             XposedCompat.interceptHook("MainHook.ApplicationAttach", attachMethod) { chain ->
                 XposedCompat.log("[MainHook] > Application.attach INTERCEPTED, thisObj=${chain.thisObject?.javaClass?.name}")
-                val result = chain.proceed()
+                val result = attachWithPreparedData(chain.args.getOrNull(0) as? Context) { chain.proceed() }
                 XposedCompat.log("[MainHook] > Application.attach proceed() returned")
 
                 val app = chain.thisObject as? Application
@@ -148,12 +153,29 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
         }
     }
 
+    /** Application.attach runs on the main thread; early host readers must see reset preferences. */
+    private inline fun <T> attachWithPreparedData(context: Context?, attachHost: () -> T): T {
+        if (!sResetChecked && HookProcess.isMain(processName) && context != null) {
+            sResetChecked = true
+            sPendingReset = ModuleUserDataCleaner.completePendingReset(context)
+        }
+        return attachHost()
+    }
+
     private fun handleApplicationReady(
         app: Application,
         cl: ClassLoader,
     ) {
         val firstApplicationReady = sAppContext == null
         if (firstApplicationReady) {
+            sPendingReset?.let { result ->
+                sPendingReset = null
+                Handler(Looper.getMainLooper()).post {
+                    val message = if (result.success) UiText.Settings.CLEAR_MODULE_DATA_COMPLETE
+                        else UiText.Settings.clearModuleDataPartialFailed(result.failedTargets.size)
+                    Toast.makeText(app, message, Toast.LENGTH_LONG).show()
+                }
+            }
             sAppContext = app
             ConfigManager.init(app)
             val isMainProcess = HookProcess.isMain(processName)

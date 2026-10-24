@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.feature.diagnostic
 
 import android.annotation.TargetApi
 import android.content.ContentValues
+import android.content.ContentUris
 import android.content.Context
 import android.os.Build
 import android.os.Environment
@@ -32,6 +33,49 @@ internal sealed interface DetailedLogExportResult {
 internal object DetailedLogExporter {
     private const val MIME_TYPE = "text/x-log"
     private val saving = AtomicBoolean(false)
+
+    /** Exact module export names and host ownership limit deletion within shared Downloads. */
+    @Suppress("DEPRECATION")
+    fun clearOwnedExports(context: Context): Pair<List<String>, List<String>> {
+        val deleted = ArrayList<String>()
+        val failed = ArrayList<String>()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                val columns = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME)
+                val selection = "${MediaStore.MediaColumns.OWNER_PACKAGE_NAME}=? AND " +
+                    "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+                val args = arrayOf(context.packageName, Environment.DIRECTORY_DOWNLOADS + "/", "FA4TB_%.log")
+                val resolver = context.contentResolver
+                val cursor = resolver.query(collection, columns, selection, args, null)
+                    ?: error("Downloads query unavailable")
+                cursor.use {
+                    while (it.moveToNext()) {
+                        val name = it.getString(1)
+                        if (!DetailedLogFileFormatter.isExportFileName(name)) continue
+                        val label = "Downloads/$name"
+                        try {
+                            val uri = ContentUris.withAppendedId(collection, it.getLong(0))
+                            if (resolver.delete(uri, null, null) > 0) deleted.add(label) else failed.add(label)
+                        } catch (_: Exception) { failed.add(label) }
+                    }
+                }
+            } else {
+                val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (downloads.exists()) {
+                    val files = downloads.listFiles() ?: error("Downloads cannot be listed")
+                    for (file in files) {
+                        if (!file.isFile || !DetailedLogFileFormatter.isExportFileName(file.name)) continue
+                        val label = "Downloads/${file.name}"
+                        if (file.delete()) deleted.add(label) else failed.add(label)
+                    }
+                }
+            }
+        } catch (failure: Exception) {
+            failed.add("Downloads/FA4TB_*.log: ${failure.message}")
+        }
+        return deleted to failed
+    }
 
     fun start(
         context: Context,

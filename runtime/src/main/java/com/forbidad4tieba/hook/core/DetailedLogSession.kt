@@ -171,6 +171,10 @@ object DetailedLogSession {
 }
 
 object DetailedLogFileFormatter {
+    private val exportName = Regex("FA4TB_[0-9]{8}_[0-9]{6}(?: \\([0-9]+\\))?\\.log")
+
+    fun isExportFileName(name: String): Boolean = exportName.matches(name)
+
     private val fileNameFormatter = DateTimeFormatter
         .ofPattern("yyyyMMdd_HHmmss", Locale.US)
     private val lineTimeFormatter = DateTimeFormatter

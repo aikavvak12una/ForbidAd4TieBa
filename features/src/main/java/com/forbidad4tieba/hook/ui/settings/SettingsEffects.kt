@@ -59,15 +59,15 @@ internal object SettingsEffects {
         Toast.makeText(activity, UiText.Settings.CLEAR_MODULE_DATA_STARTED, Toast.LENGTH_SHORT).show()
         thread(name = "tbhook-clear-module-data", isDaemon = true) {
             try {
-                val result = ModuleUserDataCleaner.clearAllModuleData(activity, resetRuntime = false)
+                val requested = ModuleUserDataCleaner.requestClearAllModuleData(activity)
                 Handler(Looper.getMainLooper()).post {
-                    val message = if (result.success) {
+                    val message = if (requested) {
                         UiText.Settings.CLEAR_MODULE_DATA_RESTARTING
                     } else {
-                        UiText.Settings.clearModuleDataPartialFailed(result.failedTargets.size)
+                        UiText.Settings.CLEAR_MODULE_DATA_REQUEST_FAILED
                     }
                     Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
-                    restartHostApp(activity)
+                    if (requested) restartHostApp(activity)
                 }
             } catch (t: Throwable) {
                 XposedCompat.log("[SettingsMenuHook] clear module data failed: ${t.message}")
