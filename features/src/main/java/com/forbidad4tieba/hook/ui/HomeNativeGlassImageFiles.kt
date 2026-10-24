@@ -2,10 +2,11 @@ package com.forbidad4tieba.hook.ui
 
 import android.content.Context
 import android.net.Uri
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
 import java.io.File
 
 internal object HomeNativeGlassImageFiles {
-    private const val SOURCE_DIR_NAME = "home_native_glass"
+    private const val SOURCE_DIR_NAME = ModuleDataPaths.BACKGROUND_DIRECTORY
     private const val SOURCE_FILE_PREFIX = "source_"
 
     fun copyToPrivateFile(

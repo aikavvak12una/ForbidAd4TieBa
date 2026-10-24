@@ -1,9 +1,10 @@
 package com.forbidad4tieba.hook.symbol.cache
 
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
 
 internal object HookSymbolCacheKeys {
-    const val PREFS_NAME = "tbhook_symbol_cache"
+    const val PREFS_NAME = ModuleDataPaths.SYMBOL_CACHE
     const val SYMBOL_FP = "hook_symbol_fp_v23"
     const val SYMBOL_JSON = "hook_symbol_json_v75"
     const val MODULE_VERSION = "hook_symbol_cache_module_version"

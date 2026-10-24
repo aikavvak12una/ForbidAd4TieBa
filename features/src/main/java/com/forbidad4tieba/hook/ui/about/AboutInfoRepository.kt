@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.ui.about
 
 import android.content.Context
 import com.forbidad4tieba.hook.contracts.BuildIdentity
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -57,7 +58,7 @@ internal object AboutPayloadReader {
 }
 
 internal object AboutInfoRepository {
-    private const val CACHE_DIR_NAME = "tbhook"
+    private const val CACHE_DIR_NAME = ModuleDataPaths.ABOUT_DIRECTORY
     private const val CACHE_FILE_NAME = "about_info_cache.json"
     private val startupCache = AboutStartupCache()
     private val sourceUrls = listOf(

@@ -4,6 +4,7 @@ import com.forbidad4tieba.hook.config.RemoteEnvironmentState.restrictedFeatureUn
 import android.content.Context
 import android.content.SharedPreferences
 import com.forbidad4tieba.hook.contracts.BuildIdentity
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
 import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.contracts.Diagnostics
@@ -16,13 +17,13 @@ object ConfigManager {
         DISABLED,
     }
 
-    const val USER_SETTINGS_PREFS_NAME = "tbhook_user_settings"
+    const val USER_SETTINGS_PREFS_NAME = ModuleDataPaths.USER_SETTINGS
 
-    const val MODULE_STATE_PREFS_NAME = "tbhook_module_state"
+    const val MODULE_STATE_PREFS_NAME = ModuleDataPaths.MODULE_STATE
 
-    const val SYMBOL_CACHE_PREFS_NAME = "tbhook_symbol_cache"
+    const val SYMBOL_CACHE_PREFS_NAME = ModuleDataPaths.SYMBOL_CACHE
 
-    const val LEGACY_MIXED_PREFS_NAME = "tiebahook_settings"
+    const val LEGACY_MIXED_PREFS_NAME = ModuleDataPaths.LEGACY_SETTINGS
 
     const val PREFS_NAME = USER_SETTINGS_PREFS_NAME
 

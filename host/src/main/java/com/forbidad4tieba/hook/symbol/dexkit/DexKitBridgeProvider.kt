@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.symbol.dexkit
 
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
+
 import android.app.Application
 import com.forbidad4tieba.hook.contracts.ModuleLocation
 import com.forbidad4tieba.hook.contracts.ModuleLocationProvider
@@ -27,7 +29,7 @@ internal object DexKitBridgeProvider {
     private const val MODULE_PACKAGE_NAME = "com.forbidad4tieba.hook"
     private const val DEXKIT_LIBRARY_NAME = "dexkit"
     private const val DEXKIT_LIBRARY_FILE_NAME = "libdexkit.so"
-    private const val EXTRACTED_LIBRARY_DIR_NAME = "tbhook_native_libs"
+    private const val EXTRACTED_LIBRARY_DIR_NAME = ModuleDataPaths.NATIVE_DIRECTORY
 
     @Volatile
     private var nativeLibraryLoaded = false

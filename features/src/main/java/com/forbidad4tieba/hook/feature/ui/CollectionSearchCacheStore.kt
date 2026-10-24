@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.feature.ui
 
 import android.content.Context
 import com.forbidad4tieba.hook.core.XposedCompat
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -10,7 +11,7 @@ import java.util.Locale
 
 internal object CollectionSearchCacheStore {
     private const val CACHE_VERSION = 1
-    private const val CACHE_DIR_NAME = "tbhook_cache"
+    private const val CACHE_DIR_NAME = ModuleDataPaths.COLLECTION_DIRECTORY
     private const val CACHE_FILE_PREFIX = "collection_search_"
     private const val CACHE_FILE_SUFFIX = ".json"
     private const val MAX_CACHE_FILES = 8

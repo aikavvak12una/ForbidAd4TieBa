@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import com.forbidad4tieba.hook.config.HomeGlassPreferences
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -17,7 +18,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 object HomeNativeGlassImageCache {
-    private const val CACHE_ROOT_DIR_NAME = "home_native_glass"
+    private const val CACHE_ROOT_DIR_NAME = ModuleDataPaths.BACKGROUND_DIRECTORY
     private const val CACHE_EFFECT_DIR_NAME = "effects"
     private const val CACHE_FILE_PREFIX = "blur_"
     private const val CACHE_VERSION = 5

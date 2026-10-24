@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.feature.share
 
 import com.forbidad4tieba.hook.core.RuntimeHooks
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
 import android.app.Activity
 import android.content.ClipData
 import android.content.Context
@@ -42,7 +43,7 @@ object ImageViewerNativeShareHook {
     private const val REQUEST_MARK_KEY = "tbhook_image_viewer_native_share_added"
     private const val IMAGE_FETCH_CONNECT_TIMEOUT_MS = 10000
     private const val IMAGE_FETCH_READ_TIMEOUT_MS = 15000
-    private const val SHARE_STAGING_DIR = "com_qq_e_download/tbhook_share"
+    private const val SHARE_STAGING_DIR = ModuleDataPaths.SHARE_DIRECTORY
     private const val PB_SHARE_ICON_INSET_RATIO = 0.14f
 
     private val entryInstalled = AtomicBoolean(false)

@@ -1,11 +1,13 @@
 package com.forbidad4tieba.hook.config
 
+import com.forbidad4tieba.hook.contracts.ModuleDataPaths
+
 import java.math.BigDecimal
 import java.math.RoundingMode
 
 /** Model-score storage format and numeric rules, shared by settings and filtering. */
 object ModelScoreSettings {
-    const val MODEL_SCORE_STATS_FILE_NAME = "tbhook_model_score_stats.tsv"
+    const val MODEL_SCORE_STATS_FILE_NAME = ModuleDataPaths.MODEL_STATS_FILE
     const val DEFAULT_MODEL_SCORE_STATS_POST_LIMIT = 5000
     const val MIN_MODEL_SCORE_STATS_POST_LIMIT = 1000
     const val MIN_MODEL_SCORE_AUTO_PERCENTILE_SAMPLE_COUNT = 1000
