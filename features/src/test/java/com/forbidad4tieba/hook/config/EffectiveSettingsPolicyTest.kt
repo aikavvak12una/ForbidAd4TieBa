@@ -10,13 +10,15 @@ class EffectiveSettingsPolicyTest {
         for (enabled in listOf(false, true)) {
             val values = mapOf<String, Any>(
                 BottomTabLiquidGlassPreferences.ENABLED to enabled,
-                BottomTabLiquidGlassPreferences.DROPLET_WIDTH to 200,
+                BottomTabLiquidGlassPreferences.WIDTH_ADJUSTMENT to 100,
+                BottomTabLiquidGlassPreferences.HEIGHT_ADJUSTMENT to -50,
+                BottomTabLiquidGlassPreferences.POSITION_ADJUSTMENT to 35,
                 BottomTabLiquidGlassPreferences.BLUR_PERCENT to 0,
             )
             val state = EffectiveSettingsPolicy.derive(UserSettings(values),
                 HostCapabilities(emptyMap()), RemoteSettingsPolicy(false)).snapshot
             assertEquals(enabled, state.isFloatingBottomBarEnabled)
-            assertEquals(if (enabled) BottomTabLiquidGlassConfig(dropletWidthPercent = 200, blurPercent = 0)
+            assertEquals(if (enabled) BottomTabLiquidGlassConfig(100, -50, 35, blurPercent = 0)
                 else BottomTabLiquidGlassConfig.DEFAULT, state.bottomTabLiquidGlass)
         }
     }
@@ -32,13 +34,14 @@ class EffectiveSettingsPolicyTest {
                     BottomTabLiquidGlassPreferences.ENABLED to floating,
                     BottomTabLiquidGlassPreferences.BLUR to blur,
                     BottomTabLiquidGlassPreferences.LIQUID_GLASS to glass,
-                    BottomTabLiquidGlassPreferences.BOTTOM_GAP to 24,
+                    BottomTabLiquidGlassPreferences.POSITION_ADJUSTMENT to 24,
                 )
                 val user = UserSettings(values)
                 val state = EffectiveSettingsPolicy.derive(user, HostCapabilities(emptyMap()), RemoteSettingsPolicy(false)).snapshot
                 assertEquals(floating, state.isFloatingBottomBarEnabled)
                 if (floating) {
-                    assertEquals(BottomTabLiquidGlassConfig(24, blur, glass), state.bottomTabLiquidGlass)
+                    assertEquals(BottomTabLiquidGlassConfig(positionAdjustment = 24, blurEnabled = blur,
+                        liquidGlassEnabled = glass), state.bottomTabLiquidGlass)
                 } else assertEquals(BottomTabLiquidGlassConfig.DEFAULT, state.bottomTabLiquidGlass)
                 assertEquals(reply, user.getBoolean(BottomTabLiquidGlassPreferences.POST_REPLY_BAR, false))
                 assertEquals(glass, user.getBoolean(BottomTabLiquidGlassPreferences.LIQUID_GLASS, false))
@@ -51,15 +54,14 @@ class EffectiveSettingsPolicyTest {
             TabPreferences.KEY_ENABLE_TAB_CUSTOMIZATION to true,
             TabPreferences.BOTTOM_TAB_LIQUID_GLASS.key to false,
             BottomTabLiquidGlassPreferences.POST_REPLY_BAR to true,
-            BottomTabLiquidGlassPreferences.BOTTOM_GAP to 20,
+            "bottom_tab_liquid_glass_bottom_gap_dp" to 20,
             BottomTabLiquidGlassPreferences.BLUR to false,
         )
         fun evaluate(values: Map<String, Any>) = EffectiveSettingsPolicy.derive(UserSettings(values),
             HostCapabilities(emptyMap()), RemoteSettingsPolicy(false)).snapshot
         val replyOnly = evaluate(choices)
         assertTrue(replyOnly.isFloatingBottomBarEnabled)
-        assertEquals(BottomTabLiquidGlassConfig(bottomGapDp = 20,
-            blurEnabled = false), replyOnly.bottomTabLiquidGlass)
+        assertEquals(BottomTabLiquidGlassConfig(blurEnabled = false), replyOnly.bottomTabLiquidGlass)
         val both = evaluate(choices + (TabPreferences.BOTTOM_TAB_LIQUID_GLASS.key to true))
         assertTrue(both.isFloatingBottomBarEnabled)
         assertEquals(replyOnly.bottomTabLiquidGlass, both.bottomTabLiquidGlass)

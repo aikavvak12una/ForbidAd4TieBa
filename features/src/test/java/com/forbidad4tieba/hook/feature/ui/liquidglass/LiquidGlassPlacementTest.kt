@@ -1,7 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import com.forbidad4tieba.hook.config.BottomTabLiquidGlassConfig
+import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.roundToInt
 
@@ -19,89 +19,131 @@ class LiquidGlassPlacementTest {
         assertEquals(0f, LiquidGlassGeom.samplingResidual(1.25f, 1), 0f)
     }
 
-    @Test fun manualCenterGapUsesTheWindowBottomRegardlessOfNavigationInsets() {
-        for ((gap, expectedTop) in listOf(0 to 1120, 20 to 1120, 80 to 1040, 120 to 960)) {
-            for (navigation in listOf(0, 48, 96)) {
-                assertEquals(expectedTop, LiquidGlassBarMetrics.floatingTop(
-                    1280, 1280, 1280, navigation, 160, 2f, gap))
+
+    private fun placement(hostHeight: Int = 1280, hostBottom: Int = 1280, navigation: Int = 0,
+        baseline: Int = 128, minimum: Int = 80, density: Float = 2f,
+        width: Int = 0, height: Int = 0, position: Int = 0, top: Int = 0) =
+        LiquidGlassBarMetrics.placement(hostHeight, hostBottom, 1280, navigation, baseline, minimum, density,
+            BottomTabLiquidGlassConfig(width, height, position), top)
+
+    @Test fun centredSizeUsesIndependentRangesAndRejectsImpossibleBounds() {
+        assertEquals(60, LiquidGlassBarMetrics.adjustedSize(100, 60, 160, -100))
+        assertEquals(100, LiquidGlassBarMetrics.adjustedSize(100, 60, 160, 0))
+        assertEquals(160, LiquidGlassBarMetrics.adjustedSize(100, 60, 160, 100))
+        assertEquals(80, LiquidGlassBarMetrics.adjustedSize(100, 60, 160, -50))
+        assertEquals(130, LiquidGlassBarMetrics.adjustedSize(100, 60, 160, 50))
+        assertNull(LiquidGlassBarMetrics.adjustedSize(100, 120, 119, 0))
+    }
+
+    @Test fun leftPositionEndReachesTheScreenBottomIncludingNavigation() {
+        for (navigation in listOf(0, 48, 96)) {
+            val home = placement(navigation = navigation, position = -100)!!
+            assertEquals(1280, home.top + home.height)
+            val reply = placement(navigation = navigation, baseline = 96, minimum = 72, position = -100)!!
+            assertEquals(16, 1280 - reply.top - reply.height)
+        }
+    }
+
+    @Test fun sizeChangesKeepTheSelectedBottomEdgeFixed() {
+        for (navigation in listOf(0, 48, 96)) for (position in listOf(-100, -50, 0, 50, 100)) {
+            val base = placement(navigation = navigation, position = position)!!
+            var previous = 0
+            for (height in -100..100) {
+                val next = placement(navigation = navigation, height = height, position = position)!!
+                assertEquals(base.top + base.height, next.top + next.height)
+                assertTrue(next.height >= previous)
+                assertTrue(next.top >= 0 && next.top + next.height <= 1280)
+                previous = next.height
             }
         }
     }
 
-    @Test fun manualWindowAnchorSurvivesHostOffsetsWhenTheBarFits() {
-        val full = LiquidGlassBarMetrics.floatingTop(1280, 1280, 1280, 96, 160, 2f, 120)
-        val inset = LiquidGlassBarMetrics.floatingTop(1136, 1184, 1280, 96, 160, 2f, 120)
-        assertEquals(full, 48 + inset)
+    @Test fun insetHostsStillKeepTheCompleteBarInsideTheirActualBounds() {
+        val box = placement(hostHeight = 1136, hostBottom = 1184, navigation = 96, position = -100)!!
+        assertEquals(1136, box.top + box.height)
+        assertNull(placement(hostHeight = 60, hostBottom = 1280))
+        assertNull(placement(top = 1240))
+        assertNull(placement(density = Float.NaN))
     }
 
-    @Test fun manualPlacementStillKeepsTheBarInsideAnInsetHost() {
-        val top = LiquidGlassBarMetrics.floatingTop(1136, 1184, 1280, 96, 160, 2f, 0)
-        assertEquals(1136, top + 160)
+    @Test fun defaultGeometryMatchesKernelSuIntrinsicTabsWithinParentPadding() {
+        val examples = listOf(
+            listOf(360, 4, 2, 148, 608),
+            listOf(411, 4, 2, 152, 624),
+            listOf(360, 5, 2, 118, 606),
+            listOf(600, 4, 2, 152, 624),
+            listOf(240, 4, 3, 132, 552),
+        )
+        for ((window, count, scale, expectedColumn, expectedBar) in examples) {
+            val density = scale.toFloat()
+            val height = LiquidGlassBarMetrics.barHeight(40 * scale, density)
+            val column = LiquidGlassBarMetrics.columnWidth(window * scale, count, density, 0)
+            assertEquals(expectedColumn, column)
+            assertEquals(expectedBar, column * count + 8 * scale)
+            assertEquals(64 * scale, height)
+            assertEquals(56 * scale, LiquidGlassBarMetrics.dropletHeight(column, height, density))
+        }
     }
 
-    @Test fun configuredWidthKeepsCirclesAndAdaptsToDensityWindowAndTabCount() {
+    @Test fun widthAdjustmentRemainsMonotonicAcrossDensitiesAndTabCounts() {
         for (density in listOf(1f, 1.25f, 1.5f, 2f, 2.625f, 3f, 4f)) {
             fun px(dp: Int) = (dp * density).roundToInt()
-            for (windowDp in listOf(220, 260, 320, 360, 411, 600)) for (count in 1..5) {
-                for (heightDp in listOf(56, 72)) {
-                val height = px(heightDp)
-                val column = LiquidGlassBarMetrics.columnWidth(px(windowDp), count, height, density, 100)
-                val outerWidth = column * count + 2 * (LiquidGlassBarMetrics.HORIZONTAL_PADDING_DP * density).roundToInt()
-                assertTrue(outerWidth <= px(windowDp))
-                assertEquals(column, LiquidGlassBarMetrics.dropletHeight(column, height))
-                if (windowDp >= 360 && heightDp == 56) assertTrue(column >= px(48))
-                var previous = column
-                for (percent in listOf(115, 150, 200)) {
-                    val wider = LiquidGlassBarMetrics.columnWidth(px(windowDp), count, height, density, percent)
-                    assertTrue(wider >= previous)
-                    assertTrue(wider * count + 2 * (LiquidGlassBarMetrics.HORIZONTAL_PADDING_DP * density).roundToInt() <= px(windowDp))
-                    assertEquals(column, LiquidGlassBarMetrics.dropletHeight(wider, height))
-                    previous = wider
+            for (window in listOf(220, 260, 320, 360, 411, 600)) for (count in 1..5) {
+                var previous = 0
+                for (adjustment in -100..100) {
+                    val column = LiquidGlassBarMetrics.columnWidth(px(window), count, density, adjustment)
+                    assertTrue(column >= previous)
+                    assertTrue(column * count + 2 * px(4) <= px(window))
+                    if (adjustment == 0) assertTrue(column * count + 2 * px(4) <= px(window) - 2 * px(28))
+                    previous = column
                 }
-                }
+                assertTrue(px(window) - (previous * count + 2 * px(4)) < count)
             }
         }
+        assertEquals(0, LiquidGlassBarMetrics.columnWidth(0, 4, 2f, 0))
+        assertEquals(0, LiquidGlassBarMetrics.columnWidth(720, 0, 2f, 0))
+        assertEquals(0, LiquidGlassBarMetrics.columnWidth(400, 5, 2f, 0, 100))
     }
 
-    @Test fun unconstrainedWidthTracksTheActualLensHeightAndClampsInvalidPercentages() {
-        assertEquals(98, LiquidGlassBarMetrics.columnWidth(1200, 4, 112, 2f, 100))
-        assertEquals(113, LiquidGlassBarMetrics.columnWidth(1200, 4, 112, 2f, 115))
-        assertEquals(196, LiquidGlassBarMetrics.columnWidth(1200, 4, 112, 2f, 200))
-        assertEquals(98, LiquidGlassBarMetrics.columnWidth(1200, 4, 112, 2f, -1))
-        assertEquals(196, LiquidGlassBarMetrics.columnWidth(1200, 4, 112, 2f, 999))
-        assertEquals(0, LiquidGlassBarMetrics.columnWidth(0, 4, 112, 2f, 100))
-        assertEquals(0, LiquidGlassBarMetrics.columnWidth(720, 0, 112, 2f, 100))
-    }
-
-    @Test fun tabBaseHeightIsSixtyDp() {
-        assertEquals(60f, LiquidGlassBarMetrics.TAB_HEIGHT_DP, 0f)
-    }
-
-    @Test fun noNavigationAreaLeavesTwentyEightDpAtTheScreenBottom() {
-        for (density in listOf(1f, 2f, 3f)) {
-            val height = (LiquidGlassBarMetrics.TAB_HEIGHT_DP * density).roundToInt()
-            val top = LiquidGlassBarMetrics.floatingTop(2400, 2400, 2400, 0, height, density)
-            assertEquals((28 * density).toInt(), 2400 - top - height)
+    @Test fun lensChangesHeightWithItsBarAndRetainsIndependentRounding() {
+        for (density in listOf(1f, 1.5f, 2f, 2.625f, 3f, 4f)) {
+            val baseline = (64 * density).roundToInt()
+            val expectedLens = (56 * density).roundToInt()
+            for (delta in listOf(-10, 0, 20)) {
+                val height = baseline + delta
+                val lens = LiquidGlassBarMetrics.dropletHeight(100, height, density, baseline)
+                assertEquals(expectedLens + delta, lens)
+                val inset = LiquidGlassBarMetrics.dropletInset(height, density, baseline)
+                assertTrue(kotlin.math.abs(inset + lens / 2f - height / 2f) <= 0.5f)
+            }
         }
+        assertEquals(128, LiquidGlassBarMetrics.barHeight(80, 2f))
+        assertEquals(156, LiquidGlassBarMetrics.barHeight(140, 2f))
     }
 
-    @Test fun visibleNavigationAreaUsesTheSharedThirtyEightDpCenter() {
-        for (navigation in listOf(48, 96)) {
-            val top = LiquidGlassBarMetrics.floatingTop(1280, 1280, 1280, navigation, 128, 2f)
-            assertEquals(76, 1280 - navigation - top - 64)
+    @Test fun defaultNavigationAndFractionalRoundingAreUnchanged() {
+        assertEquals(1096, placement()!!.top)
+        assertEquals(1088, placement(navigation = 48)!!.top)
+        assertEquals(1040, placement(navigation = 96)!!.top)
+        assertEquals(1038, placement(baseline = 168, minimum = 100, density = 2.625f)!!.top)
+        assertEquals(1028, placement(navigation = 63, baseline = 168, minimum = 100, density = 2.625f)!!.top)
+        assertEquals(placement(navigation = 96)!!.top,
+            placement(hostHeight = 1184, hostBottom = 1184, navigation = 96)!!.top)
+        val standard = placement(hostHeight = 1232, hostBottom = 1280)!!
+        val taller = placement(hostHeight = 1232, hostBottom = 1280, baseline = 192)!!
+        assertEquals(standard.top + 64, taller.top + 96)
+    }
+
+    @Test fun pressExpansionAtAnEdgeCannotEscapeTheViewport() {
+        assertEquals(1f, LiquidGlassGeom.centeredScale(1.4f, 180f, 100f, 0f, 280f), 0f)
+        for (width in listOf(80f, 160f, 320f)) for (desired in listOf(0.95f, 1f, 1.4f, 2.7f)) {
+            val scale = LiquidGlassGeom.fittingScale(desired, width, 320f)
+            for (position in listOf(-200f, 0f, 100f, 500f)) {
+                val x = DropletController.clampTranslation(position, width, 0f, 320f, scale)
+                val bulge = (scale - 1f) * width / 2
+                assertTrue(x - bulge >= -0.001f)
+                assertTrue(x + width + bulge <= 320.001f)
+            }
         }
-    }
-
-    @Test fun ancestorConsumedNavigationInsetIsNotCountedAgain() {
-        val edgeToEdge = LiquidGlassBarMetrics.floatingTop(1280, 1280, 1280, 96, 128, 2f)
-        val alreadyInset = LiquidGlassBarMetrics.floatingTop(1184, 1184, 1280, 96, 128, 2f)
-        assertEquals(edgeToEdge, alreadyInset)
-    }
-
-    @Test fun statusBarOffsetAndLargerTextKeepTheSameCenter() {
-        val top = LiquidGlassBarMetrics.floatingTop(1232, 1280, 1280, 0, 128, 2f)
-        val taller = LiquidGlassBarMetrics.floatingTop(1232, 1280, 1280, 0, 192, 2f)
-        assertEquals(116, 1280 - (48 + top + 64))
-        assertEquals(top + 64, taller + 96)
     }
 }

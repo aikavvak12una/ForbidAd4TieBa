@@ -1,59 +1,83 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import android.graphics.Rect
+import android.content.res.Resources
+import android.util.DisplayMetrics
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import com.forbidad4tieba.hook.config.BottomTabLiquidGlassConfig
+import com.forbidad4tieba.hook.symbol.contract.BottomTabArtworkContract
 import java.util.ArrayDeque
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Host tab dimensions and automatic/manual placement. */
+/** KernelSU floating-bar dimensions, measured under the current host constraints. */
 internal object LiquidGlassBarMetrics {
-    const val TAB_HEIGHT_DP = 60f
-    const val DROPLET_INSET_DP = 3.5f
+    const val TAB_HEIGHT_DP = 64f
+    const val TAB_WIDTH_DP = 76f
+    const val DROPLET_HEIGHT_DP = 56f
+    const val DROPLET_INSET_DP = 4f
     const val HORIZONTAL_PADDING_DP = DROPLET_INSET_DP
-    const val VERTICAL_PADDING_DP = DROPLET_INSET_DP + 4f
-    private const val SCREEN_EDGE_MARGIN_DP = 24f
+    const val VERTICAL_PADDING_DP = DROPLET_INSET_DP
+    private const val SCREEN_EDGE_MARGIN_DP = 28f
 
-    /** Center placement origin in host coordinates; only automatic placement avoids navigation. */
-    fun placementBottom(
-        hostHeight: Int,
-        hostBottomInWindow: Int,
-        windowBottom: Int,
-        navigationBottom: Int,
-        bottomGapDp: Int,
-    ): Int {
-        val windowBottomInHost = hostHeight + windowBottom - hostBottomInWindow
-        return if (bottomGapDp >= 0) windowBottomInHost
-        else (windowBottomInHost - navigationBottom.coerceAtLeast(0)).coerceIn(0, hostHeight)
+    /** Tieba rounds DisplayMetrics to a resource bucket; Configuration retains the window DPI. */
+    fun density(resources: Resources): Float =
+        resources.configuration.densityDpi / DisplayMetrics.DENSITY_DEFAULT.toFloat()
+
+    /** Each half of a centred slider uses its own available range. */
+    fun adjustedSize(baseline: Int, minimum: Int, maximum: Int, adjustment: Int): Int? {
+        if (minimum <= 0 || maximum < minimum) return null
+        val base = baseline.coerceIn(minimum, maximum)
+        val progress = adjustment.coerceIn(BottomTabLiquidGlassConfig.MIN_ADJUSTMENT,
+            BottomTabLiquidGlassConfig.MAX_ADJUSTMENT) / 100f
+        val range = if (progress < 0f) base - minimum else maximum - base
+        return (base + progress * range).roundToInt().coerceIn(minimum, maximum)
     }
 
-    fun floatingTop(
+    data class Placement(val top: Int, val height: Int)
+
+    /** The shorter reply keeps its default offset from the home bar after the shared translation. */
+    fun positionOffset(navigationBottom: Int, density: Float, adjustment: Int): Int {
+        val progress = adjustment.coerceIn(BottomTabLiquidGlassConfig.MIN_ADJUSTMENT,
+            BottomTabLiquidGlassConfig.MAX_ADJUSTMENT) / 100f
+        val navigation = navigationBottom.coerceAtLeast(0)
+        val down = navigation + ((if (navigation > 0) 8f else 28f) * density).roundToInt()
+        val range = if (progress < 0f) down.toFloat() else 120f * density
+        return (-progress * range).roundToInt()
+    }
+
+    fun placement(
         hostHeight: Int,
         hostBottomInWindow: Int,
         windowBottom: Int,
         navigationBottom: Int,
-        pillHeight: Int,
+        baselineHeight: Int,
+        minimumHeight: Int,
         density: Float,
-        bottomGapDp: Int = -1,
-    ): Int {
+        config: BottomTabLiquidGlassConfig,
+        contentTop: Int = 0,
+    ): Placement? {
+        if (hostHeight <= 0 || baselineHeight <= 0 || minimumHeight <= 0 ||
+            !density.isFinite() || density <= 0f) return null
+        val windowBottomInHost = hostHeight + windowBottom - hostBottomInWindow
+        val bottomLimit = minOf(hostHeight, windowBottomInHost)
+        val topLimit = contentTop.coerceAtLeast(0)
+        if (bottomLimit - topLimit < minimumHeight) return null
         val navigation = navigationBottom.coerceAtLeast(0)
-        val bottom = placementBottom(hostHeight, hostBottomInWindow, windowBottom, navigation, bottomGapDp)
-        // Both surfaces share a center, even though the reply controls are shorter than the tabs.
-        // Automatic placement preserves the normal 60dp home bar's existing position.
-        val minimumCenterGapDp = TAB_HEIGHT_DP / 2f
-        val centerGapDp = if (bottomGapDp >= 0) {
-            maxOf(bottomGapDp.toFloat(), minimumCenterGapDp)
-        } else {
-            minimumCenterGapDp + if (navigation > 0) 8f else 28f
-        }
-        val top = (bottom - centerGapDp * density - pillHeight / 2f).roundToInt()
-        // Manual placement may enter the navigation area, but both modes must fit the host.
-        return top.coerceIn(0, (minOf(hostHeight, bottom) - pillHeight).coerceAtLeast(0))
+        val defaultBottom = (windowBottomInHost - navigation).coerceIn(0, hostHeight)
+        val centreGap = (TAB_HEIGHT_DP * density).roundToInt() / 2f +
+            ((if (navigation > 0) 8f else 28f) * density).roundToInt()
+        val defaultTop = (defaultBottom - centreGap - baselineHeight / 2f).roundToInt()
+            .coerceIn(0, (defaultBottom - baselineHeight).coerceAtLeast(0))
+        val bottom = (defaultTop + baselineHeight + positionOffset(navigation, density, config.positionAdjustment))
+            .coerceIn(topLimit + minimumHeight, bottomLimit)
+        val height = adjustedSize(baselineHeight, minimumHeight, bottom - topLimit, config.heightAdjustment)
+            ?: return null
+        return Placement(bottom - height, height)
     }
 
     /** Per-bar scratch; measuring a settled tab set allocates no lists, boxes or bounds arrays. */
@@ -116,28 +140,44 @@ internal object LiquidGlassBarMetrics {
     fun barHeight(contentHeight: Int, density: Float): Int = maxOf(
         (TAB_HEIGHT_DP * density).roundToInt(), contentHeight + 2 * (VERTICAL_PADDING_DP * density).roundToInt())
 
-    /** 100% is a circle. Preserve press clearance where the window can fit all circles. */
-    fun columnWidth(available: Int, count: Int, barHeight: Int, density: Float, widthPercent: Int): Int {
-        if (available <= 0 || count <= 0 || barHeight <= 0 || !density.isFinite() || density <= 0f) return 0
+    /** The default keeps 28dp side padding; the right half can use the remaining window width. */
+    fun columnWidth(available: Int, count: Int, density: Float, adjustment: Int, minimumContentWidth: Int = 0): Int {
+        if (available <= 0 || count <= 0 || !density.isFinite() || density <= 0f) return 0
         val inset = 2 * (HORIZONTAL_PADDING_DP * density).roundToInt()
-        val minimum = (barHeight - 2 * dropletInset(barHeight)).coerceAtLeast(1)
-        val margin = minOf((SCREEN_EDGE_MARGIN_DP * density).roundToInt(),
-            ((available - inset - minimum * count) / 2).coerceAtLeast(0))
-        val percent = widthPercent.coerceIn(BottomTabLiquidGlassConfig.MIN_DROPLET_WIDTH_PERCENT,
-            BottomTabLiquidGlassConfig.MAX_DROPLET_WIDTH_PERCENT)
-        val desired = (minimum * percent / 100f).roundToInt()
-        return minOf(desired, (available - inset - 2 * margin) / count).coerceAtLeast(0)
+        val margin = (SCREEN_EDGE_MARGIN_DP * density).roundToInt()
+        val baseline = minOf((TAB_WIDTH_DP * density).roundToInt(), (available - inset - 2 * margin) / count)
+        val minimum = maxOf((24f * density).roundToInt(), minimumContentWidth)
+        return adjustedSize(baseline, minimum, (available - inset) / count, adjustment) ?: 0
     }
 
-    /** A very narrow window can shrink the lens uniformly; it must never become a vertical oval. */
-    fun dropletHeight(columnWidth: Int, barHeight: Int): Int =
-        minOf(columnWidth, barHeight - 2 * dropletInset(barHeight)).coerceAtLeast(1)
+    /** Intrinsic labels and fixed-size icons do not shrink with a previously adjusted column. */
+    fun minimumColumnWidth(artwork: List<BottomTabArtworkContract.Artwork>, density: Float): Int {
+        fun naturalWidth(view: View): Int {
+            if (view.visibility == View.GONE) return 0
+            val body = when (view) {
+                is TextView -> kotlin.math.ceil(view.paint.measureText(view.text?.toString().orEmpty())).toInt() +
+                    view.compoundPaddingLeft + view.compoundPaddingRight
+                is ImageView -> (view.layoutParams?.width ?: 0).takeIf { it > 0 }
+                    ?: minOf(view.width, view.height).coerceAtLeast(0)
+                is ViewGroup -> (0 until view.childCount).maxOfOrNull { naturalWidth(view.getChildAt(it)) } ?: 0
+                else -> view.minimumWidth
+            }
+            return if (view is TextView) body else body + view.paddingLeft + view.paddingRight
+        }
+        return (artwork.maxOfOrNull { naturalWidth(it.content) } ?: 0) + (4f * density).roundToInt()
+    }
 
-    /** Preserve the reference's 4/64 inset ratio at the current bar height. */
-    fun dropletInset(barHeight: Int): Int = (barHeight / 16f).roundToInt().coerceAtLeast(1)
+    /** KernelSU keeps the 56dp inner height while parent constraints determine the column width. */
+    fun dropletHeight(columnWidth: Int, barHeight: Int, density: Float, baselineHeight: Int = barHeight): Int =
+        if (columnWidth <= 0 || barHeight <= 0 || !density.isFinite() || density <= 0f) 0
+        else ((DROPLET_HEIGHT_DP * density).roundToInt() + barHeight - baselineHeight).coerceIn(1, barHeight)
+
+    /** Independently measured 64dp/56dp layers can leave an odd number of pixels between them. */
+    fun dropletInset(barHeight: Int, density: Float, baselineHeight: Int = barHeight): Int =
+        ((barHeight - dropletHeight(1, barHeight, density, baselineHeight)) / 2f).roundToInt().coerceAtLeast(0)
 
     /** Only the native column's plain, top-aligned hairline is decorative chrome. */
-    fun hideColumnHairlines(row: ViewGroup, density: Float) {
+    fun hideColumnHairlines(row: ViewGroup, density: Float, beforeHide: (View) -> Unit) {
         val maxHeight = max(1, (2f * density).roundToInt())
         val maxTop = (4f * density).roundToInt()
         for (i in 0 until row.childCount) {
@@ -147,7 +187,10 @@ internal object LiquidGlassBarMetrics {
                 val child = column.getChildAt(j)
                 if (child.javaClass == View::class.java && child.visibility == View.VISIBLE &&
                     child.height in 1..maxHeight && child.top <= maxTop &&
-                    child.width >= column.width * 0.75f) child.visibility = View.GONE
+                    child.width >= column.width * 0.75f) {
+                    beforeHide(child)
+                    child.visibility = View.GONE
+                }
             }
         }
     }

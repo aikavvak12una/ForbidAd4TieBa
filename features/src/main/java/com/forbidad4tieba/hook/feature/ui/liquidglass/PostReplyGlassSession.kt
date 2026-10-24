@@ -25,15 +25,20 @@ internal class PostReplyGlassSession(
     private val page: PostReplyBarContract.Page,
     private val targets: PostReplyBarContract.Targets,
     private val config: BottomTabLiquidGlassConfig,
-    private val navigationInsetBottom: Int,
-    private val onHierarchyChanged: () -> Unit,
+    private val navigationInsetBottom: () -> Int,
+    private val onHierarchyChanged: (Boolean) -> Unit,
     private val onUnavailable: () -> Unit,
+    autoHideAvailable: Boolean = false,
+    private val initiallyHidden: Boolean = false,
 ) : ViewTreeObserver.OnPreDrawListener, ViewTreeObserver.OnGlobalLayoutListener,
     ViewTreeObserver.OnScrollChangedListener, ViewTreeObserver.OnWindowFocusChangeListener {
-    private val density = page.root.resources.displayMetrics.density
+    private var density = LiquidGlassBarMetrics.density(page.root.resources)
+    private var fontScale = page.root.resources.configuration.fontScale
     private var night = targets.isNight()
     private val panel = LiquidGlassPanel(page.root.context, page.backdrop, density, night, config)
     private var original: NativeState? = null
+    private val autoHide = if (autoHideAvailable) PostReplyBarAutoHide(page.slot, ::onAutoHideChanged) else null
+    private var autoHideFailed = false
     private var comments: CommentState? = null
     private var bounds: PostReplyGlassGeometry.Bounds? = null
     private var layoutDirty = true
@@ -45,8 +50,6 @@ internal class PostReplyGlassSession(
     private var pressProgress = 0f
     private var pressX = 0f
     private var animator: ValueAnimator? = null
-    private var actionsAlpha = 0f
-    private var revealFrame: Runnable? = null
     private val hostPosition = IntArray(2)
     private val windowPosition = IntArray(2)
     private val slotOffset = Rect()
@@ -89,7 +92,6 @@ internal class PostReplyGlassSession(
     fun start() {
         check(panel.isSupported) { "Liquid glass shader unavailable" }
         panel.visibility = View.INVISIBLE
-        panel.setActionsAlpha(0f)
         page.slot.addView(panel, 0, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val native = NativeState(page, unclipped, chrome).also { original = it }
@@ -102,6 +104,8 @@ internal class PostReplyGlassSession(
             if (config.needsBackdrop) addOnScrollChangedListener(this@PostReplyGlassSession)
             addOnWindowFocusChangeListener(this@PostReplyGlassSession)
         }
+        if (autoHide != null) PostReplyScrollDispatcher.bind(page.recycler, this)
+        if (initiallyHidden && ConfigManager.snapshot().isHomeTabAutoHideEnabled) autoHide?.startHidden()
         layoutDirty = true
         // A replacement session may start inside an existing pre-draw dispatch. Its newly added
         // listener will only run next frame, so settle this bar immediately when it is laid out.
@@ -111,35 +115,7 @@ internal class PostReplyGlassSession(
 
     override fun onPreDraw(): Boolean {
         updateSafely()
-        revealActionsAfterDraw()
         return true // Decorative work must never cancel the host's entire window draw.
-    }
-
-    /** Only a committed frame advances the whole group; loading stalls cannot skip its reveal. */
-    private fun revealActionsAfterDraw() {
-        val native = original ?: return
-        if (disposed || panel.isCapturing || actionsAlpha >= 1f ||
-            native.actionContent.isEmpty() || !panel.isShown || !page.root.hasWindowFocus() || page.row.alpha <= 0f) return
-        val scale = ValueAnimator.getDurationScale()
-        if (scale <= 0f) { setActionsAlpha(1f); return }
-        if (revealFrame != null) return
-        val frames = (0.4f * scale * (page.root.display?.refreshRate ?: 60f)).coerceAtLeast(1f)
-        val frame = Runnable {
-            if (disposed || original !== native) return@Runnable
-            revealFrame = null
-            if (!panel.isShown || !page.root.hasWindowFocus()) return@Runnable
-            setActionsAlpha((actionsAlpha + 1f / frames).coerceAtMost(1f))
-            panel.postInvalidateOnAnimation()
-        }
-        revealFrame = frame
-        if (page.slot.isHardwareAccelerated) page.root.viewTreeObserver.registerFrameCommitCallback(frame)
-        else page.slot.postOnAnimation(frame)
-    }
-
-    private fun setActionsAlpha(value: Float) {
-        actionsAlpha = value
-        panel.setActionsAlpha(value)
-        original?.actionContent?.values?.forEach { it.setAlpha(value) }
     }
 
     override fun onGlobalLayout() {
@@ -174,23 +150,47 @@ internal class PostReplyGlassSession(
     }
 
     private fun update() {
+        val settings = ConfigManager.snapshot()
+        val insets = page.root.rootWindowInsets
+        if (!PostReplyGlassGeometry.shouldFloat(settings.isFloatingBottomBarEnabled,
+                page.row.visibility == View.VISIBLE && page.underlay.visibility == View.VISIBLE && page.underlay.alpha > 0f,
+                insets?.isVisible(WindowInsets.Type.ime()) == true, page.isEditorShown())) {
+            restore()
+            return
+        }
+        if ((!settings.isHomeTabAutoHideEnabled || autoHideFailed) && autoHide?.reset() == true) {
+            layoutDirty = true
+            refresh()
+        }
+        // A hidden bar still detects editor entry and replacement of its fixed native anchors.
+        // It does not walk actions, measure content, inspect themes, capture or render the page.
+        if (autoHide?.suspended == true && page.slot.parent === page.stack &&
+            page.row.parent === page.slot && page.input.parent === page.row && page.row.getChildAt(0) === page.input) return
         if (!page.isIntact()) {
             if (!page.refreshActions() || !page.isIntact()) {
                 XposedCompat.logD("[PostReplyLiquidGlassHook] reply controls replaced; rebinding")
+                val hidden = autoHide?.hidden == true
                 dispose()
-                onHierarchyChanged()
+                onHierarchyChanged(hidden)
                 return
             }
             layoutDirty = true
         }
-        val insets = page.root.rootWindowInsets
-        val enabled = ConfigManager.snapshot().isFloatingBottomBarEnabled
-        if (!PostReplyGlassGeometry.shouldFloat(enabled,
-                page.row.visibility == View.VISIBLE && page.underlay.visibility == View.VISIBLE && page.underlay.alpha > 0f,
-                insets?.isVisible(WindowInsets.Type.ime()) == true,
-                page.isEditorShown())) {
-            restore()
-            return
+        val resources = page.root.resources
+        val currentDensity = LiquidGlassBarMetrics.density(resources)
+        val currentFontScale = resources.configuration.fontScale
+        if (currentDensity.isFinite() && currentDensity > 0f &&
+            (density != currentDensity || fontScale != currentFontScale)) {
+            animator?.cancel()
+            pressed = false
+            pressProgress = 0f
+            original?.let { page.slot.scaleX = it.scaleX; page.slot.scaleY = it.scaleY }
+            density = currentDensity
+            fontScale = currentFontScale
+            panel.updateDensity(currentDensity)
+            panel.setInteraction(0f, 0f)
+            autoHide?.reset()
+            layoutDirty = true
         }
         if (page.root.width <= 0) return
         val native = original ?: NativeState(page, unclipped, chrome).also {
@@ -228,20 +228,22 @@ internal class PostReplyGlassSession(
         fun calculate(controlHeight: Int) = PostReplyGlassGeometry.calculate(
             page.root.width, page.root.height, hostPosition[0], hostPosition[1],
             windowPosition[0], windowPosition[0] + window.width, windowPosition[1] + window.height,
-            safe?.left ?: 0, safe?.right ?: 0, maxOf(safe?.bottom ?: 0, navigationInsetBottom),
-            contentOffset.top, actionCount, controlHeight, density, config.bottomGapDp, native.minimumHeight,
+            safe?.left ?: 0, safe?.right ?: 0, maxOf(safe?.bottom ?: 0, navigationInsetBottom()),
+            contentOffset.top, actionCount, controlHeight, density, config, native.minimumHeight,
         )
         val available = calculate(0) ?: run { restore(); return false }
         val surfaces = PostReplyGlassGeometry.separate(available.width, actionCount, density)
         if (actionCount > 0 && surfaces == null) { restore(); return false }
         val content = prepareActionContent(native, surfaces)
-        val geometry = calculate(nativeControlHeight(native, available.width, surfaces))
+        val loadingChanged = updateLoadingGuard(available, surfaces)
+        val controlHeight = maxOf(nativeControlHeight(native, available.width, surfaces),
+            (loadingGuard as? PostReplyPendingActions)?.contentHeight ?: 0)
+        val geometry = calculate(controlHeight)
             ?: run { restore(); return false }
-        var changed = bounds != geometry
+        var changed = bounds != geometry || loadingChanged
         bounds = geometry
         clearChrome(native)
         changed = configureRow(native, geometry.width, geometry.height, surfaces) || changed
-        changed = updateLoadingGuard(geometry, surfaces) || changed
         // Settle only the bar subtree. Never cancel a window draw or remeasure the comment page.
         if (page.slot.isLayoutRequested || page.slot.width != geometry.width || page.slot.height != geometry.height) {
             page.slot.measure(View.MeasureSpec.makeMeasureSpec(geometry.width, View.MeasureSpec.EXACTLY),
@@ -265,12 +267,14 @@ internal class PostReplyGlassSession(
     private fun displayedActionCount(): Int = if (page.actions.isEmpty()) PostReplyGlassGeometry.PENDING_ACTION_COUNT
         else page.actions.count { it.visibility != View.GONE }
 
-    /** Reserve the loading surface without letting its empty area trigger the native input. */
+    /** Early artwork also consumes taps until the native data-bound controls take ownership. */
     private fun updateLoadingGuard(geometry: PostReplyGlassGeometry.Bounds,
         surfaces: PostReplyGlassGeometry.Surfaces?): Boolean {
         if (page.actions.isNotEmpty() || surfaces == null) return removeLoadingGuard()
         val width = geometry.width - surfaces.actionsLeft
-        val guard = loadingGuard ?: View(page.root.context).also {
+        val guard = loadingGuard ?: (targets.loadingArtwork?.let {
+            PostReplyPendingActions(page.root.context, it, density, night)
+        } ?: View(page.root.context)).also {
             it.isClickable = true
             it.isEnabled = false
             it.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -281,6 +285,7 @@ internal class PostReplyGlassSession(
                 })
             return true
         }
+        (guard as? PostReplyPendingActions)?.update(density, night)
         val layout = guard.layoutParams as FrameLayout.LayoutParams
         if (layout.width == width && layout.leftMargin == surfaces.actionsLeft) return false
         layout.width = width
@@ -313,7 +318,6 @@ internal class PostReplyGlassSession(
             check(index >= 0) { "Detached reply content" }
             native.actionContent.getOrPut(item.body) { PostReplyActionLayout(item) }.also {
                 it.prepare(surfaces.columnWidth(index, actions.size), size, density)
-                it.setAlpha(actionsAlpha)
             }
         }
     }
@@ -458,6 +462,7 @@ internal class PostReplyGlassSession(
         if (current != night) {
             night = current
             panel.setTheme(night)
+            (loadingGuard as? PostReplyPendingActions)?.setTheme(night)
         }
     }
 
@@ -500,13 +505,43 @@ internal class PostReplyGlassSession(
         }
     }
 
-    private fun restore() {
-        revealFrame?.let {
-            if (page.root.viewTreeObserver.isAlive) page.root.viewTreeObserver.unregisterFrameCommitCallback(it)
-            page.slot.removeCallbacks(it)
+    fun onScrolled(dy: Int) {
+        if (disposed || autoHideFailed || panel.isCapturing || original == null ||
+            page.row.visibility != View.VISIBLE || page.underlay.visibility != View.VISIBLE || page.isEditorShown()) return
+        try {
+            autoHide?.onScroll(dy)
+        } catch (failure: Exception) {
+            autoHideFailed = true
+            autoHide?.reset()
+            PostReplyScrollDispatcher.unbind(page.recycler, this)
+            layoutDirty = true
+            refresh()
+            XposedCompat.logW("[PostReplyLiquidGlassHook] page scroll collapse disabled: ${failure.message}")
         }
-        revealFrame = null
-        setActionsAlpha(0f)
+    }
+
+    private fun onAutoHideChanged() {
+        if (disposed) return
+        if (autoHide?.suspended == true) {
+            animator?.cancel()
+            animator = null
+            pressed = false
+            pressProgress = 0f
+            original?.let { page.slot.scaleX = it.scaleX; page.slot.scaleY = it.scaleY }
+            panel.setInteraction(0f, 0f)
+            panel.visibility = View.INVISIBLE
+            comments?.restore()
+            comments = null
+            layoutDirty = true
+        } else {
+            if (panel.visibility != View.VISIBLE) layoutDirty = true
+            refresh()
+            page.root.invalidate()
+        }
+    }
+
+    private fun restore() {
+        autoHide?.reset()
         if (panel.visibility != View.GONE) panel.visibility = View.GONE
         removeLoadingGuard()
         comments?.restore()
@@ -547,6 +582,7 @@ internal class PostReplyGlassSession(
     fun dispose() {
         if (disposed) return
         disposed = true
+        if (autoHide != null) PostReplyScrollDispatcher.unbind(page.recycler, this)
         if (page.root.viewTreeObserver.isAlive) page.root.viewTreeObserver.apply {
             removeOnPreDrawListener(this@PostReplyGlassSession)
             removeOnGlobalLayoutListener(this@PostReplyGlassSession)

@@ -24,7 +24,7 @@ import kotlin.math.roundToInt
 internal class LiquidGlassPanel(
     context: Context,
     backdrop: ViewGroup,
-    private val density: Float,
+    private var density: Float,
     private var night: Boolean,
     private val config: BottomTabLiquidGlassConfig = BottomTabLiquidGlassConfig.DEFAULT,
 ) : View(context) {
@@ -38,7 +38,7 @@ internal class LiquidGlassPanel(
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val shadowPath = Path()
     private val actionsShadowPath = Path()
-    private val shadowMargin = (2 * LiquidGlassStyle.SHADOW_RADIUS_DP + LiquidGlassStyle.SHADOW_OFFSET_Y_DP) * density
+    private var shadowMargin = (2 * LiquidGlassStyle.SHADOW_RADIUS_DP + LiquidGlassStyle.SHADOW_OFFSET_Y_DP) * density
     private var shadowDirty = true
     private val pagePosition = IntArray(2)
     private val anchor = Matrix()
@@ -56,6 +56,8 @@ internal class LiquidGlassPanel(
     private var tabCaptureRevision = -1L
     private var tabOffsetX = Float.NaN
     private var tabInset = -1
+    private var selectionHeight = 0
+    private var selectionInset = 0
     private var captureX = 0
     private var captureY = 0
     private var captureWidth = 0
@@ -63,7 +65,6 @@ internal class LiquidGlassPanel(
     private var captureMargin = 0
     private var inputWidth = 0
     private var actionsLeft = 0
-    private var actionsAlpha = 1f
     private var containerAlpha = 1f
     private var interaction = 0f
     private var interactionX = 0f
@@ -87,8 +88,30 @@ internal class LiquidGlassPanel(
 
     fun setDependent(view: View) { dependent = WeakReference(view) }
 
+    fun setTabLensGeometry(height: Int, inset: Int) {
+        if (selectionHeight == height && selectionInset == inset) return
+        selectionHeight = height
+        selectionInset = inset
+        tabCaptureRevision = -1L
+        invalidate()
+    }
+
+    fun updateDensity(value: Float) {
+        if (density == value) return
+        density = value
+        shadowMargin = (2 * LiquidGlassStyle.SHADOW_RADIUS_DP + LiquidGlassStyle.SHADOW_OFFSET_Y_DP) * value
+        shadowDirty = true
+        source.discardDisplayList()
+        capturedGeneration = -1L
+        tabCaptureRevision = -1L
+        materialCaptureRevision = -1L
+        refreshBackdrop()
+        invalidate()
+    }
+
     fun refreshBackdrop() {
-        if (!config.needsBackdrop) return
+        // Layout, scrolling and the pre-draw dirty check can all request the same next capture.
+        if (!config.needsBackdrop || requestedGeneration != capturedGeneration) return
         requestedGeneration++
         invalidate()
         dependent.get()?.invalidate()
@@ -117,13 +140,6 @@ internal class LiquidGlassPanel(
         interaction = progress
         interactionX = centreX
         glowProgress = glow
-        invalidate()
-    }
-
-    fun setActionsAlpha(value: Float) {
-        val next = value.coerceIn(0f, 1f)
-        if (actionsAlpha == next) return
-        actionsAlpha = next
         invalidate()
     }
 
@@ -194,7 +210,7 @@ internal class LiquidGlassPanel(
             val p = parameters(height)
             val margin = LiquidGlassStyle.margin(p)
             if (canvas.isHardwareAccelerated && ensureBackdrop(margin) && updateSampling()) {
-                if (!renderer.draw(canvas, width, height, p, materialRevision, recordMaterial, actionsAlpha)) drawSurfaceTint(canvas)
+                if (!renderer.draw(canvas, width, height, p, materialRevision, recordMaterial)) drawSurfaceTint(canvas)
             } else drawSurfaceTint(canvas)
         } else drawSurfaceTint(canvas, parameters(height).tint)
         canvas.restoreToCount(save)
@@ -225,13 +241,7 @@ internal class LiquidGlassPanel(
         canvas.clipOutPath(shadowPath)
         canvas.clipOutPath(actionsShadowPath)
         canvas.drawPath(shadowPath, shadowPaint)
-        if (!actionsShadowPath.isEmpty && actionsAlpha > 0f) {
-            val actionSave = if (actionsAlpha < 1f) canvas.saveLayerAlpha(actionsLeft - shadowMargin,
-                -shadowMargin, width + shadowMargin, height + shadowMargin, (actionsAlpha * 255f).roundToInt())
-                else canvas.save()
-            canvas.drawPath(actionsShadowPath, shadowPaint)
-            canvas.restoreToCount(actionSave)
-        }
+        if (!actionsShadowPath.isEmpty) canvas.drawPath(actionsShadowPath, shadowPaint)
         canvas.restoreToCount(save)
     }
 
@@ -329,7 +339,7 @@ internal class LiquidGlassPanel(
         canvas.restoreToCount(save)
     }
 
-    /** The page keeps its window scale while the inner capsule recedes during a press. */
+    /** Both page and inner material keep their window scale behind the expanding lens. */
     fun drawPageForDroplet(canvas: Canvas) {
         if (width <= 0 || height <= 0) return
         val margin = LiquidGlassStyle.margin(parameters(height))
@@ -344,8 +354,9 @@ internal class LiquidGlassPanel(
     /** Cached inner-height material; press transforms never request another page capture. */
     fun drawTabBackdrop(canvas: Canvas) {
         if (width <= 0 || height <= 0 || !source.hasDisplayList()) return
-        val inset = LiquidGlassBarMetrics.dropletInset(height)
-        val innerHeight = height - 2 * inset
+        val inset = selectionInset
+        val innerHeight = selectionHeight
+        if (innerHeight <= 0) return
         val p = parameters(innerHeight, hidden = true)
         if (tabCaptureRevision != captureRevision || tabOffsetX != translationX || tabInset != inset) {
             tabCaptureRevision = captureRevision
@@ -361,10 +372,11 @@ internal class LiquidGlassPanel(
     }
 
     fun clipTabBackdrop(canvas: Canvas) {
-        val inset = LiquidGlassBarMetrics.dropletInset(height)
+        val inset = selectionInset
         val x = captureX + translationX
         val y = (captureY + inset).toFloat()
-        val h = (height - 2 * inset).toFloat()
+        val h = selectionHeight.toFloat()
+        if (h <= 0f) return
         val radius = min(width.toFloat(), h) / 2f
         tabClip.reset()
         tabClip.addRoundRect(x, y, x + width, y + h, radius, radius, Path.Direction.CW)
@@ -386,7 +398,6 @@ internal class LiquidGlassPanel(
         canvas.drawRoundRect(0f, 0f, w, height.toFloat(), r, r, paint)
         if (split) {
             val rr = min((width - actionsLeft).toFloat(), height.toFloat()) / 2f
-            paint.alpha = (paint.alpha * actionsAlpha).roundToInt()
             canvas.drawRoundRect(actionsLeft.toFloat(), 0f, width.toFloat(), height.toFloat(), rr, rr, paint)
         }
     }

@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LiquidGlassStyleTest {
-    private val config = BottomTabLiquidGlassConfig.DEFAULT.copy(blurPercent = 25)
+    private val config = BottomTabLiquidGlassConfig.DEFAULT
 
     @Test fun tabAndReplyUseTheSameMaterialInBothSkins() {
         for (night in listOf(false, true)) {
@@ -25,8 +25,8 @@ class LiquidGlassStyleTest {
             assertEquals(4f, p.blurRadius / density, 0.001f)
             assertEquals(24f, p.refractionHeight / density, 0.001f)
             assertEquals(24f, p.refractionAmount / density, 0.001f)
-            assertEquals(1.08f, p.saturation, 0f)
-            assertEquals(1.04f, p.contrast, 0f)
+            assertEquals(1.5f, p.saturation, 0f)
+            assertEquals(1f, p.contrast, 0f)
             assertFalse(p.depthEffect)
             assertTrue(LiquidGlassStyle.margin(p) >= 40f * density)
         }
@@ -71,14 +71,14 @@ class LiquidGlassStyleTest {
                 val choice = config.copy(liquidGlassEnabled = glass, blurPercent = percent)
                 val tab = LiquidGlassStyle.params(720, 112, density, false, choice)
                 val reply = LiquidGlassStyle.params(672, 96, density, false, choice, 394, 410)
-                assertEquals(16f * percent / 100f * density, tab.blurRadius, 0.001f)
+                assertEquals(20f * percent / 100f * density, tab.blurRadius, 0.001f)
                 assertEquals(tab.blurRadius, reply.blurRadius, 0f)
                 val lens = LiquidGlassStyle.params(112, 98, density, false, choice, droplet = true, press = 1f)
                 assertEquals(0f, lens.blurRadius, 0f)
                 assertEquals(1f, lens.saturation, 0f)
                 assertEquals(1f, lens.contrast, 0f)
-                assertEquals(if (percent == 0) 1f else 1.08f, tab.saturation, 0f)
-                assertEquals(if (percent == 0) 1f else 1.04f, tab.contrast, 0f)
+                assertEquals(if (percent == 0) 1f else 1.5f, tab.saturation, 0f)
+                assertEquals(if (percent == 0) 1f else 1f, tab.contrast, 0f)
                 assertEquals(tab.saturation, reply.saturation, 0f)
                 assertEquals(tab.contrast, reply.contrast, 0f)
                 assertEquals(glass || percent > 0, choice.needsBackdrop)
@@ -108,33 +108,10 @@ class LiquidGlassStyleTest {
     }
 
     @Test fun surfaceOverlayPreservesEachSkinAndSupportsAnOpaqueFallback() {
-        assertEquals(0xB3FFFFFF.toInt(), LiquidGlassStyle.surfaceTint(night = false, translucent = true))
-        assertEquals(0xB3000000.toInt(), LiquidGlassStyle.surfaceTint(night = true, translucent = true))
+        assertEquals(0x66FFFFFF.toInt(), LiquidGlassStyle.surfaceTint(night = false, translucent = true))
+        assertEquals(0x66242424.toInt(), LiquidGlassStyle.surfaceTint(night = true, translucent = true))
         assertEquals(0xFFFFFFFF.toInt(), LiquidGlassStyle.surfaceTint(night = false, translucent = false))
-        assertEquals(0xFF000000.toInt(), LiquidGlassStyle.surfaceTint(night = true, translucent = false))
-    }
-
-    @Test fun pressedInnerMaterialRecedesWhileTheLensExpands() {
-        val rest = LiquidGlassStyle.tabBackdropScale(0f)
-        val held = LiquidGlassStyle.tabBackdropScale(1f)
-        assertEquals(1f, rest, 0f)
-        assertEquals(0.95f, held, 0f)
-        assertTrue(held < rest)
-        // The clear margin grows at every intermediate pressure, at every physical density.
-        for (density in listOf(1f, 1.5f, 2f, 3f, 4f)) {
-            var previous = 0f
-            for (step in 0..10) {
-                val press = step / 10f
-                val lens = 49f * density * (1f + (DropletMotion.HELD_SCALE - 1f) * press)
-                val inner = 49f * density * LiquidGlassStyle.tabBackdropScale(press)
-                val margin = (lens - inner) / density
-                assertTrue(margin >= previous)
-                previous = margin
-            }
-            assertTrue(previous > 49f * (DropletMotion.HELD_SCALE - 1f))
-        }
-        assertEquals(rest, LiquidGlassStyle.tabBackdropScale(-1f), 0f)
-        assertEquals(held, LiquidGlassStyle.tabBackdropScale(2f), 0f)
+        assertEquals(0xFF242424.toInt(), LiquidGlassStyle.surfaceTint(night = true, translucent = false))
     }
 
     @Test fun selectionTintGivesWayToTheClearDepthLensOnPress() {

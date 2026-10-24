@@ -6,6 +6,7 @@ package com.forbidad4tieba.hook.feature.ui.liquidglass
 import android.animation.ValueAnimator
 import android.annotation.TargetApi
 import android.os.Build
+import android.graphics.Rect
 import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.VelocityTracker
@@ -39,10 +40,11 @@ internal class DropletController(
     private val dropletRef = WeakReference(droplet)
     private val rowRef = WeakReference(tabRow)
     private val panelRef = WeakReference(panel)
-    private val touchSlop = ViewConfiguration.get(droplet.context).scaledTouchSlop
-    private val screenMargin = 4f * droplet.resources.displayMetrics.density
+    private var touchSlop = ViewConfiguration.get(droplet.context).scaledTouchSlop
+    private var density = LiquidGlassBarMetrics.density(droplet.resources)
+    private var screenMargin = 4f * density
+    private val viewport = Rect()
     private val motion = DropletMotion(config.liquidGlassEnabled)
-    private val density = droplet.resources.displayMetrics.density
     private var velocityTracker: VelocityTracker? = null
     private var frameMillis = 0L
     private var artworkCentreY = 0f
@@ -86,6 +88,16 @@ internal class DropletController(
             if (motion.isAnimating) scheduleFrame() else lastFrameNanos = 0L
         }
     }
+
+    fun updateDensity(value: Float) {
+        if (density == value) return
+        cancelInteraction()
+        density = value
+        screenMargin = 4f * value
+        dropletRef.get()?.let { touchSlop = ViewConfiguration.get(it.context).scaledTouchSlop }
+    }
+
+    fun setViewport(bounds: Rect) { viewport.set(bounds) }
 
     fun animateToIndex(index: Int, immediate: Boolean) {
         if (isDragging) return
@@ -232,9 +244,17 @@ internal class DropletController(
         val panel = panelRef.get() ?: return
         val row = rowRef.get() ?: return
         val original = originalRow ?: return
-        val scale = 1f + 16f * density / panel.width.coerceAtLeast(1) * motion.pressProgress
+        val desiredScale = 1f + 16f * density / panel.width.coerceAtLeast(1) * motion.pressProgress
+        val scale = minOf(
+            LiquidGlassGeom.centeredScale(desiredScale, panel.left.toFloat(), panel.width.toFloat(),
+                viewport.left.toFloat(), viewport.right.toFloat()),
+            LiquidGlassGeom.centeredScale(desiredScale, panel.top + panel.translationY, panel.height.toFloat(),
+                viewport.top.toFloat(), viewport.bottom.toFloat()),
+        )
         val fraction = (motion.accumulatedDrag / panel.width.coerceAtLeast(1)).coerceIn(-1f, 1f)
-        val offset = 4f * density * fraction.sign * easeOut(abs(fraction))
+        val desiredOffset = 4f * density * fraction.sign * easeOut(abs(fraction))
+        val offset = clampTranslation(panel.left + desiredOffset, panel.width.toFloat(), viewport.left.toFloat(),
+            viewport.width().toFloat(), scale) - panel.left
         panel.scaleX = scale
         panel.scaleY = scale
         panel.translationX = offset
@@ -244,11 +264,12 @@ internal class DropletController(
         row.scaleY = original.scaleY * scale
         row.translationX = original.translationX + offset
         panel.setInteraction(motion.pressProgress, motion.x - tabPosition(row, 0) + tabWidth / 2f + offset, motion.glowProgress)
-        droplet.scaleX = motion.scaleX
-        droplet.scaleY = motion.scaleY
-        val available = (droplet.parent as? View)?.width?.toFloat() ?: 0f
-        droplet.translationX = clampTranslation(motion.x + offset, dropletWidth, screenMargin,
-            (available - 2f * screenMargin).coerceAtLeast(0f), motion.scaleX)
+        val available = (viewport.width() - 2f * screenMargin).coerceAtLeast(dropletWidth)
+        droplet.scaleX = LiquidGlassGeom.fittingScale(motion.scaleX, dropletWidth, available)
+        droplet.scaleY = LiquidGlassGeom.centeredScale(motion.scaleY, droplet.top + droplet.translationY,
+            droplet.height.toFloat(), viewport.top.toFloat(), viewport.bottom.toFloat())
+        droplet.translationX = clampTranslation(motion.x + offset, dropletWidth, viewport.left + screenMargin,
+            available, droplet.scaleX)
         droplet.setInteraction(motion.pressProgress, scale, artworkCentreY)
         droplet.refresh()
     }

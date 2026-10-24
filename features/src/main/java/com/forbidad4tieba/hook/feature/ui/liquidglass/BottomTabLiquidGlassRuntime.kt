@@ -84,9 +84,6 @@ internal object BottomTabLiquidGlassRuntime {
 
     /** Scratch for the row content box; every caller runs on the UI thread. */
     private val contentBox = IntArray(4)
-    /** Width preparation must not publish content bounds before the host layout has settled. */
-    private val sizingBox = IntArray(4)
-
     private val hostWindowPosition = IntArray(2)
     private val rootWindowPosition = IntArray(2)
 
@@ -117,14 +114,22 @@ internal object BottomTabLiquidGlassRuntime {
         val widget: ViewGroup,
         val pager: ViewGroup,
         val panel: LiquidGlassPanel,
-        val density: Float,
+        var density: Float,
         val config: BottomTabLiquidGlassConfig,
         homeContent: HomeTabContentContract.Targets?,
     ) {
         val homeContent = LiquidGlassHomeContent(homeContent)
+        val activity = findActivity(host.context)
+        val contentRoot = activity?.findViewById<ViewGroup>(android.R.id.content)
         val rowOffset = Rect()
+        val viewport = Rect()
+        val nativeLayout = BottomTabNativeLayout(host, wrapper, widget, pager)
         val contentMeasure = LiquidGlassBarMetrics.ContentMeasure()
-        val wrapperOverlappingRendering = wrapper.getHasOverlappingRendering()
+        var fontScale = host.resources.configuration.fontScale
+        var floating = true
+        var renderingSuspended = false
+        var baselineHeight = 0
+        var artwork: List<BottomTabArtworkContract.Artwork>? = null
         /**
          * Cached hug result. A negative width means the attempt completed but the host did not
          * expose a usable fixed width, so the row is left at its own extent for this layout.
@@ -305,7 +310,8 @@ internal object BottomTabLiquidGlassRuntime {
         var current: View? = view
         var depth = 0
         while (current != null && depth < 32) {
-            if (states[current]?.panel?.parent != null) return true
+            val state = states[current]
+            if (state?.floating == true && state.panel.parent != null) return true
             current = current.parent as? View
             depth++
         }
@@ -364,10 +370,13 @@ internal object BottomTabLiquidGlassRuntime {
         state.hugRowWidth = -1
         state.hugSignature = Long.MIN_VALUE
         state.geometryReady = false
+        if (!prepareRendering(state)) return
         ensurePanelOrder(state)
         SystemBarCompatHook.applyIfNeeded(findActivity(host.context))
-        ensureBackdropFillsHost(state)
-        clearHostChrome(state)
+        if (state.floating) {
+            ensureBackdropFillsHost(state)
+            clearHostChrome(state)
+        }
         applySkin(state)
         positionPanel(state)
         syncDropletSelection(state)
@@ -449,7 +458,7 @@ internal object BottomTabLiquidGlassRuntime {
                 return
             }
 
-            val density = host.resources.displayMetrics.density
+            val density = LiquidGlassBarMetrics.density(host.resources)
             val config = ConfigManager.snapshot().bottomTabLiquidGlass
             val panel = LiquidGlassPanel(host.context, pager, density, isNightSkin(), config)
             if (!panel.isSupported) {
@@ -471,17 +480,7 @@ internal object BottomTabLiquidGlassRuntime {
 
             // The lifted row overflows its inner FrameLayout, not just the outer tab wrapper.
             // Release clipping along the validated path from the row to the glass host.
-            var tabParent: ViewGroup? = widget
-            while (tabParent != null) {
-                tabParent.clipChildren = false
-                tabParent.clipToPadding = false
-                if (tabParent === host) break
-                tabParent = tabParent.parent as? ViewGroup
-            }
-            // An alpha fade otherwise allocates an offscreen layer bounded by the wrapper's
-            // original slot, clipping the lifted icons even with clipChildren disabled. This
-            // transparent container can pass alpha through to its tab contents instead.
-            wrapper.forceHasOverlappingRendering(false)
+            state.nativeLayout.activate()
 
             // Plain modes keep a painted selection pill without allocating a glass pipeline.
             val droplet = DropletPanel(host.context, panel, widget, density, isNightSkin(), config)
@@ -523,9 +522,8 @@ internal object BottomTabLiquidGlassRuntime {
     private fun detach(host: View) {
         val state = states.remove(host) ?: return
         state.homeContent.restore()
-        state.wrapper.forceHasOverlappingRendering(state.wrapperOverlappingRendering)
-        state.touchOverlay?.cancelInteraction()
-        state.controller?.cancelInteraction()
+        state.touchOverlay?.cancelInteraction() ?: state.controller?.cancelInteraction()
+        state.nativeLayout.restore()
         val observer = state.host.viewTreeObserver
         if (observer.isAlive) {
             state.scrollListener?.let { observer.removeOnScrollChangedListener(it) }
@@ -550,21 +548,23 @@ internal object BottomTabLiquidGlassRuntime {
         if (!observer.isAlive) return
 
         val scroll = if (state.config.needsBackdrop) ViewTreeObserver.OnScrollChangedListener {
-            if (!state.panel.isCapturing) markDirty(state)
+            if (state.floating && !state.panel.isCapturing) markDirty(state)
         } else null
         val layout = ViewTreeObserver.OnGlobalLayoutListener {
-            if (state.panel.isCapturing) return@OnGlobalLayoutListener
-            relaxScrollContainerClipping(state)
+            if (state.panel.isCapturing || !prepareRendering(state)) return@OnGlobalLayoutListener
+            if (state.floating) relaxScrollContainerClipping(state)
             // Unrelated layout passes must not recapture a stationary page backdrop.
             if (positionPanel(state)) markDirty(state)
         }
         val preDraw = ViewTreeObserver.OnPreDrawListener {
             val panel = state.panel
             if (panel.isAttachedToWindow) {
+                if (!prepareRendering(state)) return@OnPreDrawListener true
                 // A hug requests a layout, but a few host transitions can coalesce that pass. The
                 // pre-draw retry is cheap (the target width is cached) and prevents one stale
                 // full-width frame from leaking through if the global-layout callback was skipped.
-                if (!state.geometryReady || hugInputSignature(state.widget) != state.hugSignature) {
+                if (refreshEnvironment(state) || (state.floating && !state.geometryReady) ||
+                    hugInputSignature(state.widget) != state.hugSignature) {
                     if (positionPanel(state)) markDirty(state)
                 }
                 // This must run even while the panel is INVISIBLE: auto-hide sets the wrapper
@@ -597,7 +597,58 @@ internal object BottomTabLiquidGlassRuntime {
     }
 
     private fun markDirty(state: GlassState) {
+        if (state.renderingSuspended || !wrapperIsVisible(state)) return
         state.panel.refreshBackdrop()
+    }
+
+    private fun wrapperIsVisible(state: GlassState): Boolean =
+        state.wrapper.visibility == View.VISIBLE && state.wrapper.alpha > 0f &&
+            state.wrapper.isShown && state.host.windowVisibility == View.VISIBLE
+
+    /** Hidden scroll frames only check visibility; geometry and captures resume on the first visible frame. */
+    private fun prepareRendering(state: GlassState): Boolean {
+        if (!wrapperIsVisible(state)) {
+            if (!state.renderingSuspended) {
+                state.renderingSuspended = true
+                state.geometryReady = false
+                state.touchOverlay?.cancelInteraction() ?: state.controller?.cancelInteraction()
+                state.panel.visibility = View.INVISIBLE
+                state.droplet?.visibility = View.INVISIBLE
+            }
+            return false
+        }
+        if (state.renderingSuspended) {
+            state.renderingSuspended = false
+            ensurePanelOrder(state)
+            if (state.floating) {
+                ensureBackdropFillsHost(state)
+                clearHostChrome(state)
+                relaxScrollContainerClipping(state)
+            }
+            applySkin(state)
+            state.panel.refreshBackdrop()
+        }
+        return true
+    }
+
+    /** Mirrors LocalDensity invalidation without changing the session's published settings. */
+    private fun refreshEnvironment(state: GlassState): Boolean {
+        val resources = state.host.resources
+        val density = LiquidGlassBarMetrics.density(resources)
+        val fontScale = resources.configuration.fontScale
+        if (!density.isFinite() || density <= 0f ||
+            (state.density == density && state.fontScale == fontScale)) return false
+        state.touchOverlay?.cancelInteraction() ?: state.controller?.cancelInteraction()
+        state.density = density
+        state.fontScale = fontScale
+        state.panel.updateDensity(density)
+        state.droplet?.updateDensity(density)
+        state.controller?.updateDensity(density)
+        state.hugWidth = 0
+        state.hugSignature = Long.MIN_VALUE
+        state.geometryReady = false
+        state.dropletIndex = -1
+        return true
     }
 
     /**
@@ -676,6 +727,7 @@ internal object BottomTabLiquidGlassRuntime {
         ) {
             val previouslyKnown = unclippedContainers.put(view, true) != null
             if (view.clipToPadding) {
+                state.nativeLayout.rememberClip(view)
                 view.clipToPadding = false
                 if (!previouslyKnown) {
                     XposedCompat.logD { "$TAG un-clipped ${view.javaClass.name}" }
@@ -694,6 +746,7 @@ internal object BottomTabLiquidGlassRuntime {
 
     /** Mirrors the host wrapper's slide/fade so the pill and the icons move as one. */
     private fun followWrapperTransform(state: GlassState) {
+        if (!state.floating) return
         val panel = state.panel
         val wrapper = state.wrapper
         // The row carries the float as a translation because its own layout slot is fixed by the
@@ -757,10 +810,13 @@ internal object BottomTabLiquidGlassRuntime {
         setBoolean(api.widgetSetShouldDrawTopLine, state.widget, false)
         setBoolean(api.widgetSetShouldDrawDividerLine, state.widget, false)
         setBoolean(api.widgetSetShouldDrawIndicatorLine, state.widget, false)
+        state.nativeLayout.rememberBackground(state.wrapper)
+        state.nativeLayout.rememberBackground(state.widget)
         if (state.wrapper.background != null) state.wrapper.background = null
         if (state.widget.background != null) state.widget.background = null
         try {
             (api.getTabContainerBgImg?.invoke(state.host) as? View)?.let { bg ->
+                state.nativeLayout.rememberVisibility(bg)
                 if (bg.visibility != View.GONE) bg.visibility = View.GONE
             }
         } catch (t: Throwable) {
@@ -808,123 +864,114 @@ internal object BottomTabLiquidGlassRuntime {
      * Keeps the pill locked onto the host tab row, sized to its content rather than to the bar.
      *
      * The host bar is full width and includes a navigation reserve. Hug the columns horizontally,
-     * keep the 60dp base height, and centre the capsule on the actual icon/label content.
+     * keep the 64dp base height, and centre the capsule on the actual icon/label content.
      * Larger host fonts retain their existing content clearance. See [LiquidGlassBarMetrics].
      *
      * Returns true when the panel's geometry actually moved, so callers can tell a real change from
      * one of the many layout passes that leave the bar exactly where it was.
      */
     private fun positionPanel(state: GlassState): Boolean {
+        if (!prepareRendering(state)) return false
+        refreshEnvironment(state)
+        state.contentRoot?.let { content ->
+            if (LiquidGlassGeom.expandContentThroughNavigationBar(content,
+                    SystemBarCompatHook.gestureNavigationInsetBottom(state.activity))) {
+                state.geometryReady = false
+                state.panel.visibility = View.INVISIBLE
+                state.droplet?.visibility = View.INVISIBLE
+                state.touchOverlay?.setActive(false)
+                return false
+            }
+        }
         val host = state.host
         val widget = state.widget
         val panel = state.panel
-        val rowOffset = state.rowOffset
-        val previousTabSignature = state.hugSignature
-        if (widget.width <= 0 || widget.height <= 0) {
-            state.geometryReady = false
-            panel.visibility = View.INVISIBLE
-            state.droplet?.visibility = View.INVISIBLE
-            return false
-        }
-        if (!LiquidGlassGeom.layoutOffsetInAncestor(widget, host, rowOffset)) {
-            logApplyError("tab row is not a descendant of the host")
-            return false
-        }
-
-        hugWidthFor(state)
-        // `hugWidthFor()` writes fixed LayoutParams immediately, while `tab.width` remains the
-        // old weighted width until the next traversal. Measuring the row in that interval yields a
-        // full-width pill (and parks the droplet under the wrong column). Keep the overlays hidden
-        // until the actual child bounds agree with the requested width.
-        if (!hugColumnsSettled(state)) {
-            state.geometryReady = false
-            panel.visibility = View.INVISIBLE
-            state.droplet?.visibility = View.INVISIBLE
-            return false
-        }
-        LiquidGlassBarMetrics.hideColumnHairlines(widget, state.density)
-        val padX = (LiquidGlassBarMetrics.HORIZONTAL_PADDING_DP * state.density).roundToInt()
-        val minHeight = (LiquidGlassBarMetrics.TAB_HEIGHT_DP * state.density).roundToInt()
-
-        // Derive the capsule from where the columns actually landed rather than from the row box.
-        // The row stays full-screen width, so anchoring on it puts the capsule where the content is
-        // not. Fail soft to the row's own extent when nothing measurable was found.
-        //
-        // The float is baked into the layout position rather than applied as a translation: the row
-        // already sits flush with the bottom of the host, so a capsule that is taller than the row
-        // gets its measured height clamped at the host's edge and loses its bottom rim - which is
-        // what made the icons sit low in it.
-        val width: Int
-        val height: Int
-        val left: Int
-        val naturalTop: Int
-        if (state.contentMeasure.measure(widget, contentBox)) {
-            width = (contentBox[2] - contentBox[0]) + padX * 2
-            val contentHeight = contentBox[3] - contentBox[1]
-            height = LiquidGlassBarMetrics.barHeight(contentHeight, state.density)
-            left = rowOffset.left + contentBox[0] - padX
-            naturalTop = rowOffset.top + contentBox[1] - (height - contentHeight) / 2
-        } else {
-            width = widget.width
-            height = widget.height.coerceAtLeast(minHeight)
-            left = rowOffset.left
-            naturalTop = rowOffset.top - (height - widget.height) / 2
-        }
-        if (width <= 0 || height <= 0) {
-            state.geometryReady = false
-            if (panel.visibility != View.GONE) panel.visibility = View.GONE
-            state.droplet?.visibility = View.INVISIBLE
-            return false
-        }
+        if (widget.width <= 0 || widget.height <= 0 ||
+            !LiquidGlassGeom.layoutOffsetInAncestor(widget, host, state.rowOffset) ||
+            !state.contentMeasure.measure(widget, contentBox)) return restoreNativeLayout(state)
 
         val root = host.rootView
         host.getLocationInWindow(hostWindowPosition)
         root.getLocationInWindow(rootWindowPosition)
-        val navigationBottom = host.rootWindowInsets?.getInsets(WindowInsets.Type.navigationBars())?.bottom ?: 0
-        val top = LiquidGlassBarMetrics.floatingTop(
-            host.height, hostWindowPosition[1] + host.height,
-            rootWindowPosition[1] + root.height, navigationBottom, height, state.density,
-            state.config.bottomGapDp,
-        )
-        state.rowTranslationY = (top - naturalTop).toFloat()
+        val insets = host.rootWindowInsets
+        val safe = insets?.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+        val leftLimit = maxOf(0, rootWindowPosition[0] + (safe?.left ?: 0) - hostWindowPosition[0])
+        val rightLimit = minOf(host.width,
+            rootWindowPosition[0] + root.width - (safe?.right ?: 0) - hostWindowPosition[0])
+        val topLimit = maxOf(0, rootWindowPosition[1] + (safe?.top ?: 0) - hostWindowPosition[1])
+        val bottomLimit = minOf(host.height,
+            rootWindowPosition[1] + root.height - hostWindowPosition[1])
+        if (state.viewport.left != leftLimit || state.viewport.right != rightLimit ||
+            state.viewport.top != topLimit || state.viewport.bottom != bottomLimit) {
+            state.touchOverlay?.cancelInteraction()
+            state.viewport.set(leftLimit, topLimit, rightLimit, bottomLimit)
+            state.hugWidth = 0
+        }
+        if (state.viewport.isEmpty) return restoreNativeLayout(state)
+        val contentHeight = contentBox[3] - contentBox[1]
+        state.baselineHeight = LiquidGlassBarMetrics.barHeight(contentHeight, state.density)
+        val minimumHeight = contentHeight + 2 * (LiquidGlassBarMetrics.VERTICAL_PADDING_DP * state.density).roundToInt()
+        val navigation = insets?.getInsets(WindowInsets.Type.navigationBars())?.bottom ?: 0
+        val placement = LiquidGlassBarMetrics.placement(
+            host.height, hostWindowPosition[1] + host.height, rootWindowPosition[1] + root.height,
+            navigation, state.baselineHeight, minimumHeight, state.density, state.config, topLimit,
+        ) ?: return restoreNativeLayout(state)
+        if (!hugWidthFor(state)) return restoreNativeLayout(state)
+        if (!hugColumnsSettled(state)) {
+            state.geometryReady = false
+            panel.visibility = View.INVISIBLE
+            state.droplet?.visibility = View.INVISIBLE
+            state.touchOverlay?.setActive(false)
+            return false
+        }
+        LiquidGlassBarMetrics.hideColumnHairlines(widget, state.density, state.nativeLayout::rememberVisibility)
+        if (!state.contentMeasure.measure(widget, contentBox)) return restoreNativeLayout(state)
+        val padX = (LiquidGlassBarMetrics.HORIZONTAL_PADDING_DP * state.density).roundToInt()
+        val width = contentBox[2] - contentBox[0] + 2 * padX
+        val height = placement.height
+        val left = state.rowOffset.left + contentBox[0] - padX
+        if (width <= 0 || left < leftLimit || left + width > rightLimit) return restoreNativeLayout(state)
+        val naturalTop = state.rowOffset.top + contentBox[1] - (height - (contentBox[3] - contentBox[1])) / 2
+        state.rowTranslationY = (placement.top - naturalTop).toFloat()
 
-        val lp = panel.layoutParams as? RelativeLayout.LayoutParams
-            ?: RelativeLayout.LayoutParams(width, height)
+        val lp = panel.layoutParams as RelativeLayout.LayoutParams
         var changed = false
         if (lp.width != width) { lp.width = width; changed = true }
         if (lp.height != height) { lp.height = height; changed = true }
         if (lp.leftMargin != left) { lp.leftMargin = left; changed = true }
-        if (lp.topMargin != top) { lp.topMargin = top; changed = true }
-        val rules = lp.rules
-        if (rules.size > RelativeLayout.ALIGN_PARENT_TOP &&
-            rules[RelativeLayout.ALIGN_PARENT_TOP] == 0
-        ) {
+        if (lp.topMargin != placement.top) { lp.topMargin = placement.top; changed = true }
+        if (lp.rules[RelativeLayout.ALIGN_PARENT_TOP] == 0) {
             lp.addRule(RelativeLayout.ALIGN_PARENT_TOP)
             lp.addRule(RelativeLayout.ALIGN_PARENT_LEFT)
             changed = true
         }
         if (changed) panel.layoutParams = lp
         val wasReady = state.geometryReady
-        state.geometryReady = true
-        positionDroplet(state, height, top)
+        state.geometryReady = panel.width == width && panel.height == height
+        state.controller?.setViewport(state.viewport)
+        positionDroplet(state, height, placement.top)
         followWrapperTransform(state)
-        // Hairline suppression and the host's post-layout pass can both mutate the tab tree. Keep
-        // the cache anchored to the settled tree so the pre-draw guard does not remeasure forever.
-        state.hugSignature = hugInputSignature(widget)
-        if (changed || !wasReady || state.hugSignature != previousTabSignature) {
-            // The resting droplet caches a drawn copy of the selected tab. Moving a View or
-            // changing its source's layout does not necessarily invalidate that display list.
-            state.droplet?.refresh()
+        val signature = hugInputSignature(widget)
+        if (changed || !wasReady || signature != state.hugSignature) state.droplet?.refresh()
+        state.hugSignature = signature
+        return changed || wasReady != state.geometryReady
+    }
+
+    private fun restoreNativeLayout(state: GlassState): Boolean {
+        val wasFloating = state.floating
+        if (wasFloating) {
+            state.touchOverlay?.setActive(false)
+            state.controller?.cancelInteraction()
+            state.homeContent.restore()
+            state.nativeLayout.restore()
+            state.panel.visibility = View.INVISIBLE
+            state.droplet?.visibility = View.INVISIBLE
         }
-        if (changed) {
-            XposedCompat.logD {
-                "$TAG geometry: row=${widget.width}x${widget.height} at " +
-                    "(${rowOffset.left},${rowOffset.top}) -> pill=${width}x$height at ($left,$top), " +
-                    "content=[${contentBox[0]},${contentBox[1]},${contentBox[2]},${contentBox[3]}], " +
-                    "tabs=${widget.childCount}"
-            }
-        }
-        return changed || !wasReady
+        state.floating = false
+        state.geometryReady = false
+        state.hugWidth = 0
+        state.hugSignature = hugInputSignature(state.widget)
+        return wasFloating
     }
 
     /**
@@ -934,54 +981,59 @@ internal object BottomTabLiquidGlassRuntime {
      * Cache that work until the inputs change. The host can mutate a badge, label or
      * icon in place, so a compact content/layout signature supplements child count and row width.
      */
-    private fun hugWidthFor(state: GlassState) {
+    private fun hugWidthFor(state: GlassState): Boolean {
         val widget = state.widget
         val signature = hugInputSignature(widget)
-        if (state.hugWidth != 0 &&
-            state.hugChildCount == widget.childCount &&
-            state.hugRowWidth == widget.width &&
-            state.hugSignature == signature
-        ) {
-            return
-        }
+        if (state.floating && state.hugWidth > 0 && state.hugChildCount == widget.childCount &&
+            state.hugRowWidth == widget.width && state.hugSignature == signature) return true
         val count = (0 until widget.childCount).count { widget.getChildAt(it).visibility != View.GONE }
-        val width = if (count > 0 && widget.width > 0 && state.contentMeasure.measure(widget, sizingBox)) {
-            LiquidGlassBarMetrics.columnWidth(widget.width, count,
-                LiquidGlassBarMetrics.barHeight(sizingBox[3] - sizingBox[1], state.density),
-                state.density, state.config.dropletWidthPercent)
-        } else 0
-        if (width > 0) {
-            for (i in 0 until widget.childCount) {
-                val column = widget.getChildAt(i)
-                if (column.visibility == View.GONE) continue
-                val params = column.layoutParams ?: continue
-                val weighted = params as? LinearLayout.LayoutParams
-                if (params.width == width && (weighted == null || weighted.weight == 0f)) continue
-                params.width = width
-                weighted?.weight = 0f
-                column.layoutParams = params
-            }
-            if (widget is LinearLayout) {
-                val vertical = widget.gravity and Gravity.VERTICAL_GRAVITY_MASK
-                val centered = Gravity.CENTER_HORIZONTAL or (if (vertical == 0) Gravity.CENTER_VERTICAL else vertical)
-                if (widget.gravity != centered) widget.gravity = centered
-            }
-            if (widget.paddingLeft != 0 || widget.paddingRight != 0) {
-                widget.setPadding(0, widget.paddingTop, 0, widget.paddingBottom)
-            }
+        val leftPadding = (state.viewport.left - state.rowOffset.left).coerceAtLeast(0)
+        val rightPadding = (state.rowOffset.left + widget.width - state.viewport.right).coerceAtLeast(0)
+        val available = widget.width - leftPadding - rightPadding
+        state.artwork = try {
+            hostApi?.tabArtwork?.find(widget)
+        } catch (failure: ReflectiveOperationException) {
+            if (!state.artworkUnavailable) XposedCompat.log("$TAG selection artwork failed: ${failure.message}")
+            null
+        }
+        val minimum = state.artwork?.let { LiquidGlassBarMetrics.minimumColumnWidth(it, state.density) }
+            ?: LiquidGlassBarMetrics.columnWidth(available, count, state.density, 0)
+        val width = LiquidGlassBarMetrics.columnWidth(
+            available, count, state.density, state.config.widthAdjustment, minimum,
+        )
+        if (width <= 0) return false
+        if (!state.floating) {
+            state.floating = true
+            state.nativeLayout.activate()
+            ensureBackdropFillsHost(state)
+            clearHostChrome(state)
+            applySkin(state)
+        }
+        for (index in 0 until widget.childCount) {
+            val column = widget.getChildAt(index)
+            if (column.visibility == View.GONE) continue
+            val params = column.layoutParams ?: continue
+            val weighted = params as? LinearLayout.LayoutParams
+            if (params.width == width && (weighted == null || weighted.weight == 0f)) continue
+            state.nativeLayout.rememberColumn(column)
+            params.width = width
+            weighted?.weight = 0f
+            column.layoutParams = params
+        }
+        if (widget is LinearLayout) {
+            val vertical = widget.gravity and Gravity.VERTICAL_GRAVITY_MASK
+            val centered = Gravity.CENTER_HORIZONTAL or (if (vertical == 0) Gravity.CENTER_VERTICAL else vertical)
+            if (widget.gravity != centered) widget.gravity = centered
+        }
+        if (widget.paddingLeft != leftPadding || widget.paddingRight != rightPadding) {
+            widget.setPadding(leftPadding, widget.paddingTop, rightPadding, widget.paddingBottom)
         }
         state.hugChildCount = widget.childCount
         state.hugRowWidth = widget.width
         state.hugSignature = hugInputSignature(widget)
-        state.hugWidth = if (width > 0) {
-            (0 until widget.childCount)
-                .asSequence()
-                .mapNotNull { widget.getChildAt(it)?.layoutParams?.width }
-                .firstOrNull { it > 0 }
-                ?: -1
-        } else {
-            -1
-        }
+        state.hugWidth = width
+        if (state.artwork != null) state.artworkUnavailable = false
+        return true
     }
 
     /**
@@ -1082,12 +1134,7 @@ internal object BottomTabLiquidGlassRuntime {
         val first = row.getChildAt(0) ?: return
         if (first.width <= 0) return
         if (state.artworkUnavailable) return
-        val artwork = try {
-            hostApi?.tabArtwork?.find(row)
-        } catch (failure: ReflectiveOperationException) {
-            XposedCompat.log("$TAG selection artwork failed: ${failure.message}")
-            null
-        }
+        val artwork = state.artwork
         if (artwork == null) {
             state.artworkUnavailable = true
             state.dropletIndex = selectedIndex(row)
@@ -1099,8 +1146,10 @@ internal object BottomTabLiquidGlassRuntime {
         droplet.setArtwork(artwork)
 
         val width = first.width
-        val height = LiquidGlassBarMetrics.dropletHeight(width, pillHeight)
-        val top = pillTop + (pillHeight - height) / 2
+        val height = LiquidGlassBarMetrics.dropletHeight(width, pillHeight, state.density, state.baselineHeight)
+        val inset = LiquidGlassBarMetrics.dropletInset(pillHeight, state.density, state.baselineHeight)
+        val top = pillTop + inset
+        state.panel.setTabLensGeometry(height, inset)
         val lp = droplet.layoutParams as? RelativeLayout.LayoutParams
             ?: RelativeLayout.LayoutParams(width, height)
         var changed = false
@@ -1148,6 +1197,7 @@ internal object BottomTabLiquidGlassRuntime {
 
     /** Nudges the droplet after the host changed the selection itself. */
     private fun syncDropletSelection(state: GlassState) {
+        if (state.renderingSuspended) return
         val controller = state.controller ?: return
         val selected = selectedIndex(state.widget)
         if (state.artworkUnavailable) {

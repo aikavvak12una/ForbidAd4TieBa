@@ -4,13 +4,45 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import android.graphics.Rect
+import android.annotation.TargetApi
+import android.os.Build
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
+import android.widget.FrameLayout
 import kotlin.math.abs
 import kotlin.math.round
 
 /** Native host hit testing and layout offsets, independent of the material renderer. */
 internal object LiquidGlassGeom {
+
+    /** Expansion around the centre must fit on both sides, including a flush screen edge. */
+    fun centeredScale(desired: Float, start: Float, size: Float, lower: Float, upper: Float): Float {
+        if (!desired.isFinite() || size <= 0f || start < lower || start + size > upper) return 1f
+        val clearance = minOf(start - lower, upper - start - size).coerceAtLeast(0f)
+        return desired.coerceIn(0.01f, 1f + 2f * clearance / size)
+    }
+
+    fun fittingScale(desired: Float, size: Float, available: Float): Float =
+        if (!desired.isFinite() || size <= 0f || available < size) 1f
+        else desired.coerceIn(0.01f, available / size)
+
+    /** Release only the host's navigation-sized fixed-height reservation after edge-to-edge. */
+    @TargetApi(Build.VERSION_CODES.R)
+    @Suppress("DEPRECATION")
+    fun expandContentThroughNavigationBar(content: ViewGroup, navigationInsetBottom: Int): Boolean {
+        if (content.rootView.systemUiVisibility and View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION == 0) return false
+        val insets = content.rootWindowInsets ?: return false
+        val navigation = maxOf(navigationInsetBottom, insets.getInsets(WindowInsets.Type.navigationBars()).bottom)
+        if (navigation <= 0 || insets.isVisible(WindowInsets.Type.ime())) return false
+        val child = content.getChildAt(0) ?: return false
+        val layout = child.layoutParams as? FrameLayout.LayoutParams ?: return false
+        val available = content.height - content.paddingTop - content.paddingBottom - layout.topMargin - layout.bottomMargin
+        if (layout.height <= 0 || layout.height != available - navigation) return false
+        layout.height = ViewGroup.LayoutParams.MATCH_PARENT
+        child.layoutParams = layout
+        return true
+    }
 
     /** The downsampled backdrop is anchored to an even texel grid, then its residual is restored. */
     fun samplingResidual(offset: Float, factor: Int): Float = if (factor <= 1) 0f else {

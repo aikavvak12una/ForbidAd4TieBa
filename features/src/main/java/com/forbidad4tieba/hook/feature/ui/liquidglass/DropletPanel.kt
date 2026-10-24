@@ -24,7 +24,7 @@ internal class DropletPanel(
     context: Context,
     backdrop: LiquidGlassPanel,
     tabRow: ViewGroup,
-    private val density: Float,
+    private var density: Float,
     private var night: Boolean,
     private val config: BottomTabLiquidGlassConfig = BottomTabLiquidGlassConfig.DEFAULT,
 ) : View(context) {
@@ -71,6 +71,12 @@ internal class DropletPanel(
     }
 
     fun refresh() { invalidate() }
+
+    fun updateDensity(value: Float) {
+        if (density == value) return
+        density = value
+        invalidate()
+    }
 
     fun setArtwork(value: List<BottomTabArtworkContract.Artwork>) {
         if (value.size == artwork.size && value.indices.all {
@@ -137,11 +143,7 @@ internal class DropletPanel(
             canvas.concat(screenToLens)
             if (config.liquidGlassEnabled) {
                 panel.drawPageForDroplet(canvas)
-                val material = canvas.save()
-                val backdropScale = LiquidGlassStyle.tabBackdropScale(pressProgress)
-                canvas.scale(backdropScale, backdropScale, lensCentre[0], lensCentre[1])
                 panel.drawTabBackdrop(canvas)
-                canvas.restoreToCount(material)
                 panel.clipTabBackdrop(canvas)
             }
             rowToScreen.reset()

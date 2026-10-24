@@ -525,10 +525,10 @@ class ConfigManagerTest {
     @Test fun liquidGlassSnapshotUsesCustomSettingsOnlyWhenEnabled() {
         val values = mapOf<String, Any?>(
             TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
-            BottomTabLiquidGlassPreferences.BOTTOM_GAP to 40,
+            BottomTabLiquidGlassPreferences.POSITION_ADJUSTMENT to 40,
             BottomTabLiquidGlassPreferences.LIQUID_GLASS to false,
         )
-        assertEquals(BottomTabLiquidGlassConfig(40, liquidGlassEnabled = false),
+        assertEquals(BottomTabLiquidGlassConfig(positionAdjustment = 40, liquidGlassEnabled = false),
             buildSnapshot(values).bottomTabLiquidGlass)
         assertEquals(BottomTabLiquidGlassConfig.DEFAULT,
             buildSnapshot(values + (TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to false)).bottomTabLiquidGlass)
@@ -595,7 +595,7 @@ class ConfigManagerTest {
                 TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to true,
                 TabPreferences.KEY_HOME_TOP_TAB_DISABLED_KEYS to "code:material",
                 TabPreferences.KEY_BOTTOM_TAB_RETAIL_STORE to false,
-                BottomTabLiquidGlassPreferences.BOTTOM_GAP to 24,
+                "bottom_tab_liquid_glass_bottom_gap_dp" to 24,
                 TabPreferences.KEY_HIDE_HOME_TAB_RED_DOT to true,
             )
             val disabled = buildSnapshot(values)
@@ -616,7 +616,7 @@ class ConfigManagerTest {
             assertFalse(restored.isHomeTopTabMaterialEnabled)
             assertTrue(restored.isBottomTabHomeEnabled)
             assertFalse(restored.isBottomTabRetailStoreEnabled)
-            assertEquals(24, restored.bottomTabLiquidGlass.bottomGapDp)
+            assertEquals(0, restored.bottomTabLiquidGlass.positionAdjustment)
         }
     }
 

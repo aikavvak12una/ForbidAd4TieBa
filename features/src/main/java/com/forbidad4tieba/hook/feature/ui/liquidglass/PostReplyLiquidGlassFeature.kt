@@ -7,8 +7,6 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
-import android.view.WindowInsets
-import android.widget.FrameLayout
 import com.forbidad4tieba.hook.FeatureDefinition
 import com.forbidad4tieba.hook.FeaturePhase
 import com.forbidad4tieba.hook.FeatureProcess
@@ -30,7 +28,9 @@ internal val PostReplyLiquidGlassFeature = FeatureDefinition.single(
         InstallOutcome(InstallState.SKIPPED, reason = "Post reply glass requires Android 13")
     } else {
         val module = checkNotNull(XposedCompat.module)
-        val targets = PostReplyBarContract.resolve(cl)
+        val autoHideRequested = ConfigManager.snapshot().isHomeTabAutoHideEnabled
+        val targets = PostReplyBarContract.resolve(cl, resolveScroll = autoHideRequested)
+        var autoHideAvailable = false
         val app = checkNotNull(ConfigManager.getAppContext() as? Application)
         RuntimeHooks.builder(module, targets.onCreate, "PostReplyLiquidGlassHook", "onCreate").intercept { chain ->
             val result = chain.proceed()
@@ -39,8 +39,9 @@ internal val PostReplyLiquidGlassFeature = FeatureDefinition.single(
                     val activity = chain.thisObject as? Activity
                     SystemBarCompatHook.applyIfNeeded(activity)
                     activity?.findViewById<ViewGroup>(android.R.id.content)?.let {
-                        PostReplyGlassAttachment(it, targets,
-                            SystemBarCompatHook.gestureNavigationInsetBottom(activity)).start()
+                        PostReplyGlassAttachment(it, targets, autoHideAvailable) {
+                            SystemBarCompatHook.gestureNavigationInsetBottom(activity)
+                        }.start()
                     }
                 } catch (failure: Throwable) {
                     XposedCompat.logW("[PostReplyLiquidGlassHook] attach failed: ${failure.message}")
@@ -48,9 +49,29 @@ internal val PostReplyLiquidGlassFeature = FeatureDefinition.single(
             }
             result
         }
+        targets.scrollDispatch?.let { scroll ->
+            try {
+                RuntimeHooks.builder(module, scroll, "PostReplyLiquidGlassHook", "scroll-collapse").intercept { chain ->
+                    val result = chain.proceed()
+                    val settings = ConfigManager.snapshot()
+                    if (settings.isHomeTabAutoHideEnabled && settings.isFloatingBottomBarEnabled) {
+                        val view = chain.thisObject as? View
+                        val dy = (chain.args.getOrNull(1) as? Int) ?: 0
+                        if (view != null && dy != 0) PostReplyScrollDispatcher.onScrolled(view, dy)
+                    }
+                    result
+                }
+                autoHideAvailable = true
+                XposedCompat.log("[PostReplyLiquidGlassHook] scroll collapse hook INSTALLED")
+            } catch (failure: Exception) {
+                XposedCompat.logW("[PostReplyLiquidGlassHook] scroll collapse install failed: ${failure.message}")
+            }
+        }
         SystemBarCompatHook.registerPostReply(app, targets.onCreate.declaringClass)
         XposedCompat.log("[PostReplyLiquidGlassHook] public APIs FOUND; lifecycle hook installed")
-        null // The installation ledger counts the actual RuntimeHooks handle.
+        if (autoHideRequested && !autoHideAvailable) InstallOutcome(InstallState.PARTIAL,
+            reason = "Scroll collapse unavailable; floating reply bar remains active")
+        else null // The installation ledger counts the actual RuntimeHooks handles.
     }
 }
 
@@ -59,11 +80,13 @@ internal val PostReplyLiquidGlassFeature = FeatureDefinition.single(
 private class PostReplyGlassAttachment(
     private val content: ViewGroup,
     private val targets: PostReplyBarContract.Targets,
-    private val navigationInsetBottom: Int,
+    private val autoHideAvailable: Boolean,
+    private val navigationInsetBottom: () -> Int,
 ) : View.OnAttachStateChangeListener, ViewTreeObserver.OnGlobalLayoutListener {
     private var session: PostReplyGlassSession? = null
     private var attempts = 0
     private var closed = false
+    private var pendingHidden = false
 
     fun start() {
         content.addOnAttachStateChangeListener(this)
@@ -85,10 +108,11 @@ private class PostReplyGlassAttachment(
             val page = targets.findPage(content)
             if (page != null) {
                 val current = PostReplyGlassSession(page, targets, settings.bottomTabLiquidGlass,
-                    navigationInsetBottom, ::reattach, ::close)
+                    navigationInsetBottom, ::reattach, ::close, autoHideAvailable, pendingHidden)
                 session = current
                 current.start()
                 if (closed || session !== current) return
+                pendingHidden = false
                 XposedCompat.logD("[PostReplyLiquidGlassHook] unique reply bar attached")
             } else {
                 if (++attempts >= 12) {
@@ -103,31 +127,17 @@ private class PostReplyGlassAttachment(
     }
 
     /** The native keyboard helper can retain a fixed height measured before edge-to-edge. */
-    @Suppress("DEPRECATION")
     private fun expandContentThroughNavigationBar() {
-        if (content.rootView.systemUiVisibility and View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION == 0) return
-        val insets = content.rootWindowInsets ?: return
-        // The host can consume navigation Insets after caching the pre-edge-to-edge height.
-        val navigationBottom = maxOf(navigationInsetBottom,
-            insets.getInsets(WindowInsets.Type.navigationBars()).bottom)
-        if (navigationBottom <= 0 || insets.isVisible(WindowInsets.Type.ime())) return
-        val child = content.getChildAt(0) ?: return
-        val layout = child.layoutParams as? FrameLayout.LayoutParams ?: return
-        val available = content.height - content.paddingTop - content.paddingBottom -
-            layout.topMargin - layout.bottomMargin
-        // Repair only the navigation-sized reservation; preserve keyboard and other host sizing.
-        if (layout.height > 0 && layout.height == available - navigationBottom) {
-            layout.height = ViewGroup.LayoutParams.MATCH_PARENT
-            child.layoutParams = layout
-        }
+        LiquidGlassGeom.expandContentThroughNavigationBar(content, navigationInsetBottom())
     }
 
     override fun onViewAttachedToWindow(view: View) = Unit
     override fun onViewDetachedFromWindow(view: View) = close()
 
     /** The host replaces the loading input after post data arrives, before its next draw. */
-    private fun reattach() {
+    private fun reattach(hidden: Boolean) {
         if (closed) return
+        pendingHidden = hidden
         session = null // The old session has already restored and removed its panel/listeners.
         attachIfReady() // Revalidate the complete reply shape in the same traversal.
     }

@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import com.forbidad4tieba.hook.symbol.contract.PostReplyBarContract
-import kotlin.math.roundToInt
 
 /** Owns the complete native icon/label stack while preserving its parents and click handlers. */
 internal class PostReplyActionLayout(private val content: PostReplyBarContract.ActionContent) {
@@ -17,7 +16,6 @@ internal class PostReplyActionLayout(private val content: PostReplyBarContract.A
     private val originalIconHeight = content.icon.layoutParams.height
     private val originalTranslationX = content.artwork.translationX
     private val originalTranslationY = content.artwork.translationY
-    private val originalAlpha = body.alpha
     private val originalBodyClip = body.clipChildren
     private val originalBodyClipPadding = body.clipToPadding
     private val iconGroup = content.icon as? ViewGroup
@@ -41,8 +39,8 @@ internal class PostReplyActionLayout(private val content: PostReplyBarContract.A
             labelWidth = 0
             labelHeight = 0
         }
-        gap = if (labelHeight > 0) density.roundToInt() else 0
-        val height = iconSize + gap + labelHeight
+        val height = PostReplyGlassGeometry.actionContentHeight(iconSize, labelHeight, density)
+        gap = height - iconSize - labelHeight
         val layout = body.layoutParams as FrameLayout.LayoutParams
         if (layout.width != ViewGroup.LayoutParams.MATCH_PARENT || layout.height != height || layout.gravity != Gravity.CENTER) {
             layout.width = ViewGroup.LayoutParams.MATCH_PARENT
@@ -80,10 +78,7 @@ internal class PostReplyActionLayout(private val content: PostReplyBarContract.A
         }
     }
 
-    fun setAlpha(value: Float) { body.alpha = originalAlpha * value }
-
     fun restore() {
-        body.alpha = originalAlpha
         body.clipChildren = originalBodyClip
         body.clipToPadding = originalBodyClipPadding
         body.layoutParams = originalLayout

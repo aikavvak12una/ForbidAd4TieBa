@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.symbol.contract
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.View
@@ -10,6 +11,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.contracts.Diagnostics
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import kotlin.math.roundToInt
@@ -41,6 +43,8 @@ object PostReplyBarContract {
         private val commentList: Method,
         private val agreeType: Class<*>,
         private val agreeIcon: Method,
+        val loadingArtwork: PostReplyLoadingArtwork?,
+        val scrollDispatch: Method?,
     ) {
         fun isNight(): Boolean = when (skinType.invoke(application) as Int) {
             1, 4 -> true // Host skin protocol, shared with the native Tab bar.
@@ -169,7 +173,13 @@ object PostReplyBarContract {
             }
         }
 
-        fun isEditorShown(): Boolean = editors.any { it.isShown && it.height > 0 }
+        fun isEditorShown(): Boolean {
+            for (index in editors.indices) {
+                val editor = editors[index]
+                if (editor.isShown && editor.height > 0) return true
+            }
+            return false
+        }
 
         /** Only the already-matched row can supply newly populated native action views. */
         fun refreshActions(): Boolean {
@@ -187,7 +197,7 @@ object PostReplyBarContract {
             recycler.parent === backdrop && backdrop.parent === root && editors.all { it.parent === root }
     }
 
-    fun resolve(classLoader: ClassLoader): Targets {
+    fun resolve(classLoader: ClassLoader, resolveScroll: Boolean = false): Targets {
         fun load(name: String) = Class.forName(name, false, classLoader)
         val activity = load(StableTiebaHookPoints.PB_ACTIVITY_CLASS)
         val root = load(PAGE_ROOT)
@@ -209,9 +219,37 @@ object PostReplyBarContract {
         check(!Modifier.isStatic(skinType.modifiers) && skinType.returnType == Integer.TYPE) {
             "Invalid skin type getter"
         }
-        return Targets(onCreate, root, action, content, editor, mask,
-            checkNotNull(getInst.invoke(null)) { "Core application unavailable" }, skinType,
-            validateCommentAccessor(content), agree, validateAgreeIcon(agree))
+        val application = checkNotNull(getInst.invoke(null)) { "Core application unavailable" }
+        val loadingArtwork = try {
+            PostReplyLoadingArtwork.resolve((application as Context).resources)
+        } catch (failure: RuntimeException) {
+            Diagnostics.log("[PostReplyLiquidGlassHook] loading artwork unavailable: ${failure.message}")
+            null // Resource failure disables only the early icons; native actions still own the page.
+        }
+        val scrollDispatch = if (resolveScroll) try {
+            validateScrollDispatch(load(StableTiebaHookPoints.RECYCLER_VIEW_CLASS), content)
+        } catch (failure: ReflectiveOperationException) {
+            Diagnostics.log("[PostReplyLiquidGlassHook] scroll collapse unavailable: ${failure.message}")
+            null
+        } catch (failure: IllegalStateException) {
+            Diagnostics.log("[PostReplyLiquidGlassHook] invalid scroll collapse target: ${failure.message}")
+            null
+        } catch (failure: LinkageError) {
+            Diagnostics.log("[PostReplyLiquidGlassHook] scroll collapse API unavailable: ${failure.message}")
+            null
+        } else null
+        return Targets(onCreate, root, action, content, editor, mask, application, skinType,
+            validateCommentAccessor(content), agree, validateAgreeIcon(agree), loadingArtwork, scrollDispatch)
+    }
+
+    internal fun validateScrollDispatch(recycler: Class<*>, content: Class<*>): Method {
+        check(ViewGroup::class.java.isAssignableFrom(recycler) && recycler.isAssignableFrom(content)) {
+            "Post content is not a native RecyclerView"
+        }
+        return recycler.getDeclaredMethod("dispatchOnScrolled", Integer.TYPE, Integer.TYPE).apply {
+            check(!Modifier.isStatic(modifiers) && returnType == Void.TYPE) { "Invalid native scroll dispatch" }
+            isAccessible = true
+        }
     }
 
     internal fun validateAgreeIcon(agree: Class<*>): Method {

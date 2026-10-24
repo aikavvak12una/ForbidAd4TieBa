@@ -118,20 +118,25 @@ class AllSettingsBehaviorTest {
                 // Project the renamed shared gate and retired material fields into the frozen baseline.
                 // The new gate's migration and independence are covered by the domain/feature-plan tests.
                 assertEquals(true, result.snapshot.bottomTabLiquidGlass.liquidGlassEnabled)
-                assertEquals(135, result.snapshot.bottomTabLiquidGlass.dropletWidthPercent)
+                assertEquals(0, result.snapshot.bottomTabLiquidGlass.widthAdjustment)
+                assertEquals(0, result.snapshot.bottomTabLiquidGlass.heightAdjustment)
+                assertEquals(0, result.snapshot.bottomTabLiquidGlass.positionAdjustment)
                 assertEquals(20, result.snapshot.bottomTabLiquidGlass.blurPercent)
                 val legacyHeight = if (result.snapshot.isFloatingBottomBarEnabled)
                     ((values["bottom_tab_liquid_glass_height_dp"] as? Int) ?: 64).coerceIn(48, 120) else 64
                 val legacyWidth = if (result.snapshot.isFloatingBottomBarEnabled)
                     ((values["bottom_tab_liquid_glass_width_percent"] as? Int) ?: 0)
                         .let { if (it == 0) 0 else it.coerceIn(60, 100) } else 0
+                val legacyGap = if (result.snapshot.isFloatingBottomBarEnabled)
+                    ((values["bottom_tab_liquid_glass_bottom_gap_dp"] as? Int) ?: -1).coerceIn(-1, 120) else -1
+                // Keep the frozen comparison for every unrelated setting. Retired geometry inputs
+                // are reconstructed only for this projection; the domain tests assert they are ignored.
+                val legacyStyle = "BottomTabLiquidGlassConfig(heightDp=$legacyHeight, widthPercent=$legacyWidth, " +
+                    "bottomGapDp=$legacyGap, blurEnabled=${result.snapshot.bottomTabLiquidGlass.blurEnabled}, " +
+                    "refractionEnabled=true, highlightEnabled=true, shadowEnabled=true, tiltEnabled=true, pressEffectEnabled=true)"
                 val legacySnapshot = result.snapshot.toString().substringBefore(", commentLevelFilter=")
                     .replace("isFloatingBottomBarEnabled=", "isBottomTabLiquidGlassEnabled=")
-                    .replace(", dropletWidthPercent=135, blurPercent=20", "")
-                    .replace(", liquidGlassEnabled=true",
-                        ", refractionEnabled=true, highlightEnabled=true, shadowEnabled=true, tiltEnabled=true, pressEffectEnabled=true")
-                    .replace("BottomTabLiquidGlassConfig(",
-                        "BottomTabLiquidGlassConfig(heightDp=$legacyHeight, widthPercent=$legacyWidth, ") + ")"
+                    .replace(result.snapshot.bottomTabLiquidGlass.toString(), legacyStyle) + ")"
                 val text = legacySnapshot + "/" + result.normalizedBottomTabs
                 val hash = MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
                 results += "$name/$state/$locked=$hash"

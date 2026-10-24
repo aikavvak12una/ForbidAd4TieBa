@@ -35,6 +35,13 @@ class PostReplyBarContractTest {
     class InvalidAgree(context: Context) : LinearLayout(context) {
         fun getImgAgree(): String = ""
     }
+    open class ScrollSource(context: Context) : FrameLayout(context) {
+        fun dispatchOnScrolled(dx: Int, dy: Int) = Unit
+    }
+    class ScrollPage(context: Context) : ScrollSource(context)
+    class InvalidScrollSource(context: Context) : FrameLayout(context) {
+        fun dispatchOnScrolled(dx: Int, dy: Int): Int = dy
+    }
 
     private fun validate(activity: Class<*> = PostActivity::class.java,
         action: Class<*> = Action::class.java, editor: Class<*> = LinearLayout::class.java) =
@@ -71,5 +78,20 @@ class PostReplyBarContractTest {
         assertThrows(NoSuchMethodException::class.java) { PostReplyBarContract.validateAgreeIcon(LinearLayout::class.java) }
         assertThrows(IllegalStateException::class.java) { PostReplyBarContract.validateAgreeIcon(InvalidAgree::class.java) }
         assertThrows(IllegalStateException::class.java) { PostReplyBarContract.validateAgreeIcon(FrameLayout::class.java) }
+    }
+
+    @Test fun scrollCollapseRequiresNativeDeltasAndTheValidatedPageHierarchy() {
+        val method = PostReplyBarContract.validateScrollDispatch(ScrollSource::class.java, ScrollPage::class.java)
+        assertEquals(ScrollSource::class.java, method.declaringClass)
+        assertEquals(Void.TYPE, method.returnType)
+        assertThrows(NoSuchMethodException::class.java) {
+            PostReplyBarContract.validateScrollDispatch(FrameLayout::class.java, FrameLayout::class.java)
+        }
+        assertThrows(IllegalStateException::class.java) {
+            PostReplyBarContract.validateScrollDispatch(InvalidScrollSource::class.java, InvalidScrollSource::class.java)
+        }
+        assertThrows(IllegalStateException::class.java) {
+            PostReplyBarContract.validateScrollDispatch(ScrollSource::class.java, FrameLayout::class.java)
+        }
     }
 }

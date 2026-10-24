@@ -3,28 +3,28 @@ package com.forbidad4tieba.hook.config
 import android.content.SharedPreferences
 import com.forbidad4tieba.hook.ui.UiText
 
-/** Shared material and center placement; the droplet width applies only to the home Tab bar. */
+/** Both bars apply the same adjustments to their own default geometry. Zero restores the baseline. */
 data class BottomTabLiquidGlassConfig(
-    /** Center distance above the window bottom; -1 selects automatic navigation clearance. */
-    val bottomGapDp: Int = -1,
+    val widthAdjustment: Int = 0,
+    val heightAdjustment: Int = 0,
+    val positionAdjustment: Int = 0,
     val blurEnabled: Boolean = true,
     val liquidGlassEnabled: Boolean = true,
-    val dropletWidthPercent: Int = 135,
     val blurPercent: Int = 20,
 ) {
     val needsBackdrop: Boolean get() = liquidGlassEnabled || (blurEnabled && blurPercent > 0)
 
     companion object {
-        const val MAX_BOTTOM_GAP_DP = 120
-        const val MIN_DROPLET_WIDTH_PERCENT = 100
-        const val MAX_DROPLET_WIDTH_PERCENT = 200
+        const val MIN_ADJUSTMENT = -100
+        const val MAX_ADJUSTMENT = 100
         const val MAX_BLUR_PERCENT = 100
         val DEFAULT = BottomTabLiquidGlassConfig()
     }
 
     fun normalized(): BottomTabLiquidGlassConfig = copy(
-        bottomGapDp = bottomGapDp.coerceIn(-1, MAX_BOTTOM_GAP_DP),
-        dropletWidthPercent = dropletWidthPercent.coerceIn(MIN_DROPLET_WIDTH_PERCENT, MAX_DROPLET_WIDTH_PERCENT),
+        widthAdjustment = widthAdjustment.coerceIn(MIN_ADJUSTMENT, MAX_ADJUSTMENT),
+        heightAdjustment = heightAdjustment.coerceIn(MIN_ADJUSTMENT, MAX_ADJUSTMENT),
+        positionAdjustment = positionAdjustment.coerceIn(MIN_ADJUSTMENT, MAX_ADJUSTMENT),
         blurPercent = blurPercent.coerceIn(0, MAX_BLUR_PERCENT),
     )
 }
@@ -32,9 +32,10 @@ data class BottomTabLiquidGlassConfig(
 /** Feature-specific persistence stays out of the shared ConfigManager container. */
 internal object BottomTabLiquidGlassPreferences {
     const val ENABLED = "floating_bottom_bar"
-    const val BOTTOM_GAP = "bottom_tab_liquid_glass_bottom_gap_dp"
+    const val WIDTH_ADJUSTMENT = "floating_bottom_bar_width_adjustment"
+    const val HEIGHT_ADJUSTMENT = "floating_bottom_bar_height_adjustment"
+    const val POSITION_ADJUSTMENT = "floating_bottom_bar_position_adjustment"
     const val BLUR = "bottom_tab_liquid_glass_blur"
-    const val DROPLET_WIDTH = "bottom_tab_liquid_glass_droplet_width_percent"
     const val BLUR_PERCENT = "bottom_tab_liquid_glass_blur_percent"
     const val FLOATING = "bottom_tab_liquid_glass_floating"
     const val LIQUID_GLASS = "bottom_tab_liquid_glass_effect"
@@ -44,8 +45,9 @@ internal object BottomTabLiquidGlassPreferences {
         ENABLED, false, PreferenceUse.SWITCH, null,
         SwitchPresentation(UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_FLOATING, UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_FLOATING_DESC),
     )
-    val BOTTOM_GAP_SETTING = IntPreference(BOTTOM_GAP, BottomTabLiquidGlassConfig.DEFAULT.bottomGapDp, PreferenceUse.FORM)
-    val DROPLET_WIDTH_SETTING = IntPreference(DROPLET_WIDTH, BottomTabLiquidGlassConfig.DEFAULT.dropletWidthPercent, PreferenceUse.FORM)
+    val WIDTH_ADJUSTMENT_SETTING = IntPreference(WIDTH_ADJUSTMENT, BottomTabLiquidGlassConfig.DEFAULT.widthAdjustment, PreferenceUse.FORM)
+    val HEIGHT_ADJUSTMENT_SETTING = IntPreference(HEIGHT_ADJUSTMENT, BottomTabLiquidGlassConfig.DEFAULT.heightAdjustment, PreferenceUse.FORM)
+    val POSITION_ADJUSTMENT_SETTING = IntPreference(POSITION_ADJUSTMENT, BottomTabLiquidGlassConfig.DEFAULT.positionAdjustment, PreferenceUse.FORM)
     val BLUR_PERCENT_SETTING = IntPreference(BLUR_PERCENT, BottomTabLiquidGlassConfig.DEFAULT.blurPercent, PreferenceUse.FORM)
     val BLUR_SETTING = BooleanPreference(
         BLUR, BottomTabLiquidGlassConfig.DEFAULT.blurEnabled, PreferenceUse.FORM, null,
@@ -62,7 +64,8 @@ internal object BottomTabLiquidGlassPreferences {
         POST_REPLY_BAR, false, PreferenceUse.LEGACY, null,
     )
     val preferences: List<Preference<*>> = listOf(
-        ENABLED_SETTING, BOTTOM_GAP_SETTING, BLUR_SETTING, DROPLET_WIDTH_SETTING, BLUR_PERCENT_SETTING,
+        ENABLED_SETTING, WIDTH_ADJUSTMENT_SETTING, HEIGHT_ADJUSTMENT_SETTING, POSITION_ADJUSTMENT_SETTING,
+        BLUR_SETTING, BLUR_PERCENT_SETTING,
         FLOATING_SETTING, LIQUID_GLASS_SETTING, POST_REPLY_BAR_SETTING,
     )
 
@@ -85,10 +88,11 @@ internal object BottomTabLiquidGlassPreferences {
 
     fun read(prefs: SettingsValues): BottomTabLiquidGlassConfig {
         return BottomTabLiquidGlassConfig(
-            bottomGapDp = BOTTOM_GAP_SETTING.read(prefs),
+            widthAdjustment = WIDTH_ADJUSTMENT_SETTING.read(prefs),
+            heightAdjustment = HEIGHT_ADJUSTMENT_SETTING.read(prefs),
+            positionAdjustment = POSITION_ADJUSTMENT_SETTING.read(prefs),
             blurEnabled = BLUR_SETTING.read(prefs),
             liquidGlassEnabled = LIQUID_GLASS_SETTING.read(prefs),
-            dropletWidthPercent = DROPLET_WIDTH_SETTING.read(prefs),
             blurPercent = BLUR_PERCENT_SETTING.read(prefs),
         ).normalized()
     }
@@ -97,10 +101,11 @@ internal object BottomTabLiquidGlassPreferences {
     fun save(prefs: SharedPreferences, config: BottomTabLiquidGlassConfig) {
         val value = config.normalized()
         prefs.edit()
-            .putInt(BOTTOM_GAP, value.bottomGapDp)
+            .putInt(WIDTH_ADJUSTMENT, value.widthAdjustment)
+            .putInt(HEIGHT_ADJUSTMENT, value.heightAdjustment)
+            .putInt(POSITION_ADJUSTMENT, value.positionAdjustment)
             .putBoolean(BLUR, value.blurEnabled)
             .putBoolean(LIQUID_GLASS, value.liquidGlassEnabled)
-            .putInt(DROPLET_WIDTH, value.dropletWidthPercent)
             .putInt(BLUR_PERCENT, value.blurPercent)
             .apply()
     }

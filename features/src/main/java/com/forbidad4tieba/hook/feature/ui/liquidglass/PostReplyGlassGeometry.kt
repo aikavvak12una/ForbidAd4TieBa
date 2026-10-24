@@ -1,6 +1,8 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import android.view.Gravity
+import com.forbidad4tieba.hook.config.BottomTabLiquidGlassConfig
+import com.forbidad4tieba.hook.symbol.contract.PostReplyLoadingArtwork
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -10,7 +12,7 @@ internal object PostReplyGlassGeometry {
     const val EDGE_MARGIN_DP = 24f
     const val SURFACE_GAP_DP = 8f
     const val ACTION_PADDING_DP = 4f
-    const val PENDING_ACTION_COUNT = 3
+    val PENDING_ACTION_COUNT: Int get() = PostReplyLoadingArtwork.actionCount
     private const val INPUT_FRACTION = 0.618f
     private const val VERTICAL_PADDING_DP = 3f
     private const val MIN_INPUT_WIDTH_DP = 96f
@@ -18,8 +20,11 @@ internal object PostReplyGlassGeometry {
 
     data class Surfaces(val inputWidth: Int, val actionsLeft: Int, val actionsContentWidth: Int) {
         fun columnWidth(index: Int, count: Int): Int =
-            actionsContentWidth / count + if (index < actionsContentWidth % count) 1 else 0
+            actionColumnWidth(actionsContentWidth, index, count)
     }
+
+    fun actionColumnWidth(contentWidth: Int, index: Int, count: Int): Int =
+        contentWidth / count + if (index < contentWidth % count) 1 else 0
 
     fun minimumWidth(actionCount: Int, density: Float): Int {
         val input = (MIN_INPUT_WIDTH_DP * density).roundToInt()
@@ -47,6 +52,10 @@ internal object PostReplyGlassGeometry {
         maxOf((HEIGHT_DP * density).roundToInt(), nativeHeight,
             controlHeight + 2 * (VERTICAL_PADDING_DP * density).roundToInt())
 
+    /** Loading icons reserve exactly the same caption line as the native icon/number stack. */
+    fun actionContentHeight(iconSize: Int, labelHeight: Int, density: Float): Int =
+        iconSize + labelHeight + if (labelHeight > 0) density.roundToInt() else 0
+
     fun needsVerticalCenter(gravity: Int): Boolean =
         gravity and Gravity.VERTICAL_GRAVITY_MASK != Gravity.CENTER_VERTICAL
 
@@ -57,7 +66,7 @@ internal object PostReplyGlassGeometry {
         windowLeft: Int, windowRight: Int, windowBottom: Int,
         safeLeft: Int, safeRight: Int, navigationBottom: Int,
         contentTop: Int, actionCount: Int, controlHeight: Int,
-        density: Float, bottomGapDp: Int, nativeHeight: Int = 0,
+        density: Float, config: BottomTabLiquidGlassConfig, nativeHeight: Int = 0,
     ): Bounds? {
         if (hostWidth <= 0 || hostHeight <= 0 || !density.isFinite() || density <= 0f || actionCount < 0) return null
         val left = (windowLeft + safeLeft - hostLeft).coerceIn(0, hostWidth)
@@ -66,15 +75,15 @@ internal object PostReplyGlassGeometry {
         val minimumWidth = minimumWidth(actionCount, density)
         if (available < minimumWidth) return null
         val desired = available - 2 * (EDGE_MARGIN_DP * density).roundToInt()
-        val width = desired.coerceIn(minimumWidth, available)
-        val height = height(controlHeight, density, nativeHeight)
-        val top = LiquidGlassBarMetrics.floatingTop(hostHeight, hostTop + hostHeight,
-            windowBottom, navigationBottom, height, density, bottomGapDp)
-            .coerceAtLeast(contentTop)
-        val bottom = minOf(hostHeight, LiquidGlassBarMetrics.placementBottom(
-            hostHeight, hostTop + hostHeight, windowBottom, navigationBottom, bottomGapDp))
-        if (top + height > bottom) return null
-        return Bounds(left + (available - width) / 2, top, width, height)
+        val width = LiquidGlassBarMetrics.adjustedSize(desired, minimumWidth, available, config.widthAdjustment)
+            ?: return null
+        val baselineHeight = height(controlHeight, density, nativeHeight)
+        val minimumHeight = maxOf((HEIGHT_DP * density).roundToInt(),
+            controlHeight + 2 * (VERTICAL_PADDING_DP * density).roundToInt())
+        val placement = LiquidGlassBarMetrics.placement(hostHeight, hostTop + hostHeight,
+            windowBottom, navigationBottom, baselineHeight, minimumHeight, density, config, contentTop)
+            ?: return null
+        return Bounds(left + (available - width) / 2, placement.top, width, placement.height)
     }
 
     fun contentBottomPadding(nativePadding: Int, contentBottom: Int, glassTop: Int, density: Float): Int =

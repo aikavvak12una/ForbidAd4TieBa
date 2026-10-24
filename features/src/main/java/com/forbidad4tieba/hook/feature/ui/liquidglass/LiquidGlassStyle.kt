@@ -1,6 +1,6 @@
 // Copyright 2026, compose-miuix-ui contributors
 // SPDX-License-Identifier: Apache-2.0
-// Adapted miuix material policy, with KernelSU as a floating-bar reference and local tuning.
+// KernelSU FloatingBottomBar material policy on the existing native View renderer.
 // Source mapping and modification details: app/src/main/assets/open-source-licenses.txt.
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
@@ -18,22 +18,18 @@ internal object LiquidGlassStyle {
     const val ARTWORK_SCALE = 1.2f
 
     // Floating-bar material only; these values do not configure custom page backgrounds.
-    const val MAX_BLUR_RADIUS_DP = 16f
-    const val MATERIAL_SATURATION = 1.08f
-    const val MATERIAL_CONTRAST = 1.04f
-    // ARGB alpha: 0xB3 / 255 is approximately 70%. Tune the two skins independently here.
-    const val LIGHT_SURFACE_ALPHA = 0xB3
-    const val DARK_SURFACE_ALPHA = 0xB3
+    const val MAX_BLUR_RADIUS_DP = 20f
+    const val MATERIAL_SATURATION = 1.5f
+    const val MATERIAL_CONTRAST = 1f
+    // KernelSU uses surfaceContainer.copy(alpha = 0.4f) with miuix's base palette.
+    const val LIGHT_SURFACE_ALPHA = 0x66
+    const val DARK_SURFACE_ALPHA = 0x66
     const val LIGHT_SURFACE_RGB = 0xFFFFFF
-    const val DARK_SURFACE_RGB = 0x000000
-    const val PRESSED_TAB_BACKDROP_SCALE = 0.95f
-    const val SHADOW_RADIUS_DP = 4f
-    const val SHADOW_OFFSET_Y_DP = 1f
-    const val LIGHT_SHADOW_COLOR = 0x20000000
-    const val DARK_SHADOW_COLOR = 0x50000000
-
-    /** Recede the material inside the pressed lens, independently of page and icon coordinates. */
-    fun tabBackdropScale(press: Float): Float = 1f - (1f - PRESSED_TAB_BACKDROP_SCALE) * press.coerceIn(0f, 1f)
+    const val DARK_SURFACE_RGB = 0x242424
+    const val SHADOW_RADIUS_DP = 10f
+    const val SHADOW_OFFSET_Y_DP = 0f
+    const val LIGHT_SHADOW_COLOR = 0x1A000000
+    const val DARK_SHADOW_COLOR = 0x33000000
 
     data class Material(
         val density: Float,

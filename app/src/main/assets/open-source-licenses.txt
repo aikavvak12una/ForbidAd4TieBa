@@ -46,7 +46,9 @@ parameters; lifecycle cleanup; user-configurable materials; navigation/IME-aware
 placement and split reply surfaces. Spring channels use a local analytical
 solver. Sensor subscriptions are shared by visible View owners. Layout and
 content measurement use Android ViewGroup coordinate conversion and reusable
-artwork bounds. Sizing, color, press and shadow parameters are customized here.
+artwork bounds. The default home dimensions, material, shadow and press composition follow
+KernelSU at the revision below. Native content clearance, saved style choices,
+reply geometry and host lifecycle integration remain local adaptations.
 
 2. Sources attributed by miuix: Kyant0/AndroidLiquidGlass
 
@@ -65,8 +67,8 @@ commit for the version actually used by miuix.
 3. Floating-bar implementation reference: KernelSU
 
 https://github.com/tiann/KernelSU
-Reference revision: 0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d
-https://github.com/tiann/KernelSU/blob/0c0fdb960178fa12d80d6cbcfdcb6ad8be6a865d/manager/app/src/main/java/me/weishu/kernelsu/ui/component/FloatingBottomBar.kt
+Reference revision: 528bafc5696196f3a9500cee2e7e18497421cd32
+https://github.com/tiann/KernelSU/blob/528bafc5696196f3a9500cee2e7e18497421cd32/manager/app/src/main/java/me/weishu/kernelsu/ui/component/FloatingBottomBar.kt
 KernelSU's repository license is GPL-3.0. The referenced file also retains
 this attribution, quoted verbatim:
 Adapted from compose-miuix-ui example (IosLiquidGlassNavigationBar) — Apache 2.0.

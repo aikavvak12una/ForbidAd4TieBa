@@ -23,12 +23,16 @@ internal object HomeTabAutoHideStrategy {
     fun pageSwitchQuietUntil(now: Long): Long = now + PAGE_SWITCH_QUIET_MS
 
     fun reachedScrollThreshold(view: View, state: ScrollAccumulator, direction: Int, dy: Int): Boolean {
+        return advance(state, direction, dy, thresholdPx(view, state, direction))
+    }
+
+    fun advance(state: ScrollAccumulator, direction: Int, dy: Int, threshold: Int): Boolean {
         if (state.lastDirection != direction) {
             state.lastDirection = direction
             state.accumulatedDy = 0
         }
         state.accumulatedDy += if (dy > 0) dy else -dy
-        return state.accumulatedDy >= thresholdPx(view, state, direction)
+        return state.accumulatedDy >= threshold
     }
 
     fun reset(state: ScrollAccumulator) {
@@ -36,7 +40,7 @@ internal object HomeTabAutoHideStrategy {
         state.accumulatedDy = 0
     }
 
-    private fun thresholdPx(view: View, state: ScrollAccumulator, direction: Int): Int {
+    fun thresholdPx(view: View, state: ScrollAccumulator, direction: Int): Int {
         if (shouldHide(direction)) {
             val cached = state.hideThresholdPx
             if (cached > 0) return cached

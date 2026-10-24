@@ -55,22 +55,29 @@ internal object BottomTabLiquidGlassDialog {
                 format = UiText.Settings::liquidGlassPercent,
             )
             val width = slider(
-                root, UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_TAB_WIDTH,
-                UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_TAB_WIDTH_DESC,
-                BottomTabLiquidGlassConfig.MIN_DROPLET_WIDTH_PERCENT,
-                BottomTabLiquidGlassConfig.MAX_DROPLET_WIDTH_PERCENT, initial.dropletWidthPercent,
-                onValueCommitted = { save(savedConfig.copy(dropletWidthPercent = it)) },
-                format = UiText.Settings::liquidGlassPercent,
+                root, UiText.Settings.FLOATING_BAR_WIDTH,
+                UiText.Settings.FLOATING_BAR_WIDTH_DESC,
+                BottomTabLiquidGlassConfig.MIN_ADJUSTMENT,
+                BottomTabLiquidGlassConfig.MAX_ADJUSTMENT, initial.widthAdjustment,
+                onValueCommitted = { save(savedConfig.copy(widthAdjustment = it)) },
+                format = UiText.Settings::liquidGlassAdjustment,
+            )
+            val height = slider(
+                root, UiText.Settings.FLOATING_BAR_HEIGHT,
+                UiText.Settings.FLOATING_BAR_HEIGHT_DESC,
+                BottomTabLiquidGlassConfig.MIN_ADJUSTMENT,
+                BottomTabLiquidGlassConfig.MAX_ADJUSTMENT, initial.heightAdjustment,
+                onValueCommitted = { save(savedConfig.copy(heightAdjustment = it)) },
+                format = UiText.Settings::liquidGlassAdjustment,
             )
             val gap = slider(
                 root, UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_BOTTOM_GAP,
                 UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_BOTTOM_GAP_DESC,
-                -1, BottomTabLiquidGlassConfig.MAX_BOTTOM_GAP_DP, initial.bottomGapDp,
-                onValueCommitted = { save(savedConfig.copy(bottomGapDp = it)) },
-            ) { value ->
-                if (value < 0) UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_AUTO
-                else UiText.Settings.liquidGlassDp(value)
-            }
+                BottomTabLiquidGlassConfig.MIN_ADJUSTMENT,
+                BottomTabLiquidGlassConfig.MAX_ADJUSTMENT, initial.positionAdjustment,
+                onValueCommitted = { save(savedConfig.copy(positionAdjustment = it)) },
+                format = UiText.Settings::liquidGlassAdjustment,
+            )
 
             fun updateAvailability() {
                 blur.isEnabled = !liquidGlass.isChecked
@@ -98,11 +105,12 @@ internal object BottomTabLiquidGlassDialog {
                 dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
                     restoringDefaults = true
                     try {
-                        gap.progress = defaults.bottomGapDp + 1
+                        gap.progress = defaults.positionAdjustment - BottomTabLiquidGlassConfig.MIN_ADJUSTMENT
                         blur.isChecked = defaults.blurEnabled
                         liquidGlass.isChecked = defaults.liquidGlassEnabled
                         blurAmount.progress = defaults.blurPercent
-                        width.progress = defaults.dropletWidthPercent - BottomTabLiquidGlassConfig.MIN_DROPLET_WIDTH_PERCENT
+                        width.progress = defaults.widthAdjustment - BottomTabLiquidGlassConfig.MIN_ADJUSTMENT
+                        height.progress = defaults.heightAdjustment - BottomTabLiquidGlassConfig.MIN_ADJUSTMENT
                     } finally {
                         restoringDefaults = false
                     }
