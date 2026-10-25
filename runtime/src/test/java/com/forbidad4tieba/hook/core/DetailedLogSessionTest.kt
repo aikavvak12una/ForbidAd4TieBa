@@ -160,6 +160,74 @@ class DetailedLogSessionTest {
         assertEquals(1L, snapshot.droppedEntryCount)
     }
 
+    @Test fun ordinaryFloodCannotEvictBoundedDiagnosticEvidence() {
+        DetailedLogSession.start("main", "{}")
+        repeat(57) { DetailedLogSession.recordDiagnostic("CloudDialog", "{\"index\":$it}") }
+        repeat(20_000) { DetailedLogSession.recordTieba("INFO", "Host", "noise-$it") }
+        val snapshot = requireNotNull(DetailedLogSession.snapshot())
+        assertEquals(10_000, snapshot.entries.size)
+        assertEquals(57, snapshot.entries.count { it.source == DetailedLogSource.DIAGNOSTIC })
+        assertEquals(0L, snapshot.droppedDiagnosticCount)
+        assertEquals(10_057L, snapshot.droppedEntryCount)
+        assertTrue(snapshot.entries.sumOf { it.characterCount } <= 2_000_000)
+    }
+
+    @Test fun diagnosticTrafficHasItsOwnCountAndCharacterCeilings() {
+        val store = DetailedLogSessionStore(10, 100, 50,
+            maxDiagnosticEntries = 2, maxDiagnosticCharacters = 25)
+        store.start("main", "{}")
+        store.append(DetailedLogSource.MODULE, "I", "T", "ordinary")
+        repeat(5) { store.append(DetailedLogSource.DIAGNOSTIC, "I", "T", "{\"i\":$it}") }
+        val snapshot = requireNotNull(store.snapshot())
+        assertEquals(listOf("ordinary", "{\"i\":3}", "{\"i\":4}"), snapshot.entries.map { it.message })
+        assertEquals(3L, snapshot.droppedDiagnosticCount)
+        // A larger valid record replaces both earlier diagnostic entries to fit the character cap.
+        assertTrue(store.append(DetailedLogSource.DIAGNOSTIC, "I", "T", "{\"value\":\"123456789\"}"))
+        val next = requireNotNull(store.snapshot())
+        assertEquals(1, next.entries.count { it.source == DetailedLogSource.DIAGNOSTIC })
+        assertEquals(5L, next.droppedDiagnosticCount)
+    }
+
+    @Test fun protectedEvidenceStillCountsAgainstTheGlobalCharacterLimit() {
+        val store = DetailedLogSessionStore(10, 40, 30,
+            maxDiagnosticEntries = 2, maxDiagnosticCharacters = 15)
+        store.start("main", "{}")
+        store.append(DetailedLogSource.DIAGNOSTIC, "I", "T", "{\"key\":123}")
+        repeat(10) { store.append(DetailedLogSource.TIEBA, "I", "T", "ordinary-$it") }
+        val snapshot = requireNotNull(store.snapshot())
+        assertEquals(1, snapshot.entries.count { it.source == DetailedLogSource.DIAGNOSTIC })
+        assertTrue(snapshot.entries.sumOf { it.characterCount } <= 40)
+    }
+
+    @Test fun oversizeDiagnosticIsRejectedWithoutTruncatingItsJsonOrEvictingOthers() {
+        val store = DetailedLogSessionStore(10, 100, 30,
+            maxDiagnosticEntries = 2, maxDiagnosticCharacters = 40)
+        store.start("main", "{}")
+        store.append(DetailedLogSource.DIAGNOSTIC, "I", "T", "{}")
+        assertFalse(store.append(DetailedLogSource.DIAGNOSTIC, "I", "T", "{\"text\":\"${"x".repeat(100)}\"}"))
+        // Default INFO/tag labels must be charged before accepting a payload near the limit.
+        assertFalse(store.append(DetailedLogSource.DIAGNOSTIC, "", "", "{\"text\":\"${"x".repeat(18)}\"}"))
+        val snapshot = requireNotNull(store.snapshot())
+        assertEquals(listOf("{}"), snapshot.entries.map { it.message })
+        assertEquals(2L, snapshot.droppedDiagnosticCount)
+        assertEquals(2L, snapshot.droppedEntryCount)
+    }
+
+    @Test fun mergedCaptureOrderSurvivesClockRollbackAndColdStartClearsBothQueues() {
+        var now = 200L
+        val store = DetailedLogSessionStore(10, 100, 30, clock = { now-- },
+            maxDiagnosticEntries = 2, maxDiagnosticCharacters = 30)
+        store.start("main", "{}")
+        store.append(DetailedLogSource.TIEBA, "I", "T", "first")
+        store.append(DetailedLogSource.DIAGNOSTIC, "I", "T", "{}")
+        store.append(DetailedLogSource.MODULE, "I", "T", "third")
+        assertEquals(listOf("first", "{}", "third"), requireNotNull(store.snapshot()).entries.map { it.message })
+        store.start("next", "{}")
+        val next = requireNotNull(store.snapshot())
+        assertTrue(next.entries.isEmpty())
+        assertEquals(0L, next.droppedDiagnosticCount)
+    }
+
     private fun store(
         maxEntries: Int = 10,
         maxTotalCharacters: Int = 1_000,

@@ -9,6 +9,7 @@ import java.util.Locale
 enum class DetailedLogSource {
     MODULE,
     TIEBA,
+    DIAGNOSTIC,
 }
 
 data class DetailedLogEntry(
@@ -17,6 +18,7 @@ data class DetailedLogEntry(
     val level: String,
     val tag: String,
     val message: String,
+    val sequence: Long = 0L,
 ) {
     val characterCount: Int
         get() = level.length + tag.length + message.length
@@ -28,6 +30,7 @@ data class DetailedLogSnapshot(
     val runtimeEnvironment: String,
     val entries: List<DetailedLogEntry>,
     val droppedEntryCount: Long,
+    val droppedDiagnosticCount: Long = 0L,
 )
 
 internal class DetailedLogSessionStore(
@@ -35,19 +38,27 @@ internal class DetailedLogSessionStore(
     private val maxTotalCharacters: Int,
     private val maxEntryCharacters: Int,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val maxDiagnosticEntries: Int = 0,
+    private val maxDiagnosticCharacters: Int = 0,
 ) {
     private val entries = ArrayDeque<DetailedLogEntry>()
+    private val diagnosticEntries = ArrayDeque<DetailedLogEntry>()
     private var active = false
     private var sessionStartMillis = 0L
     private var processName = ""
     private var runtimeEnvironment = ""
     private var totalCharacters = 0
     private var droppedEntryCount = 0L
+    private var diagnosticCharacters = 0
+    private var droppedDiagnosticCount = 0L
+    private var sequence = 0L
 
     init {
         require(maxEntries > 0)
         require(maxTotalCharacters > 0)
         require(maxEntryCharacters > 0)
+        require(maxDiagnosticEntries in 0..maxEntries)
+        require(maxDiagnosticCharacters in 0..maxTotalCharacters)
     }
 
     @Synchronized
@@ -56,8 +67,12 @@ internal class DetailedLogSessionStore(
         runtimeEnvironment: String,
     ) {
         entries.clear()
+        diagnosticEntries.clear()
         totalCharacters = 0
+        diagnosticCharacters = 0
         droppedEntryCount = 0
+        droppedDiagnosticCount = 0
+        sequence = 0
         sessionStartMillis = clock()
         this.processName = processName
         this.runtimeEnvironment = runtimeEnvironment
@@ -73,6 +88,15 @@ internal class DetailedLogSessionStore(
     ): Boolean {
         if (!active) return false
 
+        val diagnostic = source == DetailedLogSource.DIAGNOSTIC
+        // Structured records must remain valid JSON: reject oversize records instead of cutting them.
+        if (diagnostic && (maxDiagnosticEntries == 0 ||
+                level.ifBlank { "INFO" }.length.toLong() + tag.ifBlank { "-" }.length + message.length >
+                minOf(maxEntryCharacters, maxDiagnosticCharacters))) {
+            droppedEntryCount++
+            droppedDiagnosticCount++
+            return false
+        }
         val entry = boundedEntry(
             timestampMillis = clock(),
             source = source,
@@ -80,17 +104,41 @@ internal class DetailedLogSessionStore(
             tag = tag,
             message = message,
         )
-        while (
-            entries.isNotEmpty() &&
-            (entries.size >= maxEntries || totalCharacters + entry.characterCount > maxTotalCharacters)
-        ) {
-            val removed = entries.removeFirst()
-            totalCharacters -= removed.characterCount
-            droppedEntryCount += 1
+        if (diagnostic) {
+            while (diagnosticEntries.isNotEmpty() &&
+                (diagnosticEntries.size >= maxDiagnosticEntries ||
+                    diagnosticCharacters + entry.characterCount > maxDiagnosticCharacters)) {
+                dropOldestDiagnostic()
+            }
         }
-        entries.addLast(entry)
+        while (
+            entries.size + diagnosticEntries.size >= maxEntries ||
+            totalCharacters + entry.characterCount > maxTotalCharacters
+        ) {
+            if (entries.isNotEmpty()) {
+                totalCharacters -= entries.removeFirst().characterCount
+                droppedEntryCount++
+            } else if (diagnostic && diagnosticEntries.isNotEmpty()) {
+                dropOldestDiagnostic()
+            } else {
+                droppedEntryCount++
+                return false
+            }
+        }
+        if (diagnostic) {
+            diagnosticEntries.addLast(entry)
+            diagnosticCharacters += entry.characterCount
+        } else entries.addLast(entry)
         totalCharacters += entry.characterCount
         return true
+    }
+
+    private fun dropOldestDiagnostic() {
+        val size = diagnosticEntries.removeFirst().characterCount
+        diagnosticCharacters -= size
+        totalCharacters -= size
+        droppedEntryCount++
+        droppedDiagnosticCount++
     }
 
     @Synchronized
@@ -100,8 +148,10 @@ internal class DetailedLogSessionStore(
             sessionStartMillis = sessionStartMillis,
             processName = processName,
             runtimeEnvironment = runtimeEnvironment,
-            entries = entries.toList(),
+            // Sequence preserves capture order even if wall-clock time moves backwards.
+            entries = (entries + diagnosticEntries).sortedBy { it.sequence },
             droppedEntryCount = droppedEntryCount,
+            droppedDiagnosticCount = droppedDiagnosticCount,
         )
     }
 
@@ -124,6 +174,7 @@ internal class DetailedLogSessionStore(
             level = boundedLevel,
             tag = boundedTag,
             message = boundedMessage,
+            sequence = ++sequence,
         )
     }
 
@@ -150,6 +201,8 @@ object DetailedLogSession {
         maxEntries = MAX_ENTRIES,
         maxTotalCharacters = MAX_TOTAL_CHARACTERS,
         maxEntryCharacters = MAX_ENTRY_CHARACTERS,
+        maxDiagnosticEntries = 1_000,
+        maxDiagnosticCharacters = 250_000,
     )
 
     fun start(
@@ -166,6 +219,10 @@ object DetailedLogSession {
     fun recordTieba(level: String, tag: String, message: String): Boolean {
         return store.append(DetailedLogSource.TIEBA, level, tag, message)
     }
+
+    /** Bounded evidence retained independently of ordinary log traffic, within the same total cap. */
+    fun recordDiagnostic(tag: String, message: String): Boolean =
+        store.append(DetailedLogSource.DIAGNOSTIC, "INFO", tag, message)
 
     fun snapshot(): DetailedLogSnapshot? = store.snapshot()
 }
@@ -202,6 +259,8 @@ object DetailedLogFileFormatter {
             appendLine(snapshot.runtimeEnvironment)
             appendLine("entry_count=${snapshot.entries.size}")
             appendLine("dropped_count=${snapshot.droppedEntryCount}")
+            appendLine("diagnostic_entry_count=${snapshot.entries.count { it.source == DetailedLogSource.DIAGNOSTIC }}")
+            appendLine("diagnostic_dropped_count=${snapshot.droppedDiagnosticCount}")
             appendLine("---")
             snapshot.entries.forEach { entry ->
                 append(formatTimestamp(entry.timestampMillis, zoneId))
