@@ -3,6 +3,8 @@ package com.forbidad4tieba.hook.feature.signin
 import org.json.JSONObject
 
 internal object AutoSignInResponses {
+    private const val ALREADY_SIGNED_CODE = "160002"
+
     fun snapshot(json: JSONObject, nowSeconds: Long): SignInSnapshotResult {
         apiFailure(json)?.let { return SignInSnapshotResult(failure = it) }
         val body = payload(json)
@@ -43,8 +45,10 @@ internal object AutoSignInResponses {
         val body = payload(json)
         if (listOfNotNull(body.optJSONObject("user_info"), json.optJSONObject("user_info"))
                 .any { text(it, "is_sign_in") == "1" }) return SignInAttempt(true)
-        apiFailure(json)?.let { return SignInAttempt(false, it) }
-        return if (hasSuccessCode(json)) SignInAttempt(true)
+        val failures = apiFailures(json)
+        failures.firstOrNull { it.code != ALREADY_SIGNED_CODE }?.let { return SignInAttempt(false, it) }
+        // Only a single-forum reply can confirm this code; another business error still wins.
+        return if (failures.any { it.code == ALREADY_SIGNED_CODE } || hasSuccessCode(json)) SignInAttempt(true)
         else SignInAttempt(false, SignInFailure(SignInFailureKind.UNCONFIRMED))
     }
 
@@ -80,18 +84,19 @@ internal object AutoSignInResponses {
         if (text(json, "show_dialog") == "1") SignInFailure(SignInFailureKind.SERVER_NOTICE,
             message = text(json, "sign_notice")) else null
 
-    fun apiFailure(json: JSONObject): SignInFailure? {
+    fun apiFailure(json: JSONObject): SignInFailure? = apiFailures(json).firstOrNull()
+
+    private fun apiFailures(json: JSONObject): List<SignInFailure> {
         val objects = listOfNotNull(json.optJSONObject("error"), json,
             payload(json).takeUnless { it === json }?.optJSONObject("error"),
             payload(json).takeUnless { it === json })
-        for (obj in objects) {
+        return objects.mapNotNull { obj ->
             val code = text(obj, "errno").ifEmpty { text(obj, "error_code") }
                 .ifEmpty { text(obj, "code") }
             if (code.isNotEmpty() && code != "0") {
-                return SignInFailure(SignInFailureKind.API, code, errorMessage(obj))
-            }
+                SignInFailure(SignInFailureKind.API, code, errorMessage(obj))
+            } else null
         }
-        return null
     }
 
     private fun hasSuccessCode(json: JSONObject): Boolean {

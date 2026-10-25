@@ -84,8 +84,8 @@ internal class AutoSignInTask(
                 !entry.signed && entry.attempts == round
             }
             if (candidates.isEmpty()) return@repeat
-            if (round > 0 && (!canContinue() || !pause(RETRY_DELAY_MS * round))) return null
-            for ((index, forum) in candidates.withIndex()) {
+            var sent = 0
+            for (forum in candidates) {
                 if (forum.name.isEmpty()) {
                     state.forums.getValue(forum.key).apply {
                         attempts = MAX_ATTEMPTS
@@ -94,11 +94,11 @@ internal class AutoSignInTask(
                     checkpoint(state)
                     continue
                 }
-                if (!reserve(state, forum)) return null
+                if (!pauseBeforeSingle(round, sent) || !reserve(state, forum)) return null
                 record(state, forum, gateway.signSingle(forum))
+                sent++
                 checkpoint(state)
                 if (!canContinue()) return null
-                if (index < candidates.lastIndex && !pause(SINGLE_DELAY_MS)) return null
             }
         }
 
@@ -120,6 +120,20 @@ internal class AutoSignInTask(
         val alreadySigned = snapshot.forums.count { it.signed }
         return finish(state, SignInReport(state.day, now(), state.forums.size,
             state.forums.size - failures.size - alreadySigned, alreadySigned, failures))
+    }
+
+    private fun pauseBeforeSingle(round: Int, sent: Int): Boolean {
+        if (!canContinue()) return false
+        // Batch successes never consume pacing slots. The first fallback single starts immediately.
+        var delay = when {
+            sent == 0 -> if (round == 0) 0L else RETRY_DELAY_MS
+            round == 0 -> SINGLE_DELAY_MS.random()
+            else -> RETRY_SINGLE_DELAY_MS.random()
+        }
+        if (sent > 0 && sent % 10 == 0) {
+            delay += if (round == 0) SINGLE_REST_MS.random() else RETRY_REST_MS.random()
+        }
+        return (delay == 0L || pause(delay)) && canContinue()
     }
 
     private fun reserve(state: SignInDayState, forum: SignInForum): Boolean {
@@ -153,8 +167,11 @@ internal class AutoSignInTask(
 
     companion object {
         const val MAX_ATTEMPTS = 4 // One initial individual request, then three retries.
-        private const val RETRY_DELAY_MS = 2000L
-        private const val SINGLE_DELAY_MS = 500L
+        private const val RETRY_DELAY_MS = 15000L
+        private val SINGLE_DELAY_MS = 1000L..2500L
+        private val RETRY_SINGLE_DELAY_MS = 1500L..3000L
+        private val SINGLE_REST_MS = 5000L..10000L
+        private val RETRY_REST_MS = 5000L..8000L
         private const val FETCH_RETRY_COOLDOWN_MS = 30 * 60 * 1000L
     }
 }

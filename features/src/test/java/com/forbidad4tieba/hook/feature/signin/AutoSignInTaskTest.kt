@@ -89,6 +89,143 @@ class AutoSignInTaskTest {
         assertEquals(listOf(SignInFailedForum(gone, denied, 4)), report.failures)
     }
 
+    @Test fun allOfficialBatchesPrecedeSinglesAndAlreadySignedSuccessSurvivesRestart() {
+        val later = SignInForum("3", "后续吧", 8)
+        val api = FakeGateway(listOf(alive, gone, later), batchSize = 2)
+        api.singleReply = {
+            assertEquals(listOf(listOf(alive.key, gone.key), listOf(later.key)), api.batches)
+            AutoSignInResponses.single(JSONObject("""{"error_code":160002}"""))
+        }
+        var saved = ""
+        val state = SignInDayState("20261025")
+        val report = task(api, save = { saved = AutoSignInStateCodec.encode(it); true })
+            .run(state, false)!!
+
+        assertEquals(listOf(gone.key), api.singleCalls)
+        assertEquals(3, report.signed)
+        assertTrue(report.allSucceeded)
+        val restored = AutoSignInStateCodec.decode(saved)
+        assertTrue(restored.automaticDone)
+        assertTrue(restored.forums.getValue(gone.key).signed)
+        assertEquals(1, restored.forums.getValue(gone.key).attempts)
+        assertEquals(report, task(api).run(restored, false))
+        assertEquals(1, api.fetches)
+        task(api).run(restored, true)
+        assertEquals(listOf(gone.key), api.singleCalls)
+        assertEquals(2, api.batches.size)
+    }
+
+    @Test fun successfulOfficialBatchesNeverWaitForSingleSignPacing() {
+        val forums = (1..25).map { SignInForum(it.toString(), "贴吧$it", 8) }
+        val api = FakeGateway(forums, batchSize = 10).apply { recovered = true }
+        val report = task(api, pause = { fail("No single sign needs to wait"); false })
+            .run(SignInDayState("20261025"), false)!!
+
+        assertEquals(3, api.batches.size)
+        assertTrue(api.singleCalls.isEmpty())
+        assertTrue(report.allSucceeded)
+    }
+
+    @Test fun pacingCountsOnlyTheSinglesLeftAfterAllOfficialBatches() {
+        val forums = (1..25).map { SignInForum(it.toString(), "贴吧$it", 8) }
+        val api = FakeGateway(forums, batchSize = 10)
+        api.batchReply = { batch -> SignInBatchResult(batch.associate {
+            it.key to SignInAttempt(it.id.toInt() <= 23)
+        }) }
+        api.singleReply = {
+            assertEquals(3, api.batches.size)
+            SignInAttempt(true)
+        }
+        val waits = mutableListOf<Long>()
+        val report = task(api, pause = { waits.add(it); true })
+            .run(SignInDayState("20261025"), false)!!
+
+        assertEquals(listOf(forums[23].key, forums[24].key), api.singleCalls)
+        assertEquals(1, waits.size)
+        assertTrue(waits.single() in 1000L..2500L)
+        assertTrue(report.allSucceeded)
+    }
+
+    @Test fun longSingleSignPassRestsOnlyBeforeAnotherActualRequest() {
+        val forums = (1..21).map { SignInForum(it.toString(), "贴吧$it", 6) }
+        val api = FakeGateway(forums).apply { recovered = true }
+        val waits = mutableListOf<Pair<Int, Long>>()
+        val report = task(api, pause = { waits.add(api.singleCalls.size to it); true })
+            .run(SignInDayState("20261025"), false)!!
+
+        assertTrue(api.batches.isEmpty())
+        assertEquals(21, api.singleCalls.size)
+        assertEquals(20, waits.size)
+        for ((sent, delay) in waits) {
+            val expected = if (sent % 10 == 0) 6000L..12500L else 1000L..2500L
+            assertTrue("After $sent singles: $delay", delay in expected)
+        }
+        assertTrue(report.allSucceeded)
+    }
+
+    @Test fun retryPacingKeepsFourAttemptsAndDoesNotDelaySuccessfulForumsAgain() {
+        val forums = listOf(alive.copy(level = 6), gone.copy(level = 6))
+        val api = FakeGateway(forums)
+        val waits = mutableListOf<Pair<Int, Long>>()
+        val report = task(api, pause = { waits.add(api.singleCalls.size to it); true })
+            .run(SignInDayState("20261025"), false)!!
+
+        assertEquals(listOf(alive.key, gone.key, gone.key, gone.key, gone.key), api.singleCalls)
+        assertEquals(4, waits.size)
+        assertTrue(waits.first().second in 1000L..2500L)
+        assertEquals(listOf(2 to 15000L, 3 to 15000L, 4 to 15000L), waits.drop(1))
+        assertEquals(listOf(SignInFailedForum(forums[1], denied, 4)), report.failures)
+        assertTrue(report.isFinal)
+        assertFalse(report.allSucceeded)
+    }
+
+    @Test fun cancellationDuringPacingDoesNotReserveOrSendTheNextRequest() {
+        val forums = listOf(alive.copy(level = 6), gone.copy(level = 6))
+        val api = FakeGateway(forums)
+        var active = true
+        var saved = ""
+        assertNull(task(api, save = { saved = AutoSignInStateCodec.encode(it); true },
+            allowed = { active }, pause = { active = false; true })
+            .run(SignInDayState("20261025"), false))
+
+        assertEquals(listOf(alive.key), api.singleCalls)
+        val restored = AutoSignInStateCodec.decode(saved)
+        assertTrue(restored.forums.getValue(alive.key).signed)
+        assertEquals(0, restored.forums.getValue(gone.key).attempts)
+        assertFalse(restored.automaticDone)
+        api.recovered = true
+        assertTrue(task(api).run(restored, false)!!.allSucceeded)
+        assertEquals(listOf(alive.key, gone.key), api.singleCalls)
+    }
+
+    @Test fun longRetryPassesKeepTheirOwnIntervalsAndRestAfterTenRequests() {
+        val forums = (1..11).map { SignInForum(it.toString(), "贴吧$it", 6) }
+        val api = FakeGateway(forums)
+        api.singleReply = { SignInAttempt(false, denied) }
+        val waits = mutableListOf<Pair<Int, Long>>()
+        val report = task(api, pause = { waits.add(api.singleCalls.size to it); true })
+            .run(SignInDayState("20261025"), false)!!
+
+        assertTrue(api.batches.isEmpty())
+        assertEquals(44, api.singleCalls.size)
+        assertEquals((1..43).toList(), waits.map { it.first })
+        for ((sent, delay) in waits) {
+            val round = sent / 11
+            val sentInRound = sent % 11
+            val expected = when {
+                sentInRound == 0 -> 15000L..15000L
+                round == 0 && sentInRound == 10 -> 6000L..12500L
+                round == 0 -> 1000L..2500L
+                sentInRound == 10 -> 6500L..11000L
+                else -> 1500L..3000L
+            }
+            assertTrue("After $sent singles: $delay", delay in expected)
+        }
+        assertEquals(11, report.failures.size)
+        assertTrue(report.failures.all { it.attempts == 4 })
+        assertTrue(report.isFinal)
+    }
+
     @Test fun failedBatchAndSingleSignProgressSurviveProcessDeath() {
         val api = FakeGateway(listOf(gone))
         api.batchReply = { SignInBatchResult(failure = SignInFailure(SignInFailureKind.NO_RESPONSE)) }
@@ -422,8 +559,8 @@ class AutoSignInTaskTest {
             SignInFailure(SignInFailureKind.SERVER_NOTICE, message = peakNotice)))
 
     private fun task(api: FakeGateway, save: (SignInDayState) -> Boolean = { true },
-                     allowed: () -> Boolean = { true }) =
-        AutoSignInTask(api, save, allowed, { true }, { 1000L })
+                     allowed: () -> Boolean = { true }, pause: (Long) -> Boolean = { true }) =
+        AutoSignInTask(api, save, allowed, pause, { 1000L })
 
     private class SimulatedDeath : RuntimeException()
 

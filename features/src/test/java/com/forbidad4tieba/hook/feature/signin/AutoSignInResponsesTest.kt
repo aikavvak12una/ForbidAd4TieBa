@@ -26,6 +26,45 @@ class AutoSignInResponsesTest {
         assertTrue(AutoSignInResponses.single(JSONObject("""{"data":{"user_info":{"is_sign_in":"1"}}}""")).success)
     }
 
+    @Test fun alreadySignedCodeConfirmsSingleSignWithoutAUserFlag() {
+        for (raw in listOf(
+            """{"error_code":160002}""",
+            """{"error_code":"160002","error_msg":"今日已签到"}""",
+            """{"errno":0,"data":{"error":{"errno":"160002"}}}""",
+            """{"error":{"error_code":160002},"data":{"code":"160002"}}""",
+        )) {
+            val result = AutoSignInResponses.single(JSONObject(raw))
+            assertTrue(raw, result.success)
+            assertNull(result.failure)
+        }
+    }
+
+    @Test fun alreadySignedCodeDoesNotHideAnotherBusinessFailure() {
+        for (raw in listOf(
+            """{"error_code":160002,"data":{"error":{"errno":"fixture_login_required"}}}""",
+            """{"error":{"errno":"160002"},"error_code":"fixture_login_required"}""",
+            """{"errno":"fixture_login_required","data":{"error_code":160002}}""",
+        )) {
+            val result = AutoSignInResponses.single(JSONObject(raw))
+            assertFalse(raw, result.success)
+            assertEquals("fixture_login_required", result.failure?.code)
+        }
+    }
+
+    @Test fun alreadySignedCodeDoesNotConfirmAListOrAnEntireBatch() {
+        val json = JSONObject("""{"error_code":160002,"forum_info":[]}""")
+        assertEquals("160002", AutoSignInResponses.snapshot(json, 0).failure?.code)
+        val batch = AutoSignInResponses.batch(json, listOf(one, two))
+        assertEquals("160002", batch.failure?.code)
+        assertTrue(batch.attempts.values.all { !it.success })
+    }
+
+    @Test fun shieldedForumKeepsItsActualFailureCode() {
+        val result = AutoSignInResponses.single(JSONObject("""{"error_code":340006,"error_msg":"贴吧已被屏蔽"}"""))
+        assertFalse(result.success)
+        assertEquals(SignInFailure(SignInFailureKind.API, "340006", "贴吧已被屏蔽"), result.failure)
+    }
+
     @Test fun missingResultDoesNotBecomeSuccessOrAnInventedErrorCode() {
         val result = AutoSignInResponses.single(JSONObject("""{"data":{}}"""))
         assertFalse(result.success)
