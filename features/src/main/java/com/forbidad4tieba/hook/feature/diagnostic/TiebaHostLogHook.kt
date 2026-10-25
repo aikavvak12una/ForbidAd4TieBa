@@ -29,6 +29,7 @@ internal object TiebaHostLogHook {
     private val hooks = OwnedHookSet<Method, XposedInterface.HookHandle> { it.unhook() }
     private val regularBudget = HostLogRateBudget(maxEntries = 32, maxCharacters = 48 * 1024)
     private val priorityBudget = HostLogRateBudget(maxEntries = 8, maxCharacters = 16 * 1024)
+    private val cloudDialogLog = lazy { CloudDialogLog(::emitDiagnostic) }
     @Volatile private var activeInstallation: Any? = null
     private val callbackErrorLogged = AtomicBoolean(false)
 
@@ -188,6 +189,9 @@ internal object TiebaHostLogHook {
         tag: String,
         message: String,
     ) {
+        if (space == "dialog" && tag == "YunDialogManager") {
+            cloudDialogLog.value.record(message, SystemClock.elapsedRealtime())
+        }
         val characterCount = HostLogContent.boundedCharacterCount(level, MAX_LEVEL_CHARACTERS) +
             HostLogContent.boundedCharacterCount(space, MAX_SPACE_CHARACTERS) +
             HostLogContent.boundedCharacterCount(logId, MAX_LOG_ID_CHARACTERS) +
@@ -209,6 +213,21 @@ internal object TiebaHostLogHook {
         val boundedMessage = HostLogContent.sanitize(message, MAX_MESSAGE_CHARACTERS)
         val detail = "space=$boundedSpace logId=$boundedLogId message=$boundedMessage"
         emit(boundedLevel, boundedTag, detail)
+    }
+
+    /** Flush on save, so a final suppressed burst is visible without waiting for another log. */
+    fun flushSuppressed() {
+        for ((group, budget) in listOf("regular" to regularBudget, "priority" to priorityBudget)) {
+            val count = budget.drainSuppressed()
+            if (count > 0) emit("WARN", TAG, "suppressed=$count host log entries; budget=$group")
+        }
+        if (cloudDialogLog.isInitialized()) cloudDialogLog.value.flushSuppressed()
+    }
+
+    private fun emitDiagnostic(message: String) {
+        if (DetailedLogSession.recordDiagnostic("CloudDialog", message)) {
+            XposedCompat.emitTiebaHostLog(Log.INFO, "CloudDialog", message)
+        }
     }
 
     private fun emit(level: String, tag: String, detail: String) {

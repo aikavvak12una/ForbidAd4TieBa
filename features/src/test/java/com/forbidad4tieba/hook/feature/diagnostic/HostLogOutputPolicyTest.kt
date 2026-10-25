@@ -91,6 +91,16 @@ class HostLogOutputPolicyTest {
         assertEquals(2L, budget.acquire(1, 6_000))
     }
 
+    @Test fun exportCanDrainSuppressedEntriesWithoutRefillingTheBudget() {
+        val budget = HostLogRateBudget(maxEntries = 1, maxCharacters = 10)
+        assertEquals(0L, budget.acquire(10, 0))
+        repeat(3) { assertEquals(-1L, budget.acquire(1, 0)) }
+        assertEquals(3L, budget.drainSuppressed())
+        assertEquals(0L, budget.drainSuppressed())
+        assertEquals(-1L, budget.acquire(1, 0))
+        assertEquals(1L, budget.acquire(10, 1_000))
+    }
+
     @Test fun separatePriorityBudgetRemainsAvailableDuringAnOrdinaryFlood() {
         val regular = HostLogRateBudget(maxEntries = 32, maxCharacters = 48 * 1024)
         val priority = HostLogRateBudget(maxEntries = 8, maxCharacters = 16 * 1024)

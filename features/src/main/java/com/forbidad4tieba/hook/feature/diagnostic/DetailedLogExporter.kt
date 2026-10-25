@@ -85,7 +85,13 @@ internal object DetailedLogExporter {
             return DetailedLogExportStartResult.AlreadySaving
         }
 
-        val snapshot = DetailedLogSession.snapshot()
+        val snapshot = try {
+            TiebaHostLogHook.flushSuppressed()
+            DetailedLogSession.snapshot()
+        } catch (failure: Exception) {
+            saving.set(false)
+            return DetailedLogExportStartResult.Failure(failureReason(failure))
+        }
         if (snapshot == null) {
             saving.set(false)
             return DetailedLogExportStartResult.NoSession

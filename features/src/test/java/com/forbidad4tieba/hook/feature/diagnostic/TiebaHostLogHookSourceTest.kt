@@ -20,6 +20,17 @@ class TiebaHostLogHookSourceTest {
         assertFalse(source.contains("contentResolver"))
     }
 
+    @Test fun structuredEvidenceUsesTheExistingDialogLogScopeBeforeGeneralRateLimiting() {
+        val source = readSource("features/src/main/java/com/forbidad4tieba/hook/feature/diagnostic/TiebaHostLogHook.kt")
+        assertTrue(source.contains("space == \"dialog\" && tag == \"YunDialogManager\""))
+        assertTrue(source.indexOf("cloudDialogLog.value.record(") < source.indexOf("budget.acquire("))
+        val parser = readSource("features/src/main/java/com/forbidad4tieba/hook/feature/diagnostic/CloudDialogLog.kt")
+        assertFalse(parser.contains("Class.forName"))
+        assertFalse(parser.contains("getDeclared"))
+        assertFalse(parser.contains("getSharedPreferences"))
+        assertFalse(parser.contains("openConnection"))
+    }
+
     private fun readSource(relativePath: String): String {
         var directory = File(requireNotNull(System.getProperty("user.dir"))).canonicalFile
         repeat(5) {

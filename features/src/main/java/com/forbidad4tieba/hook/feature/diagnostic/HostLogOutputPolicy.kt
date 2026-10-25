@@ -58,4 +58,12 @@ internal class HostLogRateBudget(
         suppressed = 0L
         return pending
     }
+
+    /** Export must also report a final suppressed burst when no later log refills the window. */
+    @Synchronized
+    fun drainSuppressed(): Long {
+        val pending = suppressed
+        suppressed = 0L
+        return pending
+    }
 }
