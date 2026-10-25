@@ -156,7 +156,7 @@ object UiText {
         const val BOTTOM_BAR_STYLE_TITLE = "悬浮底栏"
         const val BOTTOM_TAB_LIQUID_GLASS_BOTTOM_GAP = "底部间距"
         const val BOTTOM_TAB_LIQUID_GLASS_BOTTOM_GAP_DESC =
-            "中间为默认，左侧下移、右侧上移；最低以首页底栏贴屏幕底部为限"
+            "左侧下移、右侧上移"
         const val BOTTOM_TAB_LIQUID_GLASS_BLUR = "模糊"
         const val BOTTOM_TAB_LIQUID_GLASS_BLUR_DESC = "关闭液态玻璃时，模糊底栏后方的内容"
         const val BOTTOM_TAB_LIQUID_GLASS_FLOATING = "悬浮底栏"
@@ -166,9 +166,9 @@ object UiText {
         const val BOTTOM_TAB_LIQUID_GLASS_BLUR_AMOUNT = "模糊强度"
         const val BOTTOM_TAB_LIQUID_GLASS_BLUR_AMOUNT_DESC = "调节底栏的背景模糊"
         const val FLOATING_BAR_WIDTH = "底栏宽度"
-        const val FLOATING_BAR_WIDTH_DESC = "首页与帖子共用；中间为各自默认，左侧缩窄、右侧加宽"
+        const val FLOATING_BAR_WIDTH_DESC = "左侧缩窄、右侧加宽"
         const val FLOATING_BAR_HEIGHT = "底栏高度"
-        const val FLOATING_BAR_HEIGHT_DESC = "首页与帖子共用；中间为各自默认，左侧降低、右侧增高"
+        const val FLOATING_BAR_HEIGHT_DESC = "左侧降低、右侧增高"
         fun liquidGlassAdjustment(value: Int): String = when {
             value == 0 -> "默认"
             value > 0 -> "+$value"
