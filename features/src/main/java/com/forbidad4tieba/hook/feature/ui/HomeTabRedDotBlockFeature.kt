@@ -4,7 +4,7 @@ import com.forbidad4tieba.hook.FeatureDefinition
 import com.forbidad4tieba.hook.FeaturePhase
 import com.forbidad4tieba.hook.FeatureProcess
 
-internal val HomeTabRedDotBlockFeature = FeatureDefinition.observed(
+internal val HomeTabRedDotBlockFeature = FeatureDefinition.single(
     id = "HomeTabRedDotBlockHook",
     phase = FeaturePhase.POST_ATTACH,
     process = FeatureProcess.MAIN,

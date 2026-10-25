@@ -148,7 +148,7 @@ object UiText {
         const val AUTO_HIDE_HOME_TAB_LABEL = "滚动收起 Tab 栏"
         const val AUTO_HIDE_HOME_TAB_DESC = "随滚动收起或展开首页 Tab 栏；开启悬浮底栏时，也控制帖子页的回复和互动底栏"
         const val HIDE_HOME_TAB_RED_DOT_LABEL = "隐藏小红点"
-        const val HIDE_HOME_TAB_RED_DOT_DESC = "隐藏无数字小红点提示，保留带数字的未读提示"
+        const val HIDE_HOME_TAB_RED_DOT_DESC = "隐藏无文字、无数字的小红点，保留未读数字和文字标签"
         const val HIDE_INPUT_MEME_BAR_LABEL = "移除输入框表情包栏"
         const val HIDE_INPUT_MEME_BAR_DESC = "移除回复输入框上方的表情包推荐栏"
         const val SIMPLIFY_BOTTOM_TAB_LABEL = "自定义底部 Tab"

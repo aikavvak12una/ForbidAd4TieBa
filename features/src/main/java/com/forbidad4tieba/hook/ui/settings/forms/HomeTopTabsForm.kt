@@ -12,6 +12,7 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.showSettingsDialog
 import com.forbidad4tieba.hook.ui.createDialogScrollContainer
+import com.forbidad4tieba.hook.ui.createDivider
 import com.forbidad4tieba.hook.ui.createSwitchRow
 import com.forbidad4tieba.hook.ui.dialogThemeFor
 import com.forbidad4tieba.hook.ui.findSwitchView
@@ -57,6 +58,7 @@ internal object HomeTopTabsForm {
             )
             val fixedSwitch = checkNotNull(findSwitchView(fixedRow))
             root.addView(fixedRow)
+            root.addView(createDivider(context, padding))
             val rows = ArrayList<RowState>(catalog.size + missing.size)
             (catalog + missing).forEachIndexed { index, entry ->
                 val available = index < catalog.size
