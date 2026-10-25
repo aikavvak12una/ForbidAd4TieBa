@@ -70,6 +70,7 @@ internal data class HomeTabScanSymbols(
     val tabClass: String? = null,
     val rebuildMethod: String? = null,
     val listField: String? = null,
+    val parseMethod: String? = null,
 )
 
 internal data class ForumPageAdScanSymbols(

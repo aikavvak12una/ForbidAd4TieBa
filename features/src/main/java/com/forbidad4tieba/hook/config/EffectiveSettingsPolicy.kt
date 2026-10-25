@@ -2,10 +2,6 @@ package com.forbidad4tieba.hook.config
 
 import com.forbidad4tieba.hook.config.TabPreferences.BottomTabSelection
 import com.forbidad4tieba.hook.config.HomeGlassPreferences.DEFAULT_HOME_TAB_DYNAMIC_TINT_ENABLED
-import com.forbidad4tieba.hook.config.TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED
-import com.forbidad4tieba.hook.config.TabPreferences.HOME_TOP_TAB_KEY_LIVE
-import com.forbidad4tieba.hook.config.TabPreferences.HOME_TOP_TAB_KEY_MATERIAL
-import com.forbidad4tieba.hook.config.TabPreferences.HOME_TOP_TAB_KEY_RECOMMEND
 import com.forbidad4tieba.hook.config.TabPreferences.HOME_TOP_TAB_LEGACY_RECOMMEND_KEYS
 import com.forbidad4tieba.hook.config.TabPreferences.HomeTopTabSelection
 import com.forbidad4tieba.hook.config.TabPreferences.KEY_HOME_TOP_TAB_DISABLED_KEYS
@@ -14,7 +10,6 @@ import com.forbidad4tieba.hook.config.ReplyPreferences.MAX_REPLY_VISIBILITY_PROB
 import com.forbidad4tieba.hook.config.ModelScoreSettings.MIN_MODEL_SCORE_STATS_POST_LIMIT
 import com.forbidad4tieba.hook.config.ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS
 import com.forbidad4tieba.hook.config.ReplyPreferences.MIN_REPLY_VISIBILITY_PROBE_MAX_ATTEMPTS
-import com.forbidad4tieba.hook.config.TabPreferences.isLegacyHomeTopTabEnabled
 import com.forbidad4tieba.hook.config.TabPreferences.normalizeBottomTabSelection
 import com.forbidad4tieba.hook.config.FreeCopyPreferences.normalizeFreeCopyPostModes
 import com.forbidad4tieba.hook.config.ModelScoreSettings.parseModelScoreAutoPercentiles
@@ -71,14 +66,12 @@ internal object EffectiveSettingsPolicy {
         val homeTopTabsCustomEnabled = tabCustomizationEnabled && featureBoolean(TabPreferences.CUSTOM_HOME_TOP_TABS)
         val homeTopTabSelection = if (homeTopTabsCustomEnabled) {
             val disabledKeys = readHomeTopTabDisabledKeys(p)
-            val rawSelection = HomeTopTabSelection(
-                materialEnabled = isLegacyHomeTopTabEnabled(disabledKeys, HOME_TOP_TAB_KEY_MATERIAL),
-                recommendEnabled = isLegacyHomeTopTabEnabled(disabledKeys, HOME_TOP_TAB_KEY_RECOMMEND),
-                liveEnabled = isLegacyHomeTopTabEnabled(disabledKeys, HOME_TOP_TAB_KEY_LIVE),
-                followedEnabled = isLegacyHomeTopTabEnabled(disabledKeys, HOME_TOP_TAB_KEY_FOLLOWED),
-                disabledKeys = disabledKeys,
-            )
-            if (p.contains(KEY_HOME_TOP_TAB_DISABLED_KEYS) || rawSelection.hasEnabledTab()) {
+            val rawSelection = TabPreferences.legacyHomeTopTabSelection(disabledKeys)
+            if (featureBoolean(TabPreferences.HOME_TOP_TAB_FIXED_ENABLED)) {
+                TabPreferences.fixedHomeTopTabSelection(
+                    TabPreferences.fixedHomeTopTabKeys(TabPreferences.readFixedHomeTopTabs(p)), disabledKeys,
+                )
+            } else if (p.contains(KEY_HOME_TOP_TAB_DISABLED_KEYS) || rawSelection.hasEnabledTab()) {
                 rawSelection
             } else {
                 rawSelection.copy(
@@ -138,6 +131,8 @@ internal object EffectiveSettingsPolicy {
             isHomeTopTabLiveEnabled = homeTopTabSelection.liveEnabled,
             isHomeTopTabFollowedEnabled = homeTopTabSelection.followedEnabled,
             homeTopTabDisabledKeys = homeTopTabSelection.disabledKeys,
+            isHomeTopTabFixedEnabled = homeTopTabSelection.fixedEnabled,
+            homeTopTabFixedKeys = homeTopTabSelection.fixedKeys,
             isHomeTabAutoHideEnabled = tabCustomizationEnabled && featureBoolean(TabPreferences.AUTO_HIDE_HOME_TAB),
             isHomeTabRedDotHidden = featureBoolean(TabPreferences.HIDE_HOME_TAB_RED_DOT),
             isInputMemeBarHidden = featureBoolean(ExtensionPreferences.HIDE_INPUT_MEME_BAR),

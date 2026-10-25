@@ -443,6 +443,12 @@ object UiText {
         const val HOME_TOP_TAB_LIVE_LABEL = "直播"
         const val HOME_TOP_TAB_FOLLOWED_LABEL = "关注"
         const val HOME_TOP_TAB_AT_LEAST_ONE = "至少保留一个首页顶部 Tab"
+        const val HOME_TOP_TAB_FIXED_LABEL = "固定 Tab"
+        const val HOME_TOP_TAB_FIXED_DESC = "固定显示已选且可用的 Tab，防止贴吧热更新 Tab"
+        const val HOME_TOP_TAB_FIXED_NEEDS_CATALOG = "请先进入首页，再打开设置以固定当前选择"
+        const val HOME_TOP_TAB_FIXED_UNAVAILABLE = "固定 Tab 暂不可用，请先完成符号扫描并重启"
+        const val HOME_TOP_TAB_TEMPORARILY_UNAVAILABLE = "暂不可用，恢复后自动显示"
+        const val HOME_TOP_TAB_AT_LEAST_ONE_AVAILABLE = "至少保留一个当前可用的首页顶部 Tab"
         const val HOME_TOP_TAB_SAVED = "首页顶部 Tab 配置已保存"
         fun homeTopTabFallbackLabel(index: Int): String = "顶部 Tab $index"
         const val BOTTOM_TAB_DIALOG_TITLE = SIMPLIFY_BOTTOM_TAB_LABEL

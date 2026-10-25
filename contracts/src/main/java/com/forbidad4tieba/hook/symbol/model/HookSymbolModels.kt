@@ -33,6 +33,7 @@ object HookFeatureKey {
     const val ENABLE_CUSTOM_POST_FILTER = "enable_custom_post_filter"
 
     const val SIMPLIFY_HOME_TOP_TABS = "simplify_home_tabs"
+    const val FIXED_HOME_TOP_TABS = "home_top_tab_fixed_enabled"
     const val SIMPLIFY_BOTTOM_TABS = "simplify_bottom_tabs"
     const val HIDE_INPUT_MEME_BAR = "hide_input_meme_bar"
     const val HIDE_PB_BOTTOM_BANNER = "hide_pb_bottom_enter_bar"
@@ -87,6 +88,7 @@ object HookFeatureKey {
         BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
         ENABLE_CUSTOM_POST_FILTER,
         SIMPLIFY_HOME_TOP_TABS,
+        FIXED_HOME_TOP_TABS,
         SIMPLIFY_BOTTOM_TABS,
         HIDE_INPUT_MEME_BAR,
         HIDE_PB_BOTTOM_BANNER,

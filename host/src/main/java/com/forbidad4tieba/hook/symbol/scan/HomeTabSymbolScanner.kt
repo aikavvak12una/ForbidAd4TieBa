@@ -9,18 +9,15 @@ internal object HomeTabSymbolScanner {
         cl: ClassLoader,
         logger: ScanLogger?,
     ): HomeTabScanSymbols {
+        val rule = HomeTabsLevel1Rule()
         val match = ScanReflection.runRules(
             candidates,
             cl,
-            listOf(HomeTabsLevel1Rule()),
+            listOf(rule),
             logger,
             "home",
         ) ?: return HomeTabScanSymbols()
 
-        return HomeTabScanSymbols(
-            tabClass = match.className,
-            rebuildMethod = match.methodName,
-            listField = match.fieldName,
-        )
+        return rule.targets.getValue(match.className)
     }
 }

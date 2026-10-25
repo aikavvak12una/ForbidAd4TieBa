@@ -15,11 +15,14 @@ import com.forbidad4tieba.hook.symbol.scan.HomeTabSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
 import java.lang.reflect.Field
+import java.lang.reflect.Method
+import java.lang.reflect.Modifier
 
 /** Owns the cached descriptors and host rules for this capability. */
 object HomeTabsContract : SymbolContract("HomeTabs") {
     val homeTabClass = text("homeTabClass")
     val homeTabRebuildMethod = text("homeTabRebuildMethod")
+    val homeTabParseMethod = text("homeTabParseMethod")
     val homeTabListField = text("homeTabListField")
     val homeTabItemTypeField = text("homeTabItemTypeField")
     val homeTabItemCodeField = text("homeTabItemCodeField")
@@ -28,6 +31,11 @@ object HomeTabsContract : SymbolContract("HomeTabs") {
     val homeTabItemMainSetterMethod = text("homeTabItemMainSetterMethod")
     val homeTabItemMainIntField = text("homeTabItemMainIntField")
     val homeTabItemMainBooleanField = text("homeTabItemMainBooleanField")
+
+    internal val fixedRequired = SymbolDependencies(
+        homeTabClass, homeTabRebuildMethod, homeTabListField, homeTabParseMethod,
+        homeTabItemTypeField, homeTabItemCodeField, homeTabItemNameField, homeTabItemUrlField,
+    )
 
     internal override fun scan(scan: SymbolScanContext, output: HookSymbolsBuilder) = with(scan) {
         val homeTabScan = runScanStep(
@@ -70,6 +78,7 @@ object HomeTabsContract : SymbolContract("HomeTabs") {
 
         output[HomeTabsContract.homeTabClass] = homeTabScan.tabClass
         output[HomeTabsContract.homeTabRebuildMethod] = homeTabScan.rebuildMethod
+        output[HomeTabsContract.homeTabParseMethod] = homeTabScan.parseMethod
         output[HomeTabsContract.homeTabListField] = homeTabScan.listField
         output[HomeTabsContract.homeTabItemTypeField] = homeTabItemTypeField
         output[HomeTabsContract.homeTabItemCodeField] = homeTabItemCodeField
@@ -128,6 +137,7 @@ object HomeTabsContract : SymbolContract("HomeTabs") {
                 hostClass = hostClass,
                 rebuildMethod = rebuildMethod,
                 listField = listField,
+                parseMethod = resolveParseMethod(hostClass, resolvedSymbols[homeTabParseMethod]),
                 itemTypeField = requireSymbol("homeTabItemTypeField", resolvedSymbols[HomeTabsContract.homeTabItemTypeField]),
                 itemCodeField = requireSymbol("homeTabItemCodeField", resolvedSymbols[HomeTabsContract.homeTabItemCodeField]),
                 itemNameField = requireSymbol("homeTabItemNameField", resolvedSymbols[HomeTabsContract.homeTabItemNameField]),
@@ -177,10 +187,16 @@ object HomeTabsContract : SymbolContract("HomeTabs") {
                 missingOptional = homeOptional,
             )
         }
+        out[HookFeatureKey.FIXED_HOME_TOP_TABS] = fixedRequired.requiredStatus(symbols)
         return out
     }
 
     internal override fun points(symbols: HookSymbols): List<HookPointStatus> = SymbolPointCollector().apply {
+        add(
+            "HomeTabHook.Fixed",
+            "${symbols[homeTabClass]}.${symbols[homeTabParseMethod]}",
+            fixedRequired.checks(symbols),
+        )
         add(
             "HomeTabHook",
             "${symbols[HomeTabsContract.homeTabClass]}.${symbols[HomeTabsContract.homeTabRebuildMethod]}[${symbols[HomeTabsContract.homeTabListField]}]",
@@ -201,6 +217,7 @@ object HomeTabsContract : SymbolContract("HomeTabs") {
 
     internal override val pointOwners = listOf(
         PointOwner("HomeTabHook", false, listOf(HookFeatureKey.SIMPLIFY_HOME_TOP_TABS)),
+        PointOwner("HomeTabHook.Fixed", false, listOf(HookFeatureKey.FIXED_HOME_TOP_TABS)),
     )
 
     internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
@@ -209,7 +226,29 @@ object HomeTabsContract : SymbolContract("HomeTabs") {
                 symbols[HomeTabsContract.homeTabRebuildMethod] != null ||
                 symbols[HomeTabsContract.homeTabListField] != null
         if (hasHomeSymbols && !isHomeValid(symbols, cl)) return false
+        if (!symbols[homeTabParseMethod].isNullOrBlank()) {
+            val host = symbols[homeTabClass]?.let { ScanReflection.safeFindClass(it, cl) } ?: return false
+            if (resolveParseMethod(host, symbols[homeTabParseMethod]) == null) return false
+        }
         return true
+    }
+
+    internal fun isValidParseMethod(method: Method, hostClass: Class<*>): Boolean =
+        method.declaringClass == hostClass && !Modifier.isStatic(method.modifiers) &&
+            method.parameterCount == 0 && List::class.java.isAssignableFrom(method.returnType) &&
+            method.returnType.isAssignableFrom(ArrayList::class.java)
+
+    private fun resolveParseMethod(hostClass: Class<*>, name: String?): Method? {
+        if (name.isNullOrBlank()) return null
+        return try {
+            hostClass.getDeclaredMethod(name).also {
+                check(isValidParseMethod(it, hostClass)) { "invalid parser signature" }
+                it.isAccessible = true
+            }
+        } catch (failure: Throwable) {
+            Diagnostics.log("[HomeTabHook.Fixed] parser unavailable: ${failure.message}")
+            null
+        }
     }
 
     private fun isHomeValid(symbols: HookSymbols, cl: ClassLoader): Boolean {

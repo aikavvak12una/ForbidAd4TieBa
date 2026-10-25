@@ -7,6 +7,7 @@ import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.core.XposedCompat
+import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -71,10 +72,12 @@ object HomeTabHook {
     }
 
     @Volatile private var sRuntimeTargets: HomeTabResolvedSymbols? = null
+    @Volatile private var lastFixedFailure: HomeTabFixedProjection.Failure? = null
+    @Volatile private var followedFailureLogged = false
     private val catalogSnapshot = HomeTabCatalogSnapshot()
 
-    internal fun hook(symbols: HomeTabResolvedSymbols) {
-        val mod = XposedCompat.module ?: return
+    internal fun hook(symbols: HomeTabResolvedSymbols, api: XposedInterface? = XposedCompat.module) {
+        val mod = api ?: return
         sRuntimeTargets = symbols
         catalogSnapshot.clear()
         sSchemaCache.clear()
@@ -84,15 +87,21 @@ object HomeTabHook {
         sMainIntFieldMissCache.clear()
         sMainBooleanFieldCache.clear()
         sMainBooleanFieldMissCache.clear()
+        lastFixedFailure = null
+        followedFailureLogged = false
+        val fixedParserInstalled = hookFixedParser(symbols, mod)
         try {
             RuntimeHooks.builder(mod, symbols.rebuildMethod, "HomeTabHook", "hook:symbols.rebuildMethod").intercept { chain ->
                 val result = chain.proceed()
+                val settings = ConfigManager.snapshot()
+                // The parser owns both filtering and the raw catalog in fixed mode.
+                if (fixedParserInstalled && settings.isHomeTopTabFixedEnabled) return@intercept result
                 @Suppress("UNCHECKED_CAST")
                 val list = resolveMutableListField(chain.thisObject) as? MutableList<Any?>
                 if (list != null) {
-                    // Retain membership only; settings decode and persist the latest host list on open.
-                    catalogSnapshot.capture(list)
-                    val currentSelection = currentSelectionOrNull() ?: return@intercept result
+                    captureCatalog(list)
+                    if (!settings.isHomeTopTabsCustomEnabled) return@intercept result
+                    val currentSelection = TabPreferences.resolveHomeTopTabSelection(settings, allowFixed = false)
                     val templateContext = resolveFollowedTemplateContext(list)
                     val sizeBefore = list.size
                     val filteredCount = filterTabsInPlace(list, currentSelection)
@@ -118,9 +127,49 @@ object HomeTabHook {
         }
     }
 
-    private fun currentSelectionOrNull(): TabPreferences.HomeTopTabSelection? {
-        if (!ConfigManager.snapshot().isHomeTopTabsCustomEnabled) return null
-        return TabPreferences.resolveHomeTopTabSelection()
+    private fun hookFixedParser(symbols: HomeTabResolvedSymbols, mod: XposedInterface): Boolean {
+        val parser = symbols.parseMethod ?: return false
+        return try {
+            RuntimeHooks.builder(mod, parser, "HomeTabHook.Fixed", "hook:symbols.parseMethod").intercept { chain ->
+                val raw = chain.proceed()
+                val settings = ConfigManager.snapshot()
+                if (!settings.isHomeTopTabsCustomEnabled || !settings.isHomeTopTabFixedEnabled) return@intercept raw
+                @Suppress("UNCHECKED_CAST")
+                val list = raw as? List<Any?> ?: return@intercept raw
+                captureCatalog(list)
+                val selection = TabPreferences.resolveHomeTopTabSelection(settings)
+                val projected = HomeTabFixedProjection.project(list, selection, { item ->
+                    item?.let {
+                        TabPreferences.homeTopTabKeyFor(resolveTabType(it).takeIf { type -> type >= 0 }, resolveTabCode(it), resolveTabUrl(it))
+                    }
+                }) { selected ->
+                    if (selection.followedEnabled) {
+                        syncFollowedTabState(selected, selection, resolveFollowedTemplateContext(list))
+                    }
+                }
+                if (projected.failure != lastFixedFailure) {
+                    lastFixedFailure = projected.failure
+                    projected.failure?.let { XposedCompat.logW("[HomeTabHook.Fixed] retaining host tabs: $it") }
+                }
+                projected.tabs
+            }
+            XposedCompat.log("[HomeTabHook.Fixed] hook INSTALLED: ${symbols.hostClass.name}.${parser.name}")
+            true
+        } catch (failure: Throwable) {
+            XposedCompat.log("[HomeTabHook.Fixed] install FAILED: ${failure.message}")
+            false
+        }
+    }
+
+    private fun captureCatalog(list: List<Any?>) {
+        catalogSnapshot.capture(list.mapNotNull { item ->
+            item?.let {
+                HomeTabCatalogSnapshot.Item(
+                    type = resolveTabType(it).takeIf { type -> type >= 0 },
+                    code = resolveTabCode(it), label = resolveTabName(it), url = resolveTabUrl(it),
+                )
+            }
+        })
     }
 
     internal fun refreshTopTabCatalog(context: Context) {
@@ -128,19 +177,14 @@ object HomeTabHook {
         if (list.isEmpty()) return
         val entries = ArrayList<TabPreferences.HomeTopTabCatalogEntry>(list.size)
         for (index in list.indices) {
-            val tabItem = list[index] ?: continue
-            val tabType = resolveTabType(tabItem)
-            val tabCode = resolveTabCode(tabItem)
-            val tabUrl = resolveTabUrl(tabItem)
-            val key = TabPreferences.homeTopTabKeyFor(tabType.takeIf { it >= 0 }, tabCode, tabUrl) ?: continue
-            if (key == TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED) continue
+            val item = list[index]
             TabPreferences.buildHomeTopTabCatalogEntry(
-                type = tabType.takeIf { it >= 0 },
-                code = tabCode,
-                label = resolveTabName(tabItem),
-                url = tabUrl,
+                type = item.type,
+                code = item.code,
+                label = item.label,
+                url = item.url,
                 order = index,
-            )?.let(entries::add)
+            )?.takeUnless { it.key == TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED }?.let(entries::add)
         }
         if (entries.isEmpty()) return
         runCatching {
@@ -270,6 +314,7 @@ object HomeTabHook {
             }
         }
         if (followedIndexes.isNotEmpty()) {
+            followedFailureLogged = false
             return FollowedSyncResult(
                 added = false,
                 removed = removed,
@@ -279,7 +324,10 @@ object HomeTabHook {
 
         val newFollowedTab = createFollowedTabItem(templateContext)
         if (newFollowedTab == null) {
-            XposedCompat.logW("[HomeTabHook] followed tab inject failed: no writable tab template/class found")
+            if (!followedFailureLogged) {
+                XposedCompat.logW("[HomeTabHook] followed tab inject failed: no writable tab template/class found")
+                followedFailureLogged = true
+            }
             return FollowedSyncResult(
                 added = false,
                 removed = removed,
@@ -289,6 +337,7 @@ object HomeTabHook {
 
         val insertIndex = resolveFollowedInsertIndex(list).coerceIn(0, list.size)
         list.add(insertIndex, newFollowedTab)
+        followedFailureLogged = false
         return FollowedSyncResult(
             added = true,
             removed = removed,
@@ -415,7 +464,7 @@ object HomeTabHook {
         setTabMain(tabItem, true)
 
         if (!typeApplied || !codeApplied || !nameApplied || !urlApplied) {
-            XposedCompat.logW(
+            if (!followedFailureLogged) XposedCompat.logW(
                 "[HomeTabHook] followed tab build failed: " +
                     "type=$typeApplied, code=$codeApplied, name=$nameApplied, " +
                     "url=$urlApplied, class=${tabItem.javaClass.name}"

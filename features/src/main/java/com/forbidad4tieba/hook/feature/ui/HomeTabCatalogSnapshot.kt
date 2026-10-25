@@ -1,14 +1,16 @@
 package com.forbidad4tieba.hook.feature.ui
 
-/** Keeps host list membership before filtering; decoding and persistence happen in settings. */
+/** Freeze only catalog fields before the adapter decorates URLs; encoding and IO stay in settings. */
 internal class HomeTabCatalogSnapshot {
-    @Volatile private var tabs: List<Any?> = emptyList()
+    data class Item(val type: Int?, val code: String?, val label: String?, val url: String?)
 
-    fun capture(hostTabs: List<Any?>) {
+    @Volatile private var tabs: List<Item> = emptyList()
+
+    fun capture(hostTabs: List<Item>) {
         if (hostTabs.isNotEmpty()) tabs = hostTabs.toList()
     }
 
-    fun current(): List<Any?> = tabs
+    fun current(): List<Item> = tabs
 
     fun clear() {
         tabs = emptyList()

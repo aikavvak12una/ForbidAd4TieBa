@@ -173,6 +173,7 @@ data class HomeTabResolvedSymbols(
     val hostClass: Class<*>,
     val rebuildMethod: Method,
     val listField: Field,
+    val parseMethod: Method?,
     val itemTypeField: String,
     val itemCodeField: String,
     val itemNameField: String,

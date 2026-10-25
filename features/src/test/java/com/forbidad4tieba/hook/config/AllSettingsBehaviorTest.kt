@@ -2,6 +2,8 @@ package com.forbidad4tieba.hook.config
 
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
@@ -115,6 +117,8 @@ class AllSettingsBehaviorTest {
             for (locked in listOf(false, true)) {
                 val host = HostCapabilities(HookFeatureKey.orderedKeys.associateWith { state })
                 val result = EffectiveSettingsPolicy.derive(UserSettings(values), host, RemoteSettingsPolicy(locked))
+                assertFalse(result.snapshot.isHomeTopTabFixedEnabled)
+                assertTrue(result.snapshot.homeTopTabFixedKeys.isEmpty())
                 // Project the renamed shared gate and retired material fields into the frozen baseline.
                 // The new gate's migration and independence are covered by the domain/feature-plan tests.
                 assertEquals(true, result.snapshot.bottomTabLiquidGlass.liquidGlassEnabled)
@@ -135,6 +139,7 @@ class AllSettingsBehaviorTest {
                     "bottomGapDp=$legacyGap, blurEnabled=${result.snapshot.bottomTabLiquidGlass.blurEnabled}, " +
                     "refractionEnabled=true, highlightEnabled=true, shadowEnabled=true, tiltEnabled=true, pressEffectEnabled=true)"
                 val legacySnapshot = result.snapshot.toString().substringBefore(", commentLevelFilter=")
+                    .replace(", isHomeTopTabFixedEnabled=false, homeTopTabFixedKeys=[]", "")
                     .replace("isFloatingBottomBarEnabled=", "isBottomTabLiquidGlassEnabled=")
                     .replace(result.snapshot.bottomTabLiquidGlass.toString(), legacyStyle) + ")"
                 val text = legacySnapshot + "/" + result.normalizedBottomTabs

@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
+import java.util.Collections
 import java.util.Locale
 
 object TabPreferences {
@@ -27,6 +28,10 @@ object TabPreferences {
     const val KEY_HOME_TOP_TAB_DISABLED_KEYS = "home_top_tab_disabled_keys"
 
     const val KEY_HOME_TOP_TAB_CATALOG_JSON = "home_top_tab_catalog_json"
+
+    const val KEY_HOME_TOP_TAB_FIXED_ENABLED = "home_top_tab_fixed_enabled"
+
+    const val KEY_HOME_TOP_TAB_FIXED_SELECTION_JSON = "home_top_tab_fixed_selection_json"
 
     const val KEY_AUTO_HIDE_HOME_TAB = "auto_hide_home_tab"
 
@@ -121,17 +126,21 @@ object TabPreferences {
         val liveEnabled: Boolean,
         val followedEnabled: Boolean,
         val disabledKeys: Set<String> = emptySet(),
+        val fixedEnabled: Boolean = false,
+        val fixedKeys: Set<String> = emptySet(),
     ) {
-        fun hasEnabledTab(): Boolean = materialEnabled || recommendEnabled || liveEnabled || followedEnabled
+        fun hasEnabledTab(): Boolean = if (fixedEnabled) fixedKeys.isNotEmpty()
+            else materialEnabled || recommendEnabled || liveEnabled || followedEnabled
 
         fun isTabKeyEnabled(key: String?): Boolean {
+            if (fixedEnabled) return canonicalHomeTopTabKey(key)?.let { it in fixedKeys } == true
             if (key.isNullOrBlank()) return true
             return key !in disabledKeys
         }
     }
 
     fun normalizeHomeTopTabSelection(selection: HomeTopTabSelection): HomeTopTabSelection {
-        if (selection.disabledKeys.isNotEmpty() || selection.hasEnabledTab()) return selection
+        if (selection.fixedEnabled || selection.disabledKeys.isNotEmpty() || selection.hasEnabledTab()) return selection
         // Keep a valid fallback when external preferences become inconsistent.
         return selection.copy(
             materialEnabled = false,
@@ -142,8 +151,10 @@ object TabPreferences {
         )
     }
 
-    fun resolveHomeTopTabSelection(): HomeTopTabSelection {
-        val settings = ConfigManager.snapshot()
+    fun resolveHomeTopTabSelection(
+        settings: SettingsSnapshot = ConfigManager.snapshot(),
+        allowFixed: Boolean = true,
+    ): HomeTopTabSelection {
         if (!settings.isHomeTopTabsCustomEnabled) {
             return HomeTopTabSelection(
                 materialEnabled = false,
@@ -153,14 +164,124 @@ object TabPreferences {
                 disabledKeys = emptySet(),
             )
         }
+        if (settings.isHomeTopTabFixedEnabled && !allowFixed) {
+            return legacyHomeTopTabSelection(settings.homeTopTabDisabledKeys)
+        }
         val current = HomeTopTabSelection(
             materialEnabled = settings.isHomeTopTabMaterialEnabled,
             recommendEnabled = settings.isHomeTopTabRecommendEnabled,
             liveEnabled = settings.isHomeTopTabLiveEnabled,
             followedEnabled = settings.isHomeTopTabFollowedEnabled,
             disabledKeys = settings.homeTopTabDisabledKeys,
+            fixedEnabled = settings.isHomeTopTabFixedEnabled,
+            fixedKeys = settings.homeTopTabFixedKeys,
         )
         return normalizeHomeTopTabSelection(current)
+    }
+
+    internal fun legacyHomeTopTabSelection(disabledKeys: Set<String>) = HomeTopTabSelection(
+        materialEnabled = isLegacyHomeTopTabEnabled(disabledKeys, HOME_TOP_TAB_KEY_MATERIAL),
+        recommendEnabled = isLegacyHomeTopTabEnabled(disabledKeys, HOME_TOP_TAB_KEY_RECOMMEND),
+        liveEnabled = isLegacyHomeTopTabEnabled(disabledKeys, HOME_TOP_TAB_KEY_LIVE),
+        followedEnabled = isLegacyHomeTopTabEnabled(disabledKeys, HOME_TOP_TAB_KEY_FOLLOWED),
+        disabledKeys = disabledKeys,
+    )
+
+    internal fun fixedHomeTopTabSelection(keys: Set<String>, disabledKeys: Set<String>) = HomeTopTabSelection(
+        materialEnabled = HOME_TOP_TAB_KEY_MATERIAL in keys,
+        recommendEnabled = HOME_TOP_TAB_KEY_RECOMMEND in keys,
+        liveEnabled = HOME_TOP_TAB_KEY_LIVE in keys,
+        followedEnabled = HOME_TOP_TAB_KEY_FOLLOWED in keys,
+        disabledKeys = disabledKeys,
+        fixedEnabled = true,
+        fixedKeys = keys,
+    )
+
+    data class FixedHomeTopTab(val key: String, val label: String)
+
+    /** Names are only for unavailable rows; identity never depends on display text. */
+    internal fun readFixedHomeTopTabs(p: SettingsValues): List<FixedHomeTopTab> =
+        parseFixedHomeTopTabs(HOME_TOP_TAB_FIXED_SELECTION_JSON.read(p))
+
+    internal fun readFixedHomeTopTabs(p: SharedPreferences): List<FixedHomeTopTab> =
+        readFixedHomeTopTabs(p.readOnlyValues())
+
+    internal fun fixedHomeTopTabKeys(entries: List<FixedHomeTopTab>): Set<String> =
+        Collections.unmodifiableSet(entries.mapNotNullTo(LinkedHashSet()) { canonicalHomeTopTabKey(it.key) })
+
+    internal fun parseFixedHomeTopTabs(raw: String?): List<FixedHomeTopTab> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            val entries = LinkedHashMap<String, FixedHomeTopTab>()
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: return emptyList()
+                val key = canonicalHomeTopTabKey(item.optString("key")) ?: return emptyList()
+                entries.putIfAbsent(key, FixedHomeTopTab(key, item.optString("label").trim()))
+            }
+            entries.values.toList()
+        } catch (_: org.json.JSONException) {
+            emptyList()
+        }
+    }
+
+    internal fun serializeFixedHomeTopTabs(entries: List<FixedHomeTopTab>): String = JSONArray().apply {
+        entries.distinctBy { canonicalHomeTopTabKey(it.key) }.forEach { entry ->
+            canonicalHomeTopTabKey(entry.key)?.let { key ->
+                put(JSONObject().put("key", key).put("label", entry.label.trim()))
+            }
+        }
+    }.toString()
+
+    fun canonicalHomeTopTabKey(key: String?): String? {
+        val value = key?.trim()?.lowercase(Locale.ROOT) ?: return null
+        return when {
+            value in HOME_TOP_TAB_LEGACY_MATERIAL_KEYS -> HOME_TOP_TAB_KEY_MATERIAL
+            value in HOME_TOP_TAB_LEGACY_RECOMMEND_KEYS -> HOME_TOP_TAB_KEY_RECOMMEND
+            value in HOME_TOP_TAB_LEGACY_LIVE_KEYS -> HOME_TOP_TAB_KEY_LIVE
+            value == HOME_TOP_TAB_KEY_FOLLOWED || value == "code:$HOME_TOP_TAB_CODE_FOLLOWED" ||
+                value == "code:$HOME_TOP_TAB_CODE_FOLLOWED_ALT" || value == "code:$HOME_TOP_TAB_CODE_FOLLOWED_ALT_2" -> HOME_TOP_TAB_KEY_FOLLOWED
+            value.startsWith(HOME_TOP_TAB_KEY_PREFIX_CODE) && value.length > HOME_TOP_TAB_KEY_PREFIX_CODE.length -> value
+            value.startsWith(HOME_TOP_TAB_KEY_PREFIX_URL) && value.substringAfter(':').let { hash ->
+                hash.length == 16 && hash.all { it in '0'..'9' || it in 'a'..'f' }
+            } -> value
+            value.startsWith(HOME_TOP_TAB_KEY_PREFIX_TYPE) &&
+                value.substringAfter(':').toIntOrNull()?.let { it >= 0 } == true -> value
+            else -> null
+        }
+    }
+
+    internal fun unavailableFixedHomeTopTabs(
+        catalog: List<HomeTopTabCatalogEntry>,
+        selected: List<FixedHomeTopTab>,
+    ): List<HomeTopTabCatalogEntry> {
+        val available = catalog.mapNotNullTo(HashSet()) { canonicalHomeTopTabKey(it.key) }
+        return selected.filter { it.key !in available }.map { HomeTopTabCatalogEntry(it.key, it.label) }
+    }
+
+    internal fun saveHomeTopTabSelection(
+        prefs: SharedPreferences,
+        entries: List<HomeTopTabCatalogEntry>,
+        selected: List<FixedHomeTopTab>,
+        fixedEnabled: Boolean,
+    ) {
+        val selectedKeys = fixedHomeTopTabKeys(selected)
+        val knownKeys = expandHomeTopTabDisabledKeys(entries.mapTo(LinkedHashSet()) { it.key })
+        val disabledKeys = expandHomeTopTabDisabledKeys(
+            (readHomeTopTabDisabledKeys(prefs) - knownKeys) + entries.filter {
+                canonicalHomeTopTabKey(it.key) !in selectedKeys
+            }.map { it.key },
+        )
+        val legacy = legacyHomeTopTabSelection(disabledKeys)
+        prefs.edit()
+            .putBoolean(KEY_HOME_TOP_TAB_FIXED_ENABLED, fixedEnabled)
+            .putString(KEY_HOME_TOP_TAB_FIXED_SELECTION_JSON, serializeFixedHomeTopTabs(selected))
+            .putString(KEY_HOME_TOP_TAB_DISABLED_KEYS, serializeHomeTopTabDisabledKeys(disabledKeys))
+            .putBoolean(KEY_HOME_TOP_TAB_MATERIAL, legacy.materialEnabled)
+            .putBoolean(KEY_HOME_TOP_TAB_RECOMMEND, legacy.recommendEnabled)
+            .putBoolean(KEY_HOME_TOP_TAB_LIVE, legacy.liveEnabled)
+            .putBoolean(KEY_HOME_TOP_TAB_FOLLOWED, legacy.followedEnabled)
+            .apply()
     }
 
     fun buildHomeTopTabCatalogEntry(
@@ -466,6 +587,13 @@ object TabPreferences {
     internal val HOME_TOP_TAB_CATALOG_JSON = StringPreference(
         KEY_HOME_TOP_TAB_CATALOG_JSON, null, PreferenceUse.MODULE_STATE,
     )
+    internal val HOME_TOP_TAB_FIXED_ENABLED = BooleanPreference(
+        KEY_HOME_TOP_TAB_FIXED_ENABLED, false, PreferenceUse.FORM, HookFeatureKey.FIXED_HOME_TOP_TABS,
+        SwitchPresentation(UiText.Settings.HOME_TOP_TAB_FIXED_LABEL, UiText.Settings.HOME_TOP_TAB_FIXED_DESC),
+    )
+    internal val HOME_TOP_TAB_FIXED_SELECTION_JSON = StringPreference(
+        KEY_HOME_TOP_TAB_FIXED_SELECTION_JSON, null, PreferenceUse.FORM,
+    )
     internal val AUTO_HIDE_HOME_TAB = BooleanPreference(
         KEY_AUTO_HIDE_HOME_TAB, false, PreferenceUse.SWITCH, null,
         SwitchPresentation(UiText.Settings.AUTO_HIDE_HOME_TAB_LABEL, UiText.Settings.AUTO_HIDE_HOME_TAB_DESC),
@@ -506,6 +634,8 @@ object TabPreferences {
         HOME_TOP_TAB_FOLLOWED,
         HOME_TOP_TAB_DISABLED_KEYS,
         HOME_TOP_TAB_CATALOG_JSON,
+        HOME_TOP_TAB_FIXED_ENABLED,
+        HOME_TOP_TAB_FIXED_SELECTION_JSON,
         AUTO_HIDE_HOME_TAB,
         HIDE_HOME_TAB_RED_DOT,
         CUSTOM_BOTTOM_TABS,
