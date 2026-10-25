@@ -21,6 +21,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import com.forbidad4tieba.hook.config.ConfigManager
+import com.forbidad4tieba.hook.symbol.contract.RestoredMembers.resolveMethodByCachedSpec
 import com.forbidad4tieba.hook.symbol.model.CollectionSearchSymbols
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
@@ -102,12 +103,6 @@ object CollectionSearchHook {
         val postNetDataMethod: Method,
         val serverAddressField: Field,
         val markGetStoreField: Field,
-    )
-
-    private data class CachedMethodSpec(
-        val name: String,
-        val returnTypeName: String,
-        val parameterTypeNames: List<String>,
     )
 
     private val sSessions = CollectionSearchSessions()
@@ -1527,7 +1522,7 @@ object CollectionSearchHook {
     private fun resolvePresenterListSetter(clazz: Class<*>): Method? {
         sPresenterListSetterCache[clazz]?.let { return it }
         val targets = sRuntimeTargets ?: return null
-        val resolved = findMethodByCachedSpec(
+        val resolved = resolveMethodByCachedSpec(
             clazz = clazz,
             spec = targets.presenterListSetterMethodSpec,
             expectedName = targets.presenterListSetterMethod,
@@ -1552,7 +1547,7 @@ object CollectionSearchHook {
     private fun resolveModelListGetter(clazz: Class<*>): Method? {
         sModelListGetterCache[clazz]?.let { return it }
         val targets = sRuntimeTargets ?: return null
-        val resolved = findMethodByCachedSpec(
+        val resolved = resolveMethodByCachedSpec(
             clazz = clazz,
             spec = targets.modelListGetterMethodSpec,
             expectedName = targets.modelListGetterMethod,
@@ -1565,7 +1560,7 @@ object CollectionSearchHook {
     private fun resolveModelParseMethod(clazz: Class<*>): Method? {
         sModelParseMethodCache[clazz]?.let { return it }
         val targets = sRuntimeTargets ?: return null
-        val resolved = findMethodByCachedSpec(
+        val resolved = resolveMethodByCachedSpec(
             clazz = clazz,
             spec = targets.modelParseMethodSpec,
             expectedName = targets.modelParseMethod,
@@ -1667,42 +1662,6 @@ object CollectionSearchHook {
 
     private fun findExactMethodInHierarchy(clazz: Class<*>, name: String, vararg paramTypes: Class<*>): Method? {
         return ReflectionUtils.findMethodInHierarchy(clazz, name, *paramTypes)
-    }
-
-    private fun findMethodByCachedSpec(clazz: Class<*>, spec: String, expectedName: String): Method? {
-        val parsed = parseCachedMethodSpec(spec) ?: return null
-        if (parsed.name != expectedName) return null
-        val paramTypes = parsed.parameterTypeNames.map { typeName ->
-            resolveClassName(typeName, clazz.classLoader) ?: return null
-        }.toTypedArray()
-        val method = findExactMethodInHierarchy(clazz, parsed.name, *paramTypes) ?: return null
-        return method.takeIf { it.returnType.name == parsed.returnTypeName }
-    }
-
-    private fun parseCachedMethodSpec(raw: String): CachedMethodSpec? {
-        val parts = raw.split('|', limit = 3)
-        if (parts.size != 3) return null
-        val name = parts[0].takeIf { it.isNotBlank() } ?: return null
-        val returnType = parts[1].takeIf { it.isNotBlank() } ?: return null
-        val params = parts[2].split(',')
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-        return CachedMethodSpec(name, returnType, params)
-    }
-
-    private fun resolveClassName(typeName: String, cl: ClassLoader?): Class<*>? {
-        return when (typeName) {
-            Void.TYPE.name -> Void.TYPE
-            Boolean::class.javaPrimitiveType!!.name -> Boolean::class.javaPrimitiveType
-            Byte::class.javaPrimitiveType!!.name -> Byte::class.javaPrimitiveType
-            Char::class.javaPrimitiveType!!.name -> Char::class.javaPrimitiveType
-            Short::class.javaPrimitiveType!!.name -> Short::class.javaPrimitiveType
-            Int::class.javaPrimitiveType!!.name -> Int::class.javaPrimitiveType
-            Long::class.javaPrimitiveType!!.name -> Long::class.javaPrimitiveType
-            Float::class.javaPrimitiveType!!.name -> Float::class.javaPrimitiveType
-            Double::class.javaPrimitiveType!!.name -> Double::class.javaPrimitiveType
-            else -> runCatching { Class.forName(typeName, false, cl) }.getOrNull()
-        }
     }
 
     private fun buildMarkSearchText(mark: Any): String {
