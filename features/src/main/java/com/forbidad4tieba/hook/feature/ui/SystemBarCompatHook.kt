@@ -18,7 +18,6 @@ import android.view.WindowManager
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
-import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassHook
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.Collections
@@ -283,7 +282,7 @@ object SystemBarCompatHook {
 
     private fun isBottomTabLiquidGlassRuntimeActive(): Boolean {
         return ConfigManager.snapshot().isFloatingBottomBarEnabled &&
-            BottomTabLiquidGlassHook.isRuntimeActive()
+            HomeBottomBarOwnership.isRuntimeActive()
     }
 
     @Suppress("DEPRECATION")
@@ -410,7 +409,7 @@ object SystemBarCompatHook {
 
     private fun applyHomeBottomTabGestureBridge(activity: Activity, tabHost: View, wrapper: View) {
         val state = synchronized(bottomTabInsetStates) { bottomTabInsetStates[wrapper] } ?: return
-        if (BottomTabLiquidGlassHook.ownsBottomBar(wrapper)) {
+        if (HomeBottomBarOwnership.ownsBottomBar(wrapper)) {
             clearGestureBridgeForLiquidGlass(wrapper, state)
             return
         }

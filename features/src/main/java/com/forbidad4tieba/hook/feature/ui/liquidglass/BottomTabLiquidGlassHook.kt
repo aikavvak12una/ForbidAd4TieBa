@@ -1,7 +1,6 @@
 package com.forbidad4tieba.hook.feature.ui.liquidglass
 
 import android.os.Build
-import android.view.View
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 
@@ -22,10 +21,4 @@ object BottomTabLiquidGlassHook {
         }
         BottomTabLiquidGlassRuntime.hook(cl)
     }
-
-    fun isRuntimeActive(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        BottomTabLiquidGlassRuntime.isRuntimeActive()
-
-    fun ownsBottomBar(view: View): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        BottomTabLiquidGlassRuntime.ownsBottomBar(view)
 }

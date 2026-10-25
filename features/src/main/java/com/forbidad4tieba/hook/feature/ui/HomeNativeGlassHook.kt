@@ -31,7 +31,6 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.InstallOutcome
 import com.forbidad4tieba.hook.core.XposedCompat
-import com.forbidad4tieba.hook.feature.ui.liquidglass.BottomTabLiquidGlassHook
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
@@ -1581,7 +1580,7 @@ object HomeNativeGlassHook {
         // Once the liquid-glass state is attached, its transparent surface is the sole owner of
         // this background. Swallow later skin writes instead of letting the native tint repaint
         // the widget underneath it.
-        if (BottomTabLiquidGlassHook.ownsBottomBar(view)) return true
+        if (HomeBottomBarOwnership.ownsBottomBar(view)) return true
         if (
             !ConfigManager.snapshot().isHomeNativeGlassEnabled ||
             !ConfigManager.snapshot().isHomeTabDynamicTintEnabled ||
@@ -1607,7 +1606,7 @@ object HomeNativeGlassHook {
 
     private fun applyHomeBottomTabBoundaryTintForSkinBackgroundWrite(view: View): Boolean {
         if (view.javaClass.name != "android.view.View") return false
-        if (BottomTabLiquidGlassHook.ownsBottomBar(view)) return true
+        if (HomeBottomBarOwnership.ownsBottomBar(view)) return true
         if (
             !ConfigManager.snapshot().isHomeNativeGlassEnabled ||
             !ConfigManager.snapshot().isHomeTabDynamicTintEnabled ||
@@ -4276,7 +4275,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyHomeBottomTabDynamicTintForMatchingViews(root: View, shouldApply: Boolean) {
-        if (BottomTabLiquidGlassHook.ownsBottomBar(root)) return
+        if (HomeBottomBarOwnership.ownsBottomBar(root)) return
         if (root.javaClass.name in HOME_BOTTOM_TAB_HOST_CLASSES) {
             applyHomeBottomTabDynamicTint(root, shouldApply)
             return
@@ -4309,7 +4308,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyHomeBottomTabDynamicTint(tabHost: View, shouldApply: Boolean) {
-        if (BottomTabLiquidGlassHook.ownsBottomBar(tabHost)) return
+        if (HomeBottomBarOwnership.ownsBottomBar(tabHost)) return
         val targets = resolveHomeBottomTabDynamicTintTargets(tabHost)
         val color = if (
             shouldApply &&
@@ -4349,7 +4348,7 @@ object HomeNativeGlassHook {
     }
 
     private fun applyHomeBottomTabBoundaryDecorations(tabHostOrWidget: View, color: Int?) {
-        if (BottomTabLiquidGlassHook.ownsBottomBar(tabHostOrWidget)) return
+        if (HomeBottomBarOwnership.ownsBottomBar(tabHostOrWidget)) return
         if (tabHostOrWidget.javaClass.name == StableTiebaHookPoints.FRAGMENT_TAB_WIDGET_CLASS) {
             if (color != null) {
                 hostAccessors.invokeBooleanMethod(tabHostOrWidget, "setShouldDrawTopLine", false)

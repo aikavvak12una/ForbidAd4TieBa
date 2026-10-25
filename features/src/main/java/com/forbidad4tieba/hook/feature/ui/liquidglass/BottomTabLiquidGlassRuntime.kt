@@ -23,6 +23,7 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ui.SystemBarCompatHook
+import com.forbidad4tieba.hook.feature.ui.HomeBottomBarOwnership
 import com.forbidad4tieba.hook.symbol.contract.BottomTabArtworkContract
 import com.forbidad4tieba.hook.symbol.contract.HomeTabContentContract
 import java.lang.reflect.Method
@@ -50,7 +51,7 @@ import kotlin.math.roundToInt
  * is left exactly as it was.
  */
 @TargetApi(Build.VERSION_CODES.TIRAMISU)
-internal object BottomTabLiquidGlassRuntime {
+internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
     private const val TAG = "[BottomTabLiquidGlassHook]"
 
     private const val METHOD_GET_TAB_WRAPPER = StableTiebaHookPoints.METHOD_GET_TAB_WRAPPER
@@ -283,6 +284,7 @@ internal object BottomTabLiquidGlassRuntime {
             // Liquid glass owns a floating bottom bar even when auto-hide is off. Registration is
             // deliberately after host validation so an unavailable glass implementation cannot
             // leave the activity in an unrelated edge-to-edge mode.
+            HomeBottomBarOwnership.publish(this)
             SystemBarCompatHook.register(app)
             XposedCompat.log("$TAG hook INSTALLED: ${hostClass.name} hooks=$hookCount")
         } catch (t: Throwable) {
@@ -294,7 +296,7 @@ internal object BottomTabLiquidGlassRuntime {
     }
 
     /** True while the feature's hooks are installed. */
-    fun isRuntimeActive(): Boolean = installed.get() && hostApi != null
+    override fun isRuntimeActive(): Boolean = installed.get() && hostApi != null
 
     /**
      * Returns true when [view] belongs to a host whose bottom chrome is currently owned by a glass
@@ -305,7 +307,7 @@ internal object BottomTabLiquidGlassRuntime {
      * the view's ancestors makes the decision precise during that short bootstrap window and after
      * a host has been detached.
      */
-    fun ownsBottomBar(view: View): Boolean {
+    override fun ownsBottomBar(view: View): Boolean {
         if (!isRuntimeActive()) return false
         var current: View? = view
         var depth = 0
