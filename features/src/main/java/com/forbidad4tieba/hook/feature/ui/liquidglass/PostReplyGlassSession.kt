@@ -44,6 +44,7 @@ internal class PostReplyGlassSession(
     private var layoutDirty = true
     private var loadingGuard: View? = null
     private var disposed = false
+    private var ownsBackdropLayer = false
     private var lift = 0f
     private var horizontalShift = 0f
     private var pressed = false
@@ -205,6 +206,14 @@ internal class PostReplyGlassSession(
             clearChrome(native)
             updateTheme()
             refresh()
+        }
+        // The screen and glass reuse the browser subtree at different GPU transforms. Without
+        // a layer, its WebView functor receives competing viewport/tile constraints and can
+        // alternate between content and empty frames. Rasterize this subtree once, then sample
+        // its texture. Preserve any layer (and layer paint) already selected by the host.
+        if (config.needsBackdrop && !ownsBackdropLayer && page.recycler.layerType == View.LAYER_TYPE_NONE) {
+            page.recycler.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            ownsBackdropLayer = true
         }
         followPlacement()
         panel.setContainerAlpha(page.row.alpha)
@@ -530,6 +539,7 @@ internal class PostReplyGlassSession(
             original?.let { page.slot.scaleX = it.scaleX; page.slot.scaleY = it.scaleY }
             panel.setInteraction(0f, 0f)
             panel.visibility = View.INVISIBLE
+            releaseBackdropLayer()
             comments?.restore()
             comments = null
             layoutDirty = true
@@ -542,6 +552,7 @@ internal class PostReplyGlassSession(
 
     private fun restore() {
         autoHide?.reset()
+        releaseBackdropLayer()
         if (panel.visibility != View.GONE) panel.visibility = View.GONE
         removeLoadingGuard()
         comments?.restore()
@@ -577,6 +588,14 @@ internal class PostReplyGlassSession(
             if (view.background == null) view.background = background
         }
         original = null
+    }
+
+    private fun releaseBackdropLayer() {
+        if (!ownsBackdropLayer) return
+        ownsBackdropLayer = false
+        if (page.recycler.layerType == View.LAYER_TYPE_HARDWARE) {
+            page.recycler.setLayerType(View.LAYER_TYPE_NONE, null)
+        }
     }
 
     fun dispose() {
