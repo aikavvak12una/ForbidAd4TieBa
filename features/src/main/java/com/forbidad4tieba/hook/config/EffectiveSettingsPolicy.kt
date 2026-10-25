@@ -23,6 +23,13 @@ import com.forbidad4tieba.hook.config.TabPreferences.readHomeTopTabDisabledKeys
 
 /** Derives runtime state without reading storage, publishing settings, or applying policy effects. */
 internal object EffectiveSettingsPolicy {
+    /** Titan runs before normal initialization and has no scan-dependent capability. */
+    fun isTitanPatchBlockEnabled(values: SettingsValues, restrictedFeaturesLocked: Boolean): Boolean =
+        !restrictedFeaturesLocked &&
+            AccountPreferences.RESTRICTED_FEATURES_UNLOCKED.read(values) &&
+            PerformancePreferences.ENABLE_PERFORMANCE_OPTIMIZATION.read(values) &&
+            PerformancePreferences.BLOCK_TITAN_PATCH.read(values)
+
     fun derive(p: UserSettings, capabilities: HostCapabilities, remote: RemoteSettingsPolicy): SettingsEvaluation {
         val restrictedUnlocked =
             AccountPreferences.RESTRICTED_FEATURES_UNLOCKED.read(p) && !remote.restrictedFeaturesLocked
@@ -196,7 +203,7 @@ internal object EffectiveSettingsPolicy {
             isApsarasScheduleDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_APSARAS_SCHEDULE),
             isFlutterPreinitDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_FLUTTER_PREINIT),
             isLowEndDeviceConfigForced = performanceChildBoolean(PerformancePreferences.FORCE_LOW_END_DEVICE_CONFIG),
-            isTitanPatchBlockEnabled = performanceChildBoolean(PerformancePreferences.BLOCK_TITAN_PATCH),
+            isTitanPatchBlockEnabled = isTitanPatchBlockEnabled(p, remote.restrictedFeaturesLocked),
             isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(AccountPreferences.PRIVATE_READ_RECEIPT_INVISIBLE),
             isPostVoteFilterEnabled = customPostFilterChildBoolean(PostFilterPreferences.FILTER_POST_VOTE),
             isPostVideoFilterEnabled = customPostFilterChildBoolean(PostFilterPreferences.FILTER_POST_VIDEO),

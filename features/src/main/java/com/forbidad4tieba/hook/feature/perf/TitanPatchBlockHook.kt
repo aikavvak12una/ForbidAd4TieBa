@@ -1,8 +1,8 @@
 package com.forbidad4tieba.hook.feature.perf
 
 import com.forbidad4tieba.hook.config.RemoteEnvironmentState
-import com.forbidad4tieba.hook.config.PerformancePreferences
-import com.forbidad4tieba.hook.config.AccountPreferences
+import com.forbidad4tieba.hook.config.EffectiveSettingsPolicy
+import com.forbidad4tieba.hook.config.readOnlyValues
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.contracts.MemberAccess
 import android.content.Context
@@ -125,11 +125,8 @@ object TitanPatchBlockHook {
                 ConfigManager.USER_SETTINGS_PREFS_NAME,
                 android.content.Context.MODE_PRIVATE
             )
-            val unlocked = AccountPreferences.RESTRICTED_FEATURES_UNLOCKED.read(prefs)
-            val performanceEnabled = PerformancePreferences.ENABLE_PERFORMANCE_OPTIMIZATION.read(prefs)
-            return unlocked &&
-                performanceEnabled &&
-                PerformancePreferences.BLOCK_TITAN_PATCH.read(prefs)
+            return EffectiveSettingsPolicy.isTitanPatchBlockEnabled(
+                prefs.readOnlyValues(), restrictedFeaturesLocked = false)
         } catch (_: Throwable) {
             return false
         }

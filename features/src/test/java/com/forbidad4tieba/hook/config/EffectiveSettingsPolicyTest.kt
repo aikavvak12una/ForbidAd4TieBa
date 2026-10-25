@@ -6,6 +6,30 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EffectiveSettingsPolicyTest {
+    @Test fun titanEarlyAndPublishedPoliciesAgreeForAllInputs() {
+        // The pre-attach path cannot consume scan availability. Adding such a dependency must
+        // revisit the bootstrap contract instead of silently making the two paths disagree.
+        assertNull(PerformancePreferences.ENABLE_PERFORMANCE_OPTIMIZATION.capabilityKey)
+        assertNull(PerformancePreferences.BLOCK_TITAN_PATCH.capabilityKey)
+        for (mask in 0 until 16) {
+            val unlocked = mask and 1 != 0
+            val performance = mask and 2 != 0
+            val titan = mask and 4 != 0
+            val locked = mask and 8 != 0
+            val values = UserSettings(mapOf(
+                AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to unlocked,
+                PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to performance,
+                PerformancePreferences.KEY_BLOCK_TITAN_PATCH to titan,
+            ))
+            val expected = unlocked && performance && titan && !locked
+            assertEquals("early mask=$mask", expected,
+                EffectiveSettingsPolicy.isTitanPatchBlockEnabled(values, locked))
+            assertEquals("published mask=$mask", expected,
+                EffectiveSettingsPolicy.derive(values, HostCapabilities(emptyMap()),
+                    RemoteSettingsPolicy(locked)).snapshot.isTitanPatchBlockEnabled)
+        }
+    }
+
     @Test fun slidersReachThePublishedFloatingStyleWithoutEnablingIt() {
         for (enabled in listOf(false, true)) {
             val values = mapOf<String, Any>(
