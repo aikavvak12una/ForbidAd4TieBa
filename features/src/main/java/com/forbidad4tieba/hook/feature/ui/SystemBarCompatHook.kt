@@ -196,6 +196,7 @@ object SystemBarCompatHook {
 
     private fun rememberActivityWindow(activity: Activity, window: Window) {
         synchronized(windowActivities) {
+            if (windowActivities[window] === activity) return
             windowActivities[window] = activity
         }
         installNavigationBarColorHook(window.javaClass)
