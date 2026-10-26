@@ -72,19 +72,19 @@ object PrivateReadReceiptBlockHook {
                     val peerUid = readLongField(targets.requestToUidField, message)
                     val requestedWireMsgId = readLongField(targets.requestMsgIdField, message)
                     if (peerUid == null || requestedWireMsgId == null || requestedWireMsgId <= 0L) {
-                        XposedCompat.logD(
+                        XposedCompat.logD {
                             "[PrivateReadReceiptBlockHook] block read receipt: invalid request " +
-                                "peer=$peerUid msg=$requestedWireMsgId",
-                        )
+                                "peer=$peerUid msg=$requestedWireMsgId"
+                        }
                         showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
                         return@intercept true
                     }
 
                     if ((syncDispatchDepth.get() ?: 0) > 0) {
-                        XposedCompat.logD(
+                        XposedCompat.logD {
                             "[PrivateReadReceiptBlockHook] allow sync read receipt after send: " +
-                                "peer=$peerUid requested=$requestedWireMsgId",
-                        )
+                                "peer=$peerUid requested=$requestedWireMsgId"
+                        }
                         val sent = chain.proceed()
                         if (sent == true) {
                             submittedReadWireMsgIdByPeer.merge(peerUid, requestedWireMsgId, ::maxOf)
@@ -93,10 +93,10 @@ object PrivateReadReceiptBlockHook {
                         return@intercept sent
                     }
 
-                    XposedCompat.logD(
+                    XposedCompat.logD {
                         "[PrivateReadReceiptBlockHook] block read receipt: " +
-                            "peer=$peerUid requested=$requestedWireMsgId",
-                    )
+                            "peer=$peerUid requested=$requestedWireMsgId"
+                    }
                     showToast(UiText.PrivateReadReceipt.TOAST_REPORT_INTERCEPTED)
                     true
                 }
@@ -175,10 +175,10 @@ object PrivateReadReceiptBlockHook {
         if (wireMsgId <= 0L) return
         val submitted = submittedReadWireMsgIdByPeer[boundary.peerUid] ?: 0L
         if (submitted >= wireMsgId) {
-            XposedCompat.logD(
+            XposedCompat.logD {
                 "[PrivateReadReceiptBlockHook] skip sync read receipt: " +
-                    "peer=${boundary.peerUid} wire=$wireMsgId submitted=$submitted",
-            )
+                    "peer=${boundary.peerUid} wire=$wireMsgId submitted=$submitted"
+            }
             return
         }
         runCatching {
@@ -186,10 +186,10 @@ object PrivateReadReceiptBlockHook {
             val request = targets.requestConstructor.newInstance(wireMsgId, boundary.peerUid)
             when (isDuplicateReadReceipt(targets, manager, request)) {
                 true -> {
-                    XposedCompat.logD(
+                    XposedCompat.logD {
                         "[PrivateReadReceiptBlockHook] skip sync read receipt: " +
-                            "peer=${boundary.peerUid} wire=$wireMsgId duplicate=true",
-                    )
+                            "peer=${boundary.peerUid} wire=$wireMsgId duplicate=true"
+                    }
                     return@runCatching
                 }
                 false -> Unit
@@ -240,11 +240,11 @@ object PrivateReadReceiptBlockHook {
                 runCatching {
                     Toast.makeText(appContext, message, Toast.LENGTH_SHORT).show()
                 }.onFailure { t ->
-                    XposedCompat.logD("[PrivateReadReceiptBlockHook] toast failed: ${t.message}")
+                    XposedCompat.logD { "[PrivateReadReceiptBlockHook] toast failed: ${t.message}" }
                 }
             }
         }.onFailure { t ->
-            XposedCompat.logD("[PrivateReadReceiptBlockHook] toast post failed: ${t.message}")
+            XposedCompat.logD { "[PrivateReadReceiptBlockHook] toast post failed: ${t.message}" }
         }
     }
 }

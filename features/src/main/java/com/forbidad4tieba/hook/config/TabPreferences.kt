@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.config
 
+import com.forbidad4tieba.hook.utils.toLowerHex
+
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import android.content.Context
@@ -495,7 +497,7 @@ object TabPreferences {
 
     private fun sha256Hex(value: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
-        return digest.joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xFF) }
+        return digest.toLowerHex()
     }
 
     private fun JSONObject.optStringOrNull(name: String): String? {
@@ -533,24 +535,13 @@ object TabPreferences {
     }
 
     fun resolveBottomTabSelection(): BottomTabSelection {
-        val settings = ConfigManager.snapshot()
-        if (!settings.isBottomTabsCustomEnabled) {
-            return BottomTabSelection(
+        return ConfigManager.snapshot().bottomTabSelection ?: BottomTabSelection(
                 homeEnabled = false,
                 enterForumEnabled = false,
                 retailStoreEnabled = false,
                 messageEnabled = false,
                 mineEnabled = false,
-            )
-        }
-        val current = BottomTabSelection(
-            homeEnabled = settings.isBottomTabHomeEnabled,
-            enterForumEnabled = settings.isBottomTabEnterForumEnabled,
-            retailStoreEnabled = settings.isBottomTabRetailStoreEnabled,
-            messageEnabled = settings.isBottomTabMessageEnabled,
-            mineEnabled = settings.isBottomTabMineEnabled,
         )
-        return normalizeBottomTabSelection(current)
     }
 
     fun homeTopTabKeyFor(type: Int?, code: String?, url: String?): String? {

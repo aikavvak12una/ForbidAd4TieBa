@@ -108,9 +108,15 @@ internal object AutoSignInResponses {
         .ifEmpty { text(json, "errmsg") }.ifEmpty { text(json, "usermsg") }.ifEmpty { text(json, "msg") })
 
     fun safeMessage(message: String): String = message
-        .replace(Regex("(?i)\"(BDUSS|STOKEN|tbs)\"\\s*:\\s*\"[^\"]*\""), "\"$1\":\"<redacted>\"")
-        .replace(Regex("(?i)(BDUSS|STOKEN|tbs)\\s*[=:]\\s*[^&;\\s]+"), "$1=<redacted>")
-        .replace(Regex("[\\r\\n\\t]+"), " ").trim().take(240)
+        .replace(MessagePatterns.jsonCredential, "\"$1\":\"<redacted>\"")
+        .replace(MessagePatterns.parameterCredential, "$1=<redacted>")
+        .replace(MessagePatterns.lineBreaks, " ").trim().take(240)
+
+    private object MessagePatterns {
+        val jsonCredential = Regex("(?i)\"(BDUSS|STOKEN|tbs)\"\\s*:\\s*\"[^\"]*\"")
+        val parameterCredential = Regex("(?i)(BDUSS|STOKEN|tbs)\\s*[=:]\\s*[^&;\\s]+")
+        val lineBreaks = Regex("[\\r\\n\\t]+")
+    }
 
     private fun payload(json: JSONObject): JSONObject = json.optJSONObject("data") ?: json
 

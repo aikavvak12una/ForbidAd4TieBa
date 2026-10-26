@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.feature.ui.nativeglass.HomeNativeGlassIntegration
+
 import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.animation.ValueAnimator
 import android.content.Context
@@ -17,8 +19,6 @@ import android.view.animation.OvershootInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.Button
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
 
 /**
  * Central style entry for settings UI colors, dialog backgrounds, progress bars, and lightweight
@@ -68,7 +68,7 @@ internal object UiStyle {
     internal fun tokens(context: Context): Tokens {
         val density = context.resources.displayMetrics.density
         if (ConfigManager.snapshot().isHomeNativeGlassEnabled) {
-            val base = if (HomeNativeGlassHostDarkModeBridge.isDarkModeEnabled() == true) {
+            val base = if (HomeNativeGlassIntegration.isHostDarkModeEnabled() == true) {
                 darkTokens(density)
             } else {
                 lightTokens(density)
@@ -213,7 +213,7 @@ internal object UiStyle {
     }
 
     private fun homeNativeGlassDynamicAccent(): Int? {
-        return HomeNativeGlassDynamicTintCache.resolveAccentColor()
+        return HomeNativeGlassIntegration.settingsAccentColor()
     }
 
     private fun homeNativeGlassStyleAccent(style: HomeGlassPreferences.HomeNativeGlassStyleConfig): Int? {

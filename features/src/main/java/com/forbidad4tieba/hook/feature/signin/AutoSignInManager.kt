@@ -121,8 +121,10 @@ object AutoSignInManager {
         repeat(attempts) { index ->
             if (!active()) return false
             val cookie = CookieManager.getInstance().getCookie(COOKIE_URL).orEmpty()
-            if (cookie.split(';').any { it.trim().startsWith("BDUSS=") &&
-                    it.trim().removePrefix("BDUSS=").isNotEmpty() }) return true
+            if (cookie.split(';').any {
+                    val entry = it.trim()
+                    entry.startsWith("BDUSS=") && entry.length > "BDUSS=".length
+                }) return true
             if (index < attempts - 1 && !pause(5000L)) return false
         }
         return false

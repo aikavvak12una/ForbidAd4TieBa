@@ -329,7 +329,7 @@ internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
         methodName: String,
     ): Int {
         val method = MemberAccess.findMethodOrNull(clazz, methodName, java.lang.Integer.TYPE) ?: run {
-            XposedCompat.logD("$TAG method NOT FOUND: ${clazz.name}.$methodName(int)")
+            XposedCompat.logD { "$TAG method NOT FOUND: ${clazz.name}.$methodName(int)" }
             return 0
         }
         RuntimeHooks.builder(mod, method, "BottomTabLiquidGlassRuntime", "hookIntMethod:method").intercept { chain ->
@@ -856,7 +856,7 @@ internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
             }
         } catch (t: Throwable) {
             if (skinErrorLogged.compareAndSet(false, true)) {
-                XposedCompat.logD("$TAG skin type unavailable: ${t.message}")
+                XposedCompat.logD { "$TAG skin type unavailable: ${t.message}" }
             }
             false
         }

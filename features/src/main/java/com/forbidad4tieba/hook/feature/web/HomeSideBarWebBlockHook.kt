@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 object HomeSideBarWebBlockHook {
     private const val TAG = "[HomeSideBarWebBlockHook]"
-    private const val SIDE_BAR_PATH = "/mo/q/hybrid-main-forumtab/mainSidebar"
+    private const val SIDE_BAR_PATH = "/mo/q/hybrid-main-forumtab/mainsidebar"
     private const val SCHEDULE_DEDUPE_WINDOW_MS = 1200L
     private val INJECT_DELAYS_MS = longArrayOf(0L, 80L, 260L, 900L, 1800L)
 
@@ -289,7 +289,7 @@ object HomeSideBarWebBlockHook {
 
     private fun isSideBarUrl(url: String?): Boolean {
         val normalizedUrl = normalizeUrl(url) ?: return false
-        return normalizedUrl.contains(SIDE_BAR_PATH.lowercase(Locale.ROOT))
+        return normalizedUrl.contains(SIDE_BAR_PATH)
     }
 
     private fun normalizeUrl(url: String?): String? {

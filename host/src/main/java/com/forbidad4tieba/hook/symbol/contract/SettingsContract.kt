@@ -1,15 +1,18 @@
 package com.forbidad4tieba.hook.symbol.contract
 
-import android.content.Context
 import android.view.View
+import android.widget.RelativeLayout
+import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.HookSymbolsBuilder
 import com.forbidad4tieba.hook.symbol.model.SettingsScanSymbols
+import com.forbidad4tieba.hook.symbol.model.SettingsMenuSymbols
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import com.forbidad4tieba.hook.symbol.scan.SettingsSymbolScanner
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
+import java.lang.reflect.Modifier
 
 /** Owns the cached descriptors and host rules for this capability. */
 object SettingsContract : SymbolContract("Settings") {
@@ -45,31 +48,35 @@ object SettingsContract : SymbolContract("Settings") {
     }.build()
 
     internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-        if (!isSettingsValid(symbols, cl)) return false
-        return true
+        return runCatching { restoreSettings(symbols, cl) }.isSuccess
     }
 
     private const val NAV_CLASS = StableTiebaHookPoints.NAVIGATION_BAR_CLASS
 
-    private fun isSettingsValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-        val settingsClassName = symbols[SettingsContract.settingsClass] ?: return false
-        val settingsInitMethod = symbols[SettingsContract.settingsInitMethod] ?: return false
-        val settingsContainerField = symbols[SettingsContract.settingsContainerField] ?: return false
-        return try {
-            val settingsClass = ScanReflection.safeFindClass(settingsClassName, cl) ?: return false
-            val navClass = ScanReflection.safeFindClass(NAV_CLASS, cl) ?: return false
-            val methodOk = settingsClass.declaredMethods.any { method ->
-                if (method.name != settingsInitMethod) return@any false
-                if (method.returnType != Void.TYPE) return@any false
-                val p = method.parameterTypes
-                (p.size == 2 && Context::class.java.isAssignableFrom(p[0]) && navClass.isAssignableFrom(p[1])) ||
-                    (p.size == 1 && View::class.java.isAssignableFrom(p[0]))
-            }
-            if (!methodOk) return false
-            settingsClass.declaredFields.any { it.name == settingsContainerField }
-        } catch (_: Throwable) {
-            false
+    fun resolveSettingsMenuSymbols(cl: ClassLoader, symbols: HookSymbols): SettingsMenuSymbols? =
+        try { restoreSettings(symbols, cl) } catch (failure: Throwable) {
+            Diagnostics.log("[SettingsMenuHook] target restoration failed: ${failure.message}")
+            null
         }
+
+    private fun restoreSettings(symbols: HookSymbols, cl: ClassLoader): SettingsMenuSymbols {
+        val ownerName = requireNotNull(symbols[settingsClass]) { "settings class missing" }
+        val methodName = requireNotNull(symbols[settingsInitMethod]) { "settings init missing" }
+        val fieldName = requireNotNull(symbols[settingsContainerField]) { "settings container missing" }
+        checkNotNull(ScanReflection.safeFindClass(NAV_CLASS, cl)) { "navigation bar class missing" }
+        val owner = checkNotNull(ScanReflection.safeFindClass(ownerName, cl)) { "settings class unavailable" }
+        return restoreEntry(owner, methodName, fieldName)
+    }
+
+    /** The scanner's semantic rule selects exactly an instance void(View) initializer. */
+    internal fun restoreEntry(owner: Class<*>, methodName: String, fieldName: String): SettingsMenuSymbols {
+        val method = owner.getDeclaredMethod(methodName, View::class.java)
+        check(!Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE) { "invalid settings init" }
+        val field = owner.getDeclaredField(fieldName)
+        check(!Modifier.isStatic(field.modifiers) && field.type == RelativeLayout::class.java) { "invalid settings container" }
+        method.isAccessible = true
+        field.isAccessible = true
+        return SettingsMenuSymbols(method, field)
     }
 
     // This owner supplies targets to a composing capability.

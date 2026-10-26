@@ -15,6 +15,7 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Method
+import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
@@ -193,7 +194,9 @@ object HomeBottomTabAutoHideHook {
 
     private fun handleScroll(target: View, dy: Int) {
         val resolved = resolveBottomTabForScrollTarget(target) ?: return
-        val state = bottomTabStateFor(resolved.tabHost, resolved.wrapper)
+        val tabHost = resolved.tabHost.get() ?: return
+        val wrapper = resolved.wrapper.get() ?: return
+        val state = bottomTabStateFor(tabHost, wrapper)
         if (!ConfigManager.snapshot().isHomeTabAutoHideEnabled) {
             if (state.hidden) showBottomTab(state)
             HomeTabAutoHideStrategy.reset(state)
@@ -201,12 +204,12 @@ object HomeBottomTabAutoHideHook {
         }
 
         val currentTabType = state.currentTabType.takeIf { it >= 0 }
-            ?: resolveCurrentTabType(resolved.tabHost).also { state.currentTabType = it }
+            ?: resolveCurrentTabType(tabHost).also { state.currentTabType = it }
         if (HomeTabAutoHideLockController.isLockedHidden()) {
             HomeTabAutoHideStrategy.reset(state)
             if (currentTabType == HOME_TAB_TYPE) {
                 if (!state.hidden) {
-                    hideBottomTab(state, target, resolved.tabHost)
+                    hideBottomTab(state, target, tabHost)
                 }
                 return
             }
@@ -217,25 +220,25 @@ object HomeBottomTabAutoHideHook {
             return
         }
 
-        if (resolved.wrapper.height <= 0 || resolved.wrapper.windowToken == null) return
+        if (wrapper.height <= 0 || wrapper.windowToken == null) return
         val direction = HomeTabAutoHideStrategy.directionOf(dy)
         val desiredHidden = HomeTabAutoHideStrategy.shouldHide(direction)
         if (state.hidden == desiredHidden) {
             HomeTabAutoHideStrategy.reset(state)
             return
         }
-        if (!HomeTabAutoHideStrategy.reachedScrollThreshold(resolved.wrapper, state, direction, dy)) return
+        if (!HomeTabAutoHideStrategy.reachedScrollThreshold(wrapper, state, direction, dy)) return
 
-        if (performBottomTabAction(state, target, resolved.tabHost, desiredHidden)) {
+        if (performBottomTabAction(state, target, tabHost, desiredHidden)) {
             HomeTabAutoHideStrategy.reset(state)
         }
     }
 
     private fun onTabHostSelectionChanged(tabHost: View) {
         val state = synchronized(tabHostStates) {
-            tabHostStates[tabHost]
+            tabHostStates[tabHost]?.takeIf { it.wrapper.get() != null }
         } ?: resolveBottomTabForTabHost(tabHost)?.let { resolved ->
-            bottomTabStateFor(resolved.tabHost, resolved.wrapper)
+            bottomTabStateFor(tabHost, resolved.wrapper.get() ?: return)
         } ?: return
 
         state.currentTabType = resolveCurrentTabType(tabHost)
@@ -255,7 +258,8 @@ object HomeBottomTabAutoHideHook {
         val root = target.rootView ?: target
         synchronized(bottomTabCache) {
             val cached = bottomTabCache[target]
-            if (cached != null && cached.root === root && cached.tabHost.rootView === root) {
+            if (cached != null && cached.root.get() === root && cached.tabHost.get()?.rootView === root &&
+                cached.wrapper.get() != null) {
                 return cached
             }
         }
@@ -283,10 +287,10 @@ object HomeBottomTabAutoHideHook {
                 bottomTabMissRetryAt.remove(target)
             }
             if (activeLogged.compareAndSet(false, true)) {
-                XposedCompat.logD(
+                XposedCompat.logD {
                     "[HomeBottomTabAutoHideHook] auto-hide observer active: " +
                         "target=${target.javaClass.name}, tabHost=${tabHost.javaClass.name}"
-                )
+                }
             }
             return resolved
         }
@@ -315,14 +319,14 @@ object HomeBottomTabAutoHideHook {
             state.currentTabType = resolveCurrentTabType(tabHost)
         }
         SystemBarCompatHook.applyIfNeeded(findActivity(tabHost.context))
-        return ResolvedBottomTab(root, tabHost, wrapper)
+        return ResolvedBottomTab(WeakReference(root), WeakReference(tabHost), WeakReference(wrapper))
     }
 
     private fun bottomTabStateFor(tabHost: View, wrapper: View): BottomTabState {
         synchronized(tabHostStates) {
             val cached = tabHostStates[tabHost]
-            if (cached != null && cached.wrapper === wrapper) return cached
-            val state = BottomTabState(wrapper)
+            if (cached != null && cached.wrapper.get() === wrapper) return cached
+            val state = BottomTabState(WeakReference(wrapper))
             tabHostStates[tabHost] = state
             return state
         }
@@ -383,7 +387,7 @@ object HomeBottomTabAutoHideHook {
     }
 
     private fun hideBottomTab(state: BottomTabState, scrollTarget: View, tabHost: View): Boolean {
-        val wrapper = state.wrapper
+        val wrapper = state.wrapper.get() ?: return false
         if (wrapper.height <= 0 || wrapper.windowToken == null) return false
         if (state.hidden && wrapper.visibility == View.INVISIBLE) return false
         if (isWebViewScrollTarget(scrollTarget)) {
@@ -434,7 +438,12 @@ object HomeBottomTabAutoHideHook {
     }
 
     private fun showBottomTab(state: BottomTabState, animate: Boolean = true): Boolean {
-        val wrapper = state.wrapper
+        val wrapper = state.wrapper.get() ?: run {
+            state.hidden = false
+            hiddenTabPresent.set(false)
+            restoreContentInsetCompensation(state)
+            return false
+        }
         if (!state.hidden && wrapper.visibility == View.VISIBLE && wrapper.translationY == 0f && wrapper.alpha == 1f) {
             return false
         }
@@ -499,19 +508,23 @@ object HomeBottomTabAutoHideHook {
 
     internal fun applyLockedHidden(anchor: View): Boolean {
         val resolved = resolveBottomTabForScrollTarget(anchor) ?: return false
-        val state = bottomTabStateFor(resolved.tabHost, resolved.wrapper)
+        val tabHost = resolved.tabHost.get() ?: return false
+        val wrapper = resolved.wrapper.get() ?: return false
+        val state = bottomTabStateFor(tabHost, wrapper)
         val currentTabType = state.currentTabType.takeIf { it >= 0 }
-            ?: resolveCurrentTabType(resolved.tabHost).also { state.currentTabType = it }
+            ?: resolveCurrentTabType(tabHost).also { state.currentTabType = it }
         if (currentTabType != HOME_TAB_TYPE) return false
         HomeTabAutoHideStrategy.reset(state)
         if (state.hidden) return true
-        return hideBottomTab(state, anchor, resolved.tabHost)
+        return hideBottomTab(state, anchor, tabHost)
     }
 
     internal fun releaseLockedHidden(anchor: View): Boolean {
         var handled = false
         resolveBottomTabForScrollTarget(anchor)?.let { resolved ->
-            val state = bottomTabStateFor(resolved.tabHost, resolved.wrapper)
+            val tabHost = resolved.tabHost.get() ?: return@let
+            val wrapper = resolved.wrapper.get() ?: return@let
+            val state = bottomTabStateFor(tabHost, wrapper)
             HomeTabAutoHideStrategy.reset(state)
             showBottomTab(state)
             handled = true
@@ -531,13 +544,14 @@ object HomeBottomTabAutoHideHook {
 
     private fun applyContentInsetCompensation(state: BottomTabState, scrollTarget: View, tabHost: View) {
         restoreContentInsetCompensation(state)
-        val barHeight = state.wrapper.height
+        val wrapper = state.wrapper.get() ?: return
+        val barHeight = wrapper.height
         if (barHeight <= 0) return
 
         var current: View? = scrollTarget
         var depth = 0
         while (current != null && current !== tabHost && depth < 12) {
-            if (current !== state.wrapper) {
+            if (current !== wrapper) {
                 adjustBottomInset(current, barHeight)?.let { adjustment ->
                     state.contentInsetAdjustments.add(adjustment)
                     return
@@ -551,7 +565,7 @@ object HomeBottomTabAutoHideHook {
     private fun restoreContentInsetCompensation(state: BottomTabState) {
         if (state.contentInsetAdjustments.isEmpty()) return
         for (adjustment in state.contentInsetAdjustments.asReversed()) {
-            val view = adjustment.view
+            val view = adjustment.view.get() ?: continue
             if (adjustment.restorePadding) {
                 view.setPadding(
                     adjustment.paddingLeft,
@@ -576,7 +590,7 @@ object HomeBottomTabAutoHideHook {
         val paddingBottom = view.paddingBottom
         if (shouldCompensateInset(paddingBottom, barHeight)) {
             val adjustment = ContentInsetAdjustment(
-                view = view,
+                view = WeakReference(view),
                 restorePadding = true,
                 paddingLeft = view.paddingLeft,
                 paddingTop = view.paddingTop,
@@ -596,7 +610,7 @@ object HomeBottomTabAutoHideHook {
         val bottomMargin = lp.bottomMargin
         if (!shouldCompensateInset(bottomMargin, barHeight)) return null
         val adjustment = ContentInsetAdjustment(
-            view = view,
+            view = WeakReference(view),
             restoreBottomMargin = true,
             bottomMargin = bottomMargin,
         )
@@ -714,13 +728,13 @@ object HomeBottomTabAutoHideHook {
     )
 
     private data class ResolvedBottomTab(
-        val root: View,
-        val tabHost: View,
-        val wrapper: View,
+        val root: WeakReference<View>,
+        val tabHost: WeakReference<View>,
+        val wrapper: WeakReference<View>,
     )
 
     private data class BottomTabState(
-        val wrapper: View,
+        val wrapper: WeakReference<View>,
         var currentTabType: Int = -1,
         var hidden: Boolean = false,
         override var lastDirection: Int = 0,
@@ -732,7 +746,7 @@ object HomeBottomTabAutoHideHook {
     ) : HomeTabAutoHideStrategy.ScrollAccumulator
 
     private data class ContentInsetAdjustment(
-        val view: View,
+        val view: WeakReference<View>,
         val restorePadding: Boolean = false,
         val paddingLeft: Int = 0,
         val paddingTop: Int = 0,

@@ -79,11 +79,15 @@ object PlainUrlDirectBrowserHook {
                 for (onClickMethod in spanTargets.onClickMethods) {
                     if (!installedMethodKeys.add(methodKey(onClickMethod))) continue
                     RuntimeHooks.builder(mod, onClickMethod, "PlainUrlDirectBrowserHook", "hook:onClickMethod").intercept { chain ->
+                        val settings = ConfigManager.snapshot()
+                        if (!settings.isOpenWebLinkInSystemBrowserEnabled && !settings.isCommentAvatarDirectProfileEnabled) {
+                            return@intercept chain.proceed()
+                        }
                         val span = chain.thisObject ?: return@intercept chain.proceed()
                         val view = chain.args.firstOrNull() as? View
                         val type = readIntField(spanTargets.typeField, span)
                         if (
-                            ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled &&
+                            settings.isCommentAvatarDirectProfileEnabled &&
                             type == USER_SPAN_TYPE
                         ) {
                             val userId = runCatching { spanTargets.urlField.get(span) as? String }.getOrNull()
@@ -92,10 +96,10 @@ object PlainUrlDirectBrowserHook {
                                 return@intercept null
                             }
                         }
-                        if (!ConfigManager.snapshot().isOpenWebLinkInSystemBrowserEnabled) {
+                        if (!settings.isOpenWebLinkInSystemBrowserEnabled) {
                             return@intercept chain.proceed()
                         }
-                        val normalizedUrl = resolveWebUrl(spanTargets.typeField, spanTargets.urlField, spanTargets.textField, span, view)
+                        val normalizedUrl = resolveWebUrl(type, spanTargets.urlField, spanTargets.textField, span, view)
                             ?: return@intercept chain.proceed()
 
                         markClickSpan(clickSpanField)
@@ -108,6 +112,10 @@ object PlainUrlDirectBrowserHook {
             val messageTarget = targets.messageTarget
             if (messageTarget != null && installedMethodKeys.add(methodKey(messageTarget.dispatchMethod))) {
                 RuntimeHooks.builder(mod, messageTarget.dispatchMethod, "PlainUrlDirectBrowserHook", "hook:messageTarget.dispatchMethod").intercept { chain ->
+                    val settings = ConfigManager.snapshot()
+                    if (!settings.isOpenWebLinkInSystemBrowserEnabled && !settings.isCommentAvatarDirectProfileEnabled) {
+                        return@intercept chain.proceed()
+                    }
                     val message = chain.args.firstOrNull() ?: return@intercept chain.proceed()
                     if (!messageTarget.customResponsedMessageClass.isInstance(message)) {
                         return@intercept chain.proceed()
@@ -122,15 +130,15 @@ object PlainUrlDirectBrowserHook {
                     val type = readIntField(dataSymbols.typeField, data)
                         ?: return@intercept chain.proceed()
                     val rawUrl = runCatching { dataSymbols.urlField.get(data) as? String }.getOrNull()
-                    val rawText = runCatching { dataSymbols.textField.get(data) as? String }.getOrNull()
                     if (
-                        ConfigManager.snapshot().isCommentAvatarDirectProfileEnabled &&
+                        settings.isCommentAvatarDirectProfileEnabled &&
                         type == USER_SPAN_TYPE
                     ) {
                         val context = runCatching { messageTarget.getInstMethod.invoke(null) as? Context }.getOrNull()
                         if (targets.openUserProfile(context, rawUrl)) return@intercept null
                     }
-                    if (!ConfigManager.snapshot().isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
+                    if (!settings.isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
+                    val rawText = runCatching { dataSymbols.textField.get(data) as? String }.getOrNull()
                     val normalizedUrl = chooseWebUrl(type, rawUrl, rawText, null)
                         ?: return@intercept chain.proceed()
                     val context = runCatching { messageTarget.getInstMethod.invoke(null) as? Context }.getOrNull()
@@ -144,9 +152,10 @@ object PlainUrlDirectBrowserHook {
             if (browserHelperTargets != null) {
                 for (startWebActivityMethod in browserHelperTargets.startWebActivityMethods) {
                     if (!installedMethodKeys.add(methodKey(startWebActivityMethod))) continue
+                    val urlIndex = browserHelperUrlArgIndex(startWebActivityMethod)
                     RuntimeHooks.builder(mod, startWebActivityMethod, "PlainUrlDirectBrowserHook", "hook:startWebActivityMethod").intercept { chain ->
                         if (!ConfigManager.snapshot().isOpenWebLinkInSystemBrowserEnabled) return@intercept chain.proceed()
-                        val normalizedUrl = resolveBrowserHelperWebUrl(startWebActivityMethod, chain.args)
+                        val normalizedUrl = resolveBrowserHelperWebUrl(urlIndex, chain.args)
                             ?: return@intercept chain.proceed()
                         val context = resolveBrowserHelperContext(chain.args)
                         if (openSystemBrowser(context, normalizedUrl)) null else chain.proceed()
@@ -198,13 +207,12 @@ object PlainUrlDirectBrowserHook {
     }
 
     private fun resolveWebUrl(
-        typeField: Field,
+        type: Int?,
         urlField: Field,
         textField: Field,
         span: Any,
         view: View?,
     ): String? {
-        val type = readIntField(typeField, span)
         val rawUrl = runCatching { urlField.get(span) as? String }.getOrNull()
         val rawText = runCatching { textField.get(span) as? String }.getOrNull()
         val spanText = extractSpanText(view, span)
@@ -218,13 +226,10 @@ object PlainUrlDirectBrowserHook {
         rawText: String?,
         spanText: String?,
     ): String? {
-        val targetUrl = normalizeWebUrl(rawUrl)
-        val displayUrl = normalizeWebUrl(rawText)
-        val clickedTextUrl = normalizeWebUrl(spanText)
         return if (type == ORDINARY_URL_TYPE) {
-            targetUrl ?: displayUrl ?: clickedTextUrl
+            normalizeWebUrl(rawUrl) ?: normalizeWebUrl(rawText) ?: normalizeWebUrl(spanText)
         } else {
-            displayUrl ?: clickedTextUrl ?: targetUrl
+            normalizeWebUrl(rawText) ?: normalizeWebUrl(spanText) ?: normalizeWebUrl(rawUrl)
         }
     }
 
@@ -234,8 +239,8 @@ object PlainUrlDirectBrowserHook {
         return normalizeWebUrl(rawUrl)
     }
 
-    private fun resolveBrowserHelperWebUrl(method: Method, args: List<*>): String? {
-        val urlIndex = browserHelperUrlArgIndex(method) ?: return null
+    private fun resolveBrowserHelperWebUrl(urlIndex: Int?, args: List<*>): String? {
+        if (urlIndex == null) return null
         val candidate = when (val arg = args.getOrNull(urlIndex)) {
             is Uri -> arg.toString()
             is String -> arg
@@ -323,8 +328,8 @@ object PlainUrlDirectBrowserHook {
     }
 
     private fun shouldInspectNestedWebUrl(value: String): Boolean {
-        val lower = value.lowercase(Locale.ROOT)
-        return isTiebaPrivateRoute(value) || lower.contains(TIEBA_WEB_HOST)
+        // normalizeWebUrl has already rejected private routes for every candidate.
+        return containsTiebaWebHost(value)
     }
 
     private fun extractNestedWebUrlValues(value: String): List<String> {
@@ -342,9 +347,9 @@ object PlainUrlDirectBrowserHook {
     private fun decodedCandidates(value: String, preferDecoded: Boolean): List<String> {
         val decodedValues = ArrayList<String>(2)
         var current = value
-        repeat(2) {
+        for (attempt in 0 until 2) {
             val decoded = runCatching { Uri.decode(current) }.getOrNull()
-            if (decoded.isNullOrEmpty() || decoded == current) return@repeat
+            if (decoded.isNullOrEmpty() || decoded == current) break
             decodedValues.add(decoded)
             current = decoded
         }

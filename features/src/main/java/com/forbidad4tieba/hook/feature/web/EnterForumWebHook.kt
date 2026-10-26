@@ -123,9 +123,7 @@ object EnterForumWebHook {
     }
 
     private fun isEnterForumMainUrl(lower: String): Boolean {
-        return lower.contains("hybrid-main-forumtab/mainpage") ||
-            lower.contains("hybrid-main-forumtab") ||
-            lower.contains("hybrid-main-frs/mainpage/hybrid") ||
+        return lower.contains("hybrid-main-forumtab") ||
             lower.contains("hybrid-main-frs/mainpage")
     }
 }

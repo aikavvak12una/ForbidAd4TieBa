@@ -30,7 +30,7 @@ import com.forbidad4tieba.hook.feature.share.ImageViewerNativeShareFeature
 import com.forbidad4tieba.hook.feature.share.ShareTrackingParamCleanerFeature
 import com.forbidad4tieba.hook.feature.ui.AutoLoadMoreFeature
 import com.forbidad4tieba.hook.feature.ui.AutoRefreshFeature
-import com.forbidad4tieba.hook.feature.ui.BottomTabTopLineFeature
+import com.forbidad4tieba.hook.feature.ui.nativeglass.BottomTabTopLineFeature
 import com.forbidad4tieba.hook.feature.ui.CollectionSearchFeature
 import com.forbidad4tieba.hook.feature.ui.CommentAvatarDirectProfileFeature
 import com.forbidad4tieba.hook.feature.ui.CommentAvatarDirectProfileHook
@@ -43,7 +43,7 @@ import com.forbidad4tieba.hook.feature.ui.FreeCopyNativeFeature
 import com.forbidad4tieba.hook.feature.ui.HistorySearchFeature
 import com.forbidad4tieba.hook.feature.ui.HomeBottomTabAutoHideFeature
 import com.forbidad4tieba.hook.feature.ui.HomeFeedPromptBarBlockFeature
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassFeature
+import com.forbidad4tieba.hook.feature.ui.nativeglass.HomeNativeGlassFeature
 import com.forbidad4tieba.hook.feature.ui.HomeSideBarSettingsEntryFeature
 import com.forbidad4tieba.hook.feature.ui.HomeTabFeature
 import com.forbidad4tieba.hook.feature.ui.HomeTabRedDotBlockFeature
@@ -175,7 +175,10 @@ internal object FeatureCatalog {
         settings: SettingsSnapshot,
     ): HookInstallPlan {
         val context = HookInstallContext(processName, symbols)
-        return HookInstallPlan(processName, phase.diagnosticName,
-            definitions.filter { it.phase == phase }.flatMap { it.entries(context, settings) })
+        val entries = ArrayList<HookInstallEntry>()
+        for (definition in definitions) {
+            if (definition.phase == phase) entries.addAll(definition.entries(context, settings))
+        }
+        return HookInstallPlan(processName, phase.diagnosticName, entries)
     }
 }

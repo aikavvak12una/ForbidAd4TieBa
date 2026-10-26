@@ -10,7 +10,7 @@ class PostUserIdFilterTest {
         isPostUserIdFilterEnabled = true,
         postUserIdList = setOf("123", "9007199254740993"),
     )
-    private val filter = CustomPostCardBlockHook.RuntimeFilter("dataList", "templateKey", "payload", "params", null, null)
+    private val filter = feedFilterFixture(Data::class.java, Component::class.java)
 
     @Test fun matchesWholeAuthorUidIncludingLongValuesAndNeverSubstrings() {
         for (uid in listOf("123", " 00123 ", 123, 123L, "9007199254740993", 9007199254740993L)) {
@@ -65,7 +65,7 @@ class PostUserIdFilterTest {
         val uidCard = card("user_id" to "123")
         val voteCard = Card(Data(listOf(Component("card_vote", emptyMap()))))
         val input = listOf(uidCard, voteCard)
-        val runtime = filter.copy(headParamsFieldName = null)
+        val runtime = filter.copy(headParamsField = null)
         assertSame(input, CustomPostCardBlockHook.filterList(input, runtime, "setList", rules = settings.customPostRules))
         assertEquals(listOf(uidCard), CustomPostCardBlockHook.filterList(input, runtime, "setList",
             rules = settings.copy(isPostVoteFilterEnabled = true).customPostRules))
@@ -86,12 +86,12 @@ class PostUserIdFilterTest {
     private fun card(vararg params: Pair<String, String>) =
         Card(Data(listOf(Component("feed_head", mapOf(*params)), Component("feed_content", emptyMap()))))
 
-    class Card(private val data: Data) {
-        fun templateKey() = "feed_card"
-        fun payload() = data
+    class Card(private val data: Data) : FeedTemplateFixture {
+        override fun templateKey() = "feed_card"
+        override fun payload() = data
     }
     class Data(@JvmField val dataList: List<Component>)
-    class Component(private val key: String, @JvmField val params: Map<String, String>) {
-        fun templateKey() = key
+    class Component(private val key: String, @JvmField val params: Map<String, String>) : FeedTemplateFixture {
+        override fun templateKey() = key
     }
 }

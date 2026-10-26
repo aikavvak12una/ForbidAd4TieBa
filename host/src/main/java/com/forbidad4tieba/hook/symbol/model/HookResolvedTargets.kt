@@ -4,6 +4,11 @@ import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 
+data class SettingsMenuSymbols(
+    val initMethod: Method,
+    val containerField: Field,
+)
+
 data class FreeCopyPopupSymbols(
     val menuClass: Class<*>,
     val contentViewMethod: Method,
@@ -174,13 +179,19 @@ data class HomeTabResolvedSymbols(
     val rebuildMethod: Method,
     val listField: Field,
     val parseMethod: Method?,
-    val itemTypeField: String,
-    val itemCodeField: String,
-    val itemNameField: String,
-    val itemUrlField: String,
-    val itemMainSetterMethod: String?,
-    val itemMainIntField: String?,
-    val itemMainBooleanField: String?,
+    val item: HomeTabItemTargets,
+)
+
+data class HomeTabItemTargets(
+    val type: Class<*>,
+    val constructor: Constructor<*>?,
+    val typeField: Field,
+    val codeField: Field,
+    val nameField: Field,
+    val urlField: Field,
+    val mainSetter: Method?,
+    val mainIntField: Field?,
+    val mainBooleanField: Field?,
 )
 
 data class PbFallingAdSymbols(
@@ -229,19 +240,19 @@ data class PostAdDataFilterSymbols(
 )
 
 data class CustomPostCardFilterSymbols(
-    val dataListFieldName: String,
-    val templateKeyMethodName: String,
-    val templatePayloadMethodName: String,
-    val headParamsFieldName: String?,
-    val recommendNestedDataMethodName: String?,
-    val recommendNestedDataListFieldName: String?,
+    val dataListField: Field,
+    val templateKeyMethod: Method,
+    val templatePayloadMethod: Method,
+    val headParamsField: Field?,
+    val recommendNestedDataMethod: Method?,
+    val recommendNestedDataListField: Field?,
     val schemaGetter: Method? = null,
 )
 
 data class FeedAdSymbols(
     val setListMethod: Method,
     val loadMoreMethod: Method?,
-    val templateKeyMethodName: String,
+    val templateKeyMethod: Method,
     val customPostFilter: CustomPostCardFilterSymbols?,
 )
 
@@ -391,61 +402,37 @@ data class HistorySearchSymbols(
     val onResumeMethod: Method?,
     val onDestroyMethod: Method?,
     val activityListUpdateMethod: Method?,
-    val adapterField: String,
-    val adapterSetListMethod: String,
-    val adapterSetListMethodSpec: String,
-    val listField: String,
-    val activityNavBarField: String,
-    val threadNameMethod: String,
-    val forumNameMethod: String,
-    val userNameMethod: String,
-    val descriptionMethod: String,
-    val threadIdMethod: String,
-    val postIdMethod: String,
-    val liveIdMethod: String,
+    val adapterField: Field,
+    val adapterSetListMethod: Method,
+    val listField: Field,
+    val activityNavBarField: Field,
+    val threadNameMethod: Method,
+    val forumNameMethod: Method,
+    val userNameMethod: Method,
+    val descriptionMethod: Method,
+    val threadIdMethod: Method,
+    val postIdMethod: Method,
+    val liveIdMethod: Method,
 )
 
-data class CollectionSearchSymbols(
-    val activityClass: Class<*>,
-    val fragmentClass: Class<*>,
-    val presenterField: String,
-    val presenterListSetterMethod: String,
-    val presenterListSetterMethodSpec: String,
-    val modelField: String,
-    val modelListGetterMethod: String,
-    val modelListGetterMethodSpec: String,
-    val modelParseMethod: String,
-    val modelParseMethodSpec: String,
-    val modelListField: String,
-    val fragmentDisplayListField: String,
-    val activityNavControllerField: String?,
-    val navBarField: String,
-    val presenterAdapterField: String?,
-    val adapterShowFooterMethod: String?,
-    val adapterLoadingMethod: String?,
-    val adapterHasMoreMethod: String?,
-    val editModeMethod: String?,
-)
 
 data class DefaultOriginalImageSymbols(
     val pagerAdapterClass: Class<*>?,
     val urlDragImageViewClass: Class<*>,
     val dataClass: Class<*>,
-    val setPrimaryItemMethod: String?,
-    val setAssistUrlMethod: String?,
-    val assistDataMethod: String,
-    val originTextMethod: String?,
-    val showButtonField: String,
-    val blockedField: String,
-    val originalProcessField: String,
-    val originalUrlField: String,
-    val sharedPrefHelperClass: Class<*>?,
-    val sharedPrefGetInstanceMethod: String?,
-    val sharedPrefPutBooleanMethod: String?,
-    val md5Class: Class<*>?,
-    val md5Method: String?,
-    val triggerMethod: String,
-    val directStartMethod: String?,
+    val setPrimaryItemMethod: Method?,
+    val setAssistUrlMethod: Method?,
+    val assistDataMethod: Method,
+    val originTextMethod: Method?,
+    val showButtonField: Field,
+    val blockedField: Field,
+    val originalProcessField: Field,
+    val originalUrlField: Field,
+    val sharedPrefGetInstanceMethod: Method?,
+    val sharedPrefPutBooleanMethod: Method?,
+    val md5Method: Method?,
+    val triggerMethod: Method,
+    val directStartMethod: Method?,
 )
 
 data class AiComponentSymbols(
@@ -462,6 +449,17 @@ data class InputMemeBarSymbols(
 
 data class AiImageViewerJumpButtonSymbols(
     val initMethod: Method,
+)
+
+data class AutoSignInNetworkSymbols(
+    val netCtor: Constructor<*>,
+    val addPostDataMethod: Method,
+    val postNetDataMethod: Method,
+    val setNeedTbsMethod: Method,
+    val setNeedSigMethod: Method,
+    val serverAddressField: Field,
+    val getCurrentAccountMethod: Method,
+    val hybridNativeProxy: AutoSignInHybridNativeProxySymbols?,
 )
 
 data class AutoSignInHybridNativeProxySymbols(

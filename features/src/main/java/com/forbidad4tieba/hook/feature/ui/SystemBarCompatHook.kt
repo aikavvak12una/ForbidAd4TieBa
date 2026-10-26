@@ -20,6 +20,7 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
@@ -31,7 +32,7 @@ object SystemBarCompatHook {
     private const val NAVIGATION_MODE_SETTING = "navigation_mode"
     private val registered = AtomicBoolean(false)
     private val firstErrorLogged = AtomicBoolean(false)
-    private val windowActivities = Collections.synchronizedMap(WeakHashMap<Window, Activity>())
+    private val windowActivities = Collections.synchronizedMap(WeakHashMap<Window, WeakReference<Activity>>())
     private val navigationBarColorHookAttemptedClasses = ConcurrentHashMap.newKeySet<Class<*>>()
     private val navigationBarColorProcessedMethods = ConcurrentHashMap.newKeySet<String>()
     private val bottomTabInsetStates = Collections.synchronizedMap(WeakHashMap<View, BottomTabInsetState>())
@@ -158,7 +159,7 @@ object SystemBarCompatHook {
             method.isAccessible = true
             RuntimeHooks.builder(mod, method, "SystemBarCompatHook", "installNavigationBarColorHook:method").intercept { chain ->
                 val window = chain.thisObject as? Window ?: return@intercept chain.proceed()
-                val activity = synchronized(windowActivities) { windowActivities[window] }
+                val activity = synchronized(windowActivities) { windowActivities[window]?.get() }
                     ?: return@intercept chain.proceed()
                 if (!shouldApply(activity)) return@intercept chain.proceed()
                 val color = (chain.args.getOrNull(0) as? Number)?.toInt()
@@ -196,8 +197,8 @@ object SystemBarCompatHook {
 
     private fun rememberActivityWindow(activity: Activity, window: Window) {
         synchronized(windowActivities) {
-            if (windowActivities[window] === activity) return
-            windowActivities[window] = activity
+            if (windowActivities[window]?.get() === activity) return
+            windowActivities[window] = WeakReference(activity)
         }
         installNavigationBarColorHook(window.javaClass)
     }
@@ -206,7 +207,7 @@ object SystemBarCompatHook {
         synchronized(windowActivities) {
             val iterator = windowActivities.entries.iterator()
             while (iterator.hasNext()) {
-                if (iterator.next().value === activity) iterator.remove()
+                if (iterator.next().value.get() === activity) iterator.remove()
             }
         }
     }

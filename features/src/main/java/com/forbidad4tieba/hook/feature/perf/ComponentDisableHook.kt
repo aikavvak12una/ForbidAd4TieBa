@@ -119,7 +119,7 @@ object ComponentDisableHook {
         } catch (t: Throwable) {
             stats.failed++
             if (ConfigManager.snapshot().isDetailedLoggingEnabled) {
-                XposedCompat.logD("$TAG restore failed: $className, ${t.message}")
+                XposedCompat.logD { "$TAG restore failed: $className, ${t.message}" }
             }
             false
         }

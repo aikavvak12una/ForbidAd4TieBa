@@ -74,7 +74,7 @@ object TitanPatchBlockHook {
                 }
                 hooked++
             } catch (t: Throwable) {
-                XposedCompat.logD("$TAG failed to hook load(): ${t.message}")
+                XposedCompat.logD { "$TAG failed to hook load(): ${t.message}" }
             }
         }
 
@@ -95,12 +95,12 @@ object TitanPatchBlockHook {
                 }
                 hooked++
             } catch (t: Throwable) {
-                XposedCompat.logD("$TAG failed to hook loadInTime(): ${t.message}")
+                XposedCompat.logD { "$TAG failed to hook loadInTime(): ${t.message}" }
             }
         }
 
         if (hooked > 0) {
-            XposedCompat.logD("$TAG interceptors registered: $hooked methods")
+            XposedCompat.logD { "$TAG interceptors registered: $hooked methods" }
         } else {
             installed.set(false)
             XposedCompat.logD("$TAG no Titan load methods found")
@@ -164,7 +164,7 @@ object TitanPatchBlockHook {
                 XposedCompat.logD("$TAG patch dir was empty")
             }
         } catch (t: Throwable) {
-            XposedCompat.logD("$TAG failed to delete patch files: ${t.message}")
+            XposedCompat.logD { "$TAG failed to delete patch files: ${t.message}" }
         }
     }
 

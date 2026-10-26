@@ -201,14 +201,13 @@ class CustomPostFilterMatcherTest {
     }
 
     @Test
-    fun recommendForumBlocksSidewayListViaRecommendCardKey() {
-        val decision = CustomPostFilterMatcher.decideByRecommendCardTemplateKey(
-            "sideway_list",
-            runtimeRules(recommendForum = true),
-        )
-
-        assertTrue(decision.blocked)
-        assertEquals("custom_post_type:recommend_forum:template_key=sideway_list", decision.reason)
+    fun allRecommendCardKeysUseTheCommonTemplateRule() {
+        for (key in listOf("recommend_card_forum_attention", "recommend_card_person_attention", "recommend_card_list", "sideway_list")) {
+            val decision = CustomPostFilterMatcher.decideByTemplateKey(key, runtimeRules(recommendForum = true))
+            assertTrue(decision.blocked)
+            assertEquals("custom_post_type:recommend_forum:template_key=$key", decision.reason)
+            assertEquals(false, CustomPostFilterMatcher.decideByTemplateKey(key, runtimeRules(recommendForum = false)).blocked)
+        }
     }
 
     @Test

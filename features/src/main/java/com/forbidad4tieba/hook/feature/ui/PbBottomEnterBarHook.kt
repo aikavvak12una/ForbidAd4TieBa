@@ -151,7 +151,7 @@ object PbBottomEnterBarHook {
         val root = try {
             totalViewMethod.invoke(guide) as? View
         } catch (t: Throwable) {
-            XposedCompat.logD("[PbBottomEnterBarHook] hot topic root resolve failed: ${t.message}")
+            XposedCompat.logD { "[PbBottomEnterBarHook] hot topic root resolve failed: ${t.message}" }
             null
         } ?: return
         squashBannerView(root)

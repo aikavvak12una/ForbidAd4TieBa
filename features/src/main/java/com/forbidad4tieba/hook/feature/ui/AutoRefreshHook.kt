@@ -136,7 +136,7 @@ object AutoRefreshHook {
             }
             val taskId = chain.args.firstOrNull() as? String
             if (taskId == key) {
-                XposedCompat.logD("[AutoRefreshHook] cache restore: $key -> false")
+                XposedCompat.logD { "[AutoRefreshHook] cache restore: $key -> false" }
                 return@intercept false
             }
             chain.proceed()
@@ -179,7 +179,7 @@ object AutoRefreshHook {
             }
             XposedCompat.log("[AutoRefreshHook] refresh-animation hook INSTALLED")
         }.onFailure { t ->
-            XposedCompat.logD("[AutoRefreshHook] refresh-animation hook skipped: ${t.message}")
+            XposedCompat.logD { "[AutoRefreshHook] refresh-animation hook skipped: ${t.message}" }
         }
     }
 
@@ -200,7 +200,7 @@ object AutoRefreshHook {
             }
             XposedCompat.log("[AutoRefreshHook] pull-gesture hook INSTALLED")
         }.onFailure { t ->
-            XposedCompat.logD("[AutoRefreshHook] pull-gesture hook skipped: ${t.message}")
+            XposedCompat.logD { "[AutoRefreshHook] pull-gesture hook skipped: ${t.message}" }
         }
     }
 
@@ -235,7 +235,7 @@ object AutoRefreshHook {
             }
             XposedCompat.log("[AutoRefreshHook] tab-click gesture hook INSTALLED")
         }.onFailure { t ->
-            XposedCompat.logD("[AutoRefreshHook] tab-click gesture hook skipped: ${t.message}")
+            XposedCompat.logD { "[AutoRefreshHook] tab-click gesture hook skipped: ${t.message}" }
         }
     }
 
@@ -286,7 +286,7 @@ object AutoRefreshHook {
     private fun markUserRefresh(reason: String) {
         if (!ConfigManager.snapshot().isAutoRefreshDisabled) return
         userRefreshUntilMs.set(SystemClock.uptimeMillis() + USER_REFRESH_GRACE_MS)
-        XposedCompat.logD("[AutoRefreshHook] user refresh gesture: $reason")
+        XposedCompat.logD { "[AutoRefreshHook] user refresh gesture: $reason" }
     }
 
     /**
@@ -298,6 +298,6 @@ object AutoRefreshHook {
     private fun beginAutomaticPhase(reason: String) {
         if (!ConfigManager.snapshot().isAutoRefreshDisabled) return
         userRefreshUntilMs.set(0L)
-        XposedCompat.logD("[AutoRefreshHook] automatic phase: $reason")
+        XposedCompat.logD { "[AutoRefreshHook] automatic phase: $reason" }
     }
 }

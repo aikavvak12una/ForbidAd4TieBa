@@ -202,6 +202,16 @@ data class SettingsSnapshot(
 
     internal val customPostRules: CustomPostFilterRules? = CustomPostFilterRules.from(this)
 
+    internal val bottomTabSelection: TabPreferences.BottomTabSelection? = if (isBottomTabsCustomEnabled) {
+        TabPreferences.normalizeBottomTabSelection(TabPreferences.BottomTabSelection(
+            homeEnabled = isBottomTabHomeEnabled,
+            enterForumEnabled = isBottomTabEnterForumEnabled,
+            retailStoreEnabled = isBottomTabRetailStoreEnabled,
+            messageEnabled = isBottomTabMessageEnabled,
+            mineEnabled = isBottomTabMineEnabled,
+        ))
+    } else null
+
     fun isHomeNativeGlassRuntimeActive(): Boolean {
         return isHomeNativeGlassEnabled && hasAnyHomeNativeGlassBackgroundImage()
     }

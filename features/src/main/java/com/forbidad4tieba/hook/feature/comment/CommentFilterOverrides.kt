@@ -24,7 +24,7 @@ internal class CommentFilterVisits {
     @Synchronized fun clear() { visits.clear() }
     @Synchronized fun forResponse(tid: String?, global: Boolean): Boolean {
         // A response with no unambiguous live owner cannot borrow another visit's state.
-        return visits.values.filter { it.tid == tid }.singleOrNull()?.enabled ?: global
+        return visits.values.singleOrNull { it.tid == tid }?.enabled ?: global
     }
 }
 

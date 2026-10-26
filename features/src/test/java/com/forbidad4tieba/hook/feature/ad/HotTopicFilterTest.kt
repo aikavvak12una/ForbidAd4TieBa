@@ -121,12 +121,11 @@ class HotTopicFilterTest {
         assertEquals(listOf(0.8), observed)
     }
 
-    private val filter = CustomPostCardBlockHook.RuntimeFilter("dataList", "templateKey", "payload", "params", null, null,
-        Data::class.java.getMethod("cardSchema"))
+    private val filter = feedFilterFixture(Data::class.java, Component::class.java, Data::class.java.getMethod("cardSchema"))
 
-    class Card(private val data: Data, private val key: String = "common_card") {
-        fun templateKey() = key
-        fun payload() = data
+    class Card(private val data: Data, private val key: String = "common_card") : FeedTemplateFixture {
+        override fun templateKey() = key
+        override fun payload() = data
     }
 
     class Data(@JvmField val schema: String, @JvmField val dataList: List<Component>) {
@@ -135,7 +134,7 @@ class HotTopicFilterTest {
         fun failingSchema(): String = error("Simulated unavailable schema getter")
     }
     class Component(private val key: String, @JvmField val schema: String = "",
-        @JvmField val params: Map<String, String> = emptyMap()) { fun templateKey() = key }
+        @JvmField val params: Map<String, String> = emptyMap()) : FeedTemplateFixture { override fun templateKey() = key }
 
     private fun portal(url: String, page: String = "h5/openWebView"): String =
         "tiebaapp://router/portal?params=" + URLEncoder.encode(JSONObject()

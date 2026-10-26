@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.utils.toLowerHex
+
 import com.forbidad4tieba.hook.config.SimpleToggle
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.contracts.MemberAccess
@@ -10,7 +12,6 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ReflectionUtils
-import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -39,8 +40,6 @@ object DefaultOriginalImageHook {
     // One-shot warning and log markers.
     private val firstPrimaryCallbackLogged = AtomicBoolean(false)
     private val firstCtorCallbackLogged = AtomicBoolean(false)
-    private val warnedTriggerMethodMissing = AtomicBoolean(false)
-    private val warnedDirectStartUnavailable = AtomicBoolean(false)
     private val warnedNoStartAfterRetry = AtomicBoolean(false)
     private val warnedDataUnavailable = AtomicBoolean(false)
     private val warnedAlreadyProcessing = AtomicBoolean(false)
@@ -53,33 +52,9 @@ object DefaultOriginalImageHook {
     private const val TAG_PENDING_TRIGGER_DATA_ID = 0x7E000011
     private const val TAG_DIRECT_START_DATA_ID = 0x7E000012
 
-    // Reflection lookup cache.
-    private data class FieldLookupCache(
-        val fields: ConcurrentHashMap<String, Field> = ConcurrentHashMap(),
-        val misses: MutableSet<String> = ConcurrentHashMap.newKeySet(),
-    )
-
-    private val assistDataMethodCache = ConcurrentHashMap<Class<*>, Method>()
-    private val assistDataMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val originTextMethodCache = ConcurrentHashMap<Class<*>, Method>()
-    private val originTextMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val triggerMethodCache = ConcurrentHashMap<Class<*>, Method>()
-    private val triggerMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val directStartMethodCache = ConcurrentHashMap<Class<*>, Method>()
-    private val directStartMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val sharedPrefGetInstanceMethodCache = ConcurrentHashMap<Class<*>, Method>()
-    private val sharedPrefGetInstanceMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val sharedPrefPutBooleanMethodCache = ConcurrentHashMap<Class<*>, Method>()
-    private val sharedPrefPutBooleanMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val tbMd5MethodCache = ConcurrentHashMap<Class<*>, Method>()
-    private val tbMd5MethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
+    // Public pager access can vary with the concrete parent View class.
     private val currentItemMethodCache = ConcurrentHashMap<Class<*>, Method>()
     private val currentItemMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val imageUrlDataFieldCache = ConcurrentHashMap<Class<*>, FieldLookupCache>()
-
-    @Volatile private var urlDragImageViewClass: Class<*>? = null
-    @Volatile private var sharedPrefHelperClass: Class<*>? = null
-    @Volatile private var tbMd5Class: Class<*>? = null
     @Volatile private var runtimeTargets: DefaultOriginalImageSymbols? = null
 
     internal fun hook(targets: DefaultOriginalImageSymbols) {
@@ -111,16 +86,12 @@ object DefaultOriginalImageHook {
 
         // Resolve classes from precomputed targets.
         val adapterClass = targets.pagerAdapterClass
-        val dataClass = targets.dataClass
-        urlDragImageViewClass = targets.urlDragImageViewClass
-        sharedPrefHelperClass = targets.sharedPrefHelperClass
-        tbMd5Class = targets.md5Class
 
         var hookCount = 0
 
         // Primary hook: ImagePagerAdapter.setPrimaryItem.
         if (adapterClass != null) {
-            val setPrimaryMethod = resolveSetPrimaryItemMethod(adapterClass)
+            val setPrimaryMethod = targets.setPrimaryItemMethod
             if (setPrimaryMethod != null) {
                 XposedCompat.log("[DefaultOriginalImageHook] resolved setPrimaryItem: ${adapterClass.name}.${setPrimaryMethod.name}")
                 RuntimeHooks.builder(mod, setPrimaryMethod, "DefaultOriginalImageHook", "hookInternal:setPrimaryMethod").intercept { chain ->
@@ -159,57 +130,52 @@ object DefaultOriginalImageHook {
         }
 
         // Fallback entry: UrlDragImageView constructors.
-        val urlDragClass = urlDragImageViewClass
-        if (urlDragClass != null) {
-            for (ctor in urlDragClass.declaredConstructors) {
-                runCatching { ctor.isAccessible = true }
-                RuntimeHooks.builder(mod, ctor, "DefaultOriginalImageHook", "hookInternal:ctor").intercept { chain ->
-                    val result = chain.proceed()
-                    if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return@intercept result
+        val urlDragClass = targets.urlDragImageViewClass
+        val constructors = urlDragClass.declaredConstructors
+        for (ctor in constructors) {
+            runCatching { ctor.isAccessible = true }
+            RuntimeHooks.builder(mod, ctor, "DefaultOriginalImageHook", "hookInternal:ctor").intercept { chain ->
+                val result = chain.proceed()
+                if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return@intercept result
 
-                    val view = chain.thisObject as? View ?: return@intercept result
-                    if (firstCtorCallbackLogged.compareAndSet(false, true)) {
-                        XposedCompat.log("[DefaultOriginalImageHook] UrlDragImageView ctor observed")
-                    }
-
-                    // Trigger only outside setPrimaryItem dispatch.
-                    if (!isInSetPrimaryDispatch()) {
-                        view.postDelayed({
-                            try {
-                                tryAutoTriggerFromView(view, source = "ctor", requireCurrentItem = true)
-                            } catch (t: Throwable) {
-                                XposedCompat.logD { "[DefaultOriginalImageHook] auto-trigger ctor failed: ${t.message}" }
-                            }
-                        }, 600L)
-                    }
-                    result
+                val view = chain.thisObject as? View ?: return@intercept result
+                if (firstCtorCallbackLogged.compareAndSet(false, true)) {
+                    XposedCompat.log("[DefaultOriginalImageHook] UrlDragImageView ctor observed")
                 }
-                hookCount++
-            }
-            XposedCompat.log("[DefaultOriginalImageHook] hook INSTALLED: UrlDragImageView.<init> x${urlDragClass.declaredConstructors.size}")
 
-            val setAssistUrlMethod = dataClass?.let { data ->
-                targets.setAssistUrlMethod?.let { methodName ->
-                    MemberAccess.findMethodOrNull(urlDragClass, methodName, data)
-                }
-            }
-            if (setAssistUrlMethod != null) {
-                RuntimeHooks.builder(mod, setAssistUrlMethod, "DefaultOriginalImageHook", "hookInternal:setAssistUrlMethod").intercept { chain ->
-                    val result = chain.proceed()
-                    if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return@intercept result
-                    val view = chain.thisObject as? View ?: return@intercept result
+                // Trigger only outside setPrimaryItem dispatch.
+                if (!isInSetPrimaryDispatch()) {
                     view.postDelayed({
                         try {
-                            tryAutoTriggerFromView(view, source = "setAssistUrl", requireCurrentItem = true)
+                            tryAutoTriggerFromView(view, source = "ctor", requireCurrentItem = true)
                         } catch (t: Throwable) {
-                            XposedCompat.logD { "[DefaultOriginalImageHook] auto-trigger setAssistUrl failed: ${t.message}" }
+                            XposedCompat.logD { "[DefaultOriginalImageHook] auto-trigger ctor failed: ${t.message}" }
                         }
-                    }, RETRY_DELAY_MS)
-                    result
+                    }, 600L)
                 }
-                hookCount++
-                XposedCompat.log("[DefaultOriginalImageHook] hook INSTALLED: UrlDragImageView.${setAssistUrlMethod.name}")
+                result
             }
+            hookCount++
+        }
+        XposedCompat.log("[DefaultOriginalImageHook] hook INSTALLED: UrlDragImageView.<init> x${constructors.size}")
+
+        val setAssistUrlMethod = targets.setAssistUrlMethod
+        if (setAssistUrlMethod != null) {
+            RuntimeHooks.builder(mod, setAssistUrlMethod, "DefaultOriginalImageHook", "hookInternal:setAssistUrlMethod").intercept { chain ->
+                val result = chain.proceed()
+                if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return@intercept result
+                val view = chain.thisObject as? View ?: return@intercept result
+                view.postDelayed({
+                    try {
+                        tryAutoTriggerFromView(view, source = "setAssistUrl", requireCurrentItem = true)
+                    } catch (t: Throwable) {
+                        XposedCompat.logD { "[DefaultOriginalImageHook] auto-trigger setAssistUrl failed: ${t.message}" }
+                    }
+                }, RETRY_DELAY_MS)
+                result
+            }
+            hookCount++
+            XposedCompat.log("[DefaultOriginalImageHook] hook INSTALLED: UrlDragImageView.${setAssistUrlMethod.name}")
         }
 
         if (hookCount == 0) {
@@ -228,7 +194,7 @@ object DefaultOriginalImageHook {
         requireCurrentItem: Boolean,
     ) {
         if (!ConfigManager.snapshot()[SimpleToggle.DEFAULT_ORIGINAL_IMAGE]) return
-        val urlDragClass = urlDragImageViewClass ?: return
+        val urlDragClass = runtimeTargets?.urlDragImageViewClass ?: return
         if (!urlDragClass.isInstance(view)) return
         if (!isImageViewerScene(view)) return
         if (requireCurrentItem && !isCurrentPagerItem(view)) return
@@ -236,173 +202,14 @@ object DefaultOriginalImageHook {
         scheduleAutoTrigger(view, retryCount = 0, source = source, requireCurrentItem = requireCurrentItem)
     }
 
-    // 方法解析。
-    private fun resolveSetPrimaryItemMethod(clazz: Class<*>): Method? {
-        val methodName = runtimeTargets?.setPrimaryItemMethod ?: return null
-        return MemberAccess.findMethodOrNull(
-            clazz,
-            methodName,
-            ViewGroup::class.java,
-            Int::class.javaPrimitiveType!!,
-            Any::class.java,
-        )?.apply { isAccessible = true }
-    }
-
-    /**
-     * 解析 UrlDragImageView 上的触发方法。
-     * 这是启动原图下载的无参 void 方法。
-     */
-    private fun resolveTriggerMethod(item: Any): Method? {
-        val clazz = item.javaClass
-        triggerMethodCache[clazz]?.let { return it }
-        if (triggerMethodMissCache.contains(clazz)) return null
-
-        val symbolName = runtimeTargets?.triggerMethod
-        if (!symbolName.isNullOrBlank()) {
-            val m = MemberAccess.findMethodOrNull(clazz, symbolName)
-                ?.takeIf { it.returnType == Void.TYPE && it.parameterTypes.isEmpty() }
-                ?.apply { isAccessible = true }
-            if (m != null) {
-                triggerMethodCache[clazz] = m
-                XposedCompat.log("[DefaultOriginalImageHook] trigger method (symbol): ${clazz.simpleName}.$symbolName()")
-                return m
-            }
-        }
-        triggerMethodMissCache.add(clazz)
-        if (warnedTriggerMethodMissing.compareAndSet(false, true)) {
-            XposedCompat.log("[DefaultOriginalImageHook] warn: trigger method unresolved from scan symbols")
-        }
-        return null
-    }
-
-    private fun resolveAssistDataMethod(clazz: Class<*>): Method? {
-        return resolveCachedMethod(
-            clazz = clazz,
-            cache = assistDataMethodCache,
-            missCache = assistDataMethodMissCache,
-        ) {
-            val targets = runtimeTargets ?: return@resolveCachedMethod null
-            MemberAccess.findMethodOrNull(clazz, targets.assistDataMethod)
-                ?.takeIf { it.parameterTypes.isEmpty() && targets.dataClass.isAssignableFrom(it.returnType) }
-                ?.apply { isAccessible = true }
-        }
-    }
-
-    private fun resolveOriginTextMethod(clazz: Class<*>): Method? {
-        return resolveCachedMethod(
-            clazz = clazz,
-            cache = originTextMethodCache,
-            missCache = originTextMethodMissCache,
-        ) {
-            val methodName = runtimeTargets?.originTextMethod ?: return@resolveCachedMethod null
-            MemberAccess.findMethodOrNull(clazz, methodName)
-                ?.takeIf { it.returnType == String::class.java && it.parameterTypes.isEmpty() }
-                ?.apply { isAccessible = true }
-        }
-    }
-
-    private fun resolveDirectStartMethod(item: Any): Method? {
-        val clazz = item.javaClass
-        directStartMethodCache[clazz]?.let { return it }
-        if (directStartMethodMissCache.contains(clazz)) return null
-
-        val methodName = runtimeTargets?.directStartMethod
-        if (!methodName.isNullOrBlank()) {
-            val m = MemberAccess.findMethodOrNull(clazz, methodName, String::class.java)
-                ?.takeIf { it.returnType == Void.TYPE }
-                ?.apply { isAccessible = true }
-            if (m != null) {
-                directStartMethodCache[clazz] = m
-                return m
-            }
-        }
-        directStartMethodMissCache.add(clazz)
-        if (warnedDirectStartUnavailable.compareAndSet(false, true)) {
-            XposedCompat.log("[DefaultOriginalImageHook] warn: direct-start method unresolved from scan symbols")
-        }
-        return null
-    }
-
-    private fun resolveSharedPrefGetInstanceMethod(clazz: Class<*>): Method? {
-        return resolveCachedMethod(
-            clazz = clazz,
-            cache = sharedPrefGetInstanceMethodCache,
-            missCache = sharedPrefGetInstanceMethodMissCache,
-        ) {
-            val methodName = runtimeTargets?.sharedPrefGetInstanceMethod ?: return@resolveCachedMethod null
-            MemberAccess.findMethodOrNull(clazz, methodName)
-                ?.takeIf { it.parameterTypes.isEmpty() }
-                ?.apply { isAccessible = true }
-        }
-    }
-
-    private fun resolveSharedPrefPutBooleanMethod(clazz: Class<*>): Method? {
-        return resolveCachedMethod(
-            clazz = clazz,
-            cache = sharedPrefPutBooleanMethodCache,
-            missCache = sharedPrefPutBooleanMethodMissCache,
-        ) {
-            val methodName = runtimeTargets?.sharedPrefPutBooleanMethod ?: return@resolveCachedMethod null
-            MemberAccess.findMethodOrNull(
-                clazz,
-                methodName,
-                String::class.java,
-                Boolean::class.javaPrimitiveType!!,
-            )?.apply { isAccessible = true }
-        }
-    }
-
-    private fun resolveTbMd5Method(clazz: Class<*>): Method? {
-        return resolveCachedMethod(
-            clazz = clazz,
-            cache = tbMd5MethodCache,
-            missCache = tbMd5MethodMissCache,
-        ) {
-            val methodName = runtimeTargets?.md5Method ?: return@resolveCachedMethod null
-            MemberAccess.findMethodOrNull(clazz, methodName, String::class.java)
-                ?.takeIf { it.parameterTypes.size == 1 }
-                ?.apply { isAccessible = true }
-        }
-    }
-
-    private fun resolveCachedMethod(
-        clazz: Class<*>,
-        cache: ConcurrentHashMap<Class<*>, Method>,
-        missCache: MutableSet<Class<*>>,
-        resolver: () -> Method?,
-    ): Method? {
-        cache[clazz]?.let { return it }
-        if (missCache.contains(clazz)) return null
-        val resolved = resolver()
-        if (resolved != null) {
-            cache[clazz] = resolved
-            return resolved
-        }
-        missCache.add(clazz)
-        return null
-    }
-
-    // 数据访问辅助。
-    private fun resolveImageUrlDataField(clazz: Class<*>, fieldName: String): Field? {
-        val fieldCache = imageUrlDataFieldCache.getOrPut(clazz) { FieldLookupCache() }
-        fieldCache.fields[fieldName]?.let { return it }
-        if (fieldCache.misses.contains(fieldName)) return null
-        val field = runCatching { clazz.getDeclaredField(fieldName).apply { isAccessible = true } }.getOrNull()
-        if (field != null) {
-            fieldCache.fields[fieldName] = field
-            return field
-        }
-        fieldCache.misses.add(fieldName)
-        return null
-    }
-
+    // Callbacks consume members restored and validated by OriginalImageContract.
     private fun getOriginText(item: Any): String? {
-        val method = resolveOriginTextMethod(item.javaClass) ?: return null
+        val method = runtimeTargets?.originTextMethod ?: return null
         return runCatching { method.invoke(item) as? String }.getOrNull()
     }
 
     private fun getAssistData(item: Any): Any? {
-        val method = resolveAssistDataMethod(item.javaClass) ?: return null
+        val method = runtimeTargets?.assistDataMethod ?: return null
         return runCatching { method.invoke(item) }.getOrNull()
     }
 
@@ -412,18 +219,16 @@ object DefaultOriginalImageHook {
 
         val targets = runtimeTargets ?: return false
         val data = getAssistData(item) ?: return false
-        val cls = data.javaClass
-        val showButton = (resolveImageUrlDataField(cls, targets.showButtonField)?.get(data) as? Boolean) ?: false
-        val blocked = (resolveImageUrlDataField(cls, targets.blockedField)?.get(data) as? Boolean) ?: true
-        val originalUrl = resolveImageUrlDataField(cls, targets.originalUrlField)?.get(data) as? String
+        val showButton = (targets.showButtonField.get(data) as? Boolean) ?: false
+        val blocked = (targets.blockedField.get(data) as? Boolean) ?: true
+        val originalUrl = targets.originalUrlField.get(data) as? String
         return showButton && !blocked && !originalUrl.isNullOrBlank()
     }
 
     private fun isOriginalProcessingOrReady(item: Any): Boolean {
         val targets = runtimeTargets ?: return false
         val data = getAssistData(item) ?: return false
-        val cls = data.javaClass
-        val process = (resolveImageUrlDataField(cls, targets.originalProcessField)?.get(data) as? Number)?.toInt() ?: -1
+        val process = (targets.originalProcessField.get(data) as? Number)?.toInt() ?: -1
         return process >= 0
     }
 
@@ -456,7 +261,7 @@ object DefaultOriginalImageHook {
             return
         }
 
-        val triggerMethod = resolveTriggerMethod(item)
+        val triggerMethod = runtimeTargets?.triggerMethod
         if (triggerMethod != null && hasOriginalCandidate(item)) {
             ensureOriginalDownloadTipBypassed()
             runCatching { triggerMethod.invoke(item) }
@@ -521,16 +326,16 @@ object DefaultOriginalImageHook {
     // 下载提示绕过和直接启动辅助。
     private fun ensureOriginalDownloadTipBypassed() {
         if (tipBypassApplied.get()) return
-        val helperClass = sharedPrefHelperClass ?: return
-        val getInstanceMethod = resolveSharedPrefGetInstanceMethod(helperClass) ?: return
-        val putBooleanMethod = resolveSharedPrefPutBooleanMethod(helperClass) ?: return
+        val targets = runtimeTargets ?: return
+        val getInstanceMethod = targets.sharedPrefGetInstanceMethod ?: return
+        val putBooleanMethod = targets.sharedPrefPutBooleanMethod ?: return
         val helperInstance = runCatching { getInstanceMethod.invoke(null) }.getOrNull() ?: return
         runCatching { putBooleanMethod.invoke(helperInstance, PREF_KEY_ORIGINAL_IMG_DOWN_TIP, true) }
             .onSuccess { tipBypassApplied.set(true) }
     }
 
     private fun tryDirectStartOriginalDownload(item: Any, source: String): Boolean {
-        val method = resolveDirectStartMethod(item) ?: return false
+        val method = runtimeTargets?.directStartMethod ?: return false
         val downloadName = buildOriginalDownloadName(item) ?: return false
         if (isDirectStartAttemptedForCurrentData(item)) return false
         markDirectStartAttempted(item)
@@ -545,24 +350,19 @@ object DefaultOriginalImageHook {
     private fun buildOriginalDownloadName(item: Any): String? {
         val targets = runtimeTargets ?: return null
         val data = getAssistData(item) ?: return null
-        val cls = data.javaClass
-        val originalUrl = (resolveImageUrlDataField(cls, targets.originalUrlField)?.get(data) as? String).orEmpty()
+        val originalUrl = (targets.originalUrlField.get(data) as? String).orEmpty()
         if (originalUrl.isBlank()) return null
 
-        val md5Class = tbMd5Class
-        if (md5Class != null) {
-            val md5Method = resolveTbMd5Method(md5Class)
-            if (md5Method != null) {
-                val fromHost = runCatching { md5Method.invoke(null, originalUrl) as? String }.getOrNull()
-                if (!fromHost.isNullOrBlank()) return fromHost
-            }
+        targets.md5Method?.let { method ->
+            val fromHost = runCatching { method.invoke(null, originalUrl) as? String }.getOrNull()
+            if (!fromHost.isNullOrBlank()) return fromHost
         }
         return runCatching { computeMd5(originalUrl) }.getOrNull()
     }
 
     private fun computeMd5(input: String): String {
         val digest = MessageDigest.getInstance("MD5").digest(input.toByteArray(Charsets.UTF_8))
-        return digest.joinToString(separator = "") { b -> "%02x".format(b) }
+        return digest.toLowerHex()
     }
 
     // 场景和分发辅助。
@@ -650,14 +450,12 @@ object DefaultOriginalImageHook {
     }
 
     private fun resolveCurrentItemMethod(clazz: Class<*>): Method? {
-        return resolveCachedMethod(
-            clazz = clazz,
-            cache = currentItemMethodCache,
-            missCache = currentItemMethodMissCache,
-        ) {
-            MemberAccess.findMethodOrNull(clazz, "getCurrentItem")
-                ?.takeIf { it.parameterTypes.isEmpty() && it.returnType == Int::class.javaPrimitiveType }
-                ?.apply { isAccessible = true }
-        }
+        currentItemMethodCache[clazz]?.let { return it }
+        if (currentItemMethodMissCache.contains(clazz)) return null
+        val method = MemberAccess.findMethodOrNull(clazz, "getCurrentItem")
+            ?.takeIf { it.parameterTypes.isEmpty() && it.returnType == Int::class.javaPrimitiveType }
+            ?.apply { isAccessible = true }
+        if (method == null) currentItemMethodMissCache.add(clazz) else currentItemMethodCache[clazz] = method
+        return method
     }
 }

@@ -127,7 +127,7 @@ object MineTabWebBlockHook {
                 val view = chain.thisObject as? View ?: return@intercept chain.proceed()
                 val url = chain.args.firstOrNull() as? String
                 pending[view]?.close()
-                val gate = if (isMineTabUrl(url) && ConfigManager.snapshot().isMineTabWebAdBlockEnabled) {
+                val gate = if (ConfigManager.snapshot().isMineTabWebAdBlockEnabled && isMineTabUrl(url)) {
                     RevealGate(view, targets).also {
                         pending[view] = it
                         it.hold()

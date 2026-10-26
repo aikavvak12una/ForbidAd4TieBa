@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.utils.toLowerHex
+
 import android.content.Context
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.contracts.ModuleDataPaths
@@ -7,7 +9,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
-import java.util.Locale
 
 internal object CollectionSearchCacheStore {
     private const val CACHE_VERSION = 1
@@ -199,7 +200,7 @@ internal object CollectionSearchCacheStore {
     private fun hashAccount(accountKey: String): String {
         return try {
             val bytes = MessageDigest.getInstance("SHA-256").digest(accountKey.toByteArray(Charsets.UTF_8))
-            bytes.joinToString("") { b -> String.format(Locale.US, "%02x", b) }
+            bytes.toLowerHex()
         } catch (_: Throwable) {
             accountKey.replace(Regex("[^a-zA-Z0-9._-]"), "_")
         }

@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.feature.ui
 
+import com.forbidad4tieba.hook.feature.ui.nativeglass.*
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

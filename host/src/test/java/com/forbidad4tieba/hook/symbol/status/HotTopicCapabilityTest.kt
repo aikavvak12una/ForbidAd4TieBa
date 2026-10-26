@@ -33,6 +33,7 @@ class HotTopicCapabilityTest {
         this[FeedContract.feedTemplatePayloadMethod] = "payload"
         this[FeedContract.feedTemplateLoadMoreMethod] = "loadMore"
         this[FeedContract.feedCardDataListField] = "dataList"
+        this[FeedContract.feedCardBindMethodSpec] = "bind|void|fixture.CardData"
         this[FeedContract.feedHeadParamsField] = "params"
         this[FeedContract.feedRecommendCardNestedDataMethod] = "nested"
         this[FeedContract.feedRecommendCardNestedDataListField] = "dataList"

@@ -18,7 +18,7 @@ internal object CollectionSearchSymbolScanner {
     private const val ACTIVITY = StableTiebaHookPoints.COLLECT_TAB_ACTIVITY_CLASS
     private const val FRAGMENT = StableTiebaHookPoints.COLLECTION_THREAD_FRAGMENT_CLASS
     private const val NAVIGATION = "com.baidu.tbadk.core.view.NavigationBar"
-    private const val MARK = "com.baidu.tbadk.baseEditMark.MarkData"
+    internal const val MARK_CLASS = "com.baidu.tbadk.baseEditMark.MarkData"
     private const val LIST_VIEW = "com.baidu.adp.widget.ListView.BdListView"
     private const val JSON_OBJECT = "org.json.JSONObject"
     private const val JSON_ARRAY = "org.json.JSONArray"
@@ -104,7 +104,7 @@ internal object CollectionSearchSymbolScanner {
                 it.calls(JSON_OBJECT, "<init>", "void", "java.lang.String") &&
                 it.calls(JSON_OBJECT, "optJSONArray", JSON_ARRAY, "java.lang.String") &&
                 it.calls(JSON_ARRAY, "getJSONObject", JSON_OBJECT, "int") &&
-                it.calls(MARK, "paserJson", "void", JSON_OBJECT)
+                it.calls(MARK_CLASS, "paserJson", "void", JSON_OBJECT)
         }, logger) { it.descriptor }
 
     private fun presenter(bridge: DexKitBridge, resume: MethodData, cl: ClassLoader, logger: ScanLogger?): Presenter? {

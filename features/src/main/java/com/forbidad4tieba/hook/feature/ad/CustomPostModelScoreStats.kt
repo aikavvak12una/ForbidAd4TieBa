@@ -183,7 +183,7 @@ internal object CustomPostModelScoreStats {
             }
             // Reset failure count after a successful write.
             persistence.succeeded()
-            val newPostCount = activeRecords.map { it.postId }.distinct().size
+            val newPostCount = activeRecords.mapTo(HashSet()) { it.postId }.size
             postsSinceLastTrim += newPostCount
             val trimThreshold = (ConfigManager.snapshot().postModelScoreStatsPostLimit * TRIM_POST_THRESHOLD_RATIO).toInt()
                 .coerceAtLeast(50)
@@ -290,9 +290,14 @@ internal object CustomPostModelScoreStats {
             pendingRecords.filter { it.modelKey == modelKey }
         }
         // Merge stored and pending records, keeping the newest unique post ids.
-        val allRecords = ArrayList<StoredRecord>(storedRecords.size + pendingForKey.size)
-        allRecords.addAll(storedRecords)
-        allRecords.addAll(pendingForKey)
+        val allRecords = when {
+            storedRecords.isEmpty() -> pendingForKey
+            pendingForKey.isEmpty() -> storedRecords
+            else -> ArrayList<StoredRecord>(storedRecords.size + pendingForKey.size).apply {
+                addAll(storedRecords)
+                addAll(pendingForKey)
+            }
+        }
         if (allRecords.isEmpty()) return ArrayList()
 
         // Walk from the tail to collect the newest unique post ids.
@@ -317,17 +322,8 @@ internal object CustomPostModelScoreStats {
         if (!file.isFile) return result
         synchronized(fileLock) {
             runCatching {
-                var legacyPostId = Long.MIN_VALUE
                 file.bufferedReader(Charsets.UTF_8).useLines { lines ->
-                    lines.forEach { line ->
-                        val parsed = parseStoredRecord(line, legacyPostId)
-                        if (parsed != null) {
-                            if (parsed.legacy) legacyPostId += 1
-                            if (parsed.record.modelKey == modelKey) {
-                                result.add(parsed.record)
-                            }
-                        }
-                    }
+                    appendParsedRecords(lines, result, modelKey)
                 }
             }.onFailure { t ->
                 XposedCompat.logW("[CustomPostModelScoreStats] read failed: ${t.message}")
@@ -360,17 +356,26 @@ internal object CustomPostModelScoreStats {
 
     private fun readStoredRecords(file: File): List<StoredRecord> {
         val result = ArrayList<StoredRecord>()
-        var legacyPostId = Long.MIN_VALUE
         file.bufferedReader(Charsets.UTF_8).useLines { lines ->
-            lines.forEach { line ->
-                val parsed = parseStoredRecord(line, legacyPostId)
-                if (parsed != null) {
-                    result.add(parsed.record)
-                    if (parsed.legacy) legacyPostId += 1
-                }
-            }
+            appendParsedRecords(lines, result, null)
         }
         return result
+    }
+
+    /** Keep legacy identity numbering even when another model's current-format rows are skipped. */
+    internal fun appendParsedRecords(lines: Sequence<String>, output: MutableList<StoredRecord>, modelKey: String?) {
+        var legacyPostId = Long.MIN_VALUE
+        lines.forEach { line ->
+            if (modelKey != null) {
+                val first = line.indexOf('\t')
+                val second = line.indexOf('\t', first + 1)
+                if (first > 0 && second > first && (second - first - 1 != modelKey.length ||
+                        !line.regionMatches(first + 1, modelKey, 0, modelKey.length))) return@forEach
+            }
+            val parsed = parseStoredRecord(line, legacyPostId) ?: return@forEach
+            if (parsed.legacy) legacyPostId++
+            if (modelKey == null || parsed.record.modelKey == modelKey) output.add(parsed.record)
+        }
     }
 
     private fun parseStoredRecord(line: String, legacyPostId: Long): ParsedStoredRecord? {
@@ -492,7 +497,7 @@ internal object CustomPostModelScoreStats {
         val cumulativeRatio: Double,
     )
 
-    private data class StoredRecord(
+    internal data class StoredRecord(
         val generation: Long,
         val postId: Long,
         val modelKey: String,

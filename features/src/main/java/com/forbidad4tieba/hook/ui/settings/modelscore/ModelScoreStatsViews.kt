@@ -193,14 +193,6 @@ internal object ModelScoreStatsViews {
         }
     }
 
-    private fun createModelScoreAutoPercentileMetricBackground(density: Float, active: Boolean): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(if (active) 0xFFEAF2FF.toInt() else 0xFFF5F7FB.toInt())
-            cornerRadius = 9f * density
-            setStroke((1 * density).toInt().coerceAtLeast(1), if (active) 0x664C87F7 else 0x244C87F7)
-        }
-    }
-
     private fun formatModelScoreValue(value: Double?): String {
         value ?: return "-"
         val text = String.format(Locale.US, "%.6f", value)

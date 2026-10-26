@@ -172,8 +172,8 @@ object FollowedTabWebHook {
                 RuntimeHooks.builder(mod, method, "FollowedTabWebHook", "hook:method").intercept { chain ->
                     val webView = chain.thisObject as? WebView
                     val url = chain.args.firstOrNull() as? String
-                    val normalizedUrl = normalizeUrl(url)
                     val enabled = webView != null && isFeatureEnabled()
+                    val normalizedUrl = if (enabled) normalizeUrl(url) else null
 
                     if (webView != null) {
                         onBeforeProceed(webView, normalizedUrl, enabled)
@@ -287,7 +287,8 @@ object FollowedTabWebHook {
     }
 
     private fun isFeatureEnabled(): Boolean {
-        return ConfigManager.snapshot().isHomeTopTabsCustomEnabled && ConfigManager.snapshot().isHomeTopTabFollowedEnabled
+        val settings = ConfigManager.snapshot()
+        return settings.isHomeTopTabsCustomEnabled && settings.isHomeTopTabFollowedEnabled
     }
 
     private fun isScopedFollowedUrl(normalizedUrl: String): Boolean {

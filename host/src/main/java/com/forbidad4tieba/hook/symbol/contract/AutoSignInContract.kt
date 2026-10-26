@@ -4,6 +4,7 @@ import android.webkit.WebView
 import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.symbol.contract.SymbolPointCollector.Companion.has
 import com.forbidad4tieba.hook.symbol.model.AutoSignInHybridNativeProxySymbols
+import com.forbidad4tieba.hook.symbol.model.AutoSignInNetworkSymbols
 import com.forbidad4tieba.hook.symbol.model.AutoSignInScanSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.symbol.model.HookFeatureState
@@ -14,6 +15,7 @@ import com.forbidad4tieba.hook.symbol.scan.AutoSignInSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
 import java.lang.reflect.Constructor
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import org.json.JSONObject
 
@@ -99,6 +101,41 @@ object AutoSignInContract : SymbolContract("AutoSignIn") {
         output[AutoSignInContract.autoSignInHybridTaskClass] = autoSignInHybridTaskClass
         output[AutoSignInContract.autoSignInHybridTaskConstructorSpec] = autoSignInHybridTaskConstructorSpec
         output[AutoSignInContract.autoSignInHybridTaskDoInBackgroundMethod] = autoSignInHybridTaskDoInBackgroundMethod
+    }
+
+    fun resolveAutoSignInNetworkSymbols(cl: ClassLoader, symbols: HookSymbols): AutoSignInNetworkSymbols =
+        restoreNativeNetwork(symbols, cl, includeHybrid = true)
+
+    private fun restoreNativeNetwork(symbols: HookSymbols, cl: ClassLoader, includeHybrid: Boolean): AutoSignInNetworkSymbols {
+        fun required(field: SymbolField<String?>): String =
+            requireNotNull(symbols[field]?.takeIf { it.isNotBlank() }) { "Missing ${field.cacheKey}" }
+        fun owner(field: SymbolField<String?>): Class<*> =
+            Class.forName(required(field), false, cl)
+        fun method(owner: Class<*>, name: SymbolField<String?>, result: Class<*>?, static: Boolean,
+                   vararg params: Class<*>): Method = owner.getDeclaredMethod(required(name), *params).apply {
+            check(Modifier.isStatic(modifiers) == static && (result == null || returnType == result)) {
+                "Invalid ${name.cacheKey}"
+            }
+            isAccessible = true
+        }
+        check(required(autoSignInNetworkConstructorSpec) == "java.lang.String") { "Invalid native network constructor" }
+        val network = owner(autoSignInNetworkClass)
+        val config = owner(autoSignInTbConfigClass)
+        val application = owner(autoSignInCoreApplicationClass)
+        val address = config.getDeclaredField(required(autoSignInServerAddressField)).apply {
+            check(Modifier.isStatic(modifiers) && type == String::class.java) { "Invalid server address field" }
+            isAccessible = true
+        }
+        return AutoSignInNetworkSymbols(
+            network.getDeclaredConstructor(String::class.java).apply { isAccessible = true },
+            method(network, autoSignInNetworkAddPostDataMethod, Void.TYPE, false, String::class.java, String::class.java),
+            method(network, autoSignInNetworkPostNetDataMethod, null, false),
+            method(network, autoSignInNetworkSetNeedTbsMethod, Void.TYPE, false, Boolean::class.javaPrimitiveType!!),
+            method(network, autoSignInNetworkSetNeedSigMethod, Void.TYPE, false, Boolean::class.javaPrimitiveType!!),
+            address,
+            method(application, autoSignInCurrentAccountMethod, String::class.java, true),
+            if (includeHybrid) resolveAutoSignInHybridNativeProxySymbols(cl, symbols) else null,
+        )
     }
 
     fun resolveAutoSignInHybridNativeProxySymbols(
@@ -344,76 +381,8 @@ object AutoSignInContract : SymbolContract("AutoSignIn") {
         return true
     }
 
-    private fun isAutoSignInNativeNetworkValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-        val networkClassName = symbols[AutoSignInContract.autoSignInNetworkClass] ?: return false
-        val addPostDataMethodName = symbols[AutoSignInContract.autoSignInNetworkAddPostDataMethod] ?: return false
-        val postNetDataMethodName = symbols[AutoSignInContract.autoSignInNetworkPostNetDataMethod] ?: return false
-        val setNeedTbsMethodName = symbols[AutoSignInContract.autoSignInNetworkSetNeedTbsMethod] ?: return false
-        val setNeedSigMethodName = symbols[AutoSignInContract.autoSignInNetworkSetNeedSigMethod] ?: return false
-        val tbConfigClassName = symbols[AutoSignInContract.autoSignInTbConfigClass] ?: return false
-        val serverAddressFieldName = symbols[AutoSignInContract.autoSignInServerAddressField] ?: return false
-        val coreApplicationClassName = symbols[AutoSignInContract.autoSignInCoreApplicationClass] ?: return false
-        val currentAccountMethodName = symbols[AutoSignInContract.autoSignInCurrentAccountMethod] ?: return false
-        if (symbols[AutoSignInContract.autoSignInNetworkConstructorSpec] != "java.lang.String") return false
-        return try {
-            val networkClass = ScanReflection.safeFindClass(networkClassName, cl) ?: return false
-            networkClass.getDeclaredConstructor(String::class.java)
-            networkClass.declaredMethods.any { method ->
-                method.name == addPostDataMethodName &&
-                    !Modifier.isStatic(method.modifiers) &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.contentEquals(arrayOf(String::class.java, String::class.java))
-            } &&
-                networkClass.declaredMethods.any { method ->
-                    method.name == postNetDataMethodName &&
-                        !Modifier.isStatic(method.modifiers) &&
-                        method.parameterTypes.isEmpty()
-                } &&
-                networkClass.declaredMethods.any { method ->
-                    method.name == setNeedTbsMethodName &&
-                        !Modifier.isStatic(method.modifiers) &&
-                        method.returnType == Void.TYPE &&
-                        method.parameterTypes.contentEquals(arrayOf(Boolean::class.javaPrimitiveType))
-                } &&
-                networkClass.declaredMethods.any { method ->
-                    method.name == setNeedSigMethodName &&
-                        !Modifier.isStatic(method.modifiers) &&
-                        method.returnType == Void.TYPE &&
-                        method.parameterTypes.contentEquals(arrayOf(Boolean::class.javaPrimitiveType))
-                } &&
-                isAutoSignInConfigValid(tbConfigClassName, serverAddressFieldName, cl) &&
-                isAutoSignInAccountValid(coreApplicationClassName, currentAccountMethodName, cl)
-        } catch (_: Throwable) {
-            false
-        }
-    }
-
-    private fun isAutoSignInConfigValid(
-        tbConfigClassName: String,
-        serverAddressFieldName: String,
-        cl: ClassLoader,
-    ): Boolean {
-        val tbConfigClass = ScanReflection.safeFindClass(tbConfigClassName, cl) ?: return false
-        return tbConfigClass.declaredFields.any { field ->
-            field.name == serverAddressFieldName &&
-                Modifier.isStatic(field.modifiers) &&
-                field.type == String::class.java
-        }
-    }
-
-    private fun isAutoSignInAccountValid(
-        coreApplicationClassName: String,
-        currentAccountMethodName: String,
-        cl: ClassLoader,
-    ): Boolean {
-        val coreApplicationClass = ScanReflection.safeFindClass(coreApplicationClassName, cl) ?: return false
-        return coreApplicationClass.declaredMethods.any { method ->
-            method.name == currentAccountMethodName &&
-                Modifier.isStatic(method.modifiers) &&
-                method.parameterTypes.isEmpty() &&
-                method.returnType == String::class.java
-        }
-    }
+    private fun isAutoSignInNativeNetworkValid(symbols: HookSymbols, cl: ClassLoader): Boolean =
+        runCatching { restoreNativeNetwork(symbols, cl, includeHybrid = false) }.isSuccess
 
     private fun isAutoSignInHybridNativeProxyValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
         val proxyClassName = symbols[AutoSignInContract.autoSignInHybridProxyClass] ?: return false

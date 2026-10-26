@@ -30,15 +30,14 @@ object PbFallingAdHook {
             val showMethod = targets.showMethod
             val clearMethod = targets.clearMethod
 
-            val methods = listOfNotNull(initMethod, showMethod, clearMethod)
-            if (methods.isEmpty()) {
+            if (initMethod == null && showMethod == null && clearMethod == null) {
                 XposedCompat.log("[PbFallingAdHook] no usable methods resolved on ${targetClass.name}")
                 return
             }
 
-            initMethod?.let { hookInitMethod(mod, it) }
-            showMethod?.let { hookShowMethod(mod, it) }
-            clearMethod?.let { hookClearMethod(mod, it) }
+            initMethod?.let { hookMember(mod, it, "hookInitMethod:method") }
+            showMethod?.let { hookMember(mod, it, "hookShowMethod:method") }
+            clearMethod?.let { hookMember(mod, it, "hookClearMethod:method") }
 
             XposedCompat.log(
                 "[PbFallingAdHook] hooks dispatched: class=${targetClass.name}, " +
@@ -53,26 +52,8 @@ object PbFallingAdHook {
         }
     }
 
-    private fun hookInitMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
-        RuntimeHooks.builder(mod, method, "PbFallingAdHook", "hookInitMethod:method").intercept { chain ->
-            if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept chain.proceed()
-            squashSelf(chain.thisObject)
-            Unit
-        }
-        XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
-    }
-
-    private fun hookShowMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
-        RuntimeHooks.builder(mod, method, "PbFallingAdHook", "hookShowMethod:method").intercept { chain ->
-            if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept chain.proceed()
-            squashSelf(chain.thisObject)
-            Unit
-        }
-        XposedCompat.log("[PbFallingAdHook] hook INSTALLED: ${ReflectionUtils.methodSignature(method)}")
-    }
-
-    private fun hookClearMethod(mod: io.github.libxposed.api.XposedModule, method: Method) {
-        RuntimeHooks.builder(mod, method, "PbFallingAdHook", "hookClearMethod:method").intercept { chain ->
+    private fun hookMember(mod: io.github.libxposed.api.XposedModule, method: Method, purpose: String) {
+        RuntimeHooks.builder(mod, method, "PbFallingAdHook", purpose).intercept { chain ->
             if (!ConfigManager.snapshot().isPostPageAdBlockEnabled) return@intercept chain.proceed()
             squashSelf(chain.thisObject)
             Unit

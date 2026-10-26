@@ -1,6 +1,7 @@
 package com.forbidad4tieba.hook.symbol.contract
 
 import android.view.ViewGroup
+import com.forbidad4tieba.hook.contracts.MemberAccess
 import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.symbol.model.DefaultOriginalImageSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
@@ -118,33 +119,60 @@ object OriginalImageContract : SymbolContract("OriginalImage") {
                 return null
             }
 
+            val adapterClass = resolvedSymbols[origImagePagerAdapterClass]?.takeIf { it.isNotBlank() }
+                ?.let { ScanReflection.safeFindClass(it, cl) }
+            val prefsClass = resolvedSymbols[origImageSharedPrefHelperClass]?.takeIf { it.isNotBlank() }
+                ?.let { ScanReflection.safeFindClass(it, cl) }
+            val md5Class = resolvedSymbols[origImageMd5Class]?.takeIf { it.isNotBlank() }
+                ?.let { ScanReflection.safeFindClass(it, cl) }
+            val fields = ScanReflection.collectInstanceFields(dataClass)
+            fun requiredField(name: String, matches: (Class<*>) -> Boolean) =
+                fields.singleOrNull { it.name == name && matches(it.type) }?.apply { isAccessible = true }
+                    ?: error("invalid image data field: $name")
+
             DefaultOriginalImageSymbols(
-                pagerAdapterClass = resolvedSymbols[OriginalImageContract.origImagePagerAdapterClass]?.takeIf { it.isNotBlank() }
-                    ?.let { ScanReflection.safeFindClass(it, cl) },
+                pagerAdapterClass = adapterClass,
                 urlDragImageViewClass = urlDragClass,
                 dataClass = dataClass,
-                setPrimaryItemMethod = resolvedSymbols[OriginalImageContract.origImageSetPrimaryItemMethod],
-                setAssistUrlMethod = resolvedSymbols[OriginalImageContract.origImageSetAssistUrlMethod],
-                assistDataMethod = assistDataMethod!!,
-                originTextMethod = resolvedSymbols[OriginalImageContract.origImageOriginTextMethod],
-                showButtonField = showButtonField!!,
-                blockedField = blockedField!!,
-                originalProcessField = originalProcessField!!,
-                originalUrlField = originalUrlField!!,
-                sharedPrefHelperClass = resolvedSymbols[OriginalImageContract.origImageSharedPrefHelperClass]?.takeIf { it.isNotBlank() }
-                    ?.let { ScanReflection.safeFindClass(it, cl) },
-                sharedPrefGetInstanceMethod = resolvedSymbols[OriginalImageContract.origImageSharedPrefGetInstanceMethod],
-                sharedPrefPutBooleanMethod = resolvedSymbols[OriginalImageContract.origImageSharedPrefPutBooleanMethod],
-                md5Class = resolvedSymbols[OriginalImageContract.origImageMd5Class]?.takeIf { it.isNotBlank() }?.let { ScanReflection.safeFindClass(it, cl) },
-                md5Method = resolvedSymbols[OriginalImageContract.origImageMd5Method],
-                triggerMethod = triggerMethod!!,
-                directStartMethod = resolvedSymbols[OriginalImageContract.origImageDirectStartMethod],
+                setPrimaryItemMethod = restoreImageMethod(adapterClass, resolvedSymbols[origImageSetPrimaryItemMethod],
+                    Void.TYPE, false, ViewGroup::class.java, Int::class.javaPrimitiveType!!, Any::class.java),
+                setAssistUrlMethod = restoreImageMethod(urlDragClass, resolvedSymbols[origImageSetAssistUrlMethod],
+                    Void.TYPE, false, dataClass),
+                assistDataMethod = requireNotNull(restoreImageMethod(urlDragClass, assistDataMethod, dataClass)) {
+                    "invalid assist data getter"
+                },
+                originTextMethod = restoreImageMethod(urlDragClass, resolvedSymbols[origImageOriginTextMethod], String::class.java),
+                showButtonField = requiredField(showButtonField!!, ScanReflection::isBooleanType),
+                blockedField = requiredField(blockedField!!, ScanReflection::isBooleanType),
+                originalProcessField = requiredField(originalProcessField!!, ScanReflection::isIntType),
+                originalUrlField = requiredField(originalUrlField!!) { it == String::class.java },
+                sharedPrefGetInstanceMethod = prefsClass?.let {
+                    restoreImageMethod(it, resolvedSymbols[origImageSharedPrefGetInstanceMethod], it, true)
+                },
+                sharedPrefPutBooleanMethod = restoreImageMethod(prefsClass, resolvedSymbols[origImageSharedPrefPutBooleanMethod],
+                    Void.TYPE, false, String::class.java, Boolean::class.javaPrimitiveType!!),
+                md5Method = restoreImageMethod(md5Class, resolvedSymbols[origImageMd5Method],
+                    String::class.java, true, String::class.java),
+                triggerMethod = requireNotNull(restoreImageMethod(urlDragClass, triggerMethod, Void.TYPE)) {
+                    "invalid original image trigger"
+                },
+                directStartMethod = restoreImageMethod(urlDragClass, resolvedSymbols[origImageDirectStartMethod],
+                    Void.TYPE, false, String::class.java),
             )
         } catch (t: Throwable) {
             Diagnostics.log("[DefaultOriginalImageHook] symbol resolve FAILED: ${t.message}")
             Diagnostics.log(t)
             null
         }
+    }
+
+    private fun restoreImageMethod(
+        owner: Class<*>?, name: String?, returnType: Class<*>, static: Boolean = false, vararg parameters: Class<*>,
+    ): Method? {
+        if (owner == null || name.isNullOrBlank()) return null
+        return MemberAccess.findMethodOrNull(owner, name, *parameters)
+            ?.takeIf { it.returnType == returnType && Modifier.isStatic(it.modifiers) == static }
+            ?.apply { isAccessible = true }
     }
 
     internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> {

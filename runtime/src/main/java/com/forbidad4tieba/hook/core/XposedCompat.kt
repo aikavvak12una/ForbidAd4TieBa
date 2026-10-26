@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
  * This object centralizes:
  * - module reference management
  * - structured logging
- * - reflection helpers for fields, methods, and classes
+ * - entry into the owned hook runtime
  */
 object XposedCompat {
     @Volatile private var logPolicy = LogPolicy { false }
@@ -179,5 +179,4 @@ object XposedCompat {
             msg.contains("unavailable", ignoreCase = true)
     }
 
-    // 绫昏В鏋?
 }

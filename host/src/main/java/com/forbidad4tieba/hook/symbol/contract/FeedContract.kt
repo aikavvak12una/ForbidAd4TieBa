@@ -45,7 +45,7 @@ object FeedContract : SymbolContract("Feed") {
     private val templateKey = SymbolDependencies(feedTemplateKeyMethod)
     private val payload = SymbolDependencies(feedTemplatePayloadMethod)
     private val loadMore = SymbolDependencies(feedTemplateLoadMoreMethod)
-    private val customRequired = templateKey + payload + loadMore + SymbolDependencies(feedCardDataListField)
+    private val customRequired = templateKey + payload + loadMore + SymbolDependencies(feedCardDataListField, feedCardBindMethodSpec)
     private val headParams = SymbolDependencies(feedHeadParamsField)
     private val topicSchema = SymbolDependencies(feedCardSchemaGetterSpec)
     private val recommendCard = SymbolDependencies(feedRecommendCardNestedDataMethod, feedRecommendCardNestedDataListField)
@@ -137,6 +137,10 @@ object FeedContract : SymbolContract("Feed") {
                 Diagnostics.log("[FeedAdHook] skipped: feedTemplateKeyMethod missing")
                 return null
             }
+            val templateKeyMethod = FeedTargetRestoration.templateKey(cl, templateKeyMethodName) ?: run {
+                Diagnostics.log("[FeedAdHook] skipped: template interface unavailable or ambiguous")
+                return null
+            }
             val templateAdapterClass = ScanReflection.safeFindClass(StableTiebaHookPoints.TEMPLATE_ADAPTER_CLASS, cl) ?: run {
                 Diagnostics.log("[FeedAdHook] class NOT FOUND: ${StableTiebaHookPoints.TEMPLATE_ADAPTER_CLASS}")
                 return null
@@ -151,14 +155,18 @@ object FeedContract : SymbolContract("Feed") {
 
             val loadMoreMethod = resolveFeedLoadMoreMethod(cl, resolvedSymbols)
             val customPostFilter = if (includeCustomPostFilter) {
-                resolveCustomPostCardFilterSymbols(cl, resolvedSymbols) ?: return null
+                runCatching { resolveCustomPostCardFilterSymbols(cl, resolvedSymbols, templateKeyMethod) }
+                    .onFailure { Diagnostics.log("[CustomPostCardBlockHook] targets invalid: ${it.message}") }
+                    .getOrNull().also {
+                        if (it == null) Diagnostics.log("[CustomPostCardBlockHook] skipped: custom targets unavailable; ad targets retained")
+                    }
             } else {
                 null
             }
             FeedAdSymbols(
                 setListMethod = setListMethod,
                 loadMoreMethod = loadMoreMethod,
-                templateKeyMethodName = templateKeyMethodName,
+                templateKeyMethod = templateKeyMethod,
                 customPostFilter = customPostFilter,
             )
         } catch (t: Throwable) {
@@ -239,11 +247,7 @@ object FeedContract : SymbolContract("Feed") {
         }
     }
 
-    private fun resolveCustomPostCardFilterSymbols(cl: ClassLoader, symbols: HookSymbols): CustomPostCardFilterSymbols? {
-        val templateKeyMethodName = symbols[FeedContract.feedTemplateKeyMethod]?.takeIf { it.isNotBlank() } ?: run {
-            Diagnostics.log("[CustomPostCardBlockHook] SKIP: feedTemplateKeyMethod missing")
-            return null
-        }
+    private fun resolveCustomPostCardFilterSymbols(cl: ClassLoader, symbols: HookSymbols, templateKey: Method): CustomPostCardFilterSymbols? {
         val templatePayloadMethodName = symbols[FeedContract.feedTemplatePayloadMethod]?.takeIf { it.isNotBlank() } ?: run {
             Diagnostics.log("[CustomPostCardBlockHook] SKIP: feedTemplatePayloadMethod missing")
             return null
@@ -252,13 +256,18 @@ object FeedContract : SymbolContract("Feed") {
             Diagnostics.log("[CustomPostCardBlockHook] SKIP: feedCardDataListField missing")
             return null
         }
+        val payload = FeedTargetRestoration.payload(templateKey, templatePayloadMethodName) ?: return null
+        val dataList = FeedTargetRestoration.cardList(cl, symbols[feedCardBindMethodSpec], dataListFieldName) ?: return null
+        val recommend = FeedTargetRestoration.recommendData(
+            cl, symbols[feedRecommendCardNestedDataMethod], symbols[feedRecommendCardNestedDataListField],
+        )
         return CustomPostCardFilterSymbols(
-            dataListFieldName = dataListFieldName,
-            templateKeyMethodName = templateKeyMethodName,
-            templatePayloadMethodName = templatePayloadMethodName,
-            headParamsFieldName = symbols[FeedContract.feedHeadParamsField]?.takeIf { it.isNotBlank() },
-            recommendNestedDataMethodName = symbols[FeedContract.feedRecommendCardNestedDataMethod]?.takeIf { it.isNotBlank() },
-            recommendNestedDataListFieldName = symbols[FeedContract.feedRecommendCardNestedDataListField]?.takeIf { it.isNotBlank() },
+            dataListField = dataList,
+            templateKeyMethod = templateKey,
+            templatePayloadMethod = payload,
+            headParamsField = FeedTargetRestoration.headParams(cl, symbols[feedHeadParamsField]),
+            recommendNestedDataMethod = recommend?.first,
+            recommendNestedDataListField = recommend?.second,
             schemaGetter = FeedCardSchemaSymbolScanner.restore(cl, symbols[FeedContract.feedCardBindMethodSpec], symbols[FeedContract.feedCardSchemaGetterSpec]),
         )
     }
@@ -319,6 +328,17 @@ object FeedContract : SymbolContract("Feed") {
     )
 
     internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+        if (!symbols[feedTemplateKeyMethod].isNullOrBlank()) {
+            val key = FeedTargetRestoration.templateKey(cl, symbols[feedTemplateKeyMethod]) ?: return false
+            if (!symbols[feedTemplatePayloadMethod].isNullOrBlank() &&
+                FeedTargetRestoration.payload(key, symbols[feedTemplatePayloadMethod]) == null) return false
+        }
+        if (!symbols[feedCardDataListField].isNullOrBlank() &&
+            FeedTargetRestoration.cardList(cl, symbols[feedCardBindMethodSpec], symbols[feedCardDataListField]) == null) return false
+        if (!symbols[feedHeadParamsField].isNullOrBlank() &&
+            FeedTargetRestoration.headParams(cl, symbols[feedHeadParamsField]) == null) return false
+        if (!symbols[feedRecommendCardNestedDataMethod].isNullOrBlank() && !symbols[feedRecommendCardNestedDataListField].isNullOrBlank() &&
+            FeedTargetRestoration.recommendData(cl, symbols[feedRecommendCardNestedDataMethod], symbols[feedRecommendCardNestedDataListField]) == null) return false
         if (!FeedCardSchemaSymbolScanner.isCacheValid(cl, symbols[FeedContract.feedCardBindMethodSpec], symbols[FeedContract.feedCardSchemaGetterSpec])) return false
         return true
     }

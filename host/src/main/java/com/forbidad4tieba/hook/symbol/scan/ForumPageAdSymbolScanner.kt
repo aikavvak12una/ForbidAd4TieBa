@@ -576,14 +576,6 @@ internal object ForumPageAdSymbolScanner {
         }
     }
 
-    private fun hasKotlinMetadataSignal(clazz: Class<*>, signal: String): Boolean {
-        val metadata = clazz.getAnnotation(Metadata::class.java) ?: return false
-        return metadata.data1.any { it.contains(signal) } || metadata.data2.any { it.contains(signal) }
-    }
-
-    private fun hasAnyKotlinMetadataSignal(clazz: Class<*>, signals: List<String>): Boolean =
-        signals.any { signal -> hasKotlinMetadataSignal(clazz, signal) }
-
     private fun preferredClassNames(): List<String> = listOf(
         DIALOG_CONTROLLER_CLASS,
         GAME_FLOATING_BAR_CONTROLLER_CLASS,

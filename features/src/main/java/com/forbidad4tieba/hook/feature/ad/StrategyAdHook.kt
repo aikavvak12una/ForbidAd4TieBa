@@ -128,10 +128,11 @@ object StrategyAdHook {
         try {
             RuntimeHooks.builder(mod, method, "StrategyAdHook", "hookSwitchManager:method").intercept { chain ->
                 val key = chain.args.firstOrNull() as? String
+                val settings = ConfigManager.snapshot()
                 val shouldBlock = when {
-                    ConfigManager.snapshot().isStrategyAdBlockEnabled && key in adContentBlockedKeys -> true
-                    ConfigManager.snapshot().isAdSdkComponentsDisabled && key in adRuntimeBlockedKeys -> true
-                    ConfigManager.snapshot().isApsarasScheduleDisabled && key in apsarasBlockedKeys -> true
+                    settings.isStrategyAdBlockEnabled && key in adContentBlockedKeys -> true
+                    settings.isAdSdkComponentsDisabled && key in adRuntimeBlockedKeys -> true
+                    settings.isApsarasScheduleDisabled && key in apsarasBlockedKeys -> true
                     else -> false
                 }
                 if (shouldBlock) {

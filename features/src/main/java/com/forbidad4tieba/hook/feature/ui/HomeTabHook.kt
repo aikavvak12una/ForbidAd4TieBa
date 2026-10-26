@@ -3,6 +3,7 @@ package com.forbidad4tieba.hook.feature.ui
 import com.forbidad4tieba.hook.config.TabPreferences
 import android.content.Context
 import com.forbidad4tieba.hook.core.RuntimeHooks
+import com.forbidad4tieba.hook.symbol.model.HomeTabItemTargets
 import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.ui.UiText
@@ -12,30 +13,8 @@ import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 
 object HomeTabHook {
-    /**
-     * 集中定义 tab item 字段解析规则。
-     * 第一次遇到某个类时一次性解析所有字段，
-     * 把缓存未命中次数从 4 次降到 1 次。
-     */
-    private data class TabItemFieldSchema(
-        val typeField: Field? = null,
-        val codeField: Field? = null,
-        val nameField: Field? = null,
-        val urlField: Field? = null,
-    )
-
-    private val sSchemaCache = ConcurrentHashMap<Class<*>, TabItemFieldSchema>()
-    private val sMainSetterMethodCache = ConcurrentHashMap<Class<*>, Method>()
-    private val sMainSetterMethodMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val sMainIntFieldCache = ConcurrentHashMap<Class<*>, Field>()
-    private val sMainIntFieldMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val sMainBooleanFieldCache = ConcurrentHashMap<Class<*>, Field>()
-    private val sMainBooleanFieldMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
-    private val sNoArgCtorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
-    private val sNoArgCtorMissCache = ConcurrentHashMap.newKeySet<Class<*>>()
     @Volatile private var sLastTabItemClass: Class<*>? = null
 
     private const val TAB_TYPE_RECOMMEND = 1
@@ -80,13 +59,6 @@ object HomeTabHook {
         val mod = api ?: return
         sRuntimeTargets = symbols
         catalogSnapshot.clear()
-        sSchemaCache.clear()
-        sMainSetterMethodCache.clear()
-        sMainSetterMethodMissCache.clear()
-        sMainIntFieldCache.clear()
-        sMainIntFieldMissCache.clear()
-        sMainBooleanFieldCache.clear()
-        sMainBooleanFieldMissCache.clear()
         lastFixedFailure = null
         followedFailureLogged = false
         val fixedParserInstalled = hookFixedParser(symbols, mod)
@@ -404,23 +376,9 @@ object HomeTabHook {
     }
 
     private fun instantiateTabItem(cls: Class<*>): Any? {
-        val cached = sNoArgCtorCache[cls]
-        if (cached != null) {
-            return newInstance(cached)
-        }
-        if (sNoArgCtorMissCache.contains(cls)) return null
-
-        val ctor = try {
-            cls.getDeclaredConstructor().apply { isAccessible = true }
-        } catch (_: Throwable) {
-            null
-        }
-        if (ctor == null) {
-            sNoArgCtorMissCache.add(cls)
-            return null
-        }
-        sNoArgCtorCache[cls] = ctor
-        return newInstance(ctor)
+        val item = sRuntimeTargets?.item ?: return null
+        if (cls != item.type) return null
+        return item.constructor?.let(::newInstance)
     }
 
     private fun newInstance(ctor: Constructor<*>): Any? {
@@ -624,161 +582,16 @@ object HomeTabHook {
         }
     }
 
-    private fun resolveSchema(cls: Class<*>): TabItemFieldSchema {
-        sSchemaCache[cls]?.let { return it }
-        val targets = sRuntimeTargets
-        val typeField = resolveFieldByName(
-            cls = cls,
-            fieldName = targets?.itemTypeField,
-        ) { it == Int::class.javaPrimitiveType || it == Int::class.javaObjectType }
-        val codeField = resolveFieldByName(
-            cls = cls,
-            fieldName = targets?.itemCodeField,
-        ) { it == String::class.java }
-        val nameField = resolveFieldByName(
-            cls = cls,
-            fieldName = targets?.itemNameField,
-        ) { it == String::class.java }
-        val urlField = resolveFieldByName(
-            cls = cls,
-            fieldName = targets?.itemUrlField,
-        ) { it == String::class.java }
-        val schema = TabItemFieldSchema(
-            typeField = typeField,
-            codeField = codeField,
-            nameField = nameField,
-            urlField = urlField,
-        )
-        sSchemaCache[cls] = schema
-        return schema
-    }
+    private fun itemTargets(cls: Class<*>): HomeTabItemTargets? =
+        sRuntimeTargets?.item?.takeIf { it.type.isAssignableFrom(cls) }
 
-    private fun resolveFieldByName(
-        cls: Class<*>,
-        fieldName: String?,
-        typeCheck: (Class<*>) -> Boolean,
-    ): Field? {
-        if (fieldName.isNullOrBlank()) return null
-        val field = resolveDeclaredFieldInHierarchy(cls, fieldName) ?: return null
-        if (!typeCheck(field.type)) return null
-        field.isAccessible = true
-        return field
-    }
-
-    private fun resolveTypeField(cls: Class<*>): Field? {
-        return resolveSchema(cls).typeField
-    }
-
-    private fun resolveCodeField(cls: Class<*>): Field? {
-        return resolveSchema(cls).codeField
-    }
-
-    private fun resolveNameField(cls: Class<*>): Field? {
-        return resolveSchema(cls).nameField
-    }
-
-    private fun resolveUrlField(cls: Class<*>): Field? {
-        return resolveSchema(cls).urlField
-    }
-
-    private fun resolveMainSetterMethod(cls: Class<*>): Method? {
-        val cached = sMainSetterMethodCache[cls]
-        if (cached != null) return cached
-        if (sMainSetterMethodMissCache.contains(cls)) return null
-
-        val methodName = sRuntimeTargets?.itemMainSetterMethod
-        if (!methodName.isNullOrBlank()) {
-            val method = resolveDeclaredMethodInHierarchy(
-                cls = cls,
-                methodName = methodName,
-                parameterTypes = arrayOf(Boolean::class.javaPrimitiveType!!),
-            ) ?: resolveDeclaredMethodInHierarchy(
-                cls = cls,
-                methodName = methodName,
-                parameterTypes = arrayOf(Boolean::class.java),
-            )
-            if (method != null) {
-                method.isAccessible = true
-                sMainSetterMethodCache[cls] = method
-                return method
-            }
-        }
-
-        sMainSetterMethodMissCache.add(cls)
-        return null
-    }
-
-    private fun resolveMainIntField(cls: Class<*>): Field? {
-        val cached = sMainIntFieldCache[cls]
-        if (cached != null) return cached
-        if (sMainIntFieldMissCache.contains(cls)) return null
-
-        val fieldName = sRuntimeTargets?.itemMainIntField
-        if (!fieldName.isNullOrBlank()) {
-            val field = resolveDeclaredFieldInHierarchy(cls, fieldName)
-            if (field != null && (field.type == Int::class.javaPrimitiveType || field.type == Int::class.javaObjectType)) {
-                field.isAccessible = true
-                sMainIntFieldCache[cls] = field
-                return field
-            }
-        }
-
-        sMainIntFieldMissCache.add(cls)
-        return null
-    }
-
-    private fun resolveMainBooleanField(cls: Class<*>): Field? {
-        val cached = sMainBooleanFieldCache[cls]
-        if (cached != null) return cached
-        if (sMainBooleanFieldMissCache.contains(cls)) return null
-
-        val fieldName = sRuntimeTargets?.itemMainBooleanField
-        if (!fieldName.isNullOrBlank()) {
-            val field = resolveDeclaredFieldInHierarchy(cls, fieldName)
-            if (field != null &&
-                (field.type == Boolean::class.javaPrimitiveType || field.type == Boolean::class.javaObjectType)
-            ) {
-                field.isAccessible = true
-                sMainBooleanFieldCache[cls] = field
-                return field
-            }
-        }
-
-        sMainBooleanFieldMissCache.add(cls)
-        return null
-    }
-
-    private fun resolveDeclaredFieldInHierarchy(cls: Class<*>, fieldName: String): Field? {
-        var current: Class<*>? = cls
-        while (current != null && current != Any::class.java) {
-            val field = try {
-                current.getDeclaredField(fieldName)
-            } catch (_: Throwable) {
-                null
-            }
-            if (field != null) return field
-            current = current.superclass
-        }
-        return null
-    }
-
-    private fun resolveDeclaredMethodInHierarchy(
-        cls: Class<*>,
-        methodName: String,
-        parameterTypes: Array<Class<*>>,
-    ): Method? {
-        var current: Class<*>? = cls
-        while (current != null && current != Any::class.java) {
-            val method = try {
-                current.getDeclaredMethod(methodName, *parameterTypes)
-            } catch (_: Throwable) {
-                null
-            }
-            if (method != null && method.returnType == Void.TYPE) return method
-            current = current.superclass
-        }
-        return null
-    }
+    private fun resolveTypeField(cls: Class<*>): Field? = itemTargets(cls)?.typeField
+    private fun resolveCodeField(cls: Class<*>): Field? = itemTargets(cls)?.codeField
+    private fun resolveNameField(cls: Class<*>): Field? = itemTargets(cls)?.nameField
+    private fun resolveUrlField(cls: Class<*>): Field? = itemTargets(cls)?.urlField
+    private fun resolveMainSetterMethod(cls: Class<*>): Method? = itemTargets(cls)?.mainSetter
+    private fun resolveMainIntField(cls: Class<*>): Field? = itemTargets(cls)?.mainIntField
+    private fun resolveMainBooleanField(cls: Class<*>): Field? = itemTargets(cls)?.mainBooleanField
 
     private fun normalizeCode(raw: String?): String? {
         if (raw.isNullOrBlank()) return null

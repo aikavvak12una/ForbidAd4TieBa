@@ -6,6 +6,7 @@ import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.config.TabPreferences
 import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.core.RuntimeHooks
+import com.forbidad4tieba.hook.symbol.model.HomeTabItemTargets
 import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
 import io.github.libxposed.api.XposedInterface
 import org.junit.After
@@ -22,9 +23,15 @@ class HomeTabFixedHookTest {
         rebuildMethod = Host::class.java.getDeclaredMethod("rebuild"),
         listField = Host::class.java.getDeclaredField("visible").apply { isAccessible = true },
         parseMethod = Host::class.java.getDeclaredMethod("parse"),
-        itemTypeField = "kind", itemCodeField = "code", itemNameField = "title", itemUrlField = "url",
-        itemMainSetterMethod = null, itemMainIntField = "main", itemMainBooleanField = null,
+        item = HomeTabItemTargets(
+            type = Item::class.java,
+            constructor = Item::class.java.getDeclaredConstructor().apply { isAccessible = true },
+            typeField = itemField("kind"), codeField = itemField("code"), nameField = itemField("title"), urlField = itemField("url"),
+            mainSetter = null, mainIntField = itemField("main"), mainBooleanField = null,
+        ),
     )
+
+    private fun itemField(name: String) = Item::class.java.getDeclaredField(name).apply { isAccessible = true }
 
     @After fun restoreState() {
         releaseHooks()

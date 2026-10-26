@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.feature.signin
 
+import com.forbidad4tieba.hook.utils.toLowerHex
+
 import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
@@ -134,5 +136,5 @@ internal object AutoSignInNoticePolicy {
         report.isFinal && fingerprint(report) != lastFingerprint
 
     private fun digest(value: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        .digest(value.toByteArray(Charsets.UTF_8)).toLowerHex()
 }

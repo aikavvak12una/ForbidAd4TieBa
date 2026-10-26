@@ -60,14 +60,14 @@ class FilterRuntimeTest {
         postModelScoreThresholds = listOf(ModelScoreSettings.ModelScoreThreshold("msd_score", 0.5)),
     )
 
-    private val filter = CustomPostCardBlockHook.RuntimeFilter("dataList", "templateKey", "payload", "params", null, null)
+    private val filter = feedFilterFixture(Data::class.java, Head::class.java)
     private fun card(extra: String) = Card(Data(listOf(Head(mapOf("extra" to extra)))))
-    class Card(private val data: Data) {
+    class Card(private val data: Data) : FeedTemplateFixture {
         var keyReads = 0
         var payloadReads = 0
-        fun templateKey(): String { keyReads++; return "feed_card" }
-        fun payload(): Data { payloadReads++; return data }
+        override fun templateKey(): String { keyReads++; return "feed_card" }
+        override fun payload(): Data { payloadReads++; return data }
     }
     class Data(@JvmField val dataList: List<Head>)
-    class Head(@JvmField val params: Map<String, String>) { fun templateKey() = "feed_head" }
+    class Head(@JvmField val params: Map<String, String>) : FeedTemplateFixture { override fun templateKey() = "feed_head" }
 }

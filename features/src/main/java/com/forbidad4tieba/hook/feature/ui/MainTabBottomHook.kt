@@ -95,17 +95,7 @@ object MainTabBottomHook {
     }
 
     private fun currentSelectionOrNull(): TabPreferences.BottomTabSelection? {
-        val settings = ConfigManager.snapshot()
-        if (!settings.isBottomTabsCustomEnabled) return null
-        return TabPreferences.normalizeBottomTabSelection(
-            TabPreferences.BottomTabSelection(
-                homeEnabled = settings.isBottomTabHomeEnabled,
-                enterForumEnabled = settings.isBottomTabEnterForumEnabled,
-                retailStoreEnabled = settings.isBottomTabRetailStoreEnabled,
-                messageEnabled = settings.isBottomTabMessageEnabled,
-                mineEnabled = settings.isBottomTabMineEnabled,
-            ),
-        )
+        return ConfigManager.snapshot().bottomTabSelection
     }
 
     private fun shouldFilterOut(

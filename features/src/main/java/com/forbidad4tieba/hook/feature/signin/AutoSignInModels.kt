@@ -6,7 +6,7 @@ internal data class SignInForum(
     val level: Int = 0,
     val signed: Boolean = false,
 ) {
-    val key: String get() = if (id.isNotEmpty()) "id:$id" else "name:$name"
+    val key: String = if (id.isNotEmpty()) "id:$id" else "name:$name"
 }
 
 internal enum class SignInFailureKind {

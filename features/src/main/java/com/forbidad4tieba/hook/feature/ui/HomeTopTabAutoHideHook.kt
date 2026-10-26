@@ -10,6 +10,7 @@ import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
+import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
@@ -35,7 +36,7 @@ object HomeTopTabAutoHideHook {
         StableTiebaHookPoints.HOME_SCROLL_TAB_BAR_LAYOUT_CLASS,
         StableTiebaHookPoints.HOME_FIXED_APP_BAR_LAYOUT_CLASS,
     )
-    private val appBarCache = Collections.synchronizedMap(WeakHashMap<View, ViewGroup>())
+    private val appBarCache = Collections.synchronizedMap(WeakHashMap<View, WeakReference<ViewGroup>>())
     private val appBarMissRetryAt = Collections.synchronizedMap(WeakHashMap<View, Long>())
     private val appBarExpandedStates = Collections.synchronizedMap(WeakHashMap<ViewGroup, Boolean>())
     private val appBarOffsetControllers = Collections.synchronizedMap(WeakHashMap<ViewGroup, AppBarOffsetController>())
@@ -271,7 +272,7 @@ object HomeTopTabAutoHideHook {
     private fun resolveHomeAppBarForScrollTarget(target: View): ViewGroup? {
         val root = target.rootView ?: target
         synchronized(appBarCache) {
-            val cached = appBarCache[target]
+            val cached = appBarCache[target]?.get()
             if (cached != null && cached.rootView === root) return cached
         }
         val now = SystemClock.uptimeMillis()
@@ -283,16 +284,16 @@ object HomeTopTabAutoHideHook {
         if (appBar != null) {
             configureAppBar(appBar)
             synchronized(appBarCache) {
-                appBarCache[target] = appBar
+                appBarCache[target] = WeakReference(appBar)
             }
             synchronized(appBarMissRetryAt) {
                 appBarMissRetryAt.remove(target)
             }
             if (autoHideActiveLogged.compareAndSet(false, true)) {
-                XposedCompat.logD(
+                XposedCompat.logD {
                     "[HomeTopTabAutoHideHook] auto-hide observer active: " +
                         "target=${target.javaClass.name}, appBar=${appBar.javaClass.name}"
-                )
+                }
             }
             return appBar
         }
@@ -396,7 +397,7 @@ object HomeTopTabAutoHideHook {
 
     private fun appBarOffsetController(appBar: ViewGroup): AppBarOffsetController? {
         synchronized(appBarOffsetControllers) {
-            appBarOffsetControllers[appBar]?.let { return it }
+            appBarOffsetControllers[appBar]?.takeIf { it.behavior.get() != null }?.let { return it }
         }
         val layoutParams = appBar.layoutParams ?: return null
         val layoutParamMethods = behaviorMethods(layoutParams.javaClass) ?: return null
@@ -410,7 +411,7 @@ object HomeTopTabAutoHideHook {
             null
         } ?: return null
         val offsetMethods = offsetMethods(behavior.javaClass) ?: return null
-        val controller = AppBarOffsetController(behavior, offsetMethods)
+        val controller = AppBarOffsetController(WeakReference(behavior), offsetMethods)
         synchronized(appBarOffsetControllers) {
             appBarOffsetControllers[appBar] = controller
         }
@@ -418,8 +419,9 @@ object HomeTopTabAutoHideHook {
     }
 
     private fun currentAppBarOffset(controller: AppBarOffsetController): Int? {
+        val behavior = controller.behavior.get() ?: return null
         return try {
-            controller.methods.getTopAndBottomOffset.invoke(controller.behavior) as? Int
+            controller.methods.getTopAndBottomOffset.invoke(behavior) as? Int
         } catch (t: Throwable) {
             if (preScrollErrorLogged.compareAndSet(false, true)) {
                 XposedCompat.log("[HomeTopTabAutoHideHook] get appbar offset FAILED: ${t.message}")
@@ -436,6 +438,7 @@ object HomeTopTabAutoHideHook {
         windowTarget: View?,
         offsetInWindow: IntArray?,
     ): Boolean {
+        val behavior = controller.behavior.get() ?: return false
         val scratch = if (windowTarget != null && offsetInWindow != null && offsetInWindow.size > 1) {
             locationScratch().also { windowTarget.getLocationInWindow(it) }
         } else {
@@ -445,7 +448,7 @@ object HomeTopTabAutoHideHook {
         val beforeWindowY = scratch?.get(1) ?: 0
         return try {
             val changed = controller.methods.setTopAndBottomOffset.invoke(
-                controller.behavior,
+                behavior,
                 targetOffset,
             ) as? Boolean
             if (changed != true) return false
@@ -805,7 +808,7 @@ object HomeTopTabAutoHideHook {
     )
 
     private data class AppBarOffsetController(
-        val behavior: Any,
+        val behavior: WeakReference<Any>,
         val methods: OffsetMethods,
     )
 

@@ -18,6 +18,7 @@ internal object CustomPostModelScoreCatalog {
         CUPAI_ALL_SCORES_3 to ScoreSpec(rawKey = "cupai_all_scores", index = 3),
         CDNN_LTR to ScoreSpec(rawKey = "cdnn_ltr"),
     )
+    private val rawKeys = specs.values.mapTo(HashSet()) { it.rawKey }
 
     fun extractScores(rawExtra: String): Map<String, Double> {
         val features = parseExtraFeatures(rawExtra)
@@ -38,15 +39,20 @@ internal object CustomPostModelScoreCatalog {
     private fun parseExtraFeatures(rawExtra: String): Map<String, String> {
         val innerExtra = extractInnerExtra(rawExtra)
         if (innerExtra.isBlank()) return emptyMap()
-        val result = HashMap<String, String>(32)
-        for (segment in innerExtra.split(';')) {
-            val separator = segment.indexOf(':')
-            if (separator <= 0) continue
-            val key = segment.substring(0, separator).trim()
-            val value = segment.substring(separator + 1).trim()
-            if (key.isNotEmpty() && value.isNotEmpty()) {
-                result[key] = value
+        val result = HashMap<String, String>(rawKeys.size * 2)
+        var start = 0
+        while (start < innerExtra.length) {
+            val end = innerExtra.indexOf(';', start).let { if (it < 0) innerExtra.length else it }
+            var separator = start
+            while (separator < end && innerExtra[separator] != ':') separator++
+            if (separator > start && separator < end) {
+                val key = innerExtra.substring(start, separator).trim()
+                if (key in rawKeys) {
+                    val value = innerExtra.substring(separator + 1, end).trim()
+                    if (value.isNotEmpty()) result[key] = value
+                }
             }
+            start = end + 1
         }
         return result
     }

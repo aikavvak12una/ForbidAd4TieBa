@@ -322,6 +322,9 @@ object FreeCopyHook {
         var installed = 0
         for (method in symbols.longPressMethods) {
             try {
+                val referencePayloadIndexes = method.parameterTypes.mapIndexedNotNull { index, type ->
+                    index.takeIf { index > 0 && !type.isPrimitive }
+                }.toIntArray()
                 RuntimeHooks.builder(mod, method, "FreeCopyHook", "hookPostBodyLongPress:method").intercept { chain ->
                     if (
                         !ConfigManager.snapshot().isFreeCopyEnabled ||
@@ -332,7 +335,7 @@ object FreeCopyHook {
                     val view = chain.args.firstOrNull() as? View
                         ?: return@intercept chain.proceed()
                     if (
-                        (view !is ViewGroup && hasNonNullReferencePayload(method, chain.args)) ||
+                        (view !is ViewGroup && hasNonNullReferencePayload(referencePayloadIndexes, chain.args)) ||
                         isRichTextChildView(view, richTextViewClass)
                     ) {
                         return@intercept chain.proceed()
@@ -373,11 +376,8 @@ object FreeCopyHook {
         return installed
     }
 
-    private fun hasNonNullReferencePayload(method: Method, arguments: List<Any?>): Boolean {
-        return method.parameterTypes.indices.drop(1).any { index ->
-            !method.parameterTypes[index].isPrimitive && arguments.getOrNull(index) != null
-        }
-    }
+    private fun hasNonNullReferencePayload(indexes: IntArray, arguments: List<Any?>): Boolean =
+        indexes.any { arguments.getOrNull(it) != null }
 
     private fun isRichTextChildView(view: View, richTextViewClass: Class<*>): Boolean {
         if (richTextViewClass.isInstance(view)) return false
@@ -724,10 +724,10 @@ object FreeCopyHook {
             }
             val count = popupPatchCount.incrementAndGet()
             if (count <= MAX_PATCH_TRACE_LOG) {
-                XposedCompat.logD(
+                XposedCompat.logD {
                     "[FreeCopyHook] patched by $source " +
-                        "(count=$count, view=${textView.javaClass.name}, multiline=$expandLineLimit)",
-                )
+                        "(count=$count, view=${textView.javaClass.name}, multiline=$expandLineLimit)"
+                }
             }
         } catch (t: Throwable) {
             logRuntimeFailure("selectable patch $source", t)

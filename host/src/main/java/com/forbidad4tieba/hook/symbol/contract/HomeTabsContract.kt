@@ -3,6 +3,7 @@ package com.forbidad4tieba.hook.symbol.contract
 import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.contracts.MemberAccess
 import com.forbidad4tieba.hook.symbol.model.HomeTabItemScanSymbols
+import com.forbidad4tieba.hook.symbol.model.HomeTabItemTargets
 import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
 import com.forbidad4tieba.hook.symbol.model.HomeTabScanSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
@@ -132,19 +133,35 @@ object HomeTabsContract : SymbolContract("HomeTabs") {
                     Diagnostics.log("[HomeTabHook] skipped: field mismatch: $hostClassName.$listFieldName")
                     return null
                 }
+            val itemClass = HomeTabItemSymbolScanner.resolveHomeTabItemClass(hostClass, listFieldName)
+                ?: error("tab item owner unavailable or ambiguous")
+            val fields = ScanReflection.collectInstanceFields(itemClass)
+            fun itemField(symbol: SymbolField<String?>, matches: (Class<*>) -> Boolean): Field? {
+                val name = resolvedSymbols[symbol]?.takeIf { it.isNotBlank() } ?: return null
+                return fields.singleOrNull { it.name == name && matches(it.type) }?.apply { isAccessible = true }
+            }
+            val item = HomeTabItemTargets(
+                type = itemClass,
+                constructor = runCatching { itemClass.getDeclaredConstructor().apply { isAccessible = true } }.getOrNull(),
+                typeField = requireNotNull(itemField(homeTabItemTypeField, ScanReflection::isIntType)) { "invalid tab type field" },
+                codeField = requireNotNull(itemField(homeTabItemCodeField) { it == String::class.java }) { "invalid tab code field" },
+                nameField = requireNotNull(itemField(homeTabItemNameField) { it == String::class.java }) { "invalid tab name field" },
+                urlField = requireNotNull(itemField(homeTabItemUrlField) { it == String::class.java }) { "invalid tab URL field" },
+                mainSetter = resolvedSymbols[homeTabItemMainSetterMethod]?.takeIf { it.isNotBlank() }?.let {
+                    MemberAccess.findMethodOrNull(itemClass, it, Boolean::class.javaPrimitiveType!!)
+                        ?.takeIf { method -> !Modifier.isStatic(method.modifiers) && method.returnType == Void.TYPE }
+                        ?.apply { isAccessible = true }
+                },
+                mainIntField = itemField(homeTabItemMainIntField, ScanReflection::isIntType),
+                mainBooleanField = itemField(homeTabItemMainBooleanField, ScanReflection::isBooleanType),
+            )
             rebuildMethod.isAccessible = true
             HomeTabResolvedSymbols(
                 hostClass = hostClass,
                 rebuildMethod = rebuildMethod,
                 listField = listField,
                 parseMethod = resolveParseMethod(hostClass, resolvedSymbols[homeTabParseMethod]),
-                itemTypeField = requireSymbol("homeTabItemTypeField", resolvedSymbols[HomeTabsContract.homeTabItemTypeField]),
-                itemCodeField = requireSymbol("homeTabItemCodeField", resolvedSymbols[HomeTabsContract.homeTabItemCodeField]),
-                itemNameField = requireSymbol("homeTabItemNameField", resolvedSymbols[HomeTabsContract.homeTabItemNameField]),
-                itemUrlField = requireSymbol("homeTabItemUrlField", resolvedSymbols[HomeTabsContract.homeTabItemUrlField]),
-                itemMainSetterMethod = resolvedSymbols[HomeTabsContract.homeTabItemMainSetterMethod]?.takeIf { it.isNotBlank() },
-                itemMainIntField = resolvedSymbols[HomeTabsContract.homeTabItemMainIntField]?.takeIf { it.isNotBlank() },
-                itemMainBooleanField = resolvedSymbols[HomeTabsContract.homeTabItemMainBooleanField]?.takeIf { it.isNotBlank() },
+                item = item,
             )
         } catch (t: Throwable) {
             Diagnostics.log("[HomeTabHook] symbol resolve FAILED: ${t.message}")

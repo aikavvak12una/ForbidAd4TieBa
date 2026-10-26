@@ -87,7 +87,7 @@ object AccountListDedupHook {
      * occurrence is the freshest row. Entries whose identity cannot be read are always kept: an
      * unreadable id must never cost the user a real account.
      */
-    private fun dedupeById(
+    internal fun dedupeById(
         original: Any?,
         accountDataClass: Class<*>,
         getIdMethod: Method,
@@ -96,28 +96,28 @@ object AccountListDedupHook {
         if (source.size < 2) return original
 
         val seenIds = HashSet<String>(source.size)
-        val deduped = ArrayList<Any?>(source.size)
-        for (entry in source) {
-            if (entry == null || !accountDataClass.isInstance(entry)) {
-                deduped.add(entry)
-                continue
-            }
-            val id = try {
+        var deduped: ArrayList<Any?>? = null
+        for (index in source.indices) {
+            val entry = source[index]
+            val id = if (entry == null || !accountDataClass.isInstance(entry)) null else try {
                 (getIdMethod.invoke(entry) as? String)?.trim()
             } catch (t: Throwable) {
                 XposedCompat.logD { "$TAG id read failed, entry kept: ${t.message}" }
                 null
             }
             if (id.isNullOrEmpty() || seenIds.add(id)) {
-                deduped.add(entry)
+                deduped?.add(entry)
+            } else if (deduped == null) {
+                deduped = ArrayList(source.size - 1)
+                for (before in 0 until index) deduped.add(source[before])
             }
         }
 
-        if (deduped.size == source.size) return original
+        val result = deduped ?: return original
         XposedCompat.logD {
-            "$TAG duplicate accounts collapsed: ${source.size} -> ${deduped.size}"
+            "$TAG duplicate accounts collapsed: ${source.size} -> ${result.size}"
         }
-        return deduped
+        return result
     }
 
     private fun failClosed(reason: String) {

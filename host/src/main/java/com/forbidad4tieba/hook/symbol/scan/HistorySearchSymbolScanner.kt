@@ -16,7 +16,7 @@ import java.lang.reflect.Modifier
 internal object HistorySearchSymbolScanner {
     private const val TAG = "HistorySearchHook"
     private const val ACTIVITY = StableTiebaHookPoints.PB_HISTORY_ACTIVITY_CLASS
-    private const val DATA = "com.baidu.tieba.myCollection.baseHistory.PbHistoryData"
+    internal const val DATA_CLASS = "com.baidu.tieba.myCollection.baseHistory.PbHistoryData"
     private const val CACHE = "com.baidu.tbadk.mvc.model.CacheModel"
     private const val CALLBACK = "$CACHE\$CacheModelCallback"
     private const val NAVIGATION = "com.baidu.tbadk.core.view.NavigationBar"
@@ -43,7 +43,7 @@ internal object HistorySearchSymbolScanner {
         val delivery = create?.let { role("CacheDelivery", logger) { cacheDelivery(bridge, it, cl, logger) } }
         val adapter = delivery?.let { role("Adapter", logger) { adapter(bridge, create!!, it.update, cl, logger) } }
         val navigation = create?.let { role("Navigation", logger) { navigation(it, logger) } }
-        fun getter(name: String) = role(name, logger) { named(bridge, DATA, name, "java.lang.String", logger)?.methodName }
+        fun getter(name: String) = role(name, logger) { named(bridge, DATA_CLASS, name, "java.lang.String", logger)?.methodName }
         return HistorySearchScanSymbols(
             adapterField = adapter?.field?.fieldName,
             adapterSetListMethod = adapter?.setter?.methodName,

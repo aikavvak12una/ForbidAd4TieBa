@@ -632,11 +632,6 @@ internal object AiComponentSymbolScanner {
         return "$staticPrefix${method.name}($params):$ret"
     }
 
-    private fun hasKotlinMetadataSignal(clazz: Class<*>, signal: String): Boolean {
-        val metadata = clazz.getAnnotation(Metadata::class.java) ?: return false
-        return metadata.data1.any { it.contains(signal) } || metadata.data2.any { it.contains(signal) }
-    }
-
     private fun appSourcePaths(context: Context): List<String> {
         return buildList {
             context.applicationInfo?.sourceDir?.takeIf { it.isNotBlank() }?.let(::add)
@@ -656,16 +651,6 @@ internal object AiComponentSymbolScanner {
     ): List<Method>? {
         return scanSubStep("AiComponentDisableHook.$label.Methods", logger, null) {
             clazz.declaredMethods.toList()
-        }
-    }
-
-    private fun declaredFieldsForScan(
-        label: String,
-        clazz: Class<*>,
-        logger: ScanLogger?,
-    ): List<Field>? {
-        return scanSubStep("AiComponentDisableHook.$label.Fields", logger, null) {
-            clazz.declaredFields.toList()
         }
     }
 

@@ -13,13 +13,13 @@ class FeedDependenciesTest {
     // Baseline roles are deliberately independent of the production dependency groups.
     private val customRequired = listOf(
         "feedTemplateKeyMethod", "feedTemplatePayloadMethod",
-        "feedTemplateLoadMoreMethod", "feedCardDataListField",
+        "feedTemplateLoadMoreMethod", "feedCardDataListField", "feedCardBindMethodSpec",
     )
     private val customOptional = listOf(
         "feedHeadParamsField", "feedCardSchemaGetterSpec",
         "feedRecommendCardNestedDataMethod", "feedRecommendCardNestedDataListField",
     )
-    private val fixtureKeys = customRequired + customOptional + "feedCardBindMethodSpec"
+    private val fixtureKeys = customRequired + customOptional
     private val pointRequirements = linkedMapOf(
         "FeedAdHook.TemplateKey" to listOf("feedTemplateKeyMethod"),
         "CustomPostCardBlockHook.Payload" to listOf("feedTemplatePayloadMethod"),

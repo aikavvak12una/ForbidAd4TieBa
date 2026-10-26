@@ -90,14 +90,14 @@ object HomeSideBarSettingsEntryHook {
             closeDrawer.invoke(drawerLayout, DRAWER_GRAVITY_LEFT, false)
             return true
         } catch (t: Throwable) {
-            XposedCompat.logD("[HomeSideBarSettingsEntryHook] close drawer without animation failed: ${t.message}")
+            XposedCompat.logD { "[HomeSideBarSettingsEntryHook] close drawer without animation failed: ${t.message}" }
         }
         return try {
             val closeDrawer = drawerClass.getMethod("closeDrawer", java.lang.Integer.TYPE)
             closeDrawer.invoke(drawerLayout, DRAWER_GRAVITY_LEFT)
             true
         } catch (t: Throwable) {
-            XposedCompat.logD("[HomeSideBarSettingsEntryHook] close drawer failed: ${t.message}")
+            XposedCompat.logD { "[HomeSideBarSettingsEntryHook] close drawer failed: ${t.message}" }
             false
         }
     }

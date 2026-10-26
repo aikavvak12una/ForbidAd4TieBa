@@ -1,7 +1,6 @@
 package com.forbidad4tieba.hook.symbol.contract
 
 import com.forbidad4tieba.hook.contracts.Diagnostics
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.symbol.contract.SymbolPointCollector.Companion.has
 import com.forbidad4tieba.hook.symbol.model.CollectionSearchScanSymbols
 import com.forbidad4tieba.hook.symbol.model.CollectionSearchSymbols
@@ -9,7 +8,6 @@ import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.HookSymbolsBuilder
 import com.forbidad4tieba.hook.symbol.scan.CollectionSearchSymbolScanner
-import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
 
 /** Owns the cached descriptors and host rules for this capability. */
@@ -120,72 +118,15 @@ object CollectionContract : SymbolContract("Collection") {
         cl: ClassLoader,
         symbols: HookSymbols?,
     ): CollectionSearchSymbols? {
-        fun requireSymbol(name: String, value: String?): String {
-            return value?.takeIf { it.isNotBlank() } ?: error("missing $name")
+        if (symbols == null) {
+            Diagnostics.log("[CollectionSearchHook] skipped: scan symbols unavailable")
+            return null
         }
-
         return try {
-            val resolvedSymbols = symbols ?: run {
-                Diagnostics.log("[CollectionSearchHook] skipped: scan symbols unavailable")
-                return null
-            }
-            val activityClass = ScanReflection.safeFindClass(StableTiebaHookPoints.COLLECT_TAB_ACTIVITY_CLASS, cl) ?: run {
-                Diagnostics.log(
-                    "[CollectionSearchHook] skipped: class not found: " +
-                        StableTiebaHookPoints.COLLECT_TAB_ACTIVITY_CLASS,
-                )
-                return null
-            }
-            val fragmentClass = ScanReflection.safeFindClass(StableTiebaHookPoints.COLLECTION_THREAD_FRAGMENT_CLASS, cl) ?: run {
-                Diagnostics.log(
-                    "[CollectionSearchHook] skipped: class not found: " +
-                        StableTiebaHookPoints.COLLECTION_THREAD_FRAGMENT_CLASS,
-                )
-                return null
-            }
-            CollectionSearchSymbols(
-                activityClass = activityClass,
-                fragmentClass = fragmentClass,
-                presenterField = requireSymbol("collectionPresenterField", resolvedSymbols[CollectionContract.collectionPresenterField]),
-                presenterListSetterMethod = requireSymbol(
-                    "collectionPresenterListSetterMethod",
-                    resolvedSymbols[CollectionContract.collectionPresenterListSetterMethod],
-                ),
-                presenterListSetterMethodSpec = requireSymbol(
-                    "collectionPresenterListSetterMethodSpec",
-                    resolvedSymbols[CollectionContract.collectionPresenterListSetterMethodSpec],
-                ),
-                modelField = requireSymbol("collectionModelField", resolvedSymbols[CollectionContract.collectionModelField]),
-                modelListGetterMethod = requireSymbol(
-                    "collectionModelListGetterMethod",
-                    resolvedSymbols[CollectionContract.collectionModelListGetterMethod],
-                ),
-                modelListGetterMethodSpec = requireSymbol(
-                    "collectionModelListGetterMethodSpec",
-                    resolvedSymbols[CollectionContract.collectionModelListGetterMethodSpec],
-                ),
-                modelParseMethod = requireSymbol("collectionModelParseMethod", resolvedSymbols[CollectionContract.collectionModelParseMethod]),
-                modelParseMethodSpec = requireSymbol(
-                    "collectionModelParseMethodSpec",
-                    resolvedSymbols[CollectionContract.collectionModelParseMethodSpec],
-                ),
-                modelListField = requireSymbol("collectionModelListField", resolvedSymbols[CollectionContract.collectionModelListField]),
-                fragmentDisplayListField = requireSymbol(
-                    "collectionFragmentDisplayListField",
-                    resolvedSymbols[CollectionContract.collectionFragmentDisplayListField],
-                ),
-                activityNavControllerField = resolvedSymbols[CollectionContract.collectionActivityNavControllerField]
-                    ?.takeIf { it.isNotBlank() },
-                navBarField = requireSymbol("collectionNavBarField", resolvedSymbols[CollectionContract.collectionNavBarField]),
-                presenterAdapterField = resolvedSymbols[CollectionContract.collectionPresenterAdapterField]?.takeIf { it.isNotBlank() },
-                adapterShowFooterMethod = resolvedSymbols[CollectionContract.collectionAdapterShowFooterMethod]?.takeIf { it.isNotBlank() },
-                adapterLoadingMethod = resolvedSymbols[CollectionContract.collectionAdapterLoadingMethod]?.takeIf { it.isNotBlank() },
-                adapterHasMoreMethod = resolvedSymbols[CollectionContract.collectionAdapterHasMoreMethod]?.takeIf { it.isNotBlank() },
-                editModeMethod = resolvedSymbols[CollectionContract.collectionEditModeMethod]?.takeIf { it.isNotBlank() },
-            )
-        } catch (t: Throwable) {
-            Diagnostics.log("[CollectionSearchHook] symbol resolve FAILED: ${t.message}")
-            Diagnostics.log(t)
+            CollectionTargetRestoration.restore(cl, symbols)
+        } catch (failure: Throwable) {
+            Diagnostics.log("[CollectionSearchHook] symbol resolve FAILED: ${failure.message}")
+            Diagnostics.log(failure)
             null
         }
     }
@@ -243,6 +184,7 @@ object CollectionContract : SymbolContract("Collection") {
                 symbols[CollectionContract.collectionModelListField] != null ||
                 symbols[CollectionContract.collectionFragmentDisplayListField] != null
         if (hasCollectionSearchSymbols && symbols[CollectionContract.collectionNavBarField].isNullOrBlank()) return false
+        if (isSearchComplete(symbols) && resolveCollectionSearchSymbols(cl, symbols) == null) return false
         return true
     }
 

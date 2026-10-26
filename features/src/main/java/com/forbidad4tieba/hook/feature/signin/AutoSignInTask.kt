@@ -25,9 +25,9 @@ internal class AutoSignInTask(
             state.fetchAttempts = 0
             state.nextAutomaticAt = 0L
             state.batchAttempted = false
-            state.forums.values.filterNot { it.signed }.forEach {
-                it.attempts = 0
-                it.failure = null
+            for (entry in state.forums.values) if (!entry.signed) {
+                entry.attempts = 0
+                entry.failure = null
             }
         }
         state.automaticDone = false
@@ -50,7 +50,7 @@ internal class AutoSignInTask(
             }
         }
         // An absent forum is not evidence of success, including after a restart.
-        val pending = state.forums.values.filterNot { it.signed }.map { it.forum }
+        val pending = state.forums.values.mapNotNull { if (it.signed) null else it.forum }
 
         if (!state.batchAttempted) {
             // Persist the phase before sending: a restart falls back to singles even
@@ -106,8 +106,8 @@ internal class AutoSignInTask(
         // confirm this; a forum disappearing from the list does not count as success.
         if (pending.any { !state.forums.getValue(it.key).signed }) {
             if (!canContinue()) return null
-            gateway.fetchForums().snapshot?.forums?.filter { it.signed }?.forEach { forum ->
-                state.forums[forum.key]?.apply { signed = true; failure = null }
+            gateway.fetchForums().snapshot?.forums?.forEach { forum ->
+                if (forum.signed) state.forums[forum.key]?.apply { signed = true; failure = null }
             }
         }
         if (!canContinue()) return null

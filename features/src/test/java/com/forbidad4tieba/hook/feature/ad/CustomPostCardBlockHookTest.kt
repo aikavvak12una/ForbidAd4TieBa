@@ -83,14 +83,7 @@ class CustomPostCardBlockHookTest {
     private fun filter(input: List<Card>): List<*> {
         return CustomPostCardBlockHook.filterList(
             input,
-            CustomPostCardBlockHook.RuntimeFilter(
-                dataListFieldName = "dataList",
-                templateKeyMethodName = "templateKey",
-                templatePayloadMethodName = "payload",
-                headParamsFieldName = "params",
-                recommendNestedDataMethodName = null,
-                recommendNestedDataListFieldName = null,
-            ),
+            feedFilterFixture(CardData::class.java, Component::class.java),
             "help-filter-regression",
         )
     }
@@ -117,14 +110,14 @@ class CustomPostCardBlockHookTest {
         }
     }
 
-    class Card(private val data: CardData) {
-        fun templateKey(): String = "feed_card"
-        fun payload(): CardData = data
+    class Card(private val data: CardData) : FeedTemplateFixture {
+        override fun templateKey(): String = "feed_card"
+        override fun payload(): CardData = data
     }
 
     class CardData(@JvmField val dataList: List<Component>)
 
-    class Component(private val key: String, @JvmField val params: Map<String, String>) {
-        fun templateKey(): String = key
+    class Component(private val key: String, @JvmField val params: Map<String, String>) : FeedTemplateFixture {
+        override fun templateKey(): String = key
     }
 }

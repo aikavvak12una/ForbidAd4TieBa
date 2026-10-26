@@ -42,7 +42,7 @@ object PbEarlyAdBlockHook {
     }
 
     private fun blockedReturnValue(returnsSparseArray: Boolean): Any? {
-        return if (returnsSparseArray) android.util.SparseArray<Any>() else null
+        return if (returnsSparseArray) android.util.SparseArray<Any>(0) else null
     }
 
     private fun tryMarkHooked(): Boolean {

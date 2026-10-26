@@ -96,9 +96,13 @@ object RuntimeHooks {
         } finally {
             attempt.remove()
         }
-        val owned = hooks.values().filter { it.entry == id }
-        val count = owned.size
-        val inactive = owned.any { !it.activation.active }
+        var count = 0
+        var inactive = false
+        for (registration in hooks.values()) {
+            if (registration.entry != id) continue
+            count++
+            inactive = inactive || !registration.activation.active
+        }
         val state = when {
             declared?.state == InstallState.ROLLED_BACK && count == 0 -> InstallState.ROLLED_BACK
             declared?.state == InstallState.ROLLBACK_FAILED || inactive -> InstallState.ROLLBACK_FAILED

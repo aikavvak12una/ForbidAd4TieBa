@@ -20,7 +20,9 @@ internal val FeedAdFeature = FeatureDefinition.single(
         symbols = symbols,
         includeCustomPostFilter = canInstallCustomPostFilter(settings),
     )?.let { targets ->
-        FeedAdHook.hook(targets)
+        if (targets.customPostFilter == null && !canInstallFeedListAdBlock(settings)) {
+            InstallOutcome.skipped("custom post filter targets unavailable")
+        } else FeedAdHook.hook(targets)
     } ?: InstallOutcome.skipped("feed list targets unavailable")
 }
 

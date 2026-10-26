@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.symbol.contract
 
+import java.lang.reflect.Modifier
 import android.os.Bundle
 import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.contracts.MemberAccess
@@ -143,36 +144,41 @@ object HistoryContract : SymbolContract("History") {
                 }
             }
 
+            val activityFields = ScanReflection.collectInstanceFields(activityClass)
+            fun field(symbol: SymbolField<String?>) = activityFields.singleOrNull {
+                it.name == requireSymbol(symbol.cacheKey, resolvedSymbols[symbol])
+            }?.apply { isAccessible = true } ?: error("invalid ${symbol.cacheKey}")
+            val adapter = field(historyAdapterField)
+            val list = field(historyListField).also { check(List::class.java.isAssignableFrom(it.type)) }
+            val setter = requireNotNull(resolveMethodByCachedSpec(adapter.type,
+                requireSymbol("historyAdapterSetListMethodSpec", resolvedSymbols[historyAdapterSetListMethodSpec]),
+                requireSymbol("historyAdapterSetListMethod", resolvedSymbols[historyAdapterSetListMethod]))) {
+                "invalid history adapter setter"
+            }.apply { isAccessible = true }
+            check(!Modifier.isStatic(setter.modifiers) && setter.returnType == Void.TYPE)
+            val data = ScanReflection.safeFindClass(HistorySearchSymbolScanner.DATA_CLASS, cl) ?: error("history data class missing")
+            fun getter(symbol: SymbolField<String?>) = requireNotNull(MemberAccess.findMethodOrNull(data,
+                requireSymbol(symbol.cacheKey, resolvedSymbols[symbol]))) { "missing ${symbol.cacheKey}" }.also {
+                check(!Modifier.isStatic(it.modifiers) && it.returnType == String::class.java) { "invalid ${symbol.cacheKey}" }
+                it.isAccessible = true
+            }
             HistorySearchSymbols(
                 activityClass = activityClass,
                 onCreateMethod = MemberAccess.findMethodOrNull(activityClass, "onCreate", Bundle::class.java),
                 onResumeMethod = MemberAccess.findMethodOrNull(activityClass, "onResume"),
                 onDestroyMethod = MemberAccess.findMethodOrNull(activityClass, "onDestroy"),
                 activityListUpdateMethod = updateMethod,
-                adapterField = requireSymbol("historyAdapterField", resolvedSymbols[HistoryContract.historyAdapterField]),
-                adapterSetListMethod = requireSymbol(
-                    "historyAdapterSetListMethod",
-                    resolvedSymbols[HistoryContract.historyAdapterSetListMethod],
-                ),
-                adapterSetListMethodSpec = requireSymbol(
-                    "historyAdapterSetListMethodSpec",
-                    resolvedSymbols[HistoryContract.historyAdapterSetListMethodSpec],
-                ),
-                listField = requireSymbol("historyListField", resolvedSymbols[HistoryContract.historyListField]),
-                activityNavBarField = requireSymbol(
-                    "historyActivityNavBarField",
-                    resolvedSymbols[HistoryContract.historyActivityNavBarField],
-                ),
-                threadNameMethod = requireSymbol("historyThreadNameMethod", resolvedSymbols[HistoryContract.historyThreadNameMethod]),
-                forumNameMethod = requireSymbol("historyForumNameMethod", resolvedSymbols[HistoryContract.historyForumNameMethod]),
-                userNameMethod = requireSymbol("historyUserNameMethod", resolvedSymbols[HistoryContract.historyUserNameMethod]),
-                descriptionMethod = requireSymbol(
-                    "historyDescriptionMethod",
-                    resolvedSymbols[HistoryContract.historyDescriptionMethod],
-                ),
-                threadIdMethod = requireSymbol("historyThreadIdMethod", resolvedSymbols[HistoryContract.historyThreadIdMethod]),
-                postIdMethod = requireSymbol("historyPostIdMethod", resolvedSymbols[HistoryContract.historyPostIdMethod]),
-                liveIdMethod = requireSymbol("historyLiveIdMethod", resolvedSymbols[HistoryContract.historyLiveIdMethod]),
+                adapterField = adapter,
+                adapterSetListMethod = setter,
+                listField = list,
+                activityNavBarField = field(historyActivityNavBarField),
+                threadNameMethod = getter(historyThreadNameMethod),
+                forumNameMethod = getter(historyForumNameMethod),
+                userNameMethod = getter(historyUserNameMethod),
+                descriptionMethod = getter(historyDescriptionMethod),
+                threadIdMethod = getter(historyThreadIdMethod),
+                postIdMethod = getter(historyPostIdMethod),
+                liveIdMethod = getter(historyLiveIdMethod),
             )
         } catch (t: Throwable) {
             Diagnostics.log("[HistorySearchHook] symbol resolve FAILED: ${t.message}")
@@ -213,6 +219,7 @@ object HistoryContract : SymbolContract("History") {
                 symbols[HistoryContract.historyActivityListUpdateMethod] != null ||
                 symbols[HistoryContract.historyActivityListUpdateMethodSpec] != null
         if (hasHistorySearchSymbols && symbols[HistoryContract.historyActivityNavBarField].isNullOrBlank()) return false
+        if (isSearchComplete(symbols) && resolveHistorySearchSymbols(cl, symbols) == null) return false
         return true
     }
 

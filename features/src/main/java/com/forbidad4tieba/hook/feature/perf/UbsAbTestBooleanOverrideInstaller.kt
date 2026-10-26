@@ -36,7 +36,7 @@ internal object UbsAbTestBooleanOverrideInstaller {
             try {
                 install(tag, module, method, entry)
                 installed++
-                XposedCompat.logD("$tag HookInstall[${entry.methodName}] state=INSTALLED")
+                XposedCompat.logD { "$tag HookInstall[${entry.methodName}] state=INSTALLED" }
             } catch (t: Throwable) {
                 XposedCompat.log("$tag HookInstall[${entry.methodName}] state=ERROR ${t.message}")
                 XposedCompat.log(t)

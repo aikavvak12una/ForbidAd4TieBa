@@ -8,7 +8,6 @@ import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
@@ -32,7 +31,7 @@ internal class LiquidGlassRenderer(
     // The reference brush dithers translucent shader output; omitting it washes out the depth lens.
     private val lightPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
         .apply { blendMode = BlendMode.PLUS }
-    private val clip = Path()
+    private val clips = arrayOfNulls<LiquidGlassClip>(2)
     private val passes = arrayOfNulls<Pass>(2)
     private var lens: RuntimeShader? = null
     private var dispersionLens: RuntimeShader? = null
@@ -102,10 +101,8 @@ internal class LiquidGlassRenderer(
     ) {
         val save = canvas.save()
         canvas.translate(left.toFloat(), 0f)
-        val radius = min(width, height) / 2f
-        clip.reset()
-        clip.addRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, Path.Direction.CW)
-        canvas.clipPath(clip)
+        val clip = clips[index] ?: LiquidGlassClip().also { clips[index] = it }
+        canvas.clipPath(clip.forSize(width, height))
         val count = if (levels.low == levels.high) 1 else 2
         for (i in 0 until count) {
             val pass = passes[i] ?: continue

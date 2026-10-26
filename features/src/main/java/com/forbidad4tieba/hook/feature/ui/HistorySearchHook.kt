@@ -3,7 +3,6 @@ package com.forbidad4tieba.hook.feature.ui
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import android.app.Activity
 import android.app.AlertDialog
-import android.os.Build
 import android.text.InputType
 import android.view.View
 import android.view.ViewGroup
@@ -12,11 +11,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.symbol.contract.RestoredMembers.resolveMethodByCachedSpec
 import com.forbidad4tieba.hook.symbol.model.HistorySearchSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
-import com.forbidad4tieba.hook.utils.ReflectionUtils
 import com.forbidad4tieba.hook.ui.UiStyle
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.ui.dialogThemeFor
@@ -45,21 +42,8 @@ object HistorySearchHook {
         var applying: Boolean = false,
     )
 
-    private data class HistoryAccessor(
-        val threadName: Method?,
-        val forumName: Method?,
-        val userName: Method?,
-        val description: Method?,
-        val threadId: Method?,
-        val postId: Method?,
-        val liveId: Method?,
-    )
-
     private val sStates = Collections.synchronizedMap(WeakHashMap<Activity, ActivityState>())
-    private val sAdapterSetterCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Method>())
-    private val sHistoryAccessorCache = Collections.synchronizedMap(WeakHashMap<Class<*>, HistoryAccessor>())
     private val sItemSearchTextCache = Collections.synchronizedMap(WeakHashMap<Any, String>())
-    private val sFieldLookupCache = Collections.synchronizedMap(WeakHashMap<Class<*>, MutableMap<String, Field?>>())
     @Volatile
     private var sRuntimeTargets: HistorySearchSymbols? = null
 
@@ -78,7 +62,6 @@ object HistorySearchHook {
     internal fun hook(symbols: HistorySearchSymbols) {
         val mod = XposedCompat.module ?: return
         sRuntimeTargets = symbols
-        sHistoryAccessorCache.clear()
 
         try {
             installLifecycleHooks(mod, symbols)
@@ -109,12 +92,13 @@ object HistorySearchHook {
                 val activity = chain.thisObject as? Activity
                 if (activity != null) {
                     ensureSearchButton(activity)
-                    refreshAllItemsFromField(activity)
-                    val state = ensureState(activity)
-                    if (state.active && state.query.isNotBlank()) {
-                        applyFilter(activity, state.query, fromUser = false)
-                    } else {
-                        updateSearchButtonVisual(activity)
+                    if (!refreshAllItemsFromField(activity)) {
+                        val state = ensureState(activity)
+                        if (state.active && state.query.isNotBlank()) {
+                            applyFilter(activity, state.query, fromUser = false)
+                        } else {
+                            updateSearchButtonVisual(activity)
+                        }
                     }
                 }
                 result
@@ -138,7 +122,7 @@ object HistorySearchHook {
         RuntimeHooks.builder(mod, method, "HistorySearchHook", "installListUpdateHooks:method").intercept { chain ->
             val result = chain.proceed()
             val activity = chain.thisObject as? Activity ?: return@intercept result
-            val incoming = (chain.args.getOrNull(0) as? List<*>)?.filterNotNull()?.toList().orEmpty()
+            val incoming = (chain.args.getOrNull(0) as? List<*>)?.filterNotNull().orEmpty()
             updateAllItems(activity, incoming)
             result
         }
@@ -150,12 +134,14 @@ object HistorySearchHook {
         }
     }
 
-    private fun refreshAllItemsFromField(activity: Activity) {
+    private fun refreshAllItemsFromField(activity: Activity): Boolean {
         val listField = sRuntimeTargets?.listField
         val list = readHistoryListFromField(activity)
         if (list.isNotEmpty() || (listField != null && readFieldValue(activity, listField) is List<*>)) {
             updateAllItems(activity, list)
+            return true
         }
+        return false
     }
 
     private fun updateAllItems(activity: Activity, incoming: List<Any>) {
@@ -192,14 +178,13 @@ object HistorySearchHook {
                 runCatching { placeSearchButtonLeftOfClearButton(button, navigationBar) }
             }
         } catch (t: Throwable) {
-            XposedCompat.logD("[HistorySearchHook] add search button failed: ${t.message}")
+            XposedCompat.logD { "[HistorySearchHook] add search button failed: ${t.message}" }
         }
     }
 
     private fun resolveNavigationBar(activity: Activity): Any? {
         val navBarField = sRuntimeTargets?.activityNavBarField ?: return null
         val navigationBar = readFieldValue(activity, navBarField) ?: return null
-        if (NavBarSearchButton.resolveAddCustomViewMethod(navigationBar.javaClass) == null) return null
         return navigationBar
     }
 
@@ -393,39 +378,26 @@ object HistorySearchHook {
         val state = ensureState(activity)
         if (state.applying) return
         val adapter = resolveHistoryAdapter(activity) ?: return
-        val setter = resolveAdapterSetListMethod(adapter.javaClass) ?: return
+        val setter = sRuntimeTargets?.adapterSetListMethod ?: return
         state.applying = true
         try {
             setter.invoke(adapter, ArrayList(list))
         } catch (t: Throwable) {
-            XposedCompat.logD("[HistorySearchHook] apply adapter list failed: ${t.message}")
+            XposedCompat.logD { "[HistorySearchHook] apply adapter list failed: ${t.message}" }
         } finally {
             state.applying = false
         }
     }
 
     private fun resolveHistoryAdapter(activity: Activity): Any? {
-        val fieldName = sRuntimeTargets?.adapterField ?: return null
-        val adapter = readFieldValue(activity, fieldName) ?: return null
-        if (resolveAdapterSetListMethod(adapter.javaClass) == null) return null
+        val field = sRuntimeTargets?.adapterField ?: return null
+        val adapter = readFieldValue(activity, field) ?: return null
         return adapter
     }
 
-    private fun resolveAdapterSetListMethod(clazz: Class<*>): Method? {
-        sAdapterSetterCache[clazz]?.let { return it }
-        val targets = sRuntimeTargets ?: return null
-        val resolved = resolveMethodByCachedSpec(
-            clazz = clazz,
-            spec = targets.adapterSetListMethodSpec,
-            expectedName = targets.adapterSetListMethod,
-        )?.apply { isAccessible = true }
-        if (resolved != null) sAdapterSetterCache[clazz] = resolved
-        return resolved
-    }
-
     private fun readHistoryListFromField(activity: Activity): List<Any> {
-        val fieldName = sRuntimeTargets?.listField ?: return emptyList()
-        val direct = readFieldValue(activity, fieldName) as? List<*>
+        val field = sRuntimeTargets?.listField ?: return emptyList()
+        val direct = readFieldValue(activity, field) as? List<*>
         if (direct != null) {
             return direct.filterNotNull()
         }
@@ -434,37 +406,16 @@ object HistorySearchHook {
 
     private fun buildHistorySearchText(item: Any): String {
         sItemSearchTextCache[item]?.let { return it }
-        val accessor = resolveHistoryAccessor(item.javaClass)
+        val accessor = sRuntimeTargets ?: return ""
         val parts = ArrayList<String>(7)
-        readString(item, accessor.threadName)?.let(parts::add)
-        readString(item, accessor.forumName)?.let(parts::add)
-        readString(item, accessor.userName)?.let(parts::add)
-        readString(item, accessor.description)?.let(parts::add)
-        readString(item, accessor.threadId)?.let(parts::add)
-        readString(item, accessor.postId)?.let(parts::add)
-        readString(item, accessor.liveId)?.let(parts::add)
+        readString(item, accessor.threadNameMethod)?.let(parts::add)
+        readString(item, accessor.forumNameMethod)?.let(parts::add)
+        readString(item, accessor.userNameMethod)?.let(parts::add)
+        readString(item, accessor.descriptionMethod)?.let(parts::add)
+        readString(item, accessor.threadIdMethod)?.let(parts::add)
+        readString(item, accessor.postIdMethod)?.let(parts::add)
+        readString(item, accessor.liveIdMethod)?.let(parts::add)
         return normalizeQuery(parts.joinToString(" ")).also { sItemSearchTextCache[item] = it }
-    }
-
-    private fun resolveHistoryAccessor(clazz: Class<*>): HistoryAccessor {
-        sHistoryAccessorCache[clazz]?.let { return it }
-        val targets = sRuntimeTargets
-        val accessor = HistoryAccessor(
-            threadName = findGetter(clazz, targets?.threadNameMethod),
-            forumName = findGetter(clazz, targets?.forumNameMethod),
-            userName = findGetter(clazz, targets?.userNameMethod),
-            description = findGetter(clazz, targets?.descriptionMethod),
-            threadId = findGetter(clazz, targets?.threadIdMethod),
-            postId = findGetter(clazz, targets?.postIdMethod),
-            liveId = findGetter(clazz, targets?.liveIdMethod),
-        )
-        sHistoryAccessorCache[clazz] = accessor
-        return accessor
-    }
-
-    private fun findGetter(clazz: Class<*>, name: String?): Method? {
-        if (name.isNullOrBlank()) return null
-        return findExactMethodInHierarchy(clazz, name)
     }
 
     private fun readString(target: Any, method: Method?): String? {
@@ -485,45 +436,12 @@ object HistorySearchHook {
         return input.lowercase(Locale.ROOT).replace(MULTI_SPACE_REGEX, " ").trim()
     }
 
-    private fun readFieldValue(instance: Any, fieldName: String): Any? {
-        return try {
-            val field = findFieldInHierarchy(instance.javaClass, fieldName) ?: return null
-            field.get(instance)
-        } catch (_: Throwable) {
-            null
-        }
-    }
-
-    private fun findFieldInHierarchy(clazz: Class<*>, name: String): Field? {
-        synchronized(sFieldLookupCache) {
-            val cached = sFieldLookupCache[clazz]
-            if (cached != null && cached.containsKey(name)) return cached[name]
-        }
-
-        var current: Class<*>? = clazz
-        var resolved: Field? = null
-        while (current != null) {
-            try {
-                resolved = current.getDeclaredField(name).apply { isAccessible = true }
-                break
-            } catch (_: NoSuchFieldException) {
-                current = current.superclass
-            }
-        }
-        synchronized(sFieldLookupCache) {
-            val cached = sFieldLookupCache.getOrPut(clazz) { HashMap() }
-            cached[name] = resolved
-        }
-        return resolved
-    }
-
-    private fun findExactMethodInHierarchy(clazz: Class<*>, name: String, vararg paramTypes: Class<*>): Method? {
-        return ReflectionUtils.findMethodInHierarchy(clazz, name, *paramTypes)
-    }
+    private fun readFieldValue(instance: Any, field: Field): Any? =
+        if (field.declaringClass.isInstance(instance)) runCatching { field.get(instance) }.getOrNull() else null
 
     private fun isActivityAlive(activity: Activity): Boolean {
         if (activity.isFinishing) return false
-        return !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed)
+        return !activity.isDestroyed
     }
 
     private fun showToast(activity: Activity?, message: String) {

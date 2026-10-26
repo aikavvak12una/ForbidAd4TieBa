@@ -9,6 +9,18 @@ import org.junit.Test
 
 class FeedAdHookTest {
     @Test
+    fun missingCustomTargetsKeepTheIndependentAdFilterActive() {
+        withSettings(SettingsSnapshot.bootstrap().copy(isFeedAdBlockEnabled = true,
+            isCustomPostFilterEnabled = true, isPostHelpFilterEnabled = true)) {
+            val ordinary = Card("feed_card")
+            val ad = Card("ad_card_video")
+            val input = listOf(ordinary, ad)
+            assertEquals(listOf(ordinary), filter(input, null))
+            assertEquals(listOf(ordinary, ad), input)
+        }
+    }
+
+    @Test
     fun strategyAndFeedSwitchesControlTheirOwnCardsInBothFilteringPaths() {
         val post = Card("feed_card")
         val banner = Card("recommend_banner")
@@ -91,8 +103,8 @@ class FeedAdHookTest {
         }
     }
 
-    private fun filter(input: List<*>, runtimeFilter: CustomPostCardBlockHook.RuntimeFilter?): List<*> {
-        return FeedAdHook.filterList(input, "templateKey", runtimeFilter, "feed-ad-regression")
+    private fun filter(input: List<*>, runtimeFilter: com.forbidad4tieba.hook.symbol.model.CustomPostCardFilterSymbols?): List<*> {
+        return FeedAdHook.filterList(input, FeedTemplateFixture::class.java.getMethod("templateKey"), runtimeFilter, "feed-ad-regression")
     }
 
     private fun withSettings(settings: SettingsSnapshot, block: () -> Unit) {
@@ -106,27 +118,20 @@ class FeedAdHookTest {
         }
     }
 
-    private val customFilter = CustomPostCardBlockHook.RuntimeFilter(
-        dataListFieldName = "dataList",
-        templateKeyMethodName = "templateKey",
-        templatePayloadMethodName = "payload",
-        headParamsFieldName = "params",
-        recommendNestedDataMethodName = null,
-        recommendNestedDataListFieldName = null,
-    )
+    private val customFilter = feedFilterFixture(CardData::class.java, Component::class.java)
 
-    class Card(private val key: String?, private val data: CardData = CardData(emptyList())) {
+    class Card(private val key: String?, private val data: CardData = CardData(emptyList())) : FeedTemplateFixture {
         var keyReads = 0
-        fun templateKey(): String? {
+        override fun templateKey(): String? {
             keyReads += 1
             return key
         }
-        fun payload(): CardData = data
+        override fun payload(): CardData = data
     }
 
     class CardData(@JvmField val dataList: List<Component>)
 
-    class Component(private val key: String, @JvmField val params: Map<String, String>) {
-        fun templateKey(): String = key
+    class Component(private val key: String, @JvmField val params: Map<String, String>) : FeedTemplateFixture {
+        override fun templateKey(): String = key
     }
 }

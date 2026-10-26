@@ -89,9 +89,10 @@ object AdSdkInitBlockHook {
             val method = resolveExactMethod(clazz, target, cl) ?: continue
             try {
                 method.isAccessible = true
+                val blockedValue = nullReturnValue(method)
                 RuntimeHooks.builder(mod, method, "AdSdkInitBlockHook", "hook:method").intercept { chain ->
                     if (ConfigManager.snapshot().isAdSdkComponentsDisabled) {
-                        return@intercept nullReturnValue(method)
+                        return@intercept blockedValue
                     }
                     chain.proceed()
                 }

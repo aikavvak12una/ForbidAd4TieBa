@@ -194,7 +194,7 @@ object HelpCenterFooterBlockHook {
 
                     if (candidate) {
                         scheduleInjection(webView, triggerUrl)
-                    } else if (!shouldKeepState(webView, triggerUrl)) {
+                    } else if (!shouldScheduleFor(webView, triggerUrl)) {
                         clearState(webView)
                     }
                     result
@@ -285,10 +285,6 @@ object HelpCenterFooterBlockHook {
     private fun clearState(webView: WebView) {
         scheduledStamp.remove(webView)
         lastLoggedUrl.remove(webView)
-    }
-
-    private fun shouldKeepState(webView: WebView, url: String?): Boolean {
-        return isUfoWebLoader(webView) || isHelpCenterUrl(url) || isHelpCenterUrl(webView.url)
     }
 
     private fun shouldScheduleFor(webView: WebView, url: String?): Boolean {

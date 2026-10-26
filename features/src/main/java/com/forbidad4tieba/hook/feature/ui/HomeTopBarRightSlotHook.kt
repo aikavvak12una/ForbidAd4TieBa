@@ -87,7 +87,7 @@ object HomeTopBarRightSlotHook {
             redDotView?.visibility = View.GONE
             redDotView?.alpha = 0.0f
         } catch (t: Throwable) {
-            XposedCompat.logD("[HomeTopBarRightSlotHook] apply state ignored: ${t.message}")
+            XposedCompat.logD { "[HomeTopBarRightSlotHook] apply state ignored: ${t.message}" }
         }
     }
 

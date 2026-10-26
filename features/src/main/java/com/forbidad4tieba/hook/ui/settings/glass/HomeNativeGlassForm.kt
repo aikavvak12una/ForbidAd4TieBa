@@ -10,8 +10,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import com.forbidad4tieba.hook.core.XposedCompat
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassHostDarkModeBridge
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassImageCache
+import com.forbidad4tieba.hook.feature.ui.nativeglass.HomeNativeGlassHostDarkModeBridge
+import com.forbidad4tieba.hook.feature.ui.nativeglass.HomeNativeGlassImageCache
 import com.forbidad4tieba.hook.ui.HomeNativeGlassDialogPreviewStyle
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImageAnalysis
 import com.forbidad4tieba.hook.ui.HomeNativeGlassImageFiles

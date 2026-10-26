@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.feature.ad
 
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.symbol.model.FeedAdSymbols
+import com.forbidad4tieba.hook.symbol.model.CustomPostCardFilterSymbols
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.InstallOutcome
 import com.forbidad4tieba.hook.InstallState
@@ -9,34 +10,23 @@ import com.forbidad4tieba.hook.core.OwnedHookSet
 import io.github.libxposed.api.XposedInterface
 import com.forbidad4tieba.hook.core.XposedCompat
 import java.lang.reflect.Method
-import java.util.concurrent.ConcurrentHashMap
 
 object FeedAdHook {
-    private val sKeyMethodCache = ConcurrentHashMap<Class<*>, Any>(32)
     private val installedMethods by lazy {
         OwnedHookSet<Method, XposedInterface.HookHandle> { it.unhook() }
     }
-    @Volatile private var sTemplateKeyMethodName: String? = null
-
-    private val NO_METHOD = Any()
-
     internal fun hook(targets: FeedAdSymbols): InstallOutcome {
-        val templateKeyMethodName = targets.templateKeyMethodName
-        if (sTemplateKeyMethodName != templateKeyMethodName) {
-            sKeyMethodCache.clear()
-            sTemplateKeyMethodName = templateKeyMethodName
-        }
         return hookTemplateAdapterSetList(
             targets = targets,
-            templateKeyMethodName = templateKeyMethodName,
-            customPostFilter = targets.customPostFilter?.let(CustomPostCardBlockHook::createRuntimeFilter),
+            templateKeyMethod = targets.templateKeyMethod,
+            customPostFilter = targets.customPostFilter,
         )
     }
 
     private fun hookTemplateAdapterSetList(
         targets: FeedAdSymbols,
-        templateKeyMethodName: String,
-        customPostFilter: CustomPostCardBlockHook.RuntimeFilter?,
+        templateKeyMethod: Method,
+        customPostFilter: CustomPostCardFilterSymbols?,
     ): InstallOutcome {
         val mod = XposedCompat.module ?: return InstallOutcome.skipped("module unavailable")
         val methods = listOfNotNull(targets.setListMethod, targets.loadMoreMethod).distinct()
@@ -48,7 +38,7 @@ object FeedAdHook {
                     RuntimeHooks.builder(mod, method, "FeedAdHook", "hookTemplateAdapterSetList:method").intercept { chain ->
                         val list = chain.args.firstOrNull() as? List<*>
                         if (list != null) {
-                            val filtered = filterList(list, templateKeyMethodName, customPostFilter, method.name)
+                            val filtered = filterList(list, templateKeyMethod, customPostFilter, method.name)
                             if (filtered !== list) return@intercept chain.proceed(arrayOf<Any?>(filtered))
                         }
                         chain.proceed()
@@ -70,8 +60,8 @@ object FeedAdHook {
 
     internal fun filterList(
         list: List<*>,
-        templateKeyMethodName: String,
-        customPostFilter: CustomPostCardBlockHook.RuntimeFilter?,
+        templateKeyMethod: Method,
+        customPostFilter: CustomPostCardFilterSymbols?,
         methodName: String,
     ): List<*> {
         val settings = ConfigManager.snapshot()
@@ -92,7 +82,7 @@ object FeedAdHook {
             )
         }
         if (!blockFeedAds && !blockRecommendBanner) return list
-        val filtered = filterItems(list, templateKeyMethodName, blockFeedAds, blockRecommendBanner)
+        val filtered = filterItems(list, templateKeyMethod, blockFeedAds, blockRecommendBanner)
         if (filtered !== list) {
             XposedCompat.logD {
                 "[FeedAdHook] > $methodName filtered: ${list.size} -> ${filtered.size}"
@@ -103,7 +93,7 @@ object FeedAdHook {
 
     private fun filterItems(
         list: List<*>,
-        templateKeyMethodName: String,
+        templateKeyMethod: Method,
         blockFeedAds: Boolean,
         blockRecommendBanner: Boolean,
     ): List<*> {
@@ -117,7 +107,7 @@ object FeedAdHook {
             var blockReason: String? = null
 
             if (item != null) {
-                val key = getTemplateKey(item, templateKeyMethodName)
+                val key = getTemplateKey(item, templateKeyMethod)
                 if (key != null && shouldBlock(key, blockFeedAds, blockRecommendBanner)) {
                     block = true
                     blockReason = "template_key:$key"
@@ -159,33 +149,11 @@ object FeedAdHook {
             key in AD_KEYS
     }
 
-    private fun getTemplateKey(item: Any?, methodName: String): String? {
-        if (item == null) return null
-        val method = getKeyMethod(item.javaClass, methodName) ?: return null
+    private fun getTemplateKey(item: Any, method: Method): String? {
+        if (!method.declaringClass.isInstance(item)) return null
         return try {
             method.invoke(item) as? String
         } catch (_: Throwable) {
-            null
-        }
-    }
-
-    private fun getKeyMethod(cls: Class<*>, methodName: String): Method? {
-        sKeyMethodCache[cls]?.let { cached ->
-            return if (cached === NO_METHOD) null else cached as Method
-        }
-
-        return try {
-            cls.getMethod(methodName).apply {
-                if (parameterTypes.isNotEmpty() || returnType != String::class.java) {
-                    sKeyMethodCache[cls] = NO_METHOD
-                    return null
-                }
-                isAccessible = true
-                sKeyMethodCache[cls] = this
-            }
-        } catch (t: Throwable) {
-            XposedCompat.logD("FeedAdHook: ${t.message}")
-            sKeyMethodCache[cls] = NO_METHOD
             null
         }
     }

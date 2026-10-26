@@ -78,24 +78,11 @@ internal object CustomPostFilterMatcher {
             KEEP
         }
 
-    fun decideByRecommendCardTemplateKey(templateKey: String?, rules: CustomPostFilterRules): Decision {
-        if (!rules.recommendForum || templateKey.isNullOrBlank()) {
-            return KEEP
-        }
-        if (templateKey !in RECOMMEND_FORUM_TEMPLATE_KEYS) {
-            return KEEP
-        }
-        return Decision(
-            blocked = true,
-            reason = "custom_post_type:${PostType.RECOMMEND_FORUM.key}:template_key=$templateKey",
-        )
-    }
-
     fun decideByFeedHeadParams(params: Map<*, *>?, rules: CustomPostFilterRules): Decision {
         if (!rules.needsFeedHeadParamsCheck || params == null) {
             return KEEP
         }
-        val cardType = params.stringValue("card_type")
+        val cardType = if (rules.reply || rules.lottery || rules.help || rules.score) params.stringValue("card_type") else null
         if (rules.reply && cardType == CARD_TYPE_COMMENT_FORWARD) {
             return Decision(
                 blocked = true,
@@ -111,14 +98,7 @@ internal object CustomPostFilterMatcher {
                 )
             }
         }
-        val recomType = params.stringValue("recom_type")
-        val threadType = params.stringValue("thread_type")
-        val specialThread = params.stringValue("is_special_thread")
-        val forumLiked = params.stringValue("forum_is_liked")
-        val forumName = params.stringValue("forum_name")
-        val pageFrom = params.stringValue("page_from")
-        val title = params.stringValue("title")
-        val abstractText = params.stringValue("abstract")
+        val recomType = if (rules.live) params.stringValue("recom_type") else null
         if (rules.live &&
             recomType == RECOM_TYPE_LIVE
         ) {
@@ -127,8 +107,9 @@ internal object CustomPostFilterMatcher {
                 reason = "custom_post_type:live:recom_type=$recomType",
             )
         }
+        val threadType = if (rules.lottery || rules.help || rules.score) params.stringValue("thread_type") else null
         if (rules.lottery) {
-            val lotterySignal = findLotterySignal(threadType, cardType, title, abstractText)
+            val lotterySignal = findLotterySignal(threadType, cardType, params.stringValue("title"), params.stringValue("abstract"))
             if (lotterySignal != null) {
                 return Decision(
                     blocked = true,
@@ -136,6 +117,7 @@ internal object CustomPostFilterMatcher {
                 )
             }
         }
+        val specialThread = if (rules.help) params.stringValue("is_special_thread") else null
         if (rules.help &&
             threadType == THREAD_TYPE_NORMAL &&
             isHelpCardType(cardType) &&
@@ -155,6 +137,8 @@ internal object CustomPostFilterMatcher {
                 reason = "custom_post_type:score:thread_type=$threadType,card_type=$cardType",
             )
         }
+        val forumLiked = if (rules.unfollowedForum) params.stringValue("forum_is_liked") else null
+        val pageFrom = if (rules.unfollowedForum) params.stringValue("page_from") else null
         if (rules.unfollowedForum &&
             forumLiked == FORUM_LIKED_FALSE &&
             pageFrom == PAGE_FROM_RECOMMEND
@@ -164,6 +148,7 @@ internal object CustomPostFilterMatcher {
                 reason = "custom_post_type:unfollowed_forum:forum_is_liked=$forumLiked,page_from=$pageFrom",
             )
         }
+        val forumName = if (rules.forumKeyword) params.stringValue("forum_name") else null
         if (rules.forumKeyword &&
             !forumName.isNullOrBlank()
         ) {

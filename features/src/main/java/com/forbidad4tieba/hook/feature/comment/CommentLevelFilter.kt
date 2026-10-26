@@ -39,10 +39,11 @@ internal class CommentLevelFilter(private val p: CommentProtocol) {
         fun post(value: Any): Any? {
             if (!p.post.type.isInstance(value)) return value
             val body = p.postFloor.number(value) == 1L || p.postId.number(value) in bodyIds
-            val children = p.postChildren.get(value)
-            val hasReplies = (p.postChildCount.number(value) ?: 0) > 0 ||
-                (children != null && !p.childList.list(children).isNullOrEmpty())
-            if (!body && settings.hides(level(value, false, users), false, hasReplies)) return null
+            if (!body) {
+                val hasReplies = settings.keepWithReplies && ((p.postChildCount.number(value) ?: 0) > 0 ||
+                    p.postChildren.get(value)?.let { !p.childList.list(it).isNullOrEmpty() } == true)
+                if (settings.hides(level(value, false, users), false, hasReplies)) return null
+            }
             return filterChildren(value, users, settings)
         }
         val changes = linkedMapOf<CommentProtoField, Any?>()

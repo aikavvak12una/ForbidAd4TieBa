@@ -1,5 +1,7 @@
 package com.forbidad4tieba.hook.ui
 
+import com.forbidad4tieba.hook.feature.ui.nativeglass.HomeNativeGlassIntegration
+
 import com.forbidad4tieba.hook.config.HomeGlassPreferences
 import android.app.AlertDialog
 import android.content.Context
@@ -34,8 +36,6 @@ import android.widget.Switch
 import android.widget.TextView
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassDynamicTintCache
-import com.forbidad4tieba.hook.feature.ui.HomeNativeGlassImageCache
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
@@ -431,7 +431,7 @@ private fun createSettingsDialogCustomBackground(
     val targetWidth = (metrics.widthPixels - tokens.dialogInsetPx * 2).coerceAtLeast(1)
     val targetHeight = (metrics.heightPixels - tokens.dialogInsetPx * 2).coerceAtLeast(1)
     val bitmap = runCatching {
-        HomeNativeGlassImageCache.decodeSampledBitmap(source.path, targetWidth, targetHeight)
+        HomeNativeGlassIntegration.decodeSettingsBackground(source.path, targetWidth, targetHeight)
     }.getOrNull()
     if (bitmap == null) {
         if (firstSettingsDialogBackgroundErrorLogged.compareAndSet(false, true)) {
@@ -502,7 +502,7 @@ private fun resolveSettingsDialogBackgroundImageSource(
 }
 
 private fun settingsDialogStrokeColor(tokens: UiStyle.Tokens): Int {
-    val tintColor = HomeNativeGlassDynamicTintCache.resolveAccentColor()
+    val tintColor = HomeNativeGlassIntegration.settingsAccentColor()
     val baseColor = if (tintColor == null) {
         Color.WHITE
     } else {

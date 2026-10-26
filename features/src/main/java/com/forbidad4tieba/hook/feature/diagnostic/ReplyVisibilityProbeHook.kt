@@ -179,7 +179,7 @@ object ReplyVisibilityProbeHook {
 
             val sent = targets.messageManagerSendMethod.invoke(manager, message) as? Boolean ?: false
             if (!sent) {
-                pendingByTag.remove(tag)
+                tag?.let { pendingByTag.remove(it) }
                 handleSendFailed(targets, request, trackResponse)
             } else if (trackResponse) {
                 tag?.let { scheduleResponseTimeout(targets, it, request) }

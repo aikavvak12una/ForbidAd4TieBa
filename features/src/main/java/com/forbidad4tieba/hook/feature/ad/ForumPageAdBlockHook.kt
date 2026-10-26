@@ -71,12 +71,13 @@ object ForumPageAdBlockHook {
         val method = targets.responseParserMethod ?: return 0
         val fields = targets.responseAdFields
         if (fields.isEmpty()) return 0
+        val patches = fields.map { it to defaultValue(it.type) }
 
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installResponseSanitizer:method").intercept { chain ->
                 val result = chain.proceed()
                 if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
-                    clearFields(chain.thisObject, fields, responseErrorLogged, "response fields")
+                    clearFields(chain.thisObject, patches, responseErrorLogged, "response fields")
                 }
                 result
             }
@@ -122,12 +123,13 @@ object ForumPageAdBlockHook {
         val mod = XposedCompat.module ?: return 0
         val method = targets.headerDataMapperMethod ?: return 0
         val setter = targets.rainSetterMethod ?: return 0
+        val setters = listOf(setter)
 
         installedMethods.install(method) {
             RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installHeaderRainSanitizer:method").intercept { chain ->
                 val result = chain.proceed()
                 if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
-                    invokeNullSetters(result, listOf(setter), rainErrorLogged, "rain data")
+                    invokeNullSetters(result, setters, rainErrorLogged, "rain data")
                 }
                 result
             }
@@ -191,14 +193,14 @@ object ForumPageAdBlockHook {
 
     private fun clearFields(
         target: Any?,
-        fields: List<Field>,
+        patches: List<Pair<Field, Any?>>,
         errorLogged: AtomicBoolean,
         label: String,
     ) {
         if (target == null) return
         try {
-            for (field in fields) {
-                field.set(target, defaultValue(field.type))
+            for ((field, value) in patches) {
+                field.set(target, value)
             }
         } catch (t: Throwable) {
             logErrorOnce(errorLogged, "clear $label FAILED", t)

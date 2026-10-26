@@ -36,8 +36,6 @@ internal object DexKitSemanticScanner {
     private const val FREE_COPY_POST_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.PostData"
     private const val FREE_COPY_THREAD_DATA_CLASS = "com.baidu.tbadk.core.data.ThreadData"
     private const val TEXT_VIEW_CLASS = "android.widget.TextView"
-    private const val REC_PERSONALIZE_MODEL_CLASS =
-        "com.baidu.tieba.homepage.personalize.model.RecPersonalizePageModel"
     /**
      * Log literal emitted by the host's cold-start tracker when a homepage
      * network request begins. Used as the semantic anchor for locating every

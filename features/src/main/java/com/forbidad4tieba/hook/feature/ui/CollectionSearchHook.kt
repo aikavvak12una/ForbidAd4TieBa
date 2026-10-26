@@ -3,35 +3,26 @@ package com.forbidad4tieba.hook.feature.ui
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.contracts.MemberAccess
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.text.InputType
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.symbol.contract.RestoredMembers.resolveMethodByCachedSpec
 import com.forbidad4tieba.hook.symbol.model.CollectionSearchSymbols
+import com.forbidad4tieba.hook.symbol.model.CollectionNetworkTargets
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.NavBarSearchButton
-import com.forbidad4tieba.hook.utils.ReflectionUtils
-import com.forbidad4tieba.hook.ui.UiStyle
+import com.forbidad4tieba.hook.ui.CollectionSearchDialog
 import com.forbidad4tieba.hook.ui.UiText
-import com.forbidad4tieba.hook.ui.dialogThemeFor
-import com.forbidad4tieba.hook.ui.showSettingsDialog
-import com.forbidad4tieba.hook.utils.ClearableInputRow
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.ArrayDeque
@@ -50,18 +41,11 @@ import org.json.JSONObject
  * keeps the complete model list unchanged so click positions can be remapped after filtering.
  */
 object CollectionSearchHook {
-    private const val FULL_CACHE_MAX_ACCOUNTS = 3
     private const val PAGE_SIZE = 20
     private val MULTI_SPACE_REGEX = Regex("\\s+")
 
     private data class ActivityState(
         var buttonView: View? = null,
-    )
-
-    private data class FullDataCache(
-        val updatedAtMs: Long,
-        val items: ArrayList<Any>,
-        val fullReady: Boolean,
     )
 
     private data class DiskRestoreResult(
@@ -80,50 +64,14 @@ object CollectionSearchHook {
         val rawPage: String,
     )
 
-    private data class MarkAccessor(
-        val titleMethod: Method?,
-        val authorMethod: Method?,
-        val forumMethod: Method?,
-        val threadIdMethod: Method?,
-        val postIdMethod: Method?,
-        val idMethod: Method?,
-    )
-
-    private data class AdapterFooterAccess(
-        val showFooterMethod: Method?,
-        val showFooterShowArg: Boolean,
-        val showFooterHideArg: Boolean,
-        val loadingMethod: Method?,
-        val hasMoreMethod: Method?,
-    )
-
-    private data class NetworkBridge(
-        val netCtor: java.lang.reflect.Constructor<*>,
-        val addPostDataMethod: Method,
-        val postNetDataMethod: Method,
-        val serverAddressField: Field,
-        val markGetStoreField: Field,
-    )
-
     private val sSessions = CollectionSearchSessions()
     private val sActivityStates = Collections.synchronizedMap(WeakHashMap<Activity, ActivityState>())
     private val sHookedPresenterClasses =
         Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap<Class<*>, Boolean>()))
-    private val sPresenterListSetterCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Method>())
-    private val sModelListGetterCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Method>())
-    private val sModelListFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field>())
-    private val sModelParseMethodCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Method>())
-    private val sFragmentDisplayListFieldCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Field>())
-    private val sCurrentAccountMethodCache = Collections.synchronizedMap(WeakHashMap<ClassLoader, Method>())
-    private val sAdapterFooterAccessCache = Collections.synchronizedMap(WeakHashMap<Class<*>, AdapterFooterAccess>())
-    private val sNetworkBridgeCache = Collections.synchronizedMap(WeakHashMap<ClassLoader, NetworkBridge>())
-    private val sFullDataCacheByAccount = Collections.synchronizedMap(LinkedHashMap<String, FullDataCache>())
-    private val sMarkAccessorCache = Collections.synchronizedMap(WeakHashMap<Class<*>, MarkAccessor>())
+    private val memoryCache = CollectionSearchMemoryCache()
     private val sMarkTextCache = Collections.synchronizedMap(WeakHashMap<Any, String>())
-    private val sFieldLookupCache = Collections.synchronizedMap(WeakHashMap<Class<*>, MutableMap<String, Field?>>())
     private val sHookedAdapterClasses =
         Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap<Class<*>, Boolean>()))
-    private val sEditModeMethodCache = Collections.synchronizedMap(WeakHashMap<Class<*>, Method>())
     private val sDiskIoExecutor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "tbhook-collect-cache-io").apply { isDaemon = true }
     }
@@ -283,9 +231,9 @@ object CollectionSearchHook {
                 if (fragment == null || !isFilterActive(fragment)) return@intercept chain.proceed()
                 val mapped = remapIndex(fragment, index)
                 if (mapped == index) return@intercept chain.proceed()
-                val args = chain.args.toMutableList()
+                val args = chain.args.toTypedArray()
                 args[2] = mapped
-                chain.proceed(args.toTypedArray())
+                chain.proceed(args)
             }
         }
 
@@ -369,7 +317,7 @@ object CollectionSearchHook {
         applyFilter(fragment, state.query, fromUser = false)
     }
 
-    private fun isMemoryCacheTrustedFull(cache: FullDataCache): Boolean {
+    private fun isMemoryCacheTrustedFull(cache: CollectionSearchMemoryCache.Snapshot): Boolean {
         return cache.fullReady
     }
 
@@ -708,7 +656,7 @@ object CollectionSearchHook {
     }
 
     private fun postCollectionPage(
-        bridge: NetworkBridge,
+        bridge: CollectionNetworkTargets,
         url: String,
         userId: String,
         offset: Int,
@@ -731,7 +679,6 @@ object CollectionSearchHook {
             val result = parseMethod.invoke(model, raw)
             when (result) {
                 is List<*> -> result.filterNotNull()
-                is Array<*> -> result.filterNotNull()
                 else -> emptyList()
             }
         } catch (_: Throwable) {
@@ -864,40 +811,10 @@ object CollectionSearchHook {
         }
     }
 
-    private fun getFullDataCache(accountKey: String): FullDataCache? {
-        synchronized(sFullDataCacheByAccount) {
-            val cache = sFullDataCacheByAccount[accountKey] ?: return null
-            if (cache.items.isEmpty() && !cache.fullReady) {
-                sFullDataCacheByAccount.remove(accountKey)
-                return null
-            }
-            return FullDataCache(
-                updatedAtMs = cache.updatedAtMs,
-                items = ArrayList(cache.items),
-                fullReady = cache.fullReady,
-            )
-        }
-    }
+    private fun getFullDataCache(accountKey: String): CollectionSearchMemoryCache.Snapshot? = memoryCache.get(accountKey)
 
     private fun putFullDataCache(accountKey: String, items: List<Any>, fullReady: Boolean) {
-        if (items.isEmpty() && !fullReady) return
-        synchronized(sFullDataCacheByAccount) {
-            sFullDataCacheByAccount[accountKey] = FullDataCache(
-                updatedAtMs = System.currentTimeMillis(),
-                items = ArrayList(items),
-                fullReady = fullReady,
-            )
-            trimFullDataCacheLocked()
-        }
-    }
-
-    private fun trimFullDataCacheLocked() {
-        while (sFullDataCacheByAccount.size > FULL_CACHE_MAX_ACCOUNTS) {
-            val iterator = sFullDataCacheByAccount.entries.iterator()
-            if (!iterator.hasNext()) return
-            iterator.next()
-            iterator.remove()
-        }
+        memoryCache.put(accountKey, items, fullReady)
     }
 
     private fun persistFullSnapshot(context: Context?, request: CollectionSearchRequest, result: LoadAllResult?) {
@@ -946,17 +863,9 @@ object CollectionSearchHook {
     }
 
     private fun readCurrentAccount(cl: ClassLoader?): String? {
-        val loader = cl ?: return null
-        val method = synchronized(sCurrentAccountMethodCache) {
-            sCurrentAccountMethodCache[loader] ?: runCatching {
-                val coreAppClass = Class.forName(StableTiebaHookPoints.TBADK_CORE_APPLICATION_CLASS, false, loader)
-                coreAppClass.getDeclaredMethod(StableTiebaHookPoints.METHOD_GET_CURRENT_ACCOUNT)
-                    .apply { isAccessible = true }
-            }.getOrNull()?.also { sCurrentAccountMethodCache[loader] = it }
-        } ?: return null
-        return runCatching {
-            method.invoke(null)?.toString().orEmpty()
-        }.getOrDefault("")
+        if (cl == null) return null
+        val method = sRuntimeTargets?.currentAccountMethod ?: return null
+        return runCatching { method.invoke(null)?.toString().orEmpty() }.getOrDefault("")
     }
 
     private fun installAdapterFooterHook(adapterClass: Class<*>) {
@@ -964,9 +873,8 @@ object CollectionSearchHook {
         val mod = XposedCompat.module ?: return
         dbg { "installAdapterFooterHook class=${adapterClass.name}" }
 
-        val getCount = findExactMethodInHierarchy(adapterClass, "getCount")?.takeIf { method ->
-            method.returnType == Int::class.javaPrimitiveType || method.returnType == Int::class.java
-        }
+        val targets = sRuntimeTargets?.adapter ?: return
+        val getCount = targets.countMethod
         if (getCount != null) {
             getCount.isAccessible = true
             RuntimeHooks.builder(mod, getCount, "CollectionSearchHook", "installAdapterFooterHook:getCount").intercept { chain ->
@@ -982,13 +890,7 @@ object CollectionSearchHook {
             }
         }
 
-        val isEnabled = findExactMethodInHierarchy(
-            adapterClass,
-            "isEnabled",
-            Int::class.javaPrimitiveType!!,
-        )?.takeIf { method ->
-            method.returnType == Boolean::class.javaPrimitiveType || method.returnType == Boolean::class.java
-        }
+        val isEnabled = targets.enabledMethod
         if (isEnabled != null) {
             isEnabled.isAccessible = true
             RuntimeHooks.builder(mod, isEnabled, "CollectionSearchHook", "installAdapterFooterHook:isEnabled").intercept { chain ->
@@ -1008,15 +910,7 @@ object CollectionSearchHook {
             }
         }
 
-        val getView = findExactMethodInHierarchy(
-            adapterClass,
-            "getView",
-            Int::class.javaPrimitiveType!!,
-            View::class.java,
-            ViewGroup::class.java,
-        )?.takeIf { method ->
-            View::class.java.isAssignableFrom(method.returnType)
-        } ?: return
+        val getView = targets.viewMethod ?: return
 
         getView.isAccessible = true
         RuntimeHooks.builder(mod, getView, "CollectionSearchHook", "installAdapterFooterHook:getView").intercept { chain ->
@@ -1088,22 +982,16 @@ object CollectionSearchHook {
         val adapter = resolvePresenterAdapter(presenter) ?: return
         sSessions.bindAdapter(adapter, fragment)
         installAdapterFooterHook(adapter.javaClass)
-        val footerAccess = resolveAdapterFooterAccess(adapter)
+        val footerAccess = sRuntimeTargets?.adapter ?: return
         dbg {
             "updateSyncActionFooter show=$show showFooter=${methodName(footerAccess.showFooterMethod)} " +
-                "showArg=${footerAccess.showFooterShowArg}/${footerAccess.showFooterHideArg} " +
+                "showArg=true/false " +
                 "loading=${methodName(footerAccess.loadingMethod)} hasMore=${methodName(footerAccess.hasMoreMethod)}"
         }
-        if (show) {
-            runCatching { footerAccess.loadingMethod?.invoke(adapter, false) }
-            runCatching { footerAccess.hasMoreMethod?.invoke(adapter, true) }
-            runCatching { footerAccess.showFooterMethod?.invoke(adapter, footerAccess.showFooterShowArg) }
-        } else {
-            runCatching { footerAccess.loadingMethod?.invoke(adapter, false) }
-            runCatching { footerAccess.hasMoreMethod?.invoke(adapter, false) }
-            runCatching { footerAccess.showFooterMethod?.invoke(adapter, footerAccess.showFooterHideArg) }
-        }
-        runCatching { callNoArgMethod(adapter, "notifyDataSetChanged") }
+        runCatching { footerAccess.loadingMethod?.invoke(adapter, false) }
+        runCatching { footerAccess.hasMoreMethod?.invoke(adapter, show) }
+        runCatching { footerAccess.showFooterMethod?.invoke(adapter, show) }
+        runCatching { footerAccess.notifyMethod?.invoke(adapter) }
     }
 
     private fun suppressLoadingFooter(fragment: Any) {
@@ -1112,12 +1000,12 @@ object CollectionSearchHook {
         sSessions.bindAdapter(adapter, fragment)
         installAdapterFooterHook(adapter.javaClass)
         ensureFragmentState(fragment).syncFooterVisible = false
-        val footerAccess = resolveAdapterFooterAccess(adapter)
+        val footerAccess = sRuntimeTargets?.adapter ?: return
         dbg { "suppressLoadingFooter showFooter=${methodName(footerAccess.showFooterMethod)}" }
         runCatching { footerAccess.loadingMethod?.invoke(adapter, false) }
         runCatching { footerAccess.hasMoreMethod?.invoke(adapter, false) }
-        runCatching { footerAccess.showFooterMethod?.invoke(adapter, footerAccess.showFooterHideArg) }
-        runCatching { callNoArgMethod(adapter, "notifyDataSetChanged") }
+        runCatching { footerAccess.showFooterMethod?.invoke(adapter, false) }
+        runCatching { footerAccess.notifyMethod?.invoke(adapter) }
     }
 
     private fun resolvePresenterAdapter(presenter: Any): Any? {
@@ -1125,66 +1013,8 @@ object CollectionSearchHook {
         return readFieldValue(presenter, fieldName)
     }
 
-    private fun resolveAdapterFooterAccess(adapter: Any): AdapterFooterAccess {
-        val clazz = adapter.javaClass
-        sAdapterFooterAccessCache[clazz]?.let { return it }
-        val targets = sRuntimeTargets
-        val showFooter = targets?.adapterShowFooterMethod?.let { findBooleanVoidMethod(clazz, it) }
-        val loading = targets?.adapterLoadingMethod?.let { findBooleanVoidMethod(clazz, it) }
-        val hasMore = targets?.adapterHasMoreMethod?.let { findBooleanVoidMethod(clazz, it) }
-        dbg {
-            "resolveAdapterFooterAccess class=${clazz.name} showFooter=${methodName(showFooter)} " +
-                "showArg=true/false loading=${methodName(loading)} hasMore=${methodName(hasMore)}"
-        }
-        val access = AdapterFooterAccess(showFooter, showFooterShowArg = true, showFooterHideArg = false, loadingMethod = loading, hasMoreMethod = hasMore)
-        sAdapterFooterAccessCache[clazz] = access
-        return access
-    }
-
-    private fun findBooleanVoidMethod(clazz: Class<*>, methodName: String): Method? {
-        return findExactMethodInHierarchy(
-            clazz,
-            methodName,
-            Boolean::class.javaPrimitiveType!!,
-        )?.takeIf { it.returnType == Void.TYPE }
-            ?: findExactMethodInHierarchy(
-                clazz,
-                methodName,
-                Boolean::class.java,
-            )?.takeIf { it.returnType == Void.TYPE }
-    }
-
-    private fun resolveNetworkBridge(cl: ClassLoader?): NetworkBridge? {
-        val loader = cl ?: return null
-        sNetworkBridgeCache[loader]?.let { return it }
-        return try {
-            val netClass = Class.forName(StableTiebaHookPoints.NETWORK_CLASS, false, loader)
-            val tbConfigClass = Class.forName(StableTiebaHookPoints.TB_CONFIG_CLASS, false, loader)
-
-            val ctor = netClass.getDeclaredConstructor(String::class.java).apply { isAccessible = true }
-            val addPostData = netClass.getDeclaredMethod(
-                StableTiebaHookPoints.METHOD_ADD_POST_DATA,
-                String::class.java,
-                String::class.java,
-            ).apply { isAccessible = true }
-            val postNetData = netClass.getDeclaredMethod(StableTiebaHookPoints.METHOD_POST_NET_DATA)
-                .apply { isAccessible = true }
-            val serverField = tbConfigClass.getDeclaredField(StableTiebaHookPoints.FIELD_SERVER_ADDRESS)
-                .apply { isAccessible = true }
-            val markField = tbConfigClass.getDeclaredField(StableTiebaHookPoints.FIELD_MARK_GET_STORE)
-                .apply { isAccessible = true }
-
-            NetworkBridge(
-                netCtor = ctor,
-                addPostDataMethod = addPostData,
-                postNetDataMethod = postNetData,
-                serverAddressField = serverField,
-                markGetStoreField = markField,
-            ).also { sNetworkBridgeCache[loader] = it }
-        } catch (_: Throwable) {
-            null
-        }
-    }
+    private fun resolveNetworkBridge(cl: ClassLoader?): CollectionNetworkTargets? =
+        if (cl == null) null else sRuntimeTargets?.network
 
     private fun ensureSearchButton(activity: Activity?) {
         val host = activity ?: return
@@ -1211,13 +1041,13 @@ object CollectionSearchHook {
                 runCatching { placeSearchButtonLeftOfTargetFrame(button, navigationBar) }
             }
         } catch (t: Throwable) {
-            XposedCompat.logD("[CollectionSearchHook] add search button failed: ${t.message}")
+            XposedCompat.logD { "[CollectionSearchHook] add search button failed: ${t.message}" }
         }
     }
 
     private fun resolveNavigationBar(activity: Activity): Any? {
         val targets = sRuntimeTargets ?: return null
-        val navigationBar = if (!targets.activityNavControllerField.isNullOrBlank()) {
+        val navigationBar = if (targets.activityNavControllerField != null) {
             val controllerField = targets.activityNavControllerField ?: return null
             val controller = readFieldValue(activity, controllerField) ?: return null
             readFieldValue(controller, targets.navBarField)
@@ -1288,7 +1118,7 @@ object CollectionSearchHook {
             return
         }
         val state = ensureFragmentState(fragment)
-        showSearchDialog(
+        CollectionSearchDialog.show(
             activity = activity,
             currentQuery = state.query,
             onSearch = { query ->
@@ -1301,91 +1131,6 @@ object CollectionSearchHook {
                 if (isSessionCurrent(fragment, state)) triggerManualFullSync(fragment, userVisible = true)
             },
         )
-    }
-
-    private fun showSearchDialog(
-        activity: Activity,
-        currentQuery: String,
-        onSearch: (String) -> Unit,
-        onClearQuery: () -> Unit,
-        onRefresh: () -> Unit,
-    ) {
-        val density = activity.resources.displayMetrics.density
-        val tokens = UiStyle.tokens(activity)
-        val hPad = (24 * density).toInt()
-        val vPad = (10 * density).toInt()
-        val input = EditText(activity).apply {
-            hint = UiText.CollectionSearch.DIALOG_HINT
-            inputType = InputType.TYPE_CLASS_TEXT
-            setSingleLine(true)
-            setText(currentQuery)
-            setSelection(text?.length ?: 0)
-            setPadding(0, vPad, 0, vPad)
-            textSize = 14.5f
-            setTextColor(tokens.textPrimary)
-            setHintTextColor(tokens.textMuted)
-            background = null
-        }
-        val inputRow = ClearableInputRow.create(
-            activity = activity,
-            input = input,
-            initialText = currentQuery,
-            clearSymbol = UiText.CollectionSearch.INPUT_CLEAR_SYMBOL,
-            verticalPadding = vPad,
-            onClear = onClearQuery
-        )
-        val underline = View(activity).apply {
-            setBackgroundColor(tokens.accent)
-            alpha = 0.64f
-        }
-        input.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            underline.alpha = if (hasFocus) 1.0f else 0.64f
-        }
-        val inputContainer = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(hPad, (8 * density).toInt(), hPad, (4 * density).toInt())
-            addView(
-                inputRow,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            )
-            addView(
-                underline,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    (2.0f * density).toInt().coerceAtLeast(1)
-                ).apply {
-                    topMargin = (2 * density).toInt()
-                }
-            )
-        }
-
-        val dialog = AlertDialog.Builder(activity, dialogThemeFor(activity))
-            .setTitle(UiText.CollectionSearch.DIALOG_TITLE)
-            .setView(inputContainer)
-            .setPositiveButton(UiText.CollectionSearch.DIALOG_ACTION_SEARCH) { _, _ ->
-                onSearch(input.text?.toString().orEmpty().trim())
-            }
-            .setNeutralButton(UiText.CollectionSearch.DIALOG_ACTION_SYNC) { _, _ ->
-                onRefresh()
-            }
-            .setNegativeButton(UiText.Settings.BUTTON_CANCEL, null)
-            .create()
-
-        dialog.setOnShowListener {
-            val positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            val neutral = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
-            val negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-            positive?.isAllCaps = false
-            neutral?.isAllCaps = false
-            negative?.isAllCaps = false
-            positive?.setTextColor(tokens.accent)
-            neutral?.setTextColor(tokens.accent)
-            negative?.setTextColor(tokens.textSecondary)
-        }
-        dialog.showSettingsDialog(density)
     }
 
     private fun applyFilter(fragment: Any, query: String, fromUser: Boolean) {
@@ -1458,24 +1203,12 @@ object CollectionSearchHook {
 
         val normalized = normalizeQuery(query)
         val tokens = normalized.split(' ').filter { it.isNotBlank() }
-        val filtered = ArrayList<Any>(fullList.size)
-        val indexMap = ArrayList<Int>(fullList.size)
-        fullList.forEachIndexed { index, item ->
-            val matched = if (tokens.isEmpty()) {
-                true
-            } else {
-                val text = buildMarkSearchText(item)
-                tokens.all { token -> text.contains(token) }
-            }
-            if (matched) {
-                filtered.add(item)
-                indexMap.add(index)
-            }
-        }
+        val matches = CollectionSearchIndex.filter(fullList, tokens, ::buildMarkSearchText)
+        val filtered = matches.items
 
         state.query = query.trim()
         state.active = true
-        state.indexMap = indexMap.toIntArray()
+        state.indexMap = matches.positions
         applyAdapterList(fragment, filtered)
         updateSyncActionFooter(fragment, true)
         dbg { "applyFilter matched=${filtered.size} fullSize=${fullList.size} tokens=${tokens.size}" }
@@ -1513,24 +1246,14 @@ object CollectionSearchHook {
         try {
             setter.invoke(presenter, ArrayList(list))
         } catch (t: Throwable) {
-            XposedCompat.logD("[CollectionSearchHook] apply adapter list failed: ${t.message}")
+            XposedCompat.logD { "[CollectionSearchHook] apply adapter list failed: ${t.message}" }
         } finally {
             state.applying = false
         }
     }
 
-    private fun resolvePresenterListSetter(clazz: Class<*>): Method? {
-        sPresenterListSetterCache[clazz]?.let { return it }
-        val targets = sRuntimeTargets ?: return null
-        val resolved = resolveMethodByCachedSpec(
-            clazz = clazz,
-            spec = targets.presenterListSetterMethodSpec,
-            expectedName = targets.presenterListSetterMethod,
-        )
-        resolved?.isAccessible = true
-        if (resolved != null) sPresenterListSetterCache[clazz] = resolved
-        return resolved
-    }
+    private fun resolvePresenterListSetter(clazz: Class<*>): Method? =
+        sRuntimeTargets?.presenterListSetterMethod?.takeIf { it.declaringClass.isAssignableFrom(clazz) }
 
     private fun getFullModelList(fragment: Any): List<Any> {
         val model = resolveModel(fragment) ?: return emptyList()
@@ -1544,31 +1267,11 @@ object CollectionSearchHook {
         }
     }
 
-    private fun resolveModelListGetter(clazz: Class<*>): Method? {
-        sModelListGetterCache[clazz]?.let { return it }
-        val targets = sRuntimeTargets ?: return null
-        val resolved = resolveMethodByCachedSpec(
-            clazz = clazz,
-            spec = targets.modelListGetterMethodSpec,
-            expectedName = targets.modelListGetterMethod,
-        )
-        resolved?.isAccessible = true
-        if (resolved != null) sModelListGetterCache[clazz] = resolved
-        return resolved
-    }
+    private fun resolveModelListGetter(clazz: Class<*>): Method? =
+        sRuntimeTargets?.modelListGetterMethod?.takeIf { it.declaringClass.isAssignableFrom(clazz) }
 
-    private fun resolveModelParseMethod(clazz: Class<*>): Method? {
-        sModelParseMethodCache[clazz]?.let { return it }
-        val targets = sRuntimeTargets ?: return null
-        val resolved = resolveMethodByCachedSpec(
-            clazz = clazz,
-            spec = targets.modelParseMethodSpec,
-            expectedName = targets.modelParseMethod,
-        )
-        resolved?.isAccessible = true
-        if (resolved != null) sModelParseMethodCache[clazz] = resolved
-        return resolved
-    }
+    private fun resolveModelParseMethod(clazz: Class<*>): Method? =
+        sRuntimeTargets?.modelParseMethod?.takeIf { it.declaringClass.isAssignableFrom(clazz) }
 
     private fun resolvePresenter(fragment: Any): Any? {
         val fieldName = sRuntimeTargets?.presenterField ?: return null
@@ -1584,14 +1287,8 @@ object CollectionSearchHook {
         return model
     }
 
-    private fun readFieldValue(instance: Any, fieldName: String): Any? {
-        return try {
-            val field = findFieldInHierarchy(instance.javaClass, fieldName) ?: return null
-            field.get(instance)
-        } catch (_: Throwable) {
-            null
-        }
-    }
+    private fun readFieldValue(instance: Any, field: Field): Any? =
+        if (field.declaringClass.isInstance(instance)) runCatching { field.get(instance) }.getOrNull() else null
 
     private fun replaceModelDataset(fragment: Any, allItems: List<Any>) {
         replaceModelList(resolveModel(fragment), allItems)
@@ -1606,17 +1303,8 @@ object CollectionSearchHook {
         }
     }
 
-    private fun resolveModelListField(model: Any): Field? {
-        val clazz = model.javaClass
-        sModelListFieldCache[clazz]?.let { return it }
-        val fieldName = sRuntimeTargets?.modelListField ?: return null
-        val field = findFieldInHierarchy(clazz, fieldName) ?: return null
-        if (!List::class.java.isAssignableFrom(field.type) && !ArrayList::class.java.isAssignableFrom(field.type)) {
-            return null
-        }
-        sModelListFieldCache[clazz] = field
-        return field
-    }
+    private fun resolveModelListField(model: Any): Field? =
+        sRuntimeTargets?.modelListField?.takeIf { it.declaringClass.isInstance(model) }
 
     private fun replaceFragmentDisplayList(fragment: Any, allItems: List<Any>) {
         val field = resolveFragmentDisplayListField(fragment) ?: return
@@ -1625,48 +1313,12 @@ object CollectionSearchHook {
         }
     }
 
-    private fun resolveFragmentDisplayListField(fragment: Any): Field? {
-        val clazz = fragment.javaClass
-        sFragmentDisplayListFieldCache[clazz]?.let { return it }
-        val fieldName = sRuntimeTargets?.fragmentDisplayListField ?: return null
-        val field = findFieldInHierarchy(clazz, fieldName) ?: return null
-        if (!List::class.java.isAssignableFrom(field.type) && !ArrayList::class.java.isAssignableFrom(field.type)) {
-            return null
-        }
-        sFragmentDisplayListFieldCache[clazz] = field
-        return field
-    }
-
-    private fun findFieldInHierarchy(clazz: Class<*>, name: String): Field? {
-        synchronized(sFieldLookupCache) {
-            val cached = sFieldLookupCache[clazz]
-            if (cached != null && cached.containsKey(name)) return cached[name]
-        }
-
-        var current: Class<*>? = clazz
-        var resolved: Field? = null
-        while (current != null) {
-            try {
-                resolved = current.getDeclaredField(name).apply { isAccessible = true }
-                break
-            } catch (_: NoSuchFieldException) {
-                current = current.superclass
-            }
-        }
-        synchronized(sFieldLookupCache) {
-            val cached = sFieldLookupCache.getOrPut(clazz) { HashMap() }
-            cached[name] = resolved
-        }
-        return resolved
-    }
-
-    private fun findExactMethodInHierarchy(clazz: Class<*>, name: String, vararg paramTypes: Class<*>): Method? {
-        return ReflectionUtils.findMethodInHierarchy(clazz, name, *paramTypes)
-    }
+    private fun resolveFragmentDisplayListField(fragment: Any): Field? =
+        sRuntimeTargets?.fragmentDisplayListField?.takeIf { it.declaringClass.isInstance(fragment) }
 
     private fun buildMarkSearchText(mark: Any): String {
         sMarkTextCache[mark]?.let { return it }
-        val accessor = resolveMarkAccessor(mark.javaClass)
+        val accessor = sRuntimeTargets?.mark ?: return ""
         val parts = ArrayList<String>(5)
         readString(mark, accessor.titleMethod)?.let(parts::add)
         readString(mark, accessor.authorMethod)?.let(parts::add)
@@ -1676,30 +1328,6 @@ object CollectionSearchHook {
         val text = normalizeQuery(parts.joinToString(" "))
         sMarkTextCache[mark] = text
         return text
-    }
-
-    private fun resolveMarkAccessor(clazz: Class<*>): MarkAccessor {
-        sMarkAccessorCache[clazz]?.let { return it }
-        val accessor = MarkAccessor(
-            titleMethod = findGetter(clazz, "getTitle"),
-            authorMethod = findGetter(clazz, "getAuthorName", "getAuthor", "getUserName"),
-            forumMethod = findGetter(clazz, "getForumName", "getForum", "getFname"),
-            threadIdMethod = findGetter(clazz, "getThreadId"),
-            postIdMethod = findGetter(clazz, "getPostId"),
-            idMethod = findGetter(clazz, "getId"),
-        )
-        sMarkAccessorCache[clazz] = accessor
-        return accessor
-    }
-
-    private fun findGetter(clazz: Class<*>, vararg names: String): Method? {
-        names.forEach { name ->
-            findExactMethodInHierarchy(clazz, name)?.let {
-                it.isAccessible = true
-                return it
-            }
-        }
-        return null
     }
 
     private fun readString(target: Any, method: Method?): String? {
@@ -1712,7 +1340,7 @@ object CollectionSearchHook {
     }
 
     private fun resolveMarkStableKey(mark: Any): String {
-        val accessor = resolveMarkAccessor(mark.javaClass)
+        val accessor = sRuntimeTargets?.mark ?: return "obj:${System.identityHashCode(mark)}"
         val id = readString(mark, accessor.idMethod)
         if (!id.isNullOrBlank()) return "id:$id"
         val tid = readString(mark, accessor.threadIdMethod)
@@ -1736,26 +1364,11 @@ object CollectionSearchHook {
         button.alpha = if (isFiltered) 1.0f else 0.85f
     }
 
-    private fun isEditMode(activity: Activity): Boolean {
-        val targetMethodName = sRuntimeTargets?.editModeMethod ?: return false
-        val clazz = activity.javaClass
-        sEditModeMethodCache[clazz]?.let { cached ->
-            return runCatching { (cached.invoke(activity) as? Boolean) == true }.getOrDefault(false)
-        }
-
-        val method = findExactMethodInHierarchy(clazz, targetMethodName)
-            ?.takeIf { isBooleanType(it.returnType) }
-            ?: return false
-        sEditModeMethodCache[clazz] = method
-        return runCatching { (method.invoke(activity) as? Boolean) == true }.getOrDefault(false)
-    }
-
-    private fun isBooleanType(type: Class<*>): Boolean {
-        return type == Boolean::class.javaPrimitiveType || type == Boolean::class.java
-    }
+    private fun isEditMode(activity: Activity): Boolean =
+        invokeNoArg(activity, sRuntimeTargets?.editModeMethod) == true
 
     private fun findActiveThreadFragment(activity: Activity): Any? {
-        val supportManager = callNoArgMethod(activity, "getSupportFragmentManager") ?: return null
+        val supportManager = invokeNoArg(activity, sRuntimeTargets?.page?.supportManager) ?: return null
         val queue = ArrayDeque<Any>()
         collectFragments(supportManager, queue)
         while (queue.isNotEmpty()) {
@@ -1766,7 +1379,7 @@ object CollectionSearchHook {
             ) {
                 return fragment
             }
-            val childManager = callNoArgMethod(fragment, "getChildFragmentManager")
+            val childManager = invokeNoArg(fragment, sRuntimeTargets?.page?.childManager)
             if (childManager != null) {
                 collectFragments(childManager, queue)
             }
@@ -1775,27 +1388,21 @@ object CollectionSearchHook {
     }
 
     private fun collectFragments(manager: Any, queue: ArrayDeque<Any>) {
-        val method = findExactMethodInHierarchy(manager.javaClass, "getFragments") ?: return
-        val raw = runCatching { method.invoke(manager) }.getOrNull()
-        when (raw) {
-            is List<*> -> raw.filterNotNull().forEach { queue.addLast(it) }
-            is Array<*> -> raw.filterNotNull().forEach { queue.addLast(it) }
-        }
+        val raw = invokeNoArg(manager, sRuntimeTargets?.page?.fragments) as? List<*> ?: return
+        for (fragment in raw) if (fragment != null) queue.addLast(fragment)
     }
 
     private fun isFragmentAdded(fragment: Any): Boolean {
-        val result = callNoArgMethod(fragment, "isAdded") as? Boolean
+        val result = invokeNoArg(fragment, sRuntimeTargets?.page?.isAdded) as? Boolean
         return result ?: true
     }
 
     private fun findHostActivity(fragment: Any): Activity? {
-        return callNoArgMethod(fragment, "getActivity") as? Activity
+        return invokeNoArg(fragment, sRuntimeTargets?.page?.activity) as? Activity
     }
 
-    private fun callNoArgMethod(target: Any, methodName: String): Any? {
-        val method = findExactMethodInHierarchy(target.javaClass, methodName) ?: return null
-        return runCatching { method.invoke(target) }.getOrNull()
-    }
+    private fun invokeNoArg(target: Any, method: Method?): Any? =
+        if (method != null && method.declaringClass.isInstance(target)) runCatching { method.invoke(target) }.getOrNull() else null
 
     private fun showToast(activity: Activity?, message: String) {
         val host = activity ?: return
@@ -1807,6 +1414,6 @@ object CollectionSearchHook {
 
     private fun isActivityAlive(activity: Activity): Boolean {
         if (activity.isFinishing) return false
-        return !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed)
+        return !activity.isDestroyed
     }
 }
