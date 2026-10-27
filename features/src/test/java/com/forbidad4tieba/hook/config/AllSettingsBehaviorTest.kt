@@ -122,7 +122,8 @@ class AllSettingsBehaviorTest {
                 // Project the renamed shared gate and retired material fields into the frozen baseline.
                 // The new gate's migration and independence are covered by the domain/feature-plan tests.
                 assertEquals(true, result.snapshot.bottomTabLiquidGlass.liquidGlassEnabled)
-                assertEquals(0, result.snapshot.bottomTabLiquidGlass.widthAdjustment)
+                assertEquals(0, result.snapshot.bottomTabLiquidGlass.homeWidthAdjustment)
+                assertEquals(0, result.snapshot.bottomTabLiquidGlass.replyWidthAdjustment)
                 assertEquals(0, result.snapshot.bottomTabLiquidGlass.heightAdjustment)
                 assertEquals(0, result.snapshot.bottomTabLiquidGlass.positionAdjustment)
                 assertEquals(20, result.snapshot.bottomTabLiquidGlass.blurPercent)

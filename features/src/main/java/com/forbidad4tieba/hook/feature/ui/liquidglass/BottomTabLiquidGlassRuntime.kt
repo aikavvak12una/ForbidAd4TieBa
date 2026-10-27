@@ -1001,7 +1001,7 @@ internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
         val minimum = state.artwork?.let { LiquidGlassBarMetrics.minimumColumnWidth(it, state.density) }
             ?: LiquidGlassBarMetrics.columnWidth(available, count, state.density, 0)
         val width = LiquidGlassBarMetrics.columnWidth(
-            available, count, state.density, state.config.widthAdjustment, minimum,
+            available, count, state.density, state.config.homeWidthAdjustment, minimum,
         )
         if (width <= 0) return false
         if (!state.floating) {

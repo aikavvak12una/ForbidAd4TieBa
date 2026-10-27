@@ -75,7 +75,7 @@ internal object PostReplyGlassGeometry {
         val minimumWidth = minimumWidth(actionCount, density)
         if (available < minimumWidth) return null
         val desired = available - 2 * (EDGE_MARGIN_DP * density).roundToInt()
-        val width = LiquidGlassBarMetrics.adjustedSize(desired, minimumWidth, available, config.widthAdjustment)
+        val width = LiquidGlassBarMetrics.adjustedSize(desired, minimumWidth, available, config.replyWidthAdjustment)
             ?: return null
         val baselineHeight = height(controlHeight, density, nativeHeight)
         val minimumHeight = maxOf((HEIGHT_DP * density).roundToInt(),

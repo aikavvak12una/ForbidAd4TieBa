@@ -3,14 +3,15 @@ package com.forbidad4tieba.hook.config
 import android.content.SharedPreferences
 import com.forbidad4tieba.hook.ui.UiText
 
-/** Both bars apply the same adjustments to their own default geometry. Zero restores the baseline. */
+/** Independent bar widths; height, position and materials are shared. Zero restores the baseline. */
 data class BottomTabLiquidGlassConfig(
-    val widthAdjustment: Int = 0,
+    val homeWidthAdjustment: Int = 0,
     val heightAdjustment: Int = 0,
     val positionAdjustment: Int = 0,
     val blurEnabled: Boolean = true,
     val liquidGlassEnabled: Boolean = true,
     val blurPercent: Int = 20,
+    val replyWidthAdjustment: Int = 0,
 ) {
     val needsBackdrop: Boolean get() = liquidGlassEnabled || (blurEnabled && blurPercent > 0)
 
@@ -22,7 +23,8 @@ data class BottomTabLiquidGlassConfig(
     }
 
     fun normalized(): BottomTabLiquidGlassConfig = copy(
-        widthAdjustment = widthAdjustment.coerceIn(MIN_ADJUSTMENT, MAX_ADJUSTMENT),
+        homeWidthAdjustment = homeWidthAdjustment.coerceIn(MIN_ADJUSTMENT, MAX_ADJUSTMENT),
+        replyWidthAdjustment = replyWidthAdjustment.coerceIn(MIN_ADJUSTMENT, MAX_ADJUSTMENT),
         heightAdjustment = heightAdjustment.coerceIn(MIN_ADJUSTMENT, MAX_ADJUSTMENT),
         positionAdjustment = positionAdjustment.coerceIn(MIN_ADJUSTMENT, MAX_ADJUSTMENT),
         blurPercent = blurPercent.coerceIn(0, MAX_BLUR_PERCENT),
@@ -32,7 +34,8 @@ data class BottomTabLiquidGlassConfig(
 /** Feature-specific persistence stays out of the shared ConfigManager container. */
 internal object BottomTabLiquidGlassPreferences {
     const val ENABLED = "floating_bottom_bar"
-    const val WIDTH_ADJUSTMENT = "floating_bottom_bar_width_adjustment"
+    const val HOME_WIDTH_ADJUSTMENT = "floating_bottom_bar_width_adjustment"
+    const val REPLY_WIDTH_ADJUSTMENT = "floating_post_reply_bar_width_adjustment"
     const val HEIGHT_ADJUSTMENT = "floating_bottom_bar_height_adjustment"
     const val POSITION_ADJUSTMENT = "floating_bottom_bar_position_adjustment"
     const val BLUR = "bottom_tab_liquid_glass_blur"
@@ -45,7 +48,8 @@ internal object BottomTabLiquidGlassPreferences {
         ENABLED, false, PreferenceUse.SWITCH, null,
         SwitchPresentation(UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_FLOATING, UiText.Settings.BOTTOM_TAB_LIQUID_GLASS_FLOATING_DESC),
     )
-    val WIDTH_ADJUSTMENT_SETTING = IntPreference(WIDTH_ADJUSTMENT, BottomTabLiquidGlassConfig.DEFAULT.widthAdjustment, PreferenceUse.FORM)
+    val HOME_WIDTH_ADJUSTMENT_SETTING = IntPreference(HOME_WIDTH_ADJUSTMENT, BottomTabLiquidGlassConfig.DEFAULT.homeWidthAdjustment, PreferenceUse.FORM)
+    val REPLY_WIDTH_ADJUSTMENT_SETTING = IntPreference(REPLY_WIDTH_ADJUSTMENT, BottomTabLiquidGlassConfig.DEFAULT.replyWidthAdjustment, PreferenceUse.FORM)
     val HEIGHT_ADJUSTMENT_SETTING = IntPreference(HEIGHT_ADJUSTMENT, BottomTabLiquidGlassConfig.DEFAULT.heightAdjustment, PreferenceUse.FORM)
     val POSITION_ADJUSTMENT_SETTING = IntPreference(POSITION_ADJUSTMENT, BottomTabLiquidGlassConfig.DEFAULT.positionAdjustment, PreferenceUse.FORM)
     val BLUR_PERCENT_SETTING = IntPreference(BLUR_PERCENT, BottomTabLiquidGlassConfig.DEFAULT.blurPercent, PreferenceUse.FORM)
@@ -64,7 +68,8 @@ internal object BottomTabLiquidGlassPreferences {
         POST_REPLY_BAR, false, PreferenceUse.LEGACY, null,
     )
     val preferences: List<Preference<*>> = listOf(
-        ENABLED_SETTING, WIDTH_ADJUSTMENT_SETTING, HEIGHT_ADJUSTMENT_SETTING, POSITION_ADJUSTMENT_SETTING,
+        ENABLED_SETTING, HOME_WIDTH_ADJUSTMENT_SETTING, REPLY_WIDTH_ADJUSTMENT_SETTING,
+        HEIGHT_ADJUSTMENT_SETTING, POSITION_ADJUSTMENT_SETTING,
         BLUR_SETTING, BLUR_PERCENT_SETTING,
         FLOATING_SETTING, LIQUID_GLASS_SETTING, POST_REPLY_BAR_SETTING,
     )
@@ -80,20 +85,30 @@ internal object BottomTabLiquidGlassPreferences {
 
     /** Migrate before the Tab master is initialized; only previously active bars opt in. */
     fun ensureInitialized(prefs: SharedPreferences) {
-        if (prefs.contains(ENABLED)) return
-        prefs.edit().putBoolean(ENABLED, isEnabled(prefs.readOnlyValues())).apply()
+        val initializeEnabled = !prefs.contains(ENABLED)
+        val migrateWidth = !prefs.contains(REPLY_WIDTH_ADJUSTMENT) && prefs.contains(HOME_WIDTH_ADJUSTMENT)
+        if (!initializeEnabled && !migrateWidth) return
+        val editor = prefs.edit()
+        if (initializeEnabled) editor.putBoolean(ENABLED, isEnabled(prefs.readOnlyValues()))
+        if (migrateWidth) editor.putInt(REPLY_WIDTH_ADJUSTMENT,
+            HOME_WIDTH_ADJUSTMENT_SETTING.read(prefs).coerceIn(
+                BottomTabLiquidGlassConfig.MIN_ADJUSTMENT, BottomTabLiquidGlassConfig.MAX_ADJUSTMENT))
+        editor.apply()
     }
 
     fun read(prefs: SharedPreferences): BottomTabLiquidGlassConfig = read(prefs.readOnlyValues())
 
     fun read(prefs: SettingsValues): BottomTabLiquidGlassConfig {
+        val homeWidth = HOME_WIDTH_ADJUSTMENT_SETTING.read(prefs)
         return BottomTabLiquidGlassConfig(
-            widthAdjustment = WIDTH_ADJUSTMENT_SETTING.read(prefs),
+            homeWidthAdjustment = homeWidth,
             heightAdjustment = HEIGHT_ADJUSTMENT_SETTING.read(prefs),
             positionAdjustment = POSITION_ADJUSTMENT_SETTING.read(prefs),
             blurEnabled = BLUR_SETTING.read(prefs),
             liquidGlassEnabled = LIQUID_GLASS_SETTING.read(prefs),
             blurPercent = BLUR_PERCENT_SETTING.read(prefs),
+            replyWidthAdjustment = if (prefs.contains(REPLY_WIDTH_ADJUSTMENT))
+                REPLY_WIDTH_ADJUSTMENT_SETTING.read(prefs) else homeWidth,
         ).normalized()
     }
 
@@ -101,7 +116,8 @@ internal object BottomTabLiquidGlassPreferences {
     fun save(prefs: SharedPreferences, config: BottomTabLiquidGlassConfig) {
         val value = config.normalized()
         prefs.edit()
-            .putInt(WIDTH_ADJUSTMENT, value.widthAdjustment)
+            .putInt(HOME_WIDTH_ADJUSTMENT, value.homeWidthAdjustment)
+            .putInt(REPLY_WIDTH_ADJUSTMENT, value.replyWidthAdjustment)
             .putInt(HEIGHT_ADJUSTMENT, value.heightAdjustment)
             .putInt(POSITION_ADJUSTMENT, value.positionAdjustment)
             .putBoolean(BLUR, value.blurEnabled)

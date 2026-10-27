@@ -34,7 +34,8 @@ class EffectiveSettingsPolicyTest {
         for (enabled in listOf(false, true)) {
             val values = mapOf<String, Any>(
                 BottomTabLiquidGlassPreferences.ENABLED to enabled,
-                BottomTabLiquidGlassPreferences.WIDTH_ADJUSTMENT to 100,
+                BottomTabLiquidGlassPreferences.HOME_WIDTH_ADJUSTMENT to 100,
+                BottomTabLiquidGlassPreferences.REPLY_WIDTH_ADJUSTMENT to -100,
                 BottomTabLiquidGlassPreferences.HEIGHT_ADJUSTMENT to -50,
                 BottomTabLiquidGlassPreferences.POSITION_ADJUSTMENT to 35,
                 BottomTabLiquidGlassPreferences.BLUR_PERCENT to 0,
@@ -42,7 +43,7 @@ class EffectiveSettingsPolicyTest {
             val state = EffectiveSettingsPolicy.derive(UserSettings(values),
                 HostCapabilities(emptyMap()), RemoteSettingsPolicy(false)).snapshot
             assertEquals(enabled, state.isFloatingBottomBarEnabled)
-            assertEquals(if (enabled) BottomTabLiquidGlassConfig(100, -50, 35, blurPercent = 0)
+            assertEquals(if (enabled) BottomTabLiquidGlassConfig(100, -50, 35, blurPercent = 0, replyWidthAdjustment = -100)
                 else BottomTabLiquidGlassConfig.DEFAULT, state.bottomTabLiquidGlass)
         }
     }

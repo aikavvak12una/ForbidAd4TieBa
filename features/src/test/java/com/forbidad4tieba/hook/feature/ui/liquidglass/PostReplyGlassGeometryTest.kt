@@ -206,13 +206,16 @@ class PostReplyGlassGeometryTest {
         assertFalse(PostReplyGlassGeometry.shouldFloat(true, true, false, true))
     }
 
-    @Test fun sharedWidthAffectsTheWholeReplyGroupAndBlurDoesNot() {
-        assertEquals(435, bounds(config = BottomTabLiquidGlassConfig(widthAdjustment = -100))!!.width)
+    @Test fun replyWidthAffectsTheWholeGroupIndependentlyOfHomeAndBlur() {
+        assertEquals(435, bounds(config = BottomTabLiquidGlassConfig(replyWidthAdjustment = -100))!!.width)
         assertEquals(624, bounds()!!.width)
-        assertEquals(720, bounds(config = BottomTabLiquidGlassConfig(widthAdjustment = 100))!!.width)
+        assertEquals(720, bounds(config = BottomTabLiquidGlassConfig(replyWidthAdjustment = 100))!!.width)
         for (adjustment in -100..100) {
-            val choice = BottomTabLiquidGlassConfig(widthAdjustment = adjustment)
+            val choice = BottomTabLiquidGlassConfig(replyWidthAdjustment = adjustment)
             val box = bounds(config = choice)!!
+            for (homeWidth in listOf(-100, 0, 100)) {
+                assertEquals(box, bounds(config = choice.copy(homeWidthAdjustment = homeWidth)))
+            }
             val split = PostReplyGlassGeometry.separate(box.width, 3, 2f)!!
             assertEquals(0.618f, split.inputWidth.toFloat() / (box.width - 16), 0.003f)
             for (blur in listOf(0, 25, 100)) assertEquals(box, bounds(config = choice.copy(blurPercent = blur)))

@@ -54,12 +54,20 @@ internal object BottomTabLiquidGlassDialog {
                 onValueCommitted = { save(savedConfig.copy(blurPercent = it)) },
                 format = UiText.Settings::liquidGlassPercent,
             )
-            val width = slider(
-                root, UiText.Settings.FLOATING_BAR_WIDTH,
+            val homeWidth = slider(
+                root, UiText.Settings.FLOATING_HOME_BAR_WIDTH,
                 UiText.Settings.FLOATING_BAR_WIDTH_DESC,
                 BottomTabLiquidGlassConfig.MIN_ADJUSTMENT,
-                BottomTabLiquidGlassConfig.MAX_ADJUSTMENT, initial.widthAdjustment,
-                onValueCommitted = { save(savedConfig.copy(widthAdjustment = it)) },
+                BottomTabLiquidGlassConfig.MAX_ADJUSTMENT, initial.homeWidthAdjustment,
+                onValueCommitted = { save(savedConfig.copy(homeWidthAdjustment = it)) },
+                format = UiText.Settings::liquidGlassAdjustment,
+            )
+            val replyWidth = slider(
+                root, UiText.Settings.FLOATING_REPLY_BAR_WIDTH,
+                UiText.Settings.FLOATING_BAR_WIDTH_DESC,
+                BottomTabLiquidGlassConfig.MIN_ADJUSTMENT,
+                BottomTabLiquidGlassConfig.MAX_ADJUSTMENT, initial.replyWidthAdjustment,
+                onValueCommitted = { save(savedConfig.copy(replyWidthAdjustment = it)) },
                 format = UiText.Settings::liquidGlassAdjustment,
             )
             val height = slider(
@@ -109,7 +117,8 @@ internal object BottomTabLiquidGlassDialog {
                         blur.isChecked = defaults.blurEnabled
                         liquidGlass.isChecked = defaults.liquidGlassEnabled
                         blurAmount.progress = defaults.blurPercent
-                        width.progress = defaults.widthAdjustment - BottomTabLiquidGlassConfig.MIN_ADJUSTMENT
+                        homeWidth.progress = defaults.homeWidthAdjustment - BottomTabLiquidGlassConfig.MIN_ADJUSTMENT
+                        replyWidth.progress = defaults.replyWidthAdjustment - BottomTabLiquidGlassConfig.MIN_ADJUSTMENT
                         height.progress = defaults.heightAdjustment - BottomTabLiquidGlassConfig.MIN_ADJUSTMENT
                     } finally {
                         restoringDefaults = false

@@ -6,10 +6,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BottomTabLiquidGlassConfigTest {
-    @Test fun defaultSlidersAreCentredAndShareBothBars() {
+    @Test fun defaultSlidersAreCentredForBothBars() {
         val config = BottomTabLiquidGlassPreferences.read(preferences(mutableMapOf()))
         assertEquals(BottomTabLiquidGlassConfig.DEFAULT, config)
-        assertEquals(listOf(0, 0, 0), listOf(config.widthAdjustment, config.heightAdjustment, config.positionAdjustment))
+        assertEquals(listOf(0, 0, 0, 0), listOf(config.homeWidthAdjustment, config.replyWidthAdjustment,
+            config.heightAdjustment, config.positionAdjustment))
     }
 
     @Test fun onlyNewFieldsControlGeometryAndMissingFieldsNeverRestoreLegacyValues() {
@@ -21,10 +22,11 @@ class BottomTabLiquidGlassConfigTest {
         )
         val prefs = preferences(oldValues)
         assertEquals(BottomTabLiquidGlassConfig.DEFAULT, BottomTabLiquidGlassPreferences.read(prefs))
-        oldValues[BottomTabLiquidGlassPreferences.WIDTH_ADJUSTMENT] = -40
+        oldValues[BottomTabLiquidGlassPreferences.HOME_WIDTH_ADJUSTMENT] = -40
         oldValues[BottomTabLiquidGlassPreferences.HEIGHT_ADJUSTMENT] = 25
         oldValues[BottomTabLiquidGlassPreferences.POSITION_ADJUSTMENT] = -100
-        assertEquals(BottomTabLiquidGlassConfig(widthAdjustment = -40, heightAdjustment = 25, positionAdjustment = -100),
+        assertEquals(BottomTabLiquidGlassConfig(homeWidthAdjustment = -40, replyWidthAdjustment = -40,
+            heightAdjustment = 25, positionAdjustment = -100),
             BottomTabLiquidGlassPreferences.read(prefs))
         prefs.edit().clear().commit()
         assertEquals(BottomTabLiquidGlassConfig.DEFAULT, BottomTabLiquidGlassPreferences.read(prefs))
@@ -35,10 +37,10 @@ class BottomTabLiquidGlassConfigTest {
     @Test fun allAdjustmentsAndMaterialsRoundTripWithoutChangingEnablement() {
         val values = mutableMapOf<String, Any>("unrelated" to true, BottomTabLiquidGlassPreferences.ENABLED to false)
         val prefs = preferences(values)
-        for (width in listOf(-100, 0, 100)) for (height in listOf(-100, 0, 100)) {
+        for (width in listOf(-100, 0, 100)) for (replyWidth in listOf(-100, 0, 100)) for (height in listOf(-100, 0, 100)) {
             for (position in listOf(-100, 0, 100)) for (blur in listOf(false, true)) for (glass in listOf(false, true)) {
                 for (amount in listOf(0, 25, 100)) {
-                    val choice = BottomTabLiquidGlassConfig(width, height, position, blur, glass, amount)
+                    val choice = BottomTabLiquidGlassConfig(width, height, position, blur, glass, amount, replyWidth)
                     BottomTabLiquidGlassPreferences.save(prefs, choice)
                     assertEquals(choice, BottomTabLiquidGlassPreferences.read(prefs))
                     assertFalse(BottomTabLiquidGlassPreferences.isEnabled(prefs.readOnlyValues()))
@@ -52,17 +54,19 @@ class BottomTabLiquidGlassConfigTest {
 
     @Test fun adjustmentBoundsApplyOnReadAndSave() {
         val values = mutableMapOf<String, Any>(
-            BottomTabLiquidGlassPreferences.WIDTH_ADJUSTMENT to Int.MIN_VALUE,
+            BottomTabLiquidGlassPreferences.HOME_WIDTH_ADJUSTMENT to Int.MIN_VALUE,
+            BottomTabLiquidGlassPreferences.REPLY_WIDTH_ADJUSTMENT to Int.MAX_VALUE,
             BottomTabLiquidGlassPreferences.HEIGHT_ADJUSTMENT to Int.MAX_VALUE,
             BottomTabLiquidGlassPreferences.POSITION_ADJUSTMENT to Int.MIN_VALUE,
             BottomTabLiquidGlassPreferences.BLUR_PERCENT to Int.MAX_VALUE,
         )
         val prefs = preferences(values)
-        assertEquals(BottomTabLiquidGlassConfig(-100, 100, -100, blurPercent = 100),
+        assertEquals(BottomTabLiquidGlassConfig(-100, 100, -100, blurPercent = 100, replyWidthAdjustment = 100),
             BottomTabLiquidGlassPreferences.read(prefs))
         BottomTabLiquidGlassPreferences.save(prefs,
-            BottomTabLiquidGlassConfig(Int.MAX_VALUE, Int.MIN_VALUE, Int.MAX_VALUE, blurPercent = -1))
-        assertEquals(BottomTabLiquidGlassConfig(100, -100, 100, blurPercent = 0),
+            BottomTabLiquidGlassConfig(Int.MAX_VALUE, Int.MIN_VALUE, Int.MAX_VALUE, blurPercent = -1,
+                replyWidthAdjustment = Int.MIN_VALUE))
+        assertEquals(BottomTabLiquidGlassConfig(100, -100, 100, blurPercent = 0, replyWidthAdjustment = -100),
             BottomTabLiquidGlassPreferences.read(prefs))
     }
 
@@ -70,7 +74,8 @@ class BottomTabLiquidGlassConfigTest {
         val values = mutableMapOf<String, Any>()
         BottomTabLiquidGlassPreferences.save(preferences(values), BottomTabLiquidGlassConfig.DEFAULT)
         assertEquals(setOf(
-            BottomTabLiquidGlassPreferences.WIDTH_ADJUSTMENT,
+            BottomTabLiquidGlassPreferences.HOME_WIDTH_ADJUSTMENT,
+            BottomTabLiquidGlassPreferences.REPLY_WIDTH_ADJUSTMENT,
             BottomTabLiquidGlassPreferences.HEIGHT_ADJUSTMENT,
             BottomTabLiquidGlassPreferences.POSITION_ADJUSTMENT,
             BottomTabLiquidGlassPreferences.BLUR,
@@ -116,6 +121,40 @@ class BottomTabLiquidGlassConfigTest {
             assertEquals(before, values)
             assertEquals(enabled, BottomTabLiquidGlassPreferences.isEnabled(prefs.readOnlyValues()))
         }
+    }
+
+    @Test fun sharedWidthMigratesOnceIncludingAlreadyInitializedOrDisabledBars() {
+        for (enabled in listOf(false, true)) for (width in listOf(-100, 43, 100, Int.MAX_VALUE)) {
+            val values = mutableMapOf<String, Any>(BottomTabLiquidGlassPreferences.ENABLED to enabled,
+                BottomTabLiquidGlassPreferences.HOME_WIDTH_ADJUSTMENT to width, "unrelated" to 7)
+            val prefs = preferences(values)
+            val oldStyle = BottomTabLiquidGlassPreferences.read(prefs)
+            BottomTabLiquidGlassPreferences.ensureInitialized(prefs)
+            assertEquals(oldStyle, BottomTabLiquidGlassPreferences.read(prefs))
+            assertEquals(width.coerceIn(-100, 100), values[BottomTabLiquidGlassPreferences.REPLY_WIDTH_ADJUSTMENT])
+            values[BottomTabLiquidGlassPreferences.HOME_WIDTH_ADJUSTMENT] = -37
+            BottomTabLiquidGlassPreferences.ensureInitialized(prefs)
+            assertEquals(width.coerceIn(-100, 100), BottomTabLiquidGlassPreferences.read(prefs).replyWidthAdjustment)
+            assertEquals(enabled, values[BottomTabLiquidGlassPreferences.ENABLED])
+            assertEquals(7, values["unrelated"])
+        }
+    }
+
+    @Test fun firstHomeEditPreservesOldReplyWidthAndLaterEditsAreIndependent() {
+        val values = mutableMapOf<String, Any>(BottomTabLiquidGlassPreferences.HOME_WIDTH_ADJUSTMENT to -70)
+        val prefs = preferences(values)
+        val old = BottomTabLiquidGlassPreferences.read(prefs)
+        BottomTabLiquidGlassPreferences.save(prefs, old.copy(homeWidthAdjustment = 60))
+        val changedHome = BottomTabLiquidGlassPreferences.read(prefs)
+        assertEquals(60, changedHome.homeWidthAdjustment)
+        assertEquals(-70, changedHome.replyWidthAdjustment)
+        BottomTabLiquidGlassPreferences.save(prefs, changedHome.copy(replyWidthAdjustment = 0))
+        BottomTabLiquidGlassPreferences.ensureInitialized(prefs)
+        val changedReply = BottomTabLiquidGlassPreferences.read(prefs)
+        assertEquals(60, changedReply.homeWidthAdjustment)
+        assertEquals(0, changedReply.replyWidthAdjustment)
+        BottomTabLiquidGlassPreferences.save(prefs, BottomTabLiquidGlassConfig.DEFAULT)
+        assertEquals(BottomTabLiquidGlassConfig.DEFAULT, BottomTabLiquidGlassPreferences.read(prefs))
     }
 
     private fun preferences(values: MutableMap<String, Any>): SharedPreferences {
