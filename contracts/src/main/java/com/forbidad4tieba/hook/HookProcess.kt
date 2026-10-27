@@ -20,6 +20,12 @@ object HookProcess {
         return isMain(processName) || isImageViewerRemote(processName)
     }
 
+    /** Playback services declared by the current host; voice and unrelated workers stay outside. */
+    fun isVideoPlaybackProcess(processName: String): Boolean =
+        isImageViewerProcess(processName) ||
+            processName == Constants.TARGET_PACKAGE + ":media" ||
+            processName == Constants.TARGET_PACKAGE + ":nadmedia"
+
     fun isTargetTiebaProcess(processName: String): Boolean {
         return isMain(processName) || processName.startsWith("${Constants.TARGET_PACKAGE}:")
     }

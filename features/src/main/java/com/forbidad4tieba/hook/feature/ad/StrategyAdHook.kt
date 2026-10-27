@@ -107,15 +107,6 @@ object StrategyAdHook {
             "bear_wxb_download",
             "pref_key_fun_ad_sdk_enable"
         )
-        val adRuntimeBlockedKeys = adContentBlockedKeys + setOf(
-            "platform_csj_init",
-            "platform_gdt_init",
-            "platform_ks_init",
-            "platform_ubix_init",
-            "12_30_fun_sdk_init_switch"
-        )
-        val apsarasBlockedKeys = setOf("apsaras_switch")
-
         val method = MemberAccess.findMethodOrNull(
             smClass,
             StableTiebaHookPoints.METHOD_FIND_TYPE,
@@ -129,12 +120,7 @@ object StrategyAdHook {
             RuntimeHooks.builder(mod, method, "StrategyAdHook", "hookSwitchManager:method").intercept { chain ->
                 val key = chain.args.firstOrNull() as? String
                 val settings = ConfigManager.snapshot()
-                val shouldBlock = when {
-                    settings.isStrategyAdBlockEnabled && key in adContentBlockedKeys -> true
-                    settings.isAdSdkComponentsDisabled && key in adRuntimeBlockedKeys -> true
-                    settings.isApsarasScheduleDisabled && key in apsarasBlockedKeys -> true
-                    else -> false
-                }
+                val shouldBlock = settings.isStrategyAdBlockEnabled && key in adContentBlockedKeys
                 if (shouldBlock) {
                     XposedCompat.logD { "[StrategyAdHook] > findType blocked key=$key" }
                     return@intercept 0

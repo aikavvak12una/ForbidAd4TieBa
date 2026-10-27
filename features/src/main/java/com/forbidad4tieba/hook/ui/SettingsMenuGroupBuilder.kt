@@ -223,31 +223,11 @@ internal object SettingsMenuGroupBuilder {
 
     private fun performanceGroups(): List<SettingGroup> = listOf(
         SettingGroup(
-            UiText.Settings.PERFORMANCE_GROUP_HOST_RUNTIME,
+            UiText.Settings.GROUP_PERFORMANCE,
             listOf(
-                SwitchItem(PerformancePreferences.FORCE_HOST_PERFORMANCE_FLAGS),
-                SwitchItem(PerformancePreferences.DISABLE_HOST_SLIDE_ANIMATION),
-                SwitchItem(PerformancePreferences.FORCE_LOW_END_DEVICE_CONFIG),
-                SwitchItem(PerformancePreferences.DISABLE_APSARAS_SCHEDULE),
-                SwitchItem(PerformancePreferences.ENABLE_PB_PERFORMANCE_MODE),
-                SwitchItem(PerformancePreferences.ENABLE_PB_SCROLL_COALESCE),
-            ),
-        ),
-        SettingGroup(
-            UiText.Settings.PERFORMANCE_GROUP_STARTUP,
-            listOf(
+                SwitchItem(PerformancePreferences.COOKIE_SYNC_DEDUP),
                 SwitchItem(PerformancePreferences.DISABLE_AD_SDK_COMPONENTS),
-                SwitchItem(PerformancePreferences.FORCE_HOST_FEED_COLD_OPT),
-                SwitchItem(PerformancePreferences.DISABLE_FLUTTER_PREINIT),
-                SwitchItem(PerformancePreferences.BLOCK_TITAN_PATCH),
-            ),
-        ),
-        SettingGroup(
-            UiText.Settings.PERFORMANCE_GROUP_COMPONENT,
-            listOf(
-                SwitchItem(PerformancePreferences.DISABLE_AI_COMPONENTS),
                 SwitchItem(PerformancePreferences.DISABLE_VIDEO_COMPONENTS),
-                SwitchItem(PerformancePreferences.DISABLE_MONITOR_SYNC_COMPONENTS),
             ),
         ),
     )

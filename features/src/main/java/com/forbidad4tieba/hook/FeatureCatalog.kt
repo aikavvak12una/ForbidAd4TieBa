@@ -3,7 +3,6 @@ package com.forbidad4tieba.hook
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.feature.comment.CommentLevelFilterFeature
 import com.forbidad4tieba.hook.feature.comment.CommentShortcutFeature
-import com.forbidad4tieba.hook.feature.comment.InlineReplyRepairFeature
 import com.forbidad4tieba.hook.feature.account.AccountListDedupFeature
 import com.forbidad4tieba.hook.feature.ad.FeedAdFeature
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogFeature
@@ -22,9 +21,9 @@ import com.forbidad4tieba.hook.feature.diagnostic.ReplyServerResponseLogFeature
 import com.forbidad4tieba.hook.feature.diagnostic.ReplyVisibilityProbeFeature
 import com.forbidad4tieba.hook.feature.diagnostic.TiebaHostLogFeature
 import com.forbidad4tieba.hook.feature.im.PrivateReadReceiptBlockFeature
-import com.forbidad4tieba.hook.feature.perf.AiComponentDisableFeature
-import com.forbidad4tieba.hook.feature.perf.AiImageViewerJumpButtonFeature
+import com.forbidad4tieba.hook.feature.ad.PostPageAdAbFeature
 import com.forbidad4tieba.hook.feature.perf.PerformanceFeature
+import com.forbidad4tieba.hook.feature.perf.VideoComponentsFeature
 import com.forbidad4tieba.hook.feature.privacy.CrashReportBlockFeature
 import com.forbidad4tieba.hook.feature.share.ImageViewerNativeShareFeature
 import com.forbidad4tieba.hook.feature.share.ShareTrackingParamCleanerFeature
@@ -61,7 +60,6 @@ import com.forbidad4tieba.hook.feature.ui.PbTopEnterBarBlockFeature
 import com.forbidad4tieba.hook.feature.ui.PbCommentAutoLoadFeature
 import com.forbidad4tieba.hook.feature.ui.PbDisableGestureFontScaleFeature
 import com.forbidad4tieba.hook.feature.ui.PbLikeAutoReplyFeature
-import com.forbidad4tieba.hook.feature.ui.PbScrollCoalesceFeature
 import com.forbidad4tieba.hook.feature.ui.UpgradePopWindowBlockFeature
 import com.forbidad4tieba.hook.feature.ui.SystemSplashFeature
 import com.forbidad4tieba.hook.feature.ui.LaunchSplashFeature
@@ -97,7 +95,9 @@ internal object FeatureCatalog {
         BottomTabLiquidGlassFeature,
         PostReplyLiquidGlassFeature,
         BottomTabTopLineFeature,
+        PostPageAdAbFeature,
         PerformanceFeature,
+        VideoComponentsFeature,
         HelpCenterFooterBlockFeature,
         AccountListDedupFeature,
         MineTabWebBlockFeature,
@@ -107,7 +107,6 @@ internal object FeatureCatalog {
         DefaultOriginalImageFeature,
         DefaultLzlEarliestFeature,
         ImageViewerSwipeEnterForumBlockFeature,
-        AiImageViewerJumpButtonFeature,
         SettingsMenuFeature,
         HomeSideBarSettingsEntryFeature,
         PbBottomEnterBarStableFeature,
@@ -133,11 +132,9 @@ internal object FeatureCatalog {
         AutoRefreshFeature,
         AutoLoadMoreFeature,
         PbCommentAutoLoadFeature,
-        PbScrollCoalesceFeature,
         PbDisableGestureFontScaleFeature,
         PbLikeAutoReplyFeature,
         InputMemeBarBlockFeature,
-        AiComponentDisableFeature,
         MsgTabDefaultNotifyFeature,
         PrivateReadReceiptBlockFeature,
         CollectionSearchFeature,
@@ -150,14 +147,13 @@ internal object FeatureCatalog {
         CommentAvatarDirectProfileFeature,
         CommentLevelFilterFeature,
         CommentShortcutFeature,
-        InlineReplyRepairFeature,
     )
 
     fun shouldHandleProcess(processName: String): Boolean =
         shouldInstallAttachHook(processName) || !staticPlan(processName).isEmpty()
 
     fun shouldInstallAttachHook(processName: String): Boolean =
-        HookProcess.isMain(processName) || HookProcess.isImageViewerRemote(processName)
+        HookProcess.isVideoPlaybackProcess(processName)
 
     fun staticPlan(processName: String): HookInstallPlan =
         plan(FeaturePhase.STATIC, processName, null, SettingsSnapshot.bootstrap())

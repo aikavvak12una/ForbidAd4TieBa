@@ -289,7 +289,6 @@ object UiText {
         const val CRASH_REPORT_BLOCK_LABEL = "阻断崩溃与异常上报"
         const val BLOCK_FIRST_LIKE_POPUP_LABEL = "屏蔽首赞弹窗"
         const val BLOCK_NOTIFICATION_GUIDE_LABEL = "屏蔽开启通知引导"
-        const val INLINE_REPLY_REPAIR_LABEL = "优化楼中楼评论显示效果"
         const val COMMENT_SHORTCUT_LABEL = "评论屏蔽快捷开关"
         const val COMMENT_SHORTCUT_DESC = "在帖子排序栏显示目标屏蔽等级图标，点击后按配置项对当前帖子临时生效。\n* 该配置项不受上级屏蔽评论开关状态影响"
         fun commentShortcutDescription(level: Int, enabled: Boolean) =
@@ -306,7 +305,6 @@ object UiText {
             BLOCK_HOME_FEED_PROMPT_BAR_LABEL,
             BLOCK_FIRST_LIKE_POPUP_LABEL,
             BLOCK_NOTIFICATION_GUIDE_LABEL,
-            INLINE_REPLY_REPAIR_LABEL,
             COLLECTION_SEARCH_LABEL,
             HISTORY_SEARCH_LABEL,
             DISABLE_IMAGE_LEFT_SWIPE_FORUM_ENTRY_LABEL,
@@ -317,42 +315,21 @@ object UiText {
         ).joinToString("\n")
         const val AUTO_SIGN_IN_LABEL = "自动签到"
         const val AUTO_SIGN_IN_DESC = "启动时静默签到，失败时汇总提醒；点右侧查看结果或手动重试"
-        const val PERFORMANCE_OPTIMIZATION_DESC = "优化运行时性能消耗，可能造成功能异常"
+        const val PERFORMANCE_OPTIMIZATION_DESC = "按需减少重复同步和后台初始化工作。\n* 配置改变后，需强制停止贴吧再重新打开"
         const val PERFORMANCE_OPTIMIZATION_DIALOG_TITLE = "性能优化"
         const val PERFORMANCE_OPTIMIZATION_SAVED = "性能优化配置已保存"
-        const val PERFORMANCE_GROUP_HOST_RUNTIME = "运行时"
-        const val PERFORMANCE_GROUP_STARTUP = "启动与框架"
-        const val PERFORMANCE_GROUP_COMPONENT = "运行期阻断"
-        const val FORCE_HOST_PERFORMANCE_FLAGS_LABEL = "启用宿主轻量配置"
-        const val FORCE_HOST_PERFORMANCE_FLAGS_DESC = "强制官方冷启动 TTI、Idle、Cookie 降频、图片内存优化、吧页聊天等 8 个性能 AB 走轻量路径，减少启动期与空闲期主线程工作。\n* 个别功能可能延迟加载；图片采用宿主的低内存解码策略，渐变和透明效果需留意"
-        const val DISABLE_HOST_SLIDE_ANIMATION_LABEL = "关闭全局滑动动画"
-        const val DISABLE_HOST_SLIDE_ANIMATION_DESC = "强制关闭宿主云控的全局滑动动画（页面切换、列表滑动过渡），滑动更跟手、低端机帧率更稳。\n* 过渡动画消失，视觉切换变硬"
-        const val DISABLE_APSARAS_SCHEDULE_LABEL = "禁用飞天调度"
-        const val DISABLE_APSARAS_SCHEDULE_DESC = "关闭 Apsaras 调度 AB，避免 native 调度运行时和任务重排成本。\n* 后台任务调度回归默认策略"
-        const val DISABLE_FLUTTER_PREINIT_LABEL = "禁用 Flutter 预热"
-        const val DISABLE_FLUTTER_PREINIT_DESC = "阻止 Flutter NPS 插件在启动或 idle 阶段预初始化，省启动资源。\n* 首次进入 Flutter 相关页面会变慢"
-        const val FORCE_LOW_END_DEVICE_CONFIG_LABEL = "强制低端机精简"
-        const val FORCE_LOW_END_DEVICE_CONFIG_DESC = "强制设备分 -1 并按低端机精简：关闭 Feed 图片预取和 WebView 加载代理、禁止空闲任务重跑、延迟视频自动播放 5 秒。\n* Feed 图片滚动到才加载，视频自动播放变慢"
-        const val BLOCK_TITAN_PATCH_LABEL = "禁用热修复"
-        const val BLOCK_TITAN_PATCH_DESC = "阻止热修复框架加载补丁并清除已下载的补丁文件。\n* 仅排查异常时开启，保持关闭以接收官方修复"
+        const val COOKIE_SYNC_DEDUP_LABEL = "Cookie 同步去重"
+        const val COOKIE_SYNC_DEDUP_DESC = "减少创建 WebView 时重复执行的 Cookie 同步。\n* 登录态刷新出现异常时，请关闭本项并重启贴吧"
         const val PRIVATE_READ_RECEIPT_INVISIBLE_LABEL = "拦截已读检测"
         const val PRIVATE_READ_RECEIPT_INVISIBLE_DESC = "仅在回复后标记对面信息为已读状态"
         const val DEFAULT_ORIGINAL_IMAGE_LABEL = "默认查看原图"
         const val DEFAULT_ORIGINAL_IMAGE_DESC = "进入图片预览后自动查看原图"
         const val DEFAULT_LZL_EARLIEST_LABEL = "楼中楼默认最早排序"
         const val DEFAULT_LZL_EARLIEST_DESC = "打开楼中楼时默认按最早排序"
-        const val DISABLE_AI_COMPONENTS_LABEL = "禁用 AI 组件"
-        const val DISABLE_AI_COMPONENTS_DESC = "屏蔽回复页 AI 写回复、AI 萌图面板和图片查看器 AI 跳转按钮，减少对应渲染与入口开销。\n* 相关 AI 功能入口消失"
         const val DISABLE_AD_SDK_COMPONENTS_LABEL = "阻断广告 SDK 初始化"
-        const val DISABLE_AD_SDK_COMPONENTS_DESC = "运行期跳过穿山甲/快手/广点通广告 SDK 初始化与开屏广告开关，省内存与主线程初始化成本。\n* 相关广告位不再展示广告"
-        const val FORCE_HOST_FEED_COLD_OPT_LABEL = "首页框架与冷启网络优化"
-        const val FORCE_HOST_FEED_COLD_OPT_DESC = "强制官方「首页框架优化」与「冷启动网络数据优化」AB 生效：首页框架按优化路径构建、冷启动网络请求精简合并。\n* 首页个别模块按新框架渲染，若遇异常可关闭本项"
-        const val DISABLE_VIDEO_COMPONENTS_LABEL = "关闭视频预加载"
-        const val DISABLE_VIDEO_COMPONENTS_DESC = "运行期关闭信息流视频预加载和预连接，减少网络与内存占用。\n* 滑动到视频时首帧等待变长，视频播放本身不受影响"
-        const val PB_PERFORMANCE_MODE_LABEL = "帖子页性能优化"
-        const val PB_PERFORMANCE_MODE_DESC = "启用帖子页轻量分支：hybrid 优化、关闭图片性能日志与 PB 广告实验"
-        const val PB_SCROLL_COALESCE_LABEL = "合并帖子页滚动回调"
-        const val PB_SCROLL_COALESCE_DESC = "在评论列表滚动回调中合并过密的刷新请求，降低帖子页滑动时的主线程压力。\n* 极快滚动时「加载更多」可能略微滞后，近底部 20 条不合并"
+        const val DISABLE_AD_SDK_COMPONENTS_DESC = "阻断穿山甲、广点通和百度广告渠道的初始化，减少对应启动和后台资源开销。\n* 对应广告和激励功能不可用\n* 「禁用视频功能」开启时，相关广告渠道也会被停用"
+        const val DISABLE_VIDEO_COMPONENTS_LABEL = "禁用视频功能"
+        const val DISABLE_VIDEO_COMPONENTS_DESC = "阻止贴吧原生视频播放器内核初始化、播放器预热与 PCDN 初始化。\n* 会导致视频贴无法播放"
         const val DETAILED_LOGGING_LABEL = "输出详细日志"
         const val DETAILED_LOGGING_DESC = "从最近一次冷启动开始记录，需重启生效\n* 包含账号数据等敏感信息，勿随意分享"
         const val DETAILED_LOG_SAVE_ACTION_DESC = "正在保存日志"
@@ -361,8 +338,6 @@ object UiText {
         const val DETAILED_LOG_SAVE_NO_SESSION = "暂无日志；请开启详细日志后重启贴吧"
         const val DETAILED_LOG_SAVE_EMPTY = "本次尚未记录到日志"
         const val DETAILED_LOG_SAVE_FAILED = "日志保存失败"
-        const val MONITOR_SYNC_BLOCK_LABEL = "阻断统计与埋点上报"
-        const val MONITOR_SYNC_BLOCK_DESC = "阻断 Loki 统计服务、页面轨迹采集与百度统计自动采集，降低 CPU、内存、磁盘 IO 与网络开销。\n* 官方统计/功能优化数据缺失"
 
         const val ACTION_ICON_SETTINGS = "\u2630"
         const val ACTION_ICON_PLAY = "\u25b6"

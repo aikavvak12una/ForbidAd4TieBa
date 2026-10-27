@@ -5,12 +5,10 @@ internal object SymbolContracts {
     val all: List<SymbolContract> = listOf(
         CommentFilterContract,
         CommentShortcutContract,
-        InlineReplyContract,
         PerformanceContract,
-        TrackingContract,
+        VideoDisableContract,
         CrashReportContract,
         DefaultPopupsContract,
-        LowEndContract,
         ProfileContract,
         LoggingContract,
         PostPageAdContract,
@@ -56,7 +54,6 @@ internal object SymbolContracts {
         ReplyLogContract,
         AgreeLogContract,
         ReplyVisibilityContract,
-        AiContract,
     )
 
     init {

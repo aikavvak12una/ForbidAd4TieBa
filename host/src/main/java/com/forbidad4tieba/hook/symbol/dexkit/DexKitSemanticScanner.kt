@@ -8,7 +8,6 @@ import com.forbidad4tieba.hook.symbol.scan.HookSymbolScanSession
 import com.forbidad4tieba.hook.symbol.scan.AutoRefreshDexScanner
 import com.forbidad4tieba.hook.symbol.scan.EnterForumCapsuleDexScanner
 import com.forbidad4tieba.hook.symbol.scan.GameFloatingBarDexScanner
-import com.forbidad4tieba.hook.symbol.scan.PbPageBrowserAiEmojiDexScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import com.forbidad4tieba.hook.symbol.scan.selectUniqueScoredCandidate
 import org.luckypray.dexkit.DexKitBridge
@@ -671,83 +670,6 @@ internal object DexKitSemanticScanner {
             }
         }
 
-    fun scanAiWriteInit(
-        sourcePaths: List<String>,
-        ownerClassName: String,
-        logger: ScanLogger? = null,
-    ): List<DexAiComponentInitMatch> =
-        scanPbInputInit(sourcePaths, ownerClassName, logger, "AiComponentDisableHook.AiWriteDex") { method ->
-            val factory = method.invokes.filter {
-                Modifier.isStatic(it.modifiers) && it.returnTypeName == "android.widget.FrameLayout" &&
-                    it.paramTypeNames == listOf("android.content.Context") && it.invokes.any { helper ->
-                        "key_ai_write_button_first_show_red_dot" in helper.usingStrings
-                    }
-            }.distinctBy { it.descriptor }.singleOrNull() ?: return@scanPbInputInit null
-            val hasClick = method.invokes.any {
-                it.methodName == "setOnClickListener" && it.paramTypeNames == listOf("android.view.View\$OnClickListener")
-            }
-            val hasFrame = method.usingFields.any { it.usingType.isWrite() && it.field.typeName == factory.returnTypeName }
-            if (hasClick && hasFrame) {
-                DexAiComponentInitMatch(method.methodName, 200, "aiWritePreferenceFactory,frameWrite,click", strong = true)
-            } else null
-        }
-
-    fun scanSpriteMemeInit(
-        sourcePaths: List<String>,
-        ownerClassName: String,
-        logger: ScanLogger? = null,
-    ): List<DexAiComponentInitMatch> =
-        scanPbInputInit(sourcePaths, ownerClassName, logger, "AiComponentDisableHook.SpriteMemeDex") { method ->
-            var score = 0
-            val evidence = ArrayList<String>(5)
-            if (method.invokes.any { it.declaredClassName == "com.baidu.tbadk.editortools.meme.pan.SpriteMemePan" }) {
-                score += 150
-                evidence += "spriteMemePan"
-            }
-            if (method.usingStrings.any { it.contains("SpriteMeme", ignoreCase = true) || it.contains("meme") }) {
-                score += 50
-                evidence += "memeString"
-            }
-            if (method.usingFields.any { it.field.typeName == "com.baidu.tbadk.editortools.meme.pan.SpriteMemePan" }) {
-                score += 60
-                evidence += "panField"
-            }
-            score.takeIf { it >= 110 }?.let {
-                DexAiComponentInitMatch(method.methodName, it, evidence.joinToString(","))
-            }
-        }
-
-    fun scanImageViewerJumpButtonInit(
-        sourcePaths: List<String>,
-        ownerClassName: String,
-        logger: ScanLogger? = null,
-    ): List<DexAiComponentInitMatch> =
-        withBridge(sourcePaths, logger, "AiComponentDisableHook.ImageViewerJumpButtonDex", emptyList()) { bridge ->
-            exactMethods(bridge, ownerClassName, logger).mapNotNull { method ->
-                if (method.returnTypeName != "void" || method.paramCount != 0) return@mapNotNull null
-                var score = 0
-                val evidence = ArrayList<String>(5)
-                if (method.usingFields.any { it.field.typeName == "com.baidu.tbadk.coreExtra.view.ImageJumpButtonLayout" }) {
-                    score += 120
-                    evidence += "layoutField"
-                }
-                if (method.invokes.any { it.declaredClassName == "com.baidu.tbadk.coreExtra.view.ImageJumpButtonLayout" }) {
-                    score += 90
-                    evidence += "layoutInvoke"
-                }
-                if (method.invokes.any { it.methodName == "setVisibility" }) {
-                    score += 45
-                    evidence += "visibility"
-                }
-                if (method.invokes.any { it.methodName == "setOnClickListener" }) {
-                    score += 35
-                    evidence += "click"
-                }
-                if (score < 90) return@mapNotNull null
-                DexAiComponentInitMatch(method.methodName, score, evidence.joinToString(","))
-            }
-        }
-
     fun scanGameFloatingBar(
         sourcePaths: List<String>,
         logger: ScanLogger? = null,
@@ -765,23 +687,6 @@ internal object DexKitSemanticScanner {
                 { it.score }, { "${it.controllerClassName}#${it.showMethodName}" })
         }
 
-    fun scanPbPageBrowserAiEmojiCreation(
-        sourcePaths: List<String>,
-        logger: ScanLogger? = null,
-    ): DexPbPageBrowserAiEmojiCreationMatch? =
-        withBridge(sourcePaths, logger, "AiComponentDisableHook.PbPageBrowserAiEmojiCreationDex") { bridge ->
-            val candidates = bridge.findMethod(
-                FindMethod.create().searchPackages("com.baidu.tieba").matcher(
-                    MethodMatcher.create().returnType("void").paramCount(1).addEqString("uiState").addInvoke(
-                        MethodMatcher.create().declaredClass("com.baidu.tieba.pb.view.PbAiEmojiCreationView")
-                            .name("getCapsuleView"),
-                    ),
-                ),
-            ).mapNotNull(PbPageBrowserAiEmojiDexScanner::match)
-            selectUniqueScoredCandidate("AiComponentDisableHook.PbPageBrowserAiEmojiCreationDex", candidates, 300, 24, logger,
-                { it.score }, { "${it.viewClassName}#${it.bindMethodName}" })
-        }
-
     fun scanEnterForumCapsules(
         sourcePaths: List<String>,
         ownerClassNames: List<String>,
@@ -796,18 +701,6 @@ internal object DexKitSemanticScanner {
                 }
             }.filterValues { it.isNotEmpty() }
         }
-
-    private fun scanPbInputInit(
-        sourcePaths: List<String>,
-        ownerClassName: String,
-        logger: ScanLogger?,
-        tag: String,
-        scorer: (MethodData) -> DexAiComponentInitMatch?,
-    ): List<DexAiComponentInitMatch> = withBridge(sourcePaths, logger, tag, emptyList()) { bridge ->
-        exactMethods(bridge, ownerClassName, logger)
-            .filter { it.returnTypeName == "void" && it.paramTypeNames == listOf("android.content.Context") }
-            .mapNotNull(scorer)
-    }
 
     private inline fun <T> withBridge(
         sourcePaths: List<String>,

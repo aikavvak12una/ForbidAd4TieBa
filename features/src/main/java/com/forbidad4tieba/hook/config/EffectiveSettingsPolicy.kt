@@ -18,13 +18,6 @@ import com.forbidad4tieba.hook.config.TabPreferences.readHomeTopTabDisabledKeys
 
 /** Derives runtime state without reading storage, publishing settings, or applying policy effects. */
 internal object EffectiveSettingsPolicy {
-    /** Titan runs before normal initialization and has no scan-dependent capability. */
-    fun isTitanPatchBlockEnabled(values: SettingsValues, restrictedFeaturesLocked: Boolean): Boolean =
-        !restrictedFeaturesLocked &&
-            AccountPreferences.RESTRICTED_FEATURES_UNLOCKED.read(values) &&
-            PerformancePreferences.ENABLE_PERFORMANCE_OPTIMIZATION.read(values) &&
-            PerformancePreferences.BLOCK_TITAN_PATCH.read(values)
-
     fun derive(p: UserSettings, capabilities: HostCapabilities, remote: RemoteSettingsPolicy): SettingsEvaluation {
         val restrictedUnlocked =
             AccountPreferences.RESTRICTED_FEATURES_UNLOCKED.read(p) && !remote.restrictedFeaturesLocked
@@ -111,7 +104,6 @@ internal object EffectiveSettingsPolicy {
                 mineEnabled = false,
             )
         }
-        val monitorSyncComponentsDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_MONITOR_SYNC_COMPONENTS)
 
         val snapshot = SettingsSnapshot(
             areRestrictedFeaturesUnlocked = restrictedUnlocked,
@@ -179,25 +171,15 @@ internal object EffectiveSettingsPolicy {
                 MIN_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
                 MAX_REPLY_VISIBILITY_PROBE_INTERVAL_MS,
             ),
-            isPbScrollCoalesceEnabled = performanceChildBoolean(PerformancePreferences.ENABLE_PB_SCROLL_COALESCE),
             isDefaultNotifyTabEnabled = featureBoolean(ExtensionPreferences.DEFAULT_NOTIFY_TAB),
             simpleToggles = SimpleToggle.enabledBy(p, capabilities),
             isAutoSignInEnabled = restrictedBoolean(AccountPreferences.ENABLE_AUTO_SIGN_IN),
             isCleanShareTrackingParamsEnabled = featureBoolean(ExtensionPreferences.CLEAN_SHARE_TRACKING_PARAMS),
-            isAiComponentsDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_AI_COMPONENTS),
             isCustomPostFilterEnabled = customPostFilterEnabled,
             isAdSdkComponentsDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_AD_SDK_COMPONENTS),
             isVideoComponentsDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_VIDEO_COMPONENTS),
-            isMonitorSyncComponentsDisabled = monitorSyncComponentsDisabled,
-            isPbPerformanceModeEnabled = performanceChildBoolean(PerformancePreferences.ENABLE_PB_PERFORMANCE_MODE),
-            isHostSlideAnimationDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_HOST_SLIDE_ANIMATION),
-            isHostFeedColdOptEnabled = performanceChildBoolean(PerformancePreferences.FORCE_HOST_FEED_COLD_OPT),
             isPerformanceOptimizationEnabled = performanceOptimizationEnabled,
-            isHostPerformanceFlagsForced = performanceChildBoolean(PerformancePreferences.FORCE_HOST_PERFORMANCE_FLAGS),
-            isApsarasScheduleDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_APSARAS_SCHEDULE),
-            isFlutterPreinitDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_FLUTTER_PREINIT),
-            isLowEndDeviceConfigForced = performanceChildBoolean(PerformancePreferences.FORCE_LOW_END_DEVICE_CONFIG),
-            isTitanPatchBlockEnabled = isTitanPatchBlockEnabled(p, remote.restrictedFeaturesLocked),
+            isCookieSyncDedupEnabled = performanceChildBoolean(PerformancePreferences.COOKIE_SYNC_DEDUP),
             isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(AccountPreferences.PRIVATE_READ_RECEIPT_INVISIBLE),
             isPostVoteFilterEnabled = customPostFilterChildBoolean(PostFilterPreferences.FILTER_POST_VOTE),
             isPostVideoFilterEnabled = customPostFilterChildBoolean(PostFilterPreferences.FILTER_POST_VIDEO),

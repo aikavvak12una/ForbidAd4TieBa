@@ -1,6 +1,5 @@
 package com.forbidad4tieba.hook.config
 
-import com.forbidad4tieba.hook.config.PerformancePreferences.KEY_FORCE_LOW_END_DEVICE_CONFIG
 import com.forbidad4tieba.hook.config.PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION
 
 object SettingsDiagnostics {
@@ -58,19 +57,9 @@ object SettingsDiagnostics {
                 "scan=${scanState(KEY_ENABLE_PERFORMANCE_OPTIMIZATION)} " +
                 "restricted=${onOff(settings.areRestrictedFeaturesUnlocked)} " +
                 "reason=${masterReason(masterConfigured, settings.isPerformanceOptimizationEnabled)}",
-            childLine(PerformancePreferences.FORCE_HOST_PERFORMANCE_FLAGS, settings.isHostPerformanceFlagsForced),
-            childLine(PerformancePreferences.FORCE_LOW_END_DEVICE_CONFIG, settings.isLowEndDeviceConfigForced, ConfigManager.isScanFeatureAvailable(KEY_FORCE_LOW_END_DEVICE_CONFIG)),
-            childLine(PerformancePreferences.DISABLE_APSARAS_SCHEDULE, settings.isApsarasScheduleDisabled),
-            childLine(PerformancePreferences.ENABLE_PB_PERFORMANCE_MODE, settings.isPbPerformanceModeEnabled),
-            childLine(PerformancePreferences.DISABLE_HOST_SLIDE_ANIMATION, settings.isHostSlideAnimationDisabled),
-            childLine(PerformancePreferences.ENABLE_PB_SCROLL_COALESCE, settings.isPbScrollCoalesceEnabled),
+            childLine(PerformancePreferences.COOKIE_SYNC_DEDUP, settings.isCookieSyncDedupEnabled),
             childLine(PerformancePreferences.DISABLE_AD_SDK_COMPONENTS, settings.isAdSdkComponentsDisabled),
-            childLine(PerformancePreferences.DISABLE_FLUTTER_PREINIT, settings.isFlutterPreinitDisabled),
-            childLine(PerformancePreferences.FORCE_HOST_FEED_COLD_OPT, settings.isHostFeedColdOptEnabled),
-            childLine(PerformancePreferences.BLOCK_TITAN_PATCH, settings.isTitanPatchBlockEnabled),
-            childLine(PerformancePreferences.DISABLE_AI_COMPONENTS, settings.isAiComponentsDisabled),
             childLine(PerformancePreferences.DISABLE_VIDEO_COMPONENTS, settings.isVideoComponentsDisabled),
-            childLine(PerformancePreferences.DISABLE_MONITOR_SYNC_COMPONENTS, settings.isMonitorSyncComponentsDisabled),
         )
     }
 }

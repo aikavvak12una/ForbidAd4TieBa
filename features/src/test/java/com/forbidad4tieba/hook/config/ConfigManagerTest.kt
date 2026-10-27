@@ -10,6 +10,12 @@ import org.junit.Test
 import java.lang.reflect.Proxy
 
 class ConfigManagerTest {
+    private val performanceCapabilities = listOf(
+        HookFeatureKey.COOKIE_SYNC_DEDUP,
+        HookFeatureKey.DISABLE_AD_SDK_COMPONENTS,
+        HookFeatureKey.DISABLE_VIDEO_COMPONENTS,
+    )
+
     @Test
     fun nonScanPreferencesAreAvailableWithoutScanState() {
         assertNull(SettingsCatalog.capabilityFor(PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION))
@@ -394,111 +400,99 @@ class ConfigManagerTest {
 
     @Test
     fun performanceChildrenDoNotBecomeRuntimeActiveWhenMasterIsOff() {
-        withScanAvailability(emptyMap()) {
-            val snapshot = buildSnapshot(
-                mapOf(
-                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to false,
-                    PerformancePreferences.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
-                    PerformancePreferences.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
-                ),
-            )
-
+        withScanAvailability(performanceCapabilities.associateWith { ConfigManager.ScanFeatureAvailabilityState.AVAILABLE }) {
+            val snapshot = buildSnapshot(mapOf(
+                AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to false,
+                PerformancePreferences.KEY_COOKIE_SYNC_DEDUP to true,
+                PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS to true,
+                PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS to true,
+            ))
             assertFalse(snapshot.isPerformanceOptimizationEnabled)
-            assertFalse(snapshot.isMonitorSyncComponentsDisabled)
-            assertFalse(snapshot.isHostPerformanceFlagsForced)
+            assertFalse(snapshot.isCookieSyncDedupEnabled)
+            assertFalse(snapshot.isAdSdkComponentsDisabled)
+            assertFalse(snapshot.isVideoComponentsDisabled)
         }
     }
 
     @Test
     fun performanceChildrenBecomeRuntimeActiveWhenMasterIsOn() {
-        withScanAvailability(
-            mapOf(
-                HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS to
-                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-                HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to
-                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-                HookFeatureKey.DISABLE_AI_COMPONENTS to
-                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-                HookFeatureKey.ENABLE_PB_SCROLL_COALESCE to
-                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-            ),
-        ) {
-            val snapshot = buildSnapshot(
-                mapOf(
-                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-                    PerformancePreferences.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
-                    PerformancePreferences.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
-                    PerformancePreferences.KEY_DISABLE_AI_COMPONENTS to true,
-                    PerformancePreferences.KEY_ENABLE_PB_SCROLL_COALESCE to true,
-                ),
-            )
-
+        withScanAvailability(performanceCapabilities.associateWith { ConfigManager.ScanFeatureAvailabilityState.AVAILABLE }) {
+            val snapshot = buildSnapshot(mapOf(
+                AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+                PerformancePreferences.KEY_COOKIE_SYNC_DEDUP to true,
+                PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS to true,
+                PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS to true,
+            ))
             assertTrue(snapshot.isPerformanceOptimizationEnabled)
-            assertTrue(snapshot.isMonitorSyncComponentsDisabled)
-            assertTrue(snapshot.isHostPerformanceFlagsForced)
-            assertTrue(snapshot.isAiComponentsDisabled)
-            assertTrue(snapshot.isPbScrollCoalesceEnabled)
+            assertTrue(snapshot.isCookieSyncDedupEnabled)
+            assertTrue(snapshot.isAdSdkComponentsDisabled)
+            assertTrue(snapshot.isVideoComponentsDisabled)
         }
     }
 
     @Test
     fun performanceChildrenUseEnabledDefaultsOnlyWhenMasterIsOn() {
-        withScanAvailability(mapOf(
-            HookFeatureKey.FORCE_LOW_END_DEVICE_CONFIG to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-            HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-            HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-            HookFeatureKey.DISABLE_APSARAS_SCHEDULE to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-        )) {
-            val snapshot = buildSnapshot(
-                mapOf(
-                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-                ),
-            )
-
-            assertTrue(snapshot.isPerformanceOptimizationEnabled)
-            assertTrue(snapshot.isHostPerformanceFlagsForced)
-            assertTrue(snapshot.isLowEndDeviceConfigForced)
-            assertTrue(snapshot.isApsarasScheduleDisabled)
-            assertTrue(snapshot.isAdSdkComponentsDisabled)
-            assertTrue(snapshot.isVideoComponentsDisabled)
-            assertTrue(snapshot.isMonitorSyncComponentsDisabled)
-            assertFalse(snapshot.isTitanPatchBlockEnabled)
-        }
-    }
-
-    @Test
-    fun lowEndConfigurationRequiresResolvedSymbolsWithoutChangingSavedPreference() {
-        val saved = mapOf(
-            AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-            PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-            PerformancePreferences.KEY_FORCE_LOW_END_DEVICE_CONFIG to true,
-        )
-        withScanAvailability(mapOf(HookFeatureKey.FORCE_LOW_END_DEVICE_CONFIG to ConfigManager.ScanFeatureAvailabilityState.DISABLED)) {
-            assertFalse(buildSnapshot(saved).isLowEndDeviceConfigForced)
-        }
-        withScanAvailability(mapOf(HookFeatureKey.FORCE_LOW_END_DEVICE_CONFIG to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE)) {
-            assertTrue(buildSnapshot(saved).isLowEndDeviceConfigForced)
-        }
-    }
-
-    @Test
-    fun trackingRequiresVerifiedSymbolsDespiteEnabledPreference() {
-        for (state in listOf(ConfigManager.ScanFeatureAvailabilityState.UNKNOWN, ConfigManager.ScanFeatureAvailabilityState.DISABLED)) {
-            withScanAvailability(mapOf(
-                HookFeatureKey.DISABLE_MONITOR_SYNC_COMPONENTS to state,
-                HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-            )) {
+        withScanAvailability(performanceCapabilities.associateWith { ConfigManager.ScanFeatureAvailabilityState.AVAILABLE }) {
+            for (master in listOf(false, true)) {
                 val snapshot = buildSnapshot(mapOf(
                     AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-                    PerformancePreferences.KEY_DISABLE_MONITOR_SYNC_COMPONENTS to true,
-                    PerformancePreferences.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
+                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to master,
                 ))
-                assertFalse(snapshot.isMonitorSyncComponentsDisabled)
-                assertTrue(snapshot.isHostPerformanceFlagsForced)
+                assertEquals(master, snapshot.isPerformanceOptimizationEnabled)
+                assertEquals(master, snapshot.isCookieSyncDedupEnabled)
+                assertEquals(master, snapshot.isAdSdkComponentsDisabled)
+                assertEquals(master, snapshot.isVideoComponentsDisabled)
+            }
+        }
+    }
+
+    @Test
+    fun performanceConfigurationRequiresItsOwnResolvedSymbolsWithoutChangingSavedPreference() {
+        val targets = listOf(
+            Triple(PerformancePreferences.KEY_COOKIE_SYNC_DEDUP, HookFeatureKey.COOKIE_SYNC_DEDUP,
+                { s: SettingsSnapshot -> s.isCookieSyncDedupEnabled }),
+            Triple(PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS, HookFeatureKey.DISABLE_AD_SDK_COMPONENTS,
+                { s: SettingsSnapshot -> s.isAdSdkComponentsDisabled }),
+            Triple(PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS, HookFeatureKey.DISABLE_VIDEO_COMPONENTS,
+                { s: SettingsSnapshot -> s.isVideoComponentsDisabled }),
+        )
+        val saved = targets.associate { it.first to true } + mapOf(
+            AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+            PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+        )
+        for ((key, capability, read) in targets) for (state in ConfigManager.ScanFeatureAvailabilityState.entries) {
+            val capabilities = performanceCapabilities.associateWith { ConfigManager.ScanFeatureAvailabilityState.AVAILABLE } +
+                (capability to state)
+            withScanAvailability(capabilities) {
+                val snapshot = buildSnapshot(saved)
+                assertEquals("$key/$state", state == ConfigManager.ScanFeatureAvailabilityState.AVAILABLE ||
+                    state == ConfigManager.ScanFeatureAvailabilityState.PARTIAL, read(snapshot))
+                targets.filter { it.first != key }.forEach { (_, _, readOther) -> assertTrue(readOther(snapshot)) }
+                assertTrue(saved.getValue(key))
+            }
+        }
+    }
+
+    @Test
+    fun performanceDiagnosticsReportMissingCapabilitiesForEachRetainedControl() {
+        val keys = listOf(PerformancePreferences.KEY_COOKIE_SYNC_DEDUP,
+            PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS, PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS)
+        for (index in keys.indices) for (state in listOf(
+            ConfigManager.ScanFeatureAvailabilityState.UNKNOWN, ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+        )) {
+            val capabilities = performanceCapabilities.associateWith { ConfigManager.ScanFeatureAvailabilityState.AVAILABLE } +
+                (performanceCapabilities[index] to state)
+            withScanAvailability(capabilities) {
+                val snapshot = buildSnapshot(keys.associateWith { true } + mapOf(
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+                ))
+                val lines = SettingsDiagnostics.formatPerformanceStatusLines(snapshot)
+                assertEquals(4, lines.size)
+                val status = lines.single { it.startsWith("PerformanceFeature[${keys[index]}]") }
+                assertTrue(status.contains("active=OFF scan=$state reason=scan_unavailable"))
             }
         }
     }
@@ -534,25 +528,6 @@ class ConfigManagerTest {
             buildSnapshot(values + (TabPreferences.KEY_BOTTOM_TAB_LIQUID_GLASS to false)).bottomTabLiquidGlass)
     }
 
-    @Test
-    fun pbPerformanceMissingSubHookDisablesRuntimeDespiteEnabledPreference() {
-        withScanAvailability(mapOf(
-            HookFeatureKey.ENABLE_PB_PERFORMANCE_MODE to ConfigManager.ScanFeatureAvailabilityState.DISABLED,
-            HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS to ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
-        )) {
-            val snapshot = buildSnapshot(mapOf(
-                AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
-                PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
-                PerformancePreferences.KEY_ENABLE_PB_PERFORMANCE_MODE to true,
-                PerformancePreferences.KEY_FORCE_HOST_PERFORMANCE_FLAGS to true,
-            ))
-            assertFalse(snapshot.isPbPerformanceModeEnabled)
-            assertTrue(snapshot.isHostPerformanceFlagsForced)
-            val status = SettingsDiagnostics.formatPerformanceStatusLines(snapshot)
-                .single { it.startsWith("PerformanceFeature[enable_pb_performance_mode]") }
-            assertTrue(status.contains("active=OFF scan=DISABLED reason=scan_unavailable"))
-        }
-    }
 
     @Test
     fun tabCustomizationUpgradePreservesEachPreviouslyEnabledFeature() {

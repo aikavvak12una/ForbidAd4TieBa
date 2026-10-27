@@ -17,6 +17,10 @@ object RuntimeHooks {
     private val attempt = ThreadLocal<Attempt?>()
     private val hooks = OwnedHookSet<Site, Registration> { it.release() }
 
+    /** Prerequisite verification during installation only; hook callbacks never query ownership. */
+    fun ownsActiveHandle(handle: XposedInterface.HookHandle): Boolean =
+        hooks.values().any { it.handle === handle && it.activation.active }
+
     private class Registration(
         val site: Site,
         val entry: String,

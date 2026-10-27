@@ -45,13 +45,9 @@ object HookFeatureKey {
     const val ENABLE_PB_LIKE_AUTO_REPLY = "enable_pb_like_auto_reply"
     const val ENABLE_COMMENT_AVATAR_DIRECT_PROFILE = "enable_comment_avatar_direct_profile"
     const val DISABLE_AUTO_REFRESH = "disable_auto_refresh"
-    const val ENABLE_PB_SCROLL_COALESCE = "enable_pb_scroll_coalesce"
-    const val ENABLE_PB_PERFORMANCE_MODE = "enable_pb_performance_mode"
-    const val FORCE_HOST_PERFORMANCE_FLAGS = "force_host_performance_flags"
-    const val FORCE_LOW_END_DEVICE_CONFIG = "force_low_end_device_config"
-    const val FORCE_HOST_FEED_COLD_OPT = "force_host_feed_cold_opt"
-    const val DISABLE_APSARAS_SCHEDULE = "disable_apsaras_schedule"
-    const val DISABLE_MONITOR_SYNC_COMPONENTS = "disable_monitor_sync_components"
+    const val COOKIE_SYNC_DEDUP = "force_host_performance_flags"
+    const val DISABLE_AD_SDK_COMPONENTS = "disable_ad_sdk_components"
+    const val DISABLE_VIDEO_COMPONENTS = "disable_video_components"
     const val DISABLE_PB_GESTURE_FONT_SCALE = "disable_pb_gesture_font_scale"
     const val DISABLE_FORUM_NATIVE_TOP_SHIFT = "disable_forum_native_top_shift"
     const val FREE_COPY = "enable_free_copy"
@@ -62,12 +58,10 @@ object HookFeatureKey {
     const val DEFAULT_NOTIFY_TAB = "default_notify_tab"
     const val DEFAULT_ORIGINAL_IMAGE = "enable_default_original_image"
     const val DEFAULT_LZL_EARLIEST = "default_lzl_earliest"
-    const val INLINE_REPLY_REPAIR = "inline_reply_repair"
     const val COMMENT_SHORTCUT = "comment_filter_shortcut"
     const val AUTO_SIGN_IN = "enable_auto_sign_in"
     const val PRIVATE_READ_RECEIPT_INVISIBLE = "private_read_receipt_invisible"
     const val CLEAN_SHARE_TRACKING_PARAMS = "clean_share_tracking_params"
-    const val DISABLE_AI_COMPONENTS = "disable_ai_components"
     const val VERIFY_REPLY_AFTER_POST = "verify_reply_after_post"
     const val DETAILED_LOGGING = "enable_detailed_logging"
     const val BLOCK_FIRST_LIKE_POPUP = "block_first_like_popup"
@@ -99,13 +93,9 @@ object HookFeatureKey {
         ENABLE_PB_LIKE_AUTO_REPLY,
         ENABLE_COMMENT_AVATAR_DIRECT_PROFILE,
         DISABLE_AUTO_REFRESH,
-        ENABLE_PB_SCROLL_COALESCE,
-        ENABLE_PB_PERFORMANCE_MODE,
-        FORCE_HOST_PERFORMANCE_FLAGS,
-        FORCE_LOW_END_DEVICE_CONFIG,
-        FORCE_HOST_FEED_COLD_OPT,
-        DISABLE_APSARAS_SCHEDULE,
-        DISABLE_MONITOR_SYNC_COMPONENTS,
+        COOKIE_SYNC_DEDUP,
+        DISABLE_AD_SDK_COMPONENTS,
+        DISABLE_VIDEO_COMPONENTS,
         DISABLE_PB_GESTURE_FONT_SCALE,
         DISABLE_FORUM_NATIVE_TOP_SHIFT,
         FREE_COPY,
@@ -116,12 +106,10 @@ object HookFeatureKey {
         DEFAULT_NOTIFY_TAB,
         DEFAULT_ORIGINAL_IMAGE,
         DEFAULT_LZL_EARLIEST,
-        INLINE_REPLY_REPAIR,
         COMMENT_SHORTCUT,
         AUTO_SIGN_IN,
         PRIVATE_READ_RECEIPT_INVISIBLE,
         CLEAN_SHARE_TRACKING_PARAMS,
-        DISABLE_AI_COMPONENTS,
         VERIFY_REPLY_AFTER_POST,
         DETAILED_LOGGING,
         BLOCK_FIRST_LIKE_POPUP,

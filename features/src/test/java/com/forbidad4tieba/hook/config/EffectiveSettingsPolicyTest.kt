@@ -6,27 +6,94 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EffectiveSettingsPolicyTest {
-    @Test fun titanEarlyAndPublishedPoliciesAgreeForAllInputs() {
-        // The pre-attach path cannot consume scan availability. Adding such a dependency must
-        // revisit the bootstrap contract instead of silently making the two paths disagree.
-        assertNull(PerformancePreferences.ENABLE_PERFORMANCE_OPTIMIZATION.capabilityKey)
-        assertNull(PerformancePreferences.BLOCK_TITAN_PATCH.capabilityKey)
-        for (mask in 0 until 16) {
-            val unlocked = mask and 1 != 0
-            val performance = mask and 2 != 0
-            val titan = mask and 4 != 0
-            val locked = mask and 8 != 0
-            val values = UserSettings(mapOf(
-                AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to unlocked,
-                PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to performance,
-                PerformancePreferences.KEY_BLOCK_TITAN_PATCH to titan,
-            ))
-            val expected = unlocked && performance && titan && !locked
-            assertEquals("early mask=$mask", expected,
-                EffectiveSettingsPolicy.isTitanPatchBlockEnabled(values, locked))
-            assertEquals("published mask=$mask", expected,
-                EffectiveSettingsPolicy.derive(values, HostCapabilities(emptyMap()),
-                    RemoteSettingsPolicy(locked)).snapshot.isTitanPatchBlockEnabled)
+    @Test fun performanceControlsRequireUnlockMasterChoiceAndTheirOwnCapability() {
+        val targets = listOf(
+            Triple(PerformancePreferences.KEY_COOKIE_SYNC_DEDUP, HookFeatureKey.COOKIE_SYNC_DEDUP,
+                { s: SettingsSnapshot -> s.isCookieSyncDedupEnabled }),
+            Triple(PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS, HookFeatureKey.DISABLE_AD_SDK_COMPONENTS,
+                { s: SettingsSnapshot -> s.isAdSdkComponentsDisabled }),
+            Triple(PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS, HookFeatureKey.DISABLE_VIDEO_COMPONENTS,
+                { s: SettingsSnapshot -> s.isVideoComponentsDisabled }),
+        )
+        for ((key, capability, read) in targets) for (mask in 0 until 16) {
+            for (availability in ScanFeatureAvailabilityState.entries) {
+                val unlocked = mask and 1 != 0
+                val master = mask and 2 != 0
+                val chosen = mask and 4 != 0
+                val locked = mask and 8 != 0
+                val values = targets.associate { it.first to true } + mapOf(
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to unlocked,
+                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to master,
+                    key to chosen,
+                )
+                val capabilities = targets.associate { it.second to ScanFeatureAvailabilityState.AVAILABLE } +
+                    (capability to availability)
+                val snapshot = EffectiveSettingsPolicy.derive(UserSettings(values), HostCapabilities(capabilities),
+                    RemoteSettingsPolicy(locked)).snapshot
+                val activeMaster = unlocked && master && !locked
+                val targetAvailable = availability == ScanFeatureAvailabilityState.AVAILABLE ||
+                    availability == ScanFeatureAvailabilityState.PARTIAL
+                assertEquals("$key/$mask/$availability", activeMaster && chosen && targetAvailable, read(snapshot))
+                assertEquals(activeMaster, snapshot.isPerformanceOptimizationEnabled)
+                targets.filter { it.first != key }.forEach { (_, _, readOther) ->
+                    assertEquals("Independent control: $key/$mask/$availability", activeMaster, readOther(snapshot))
+                }
+                assertEquals(chosen, values.getValue(key))
+            }
+        }
+    }
+
+    @Test fun togglingVideoPreservesTheSavedAndPublishedAdSdkChoice() {
+        val host = HostCapabilities(mapOf(
+            HookFeatureKey.DISABLE_VIDEO_COMPONENTS to ScanFeatureAvailabilityState.AVAILABLE,
+            HookFeatureKey.DISABLE_AD_SDK_COMPONENTS to ScanFeatureAvailabilityState.AVAILABLE,
+        ))
+        for (master in listOf(false, true)) for (adChoice in listOf(false, true)) {
+            val saved = mutableMapOf(
+                AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to master,
+                PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS to adChoice,
+            )
+            // Additional channel blocking belongs to the installed video group, not this setting.
+            for (videoChoice in listOf(false, true, false)) {
+                saved[PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS] = videoChoice
+                val before = saved.toMap()
+                val values = UserSettings(saved)
+                val snapshot = EffectiveSettingsPolicy.derive(values, host, RemoteSettingsPolicy(false)).snapshot
+                assertEquals(master && videoChoice, snapshot.isVideoComponentsDisabled)
+                assertEquals(master && adChoice, snapshot.isAdSdkComponentsDisabled)
+                assertEquals(adChoice, values.getBoolean(PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS, !adChoice))
+                assertEquals(before, saved)
+            }
+        }
+    }
+
+    @Test fun videoComponentControlAndVideoPostFilterRemainIndependent() {
+        for (mask in 0 until 16) for (videoAvailable in listOf(false, true)) {
+            for (filterAvailable in listOf(false, true)) {
+                val performance = mask and 1 != 0
+                val videoDisabled = mask and 2 != 0
+                val filter = mask and 4 != 0
+                val videoPostsFiltered = mask and 8 != 0
+                val values = UserSettings(mapOf(
+                    AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+                    PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to performance,
+                    PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS to videoDisabled,
+                    PostFilterPreferences.KEY_ENABLE_CUSTOM_POST_FILTER to filter,
+                    PostFilterPreferences.KEY_FILTER_POST_VIDEO to videoPostsFiltered,
+                ))
+                fun state(available: Boolean) = if (available) ScanFeatureAvailabilityState.AVAILABLE
+                    else ScanFeatureAvailabilityState.DISABLED
+                val host = HostCapabilities(mapOf(
+                    HookFeatureKey.DISABLE_VIDEO_COMPONENTS to state(videoAvailable),
+                    HookFeatureKey.ENABLE_CUSTOM_POST_FILTER to state(filterAvailable),
+                ))
+                val snapshot = EffectiveSettingsPolicy.derive(values, host, RemoteSettingsPolicy(false)).snapshot
+                assertEquals("video control: $mask/$videoAvailable/$filterAvailable",
+                    performance && videoDisabled && videoAvailable, snapshot.isVideoComponentsDisabled)
+                assertEquals("video post filter: $mask/$videoAvailable/$filterAvailable",
+                    filter && videoPostsFiltered && filterAvailable, snapshot.isPostVideoFilterEnabled)
+            }
         }
     }
 

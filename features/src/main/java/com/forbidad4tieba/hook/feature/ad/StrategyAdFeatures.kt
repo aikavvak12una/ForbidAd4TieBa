@@ -23,7 +23,7 @@ internal val StrategyAdStaticFeature = FeatureDefinition.observed(
     id = "StrategyAdHook.static",
     phase = FeaturePhase.POST_ATTACH,
     process = FeatureProcess.MAIN,
-    enabled = { settings -> settings.isStrategyAdBlockEnabled || settings.isAdSdkComponentsDisabled || settings.isApsarasScheduleDisabled },
+    enabled = { settings -> settings.isStrategyAdBlockEnabled },
 ) { cl, settings ->
     StrategyAdHook.hookStatic(
         cl = cl,

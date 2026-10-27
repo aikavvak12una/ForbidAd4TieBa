@@ -165,11 +165,6 @@ class HookInstallContextTest {
             this["origImageOriginalUrlField"] = "originalUrl"
             this["origImageTriggerMethod"] = "loadOriginal"
 
-            this["aiSpriteMemePanControllerClass"] = "com.tieba.SpriteMemeController"
-            this["aiSpriteMemeEnableMethod"] = "setEnabled"
-            this["aiPbNewInputContainerClass"] = "com.tieba.PbInput"
-            this["aiPbNewInputContainerInitSpriteMemeMethod"] = "initSpriteMeme"
-            this["aiPbNewInputContainerInitAiWriteMethod"] = "initAiWrite"
         }
         val context = HookInstallContext(Constants.TARGET_PACKAGE, symbols)
 
@@ -187,11 +182,6 @@ class HookInstallContextTest {
             DefaultOriginalImageFeature.entries(
                 context, SettingsSnapshot.bootstrap().copy(simpleToggles = setOf(SimpleToggle.DEFAULT_ORIGINAL_IMAGE)),
             ).isNotEmpty(),
-        )
-        assertTrue(
-            context.canInstallMainAiComponents(
-                SettingsSnapshot.bootstrap().copy(isAiComponentsDisabled = true),
-            ),
         )
     }
 
@@ -309,28 +299,6 @@ class HookInstallContextTest {
                 Constants.TARGET_PACKAGE,
                 nativeShareSymbols(),
             ).canInstallImageViewerNativeShare(),
-        )
-    }
-
-    @Test
-    fun imageViewerAiPathIsIndependentFromMainAiTargets() {
-        val symbols = cachedSymbols {
-            this["aiImageViewerJumpButtonOwnerClass"] = "com.tieba.ImageViewer"
-            this["aiImageViewerJumpButtonInitMethod"] = "initAiButton"
-        }
-        val settings = SettingsSnapshot.bootstrap().copy(isAiComponentsDisabled = true)
-
-        assertTrue(
-            HookInstallContext(
-                Constants.TARGET_PACKAGE + ":remote",
-                symbols,
-            ).canInstallImageViewerAiJumpButton(settings),
-        )
-        assertFalse(
-            HookInstallContext(
-                Constants.TARGET_PACKAGE,
-                symbols,
-            ).canInstallMainAiComponents(settings),
         )
     }
 

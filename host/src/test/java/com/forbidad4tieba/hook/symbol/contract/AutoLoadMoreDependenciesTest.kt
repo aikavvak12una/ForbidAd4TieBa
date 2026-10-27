@@ -15,12 +15,9 @@ class AutoLoadMoreDependenciesTest {
     private val loadMoreOptional = listOf(
         "autoLoadMoreConfigClass", "autoLoadMoreConfigMethod", "pbCommentPreloadConfigMethodSpec", "pbCommentBatchSpec",
     )
-    private val scrollRequired = listOf("pbCommentScrollListenerClass", "pbCommentScrollMethod")
-    private val evidence = listOf("pbCommentScrollFragmentField", "pbCommentScrollBottomListenerField", "pbCommentScrollBottomMethod")
-    private val keys = loadMoreOptional + scrollRequired + evidence
+    private val keys = loadMoreOptional
     private val pointRequirements = linkedMapOf(
         "AutoLoadMoreHook.Config" to listOf("autoLoadMoreConfigClass", "autoLoadMoreConfigMethod"),
-        "PbScrollCoalesceHook" to scrollRequired,
         "PbCommentAutoLoadHook" to listOf("pbCommentPreloadConfigMethodSpec"),
         "PbCommentAutoLoadHook.Batch" to listOf("pbCommentPreloadConfigMethodSpec", "pbCommentBatchSpec"),
     )
@@ -40,16 +37,11 @@ class AutoLoadMoreDependenciesTest {
             val symbols = fixture(missing)
             val capabilities = AutoLoadMoreContract.capabilities(symbols)
             val optional = loadMoreOptional.filter { it in missing }
-            val critical = scrollRequired.filter { it in missing }
-            assertEquals(listOf(HookFeatureKey.AUTO_LOAD_MORE, HookFeatureKey.ENABLE_PB_SCROLL_COALESCE), capabilities.keys.toList())
+            assertEquals(listOf(HookFeatureKey.AUTO_LOAD_MORE), capabilities.keys.toList())
             assertEquals("load more mask=$mask", HookFeatureStatus(
                 if (optional.isEmpty()) HookFeatureState.FULL else HookFeatureState.PARTIAL,
                 missingOptional = optional,
             ), capabilities[HookFeatureKey.AUTO_LOAD_MORE])
-            assertEquals("scroll mask=$mask", HookFeatureStatus(
-                if (critical.isEmpty()) HookFeatureState.FULL else HookFeatureState.DISABLED,
-                missingCritical = critical,
-            ), capabilities[HookFeatureKey.ENABLE_PB_SCROLL_COALESCE])
             val points = AutoLoadMoreContract.points(symbols)
             assertEquals(pointRequirements.keys.toList(), points.map { it.name })
             for (point in points) {

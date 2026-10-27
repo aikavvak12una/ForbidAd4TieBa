@@ -2,8 +2,6 @@ package com.forbidad4tieba.hook.symbol.model
 
 import com.forbidad4tieba.hook.symbol.contract.*
 
-import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigSymbols
-import com.forbidad4tieba.hook.symbol.lowend.LowEndConfigTarget
 import java.lang.reflect.Modifier
 import java.lang.reflect.ParameterizedType
 import org.junit.Assert.assertEquals
@@ -98,9 +96,9 @@ class HookSymbolsJsonTest {
         index: Int,
     ): Any {
         return when (type) {
-            LowEndConfigSymbols::class.java -> LowEndConfigSymbols(
-                LowEndConfigTarget.entries.associateWith { "method_${it.name}" },
-            )
+            VideoDisableCache::class.java -> VideoDisableCache(VideoDisableTarget.entries.associate {
+                it.name to VideoDisableFamily(listOf(it.className), listOf("${it.className}#${it.methodName}"))
+            })
             PbAutoReplyFlowSymbols::class.java -> PbAutoReplyFlowSymbols(
                 sendMethodSpec = "host.Editor#submit",
                 writeModelField = "writeModel",

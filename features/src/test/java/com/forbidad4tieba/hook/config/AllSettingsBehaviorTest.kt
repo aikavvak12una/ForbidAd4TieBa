@@ -139,16 +139,53 @@ class AllSettingsBehaviorTest {
                 val legacyStyle = "BottomTabLiquidGlassConfig(heightDp=$legacyHeight, widthPercent=$legacyWidth, " +
                     "bottomGapDp=$legacyGap, blurEnabled=${result.snapshot.bottomTabLiquidGlass.blurEnabled}, " +
                     "refractionEnabled=true, highlightEnabled=true, shadowEnabled=true, tiltEnabled=true, pressEffectEnabled=true)"
-                // Reconstruct only the removed field for the frozen projection. Keeping the
-                // original cases and hashes verifies every surviving setting independently.
-                val retiredPreload = result.snapshot.areRestrictedFeaturesUnlocked &&
-                    result.snapshot.isPerformanceOptimizationEnabled &&
-                    (values["force_pb_preload"] as? Boolean ?: true) &&
-                    state in listOf(ConfigManager.ScanFeatureAvailabilityState.AVAILABLE, ConfigManager.ScanFeatureAvailabilityState.PARTIAL)
-                val legacySnapshot = result.snapshot.toString().substringBefore(", commentLevelFilter=")
+                // The 22.13.1.1 convergence retires ten controls and narrows the former host AB bundle to Cookie deduplication.
+                // Keep all original cases/hashes. Only these explicitly retired fields are
+                // reconstructed; every other surviving value still comes from the real snapshot.
+                // Do not ask the new catalog about removed capabilities: it no longer owns them.
+                val scanAvailable = state in listOf(
+                    ConfigManager.ScanFeatureAvailabilityState.AVAILABLE,
+                    ConfigManager.ScanFeatureAvailabilityState.PARTIAL,
+                )
+                fun oldPerformanceValue(key: String, requiresScan: Boolean, default: Boolean = true): Boolean =
+                    result.snapshot.areRestrictedFeaturesUnlocked && result.snapshot.isPerformanceOptimizationEnabled &&
+                        (values[key] as? Boolean ?: default) && (!requiresScan || scanAvailable)
+
+                // The user also authorized verified-target gating for these two retained controls.
+                // Assert the new behavior in EVERY frozen case before projecting their old values.
+                val oldAdSdk = oldPerformanceValue("disable_ad_sdk_components", requiresScan = false)
+                val oldVideo = oldPerformanceValue("disable_video_components", requiresScan = false)
+                assertEquals("ad SDK capability: $name/$state/$locked",
+                    oldAdSdk && scanAvailable, result.snapshot.isAdSdkComponentsDisabled)
+                assertEquals("video capability: $name/$state/$locked",
+                    oldVideo && scanAvailable, result.snapshot.isVideoComponentsDisabled)
+
+                val retiredBeforeDefaultNotify =
+                    ", isPbScrollCoalesceEnabled=${oldPerformanceValue("enable_pb_scroll_coalesce", true)}"
+                val retiredBeforePostFilter =
+                    ", isAiComponentsDisabled=${oldPerformanceValue("disable_ai_components", true)}"
+                val retiredBeforePerformanceMaster =
+                    ", isMonitorSyncComponentsDisabled=${oldPerformanceValue("disable_monitor_sync_components", true)}" +
+                        ", isPbPerformanceModeEnabled=${oldPerformanceValue("enable_pb_performance_mode", true)}"
+                val retiredBeforePrivateReceipt =
+                    ", isPbPreloadForced=${oldPerformanceValue("force_pb_preload", true)}" +
+                        ", isHostSlideAnimationDisabled=${oldPerformanceValue("disable_host_slide_animation", false)}" +
+                        ", isHostFeedColdOptEnabled=${oldPerformanceValue("force_host_feed_cold_opt", true)}" +
+                        ", isApsarasScheduleDisabled=${oldPerformanceValue("disable_apsaras_schedule", true)}" +
+                        ", isFlutterPreinitDisabled=${oldPerformanceValue("disable_flutter_preinit", false)}" +
+                        ", isLowEndDeviceConfigForced=${oldPerformanceValue("force_low_end_device_config", true)}" +
+                        ", isTitanPatchBlockEnabled=${oldPerformanceValue("block_titan_patch", false, false)}"
+                val performanceProjection = result.snapshot.toString()
+                    .replace("isCookieSyncDedupEnabled=", "isHostPerformanceFlagsForced=")
+                    .replace("isVideoComponentsDisabled=${result.snapshot.isVideoComponentsDisabled}", "isVideoComponentsDisabled=$oldVideo")
+                    .replace("isAdSdkComponentsDisabled=${result.snapshot.isAdSdkComponentsDisabled}", "isAdSdkComponentsDisabled=$oldAdSdk")
+                    .replace(", isDefaultNotifyTabEnabled=", "$retiredBeforeDefaultNotify, isDefaultNotifyTabEnabled=")
+                    .replace(", isCustomPostFilterEnabled=", "$retiredBeforePostFilter, isCustomPostFilterEnabled=")
+                    .replace(", isPerformanceOptimizationEnabled=", "$retiredBeforePerformanceMaster, isPerformanceOptimizationEnabled=")
+                    .replace(", isPrivateReadReceiptInvisibleEnabled=", "$retiredBeforePrivateReceipt, isPrivateReadReceiptInvisibleEnabled=")
+                val legacySnapshot = performanceProjection.substringBefore(", commentLevelFilter=")
                     .replace(", isHomeTopTabFixedEnabled=false, homeTopTabFixedKeys=[]", "")
                     .replace("isFloatingBottomBarEnabled=", "isBottomTabLiquidGlassEnabled=")
-                    .replace(", isHostSlideAnimationDisabled=", ", isPbPreloadForced=$retiredPreload, isHostSlideAnimationDisabled=")
                     .replace(result.snapshot.bottomTabLiquidGlass.toString(), legacyStyle) + ")"
                 val text = legacySnapshot + "/" + result.normalizedBottomTabs
                 val hash = MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }

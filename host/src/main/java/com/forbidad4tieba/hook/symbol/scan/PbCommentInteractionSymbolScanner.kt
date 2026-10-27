@@ -1,6 +1,5 @@
 package com.forbidad4tieba.hook.symbol.scan
 
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.symbol.model.PbCommentInteractionScanSymbols
 import com.forbidad4tieba.hook.symbol.model.ScanLogger
 
@@ -10,48 +9,9 @@ internal object PbCommentInteractionSymbolScanner {
         cl: ClassLoader,
         logger: ScanLogger?,
     ): PbCommentInteractionScanSymbols {
-        val scroll = scanSubStep("PbScrollCoalesceHook", logger, PbCommentInteractionScanSymbols()) {
-            scanScroll(candidates, cl, logger)
-        }
-        val gesture = scanSubStep("PbDisableGestureFontScaleHook", logger, PbCommentInteractionScanSymbols()) {
+        return scanSubStep("PbDisableGestureFontScaleHook", logger, PbCommentInteractionScanSymbols()) {
             scanGesture(candidates, cl, logger)
         }
-
-        return PbCommentInteractionScanSymbols(
-            scrollListenerClass = scroll.scrollListenerClass,
-            scrollMethod = scroll.scrollMethod,
-            scrollFragmentField = scroll.scrollFragmentField,
-            scrollBottomListenerField = scroll.scrollBottomListenerField,
-            scrollBottomMethod = scroll.scrollBottomMethod,
-            gestureScaleManagerClass = gesture.gestureScaleManagerClass,
-            gestureScaleDispatchMethod = gesture.gestureScaleDispatchMethod,
-            gestureScaleListenerSetterMethod = gesture.gestureScaleListenerSetterMethod,
-            gestureScaleListenerClass = gesture.gestureScaleListenerClass,
-            gestureScaleListenerOnScaleMethod = gesture.gestureScaleListenerOnScaleMethod,
-        )
-    }
-
-    private fun scanScroll(
-        candidates: List<String>,
-        cl: ClassLoader,
-        logger: ScanLogger?,
-    ): PbCommentInteractionScanSymbols {
-        val match = ScanReflection.runRules(
-            candidates,
-            cl,
-            listOf(PbCommentScrollRule(StableTiebaHookPoints.PB_FRAGMENT_CLASS)),
-            logger,
-            "pbCommentScroll",
-        ) ?: return PbCommentInteractionScanSymbols()
-
-        val fields = unpackScanParts(match.fieldName, 3)
-        return PbCommentInteractionScanSymbols(
-            scrollListenerClass = match.className,
-            scrollMethod = match.methodName,
-            scrollFragmentField = fields[0],
-            scrollBottomListenerField = fields[1],
-            scrollBottomMethod = fields[2],
-        )
     }
 
     private fun scanGesture(

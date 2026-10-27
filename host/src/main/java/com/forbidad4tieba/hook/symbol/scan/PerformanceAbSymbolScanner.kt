@@ -1,6 +1,5 @@
 package com.forbidad4tieba.hook.symbol.scan
 
-import com.forbidad4tieba.hook.contracts.Diagnostics
 import android.content.Context
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
@@ -56,9 +55,9 @@ internal object PerformanceAbSymbolScanner {
     }
 
     fun isCacheValid(cl: ClassLoader, names: List<String>?): Boolean =
-        names == null || restore(cl, names).size == names.distinct().size
+        names == null || (names.size == names.distinct().size && restore(cl, names).size == names.size)
 
     internal fun isValidMethod(method: Method): Boolean =
-        Modifier.isStatic(method.modifiers) && method.parameterTypes.isEmpty() &&
+        Modifier.isPublic(method.modifiers) && Modifier.isStatic(method.modifiers) && method.parameterTypes.isEmpty() &&
             method.returnType == Boolean::class.javaPrimitiveType
 }

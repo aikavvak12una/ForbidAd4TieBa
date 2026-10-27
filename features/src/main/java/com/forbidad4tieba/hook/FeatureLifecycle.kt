@@ -18,8 +18,6 @@ import com.forbidad4tieba.hook.core.DetailedLogSession
 import com.forbidad4tieba.hook.core.TitanRuntimeState
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.feature.ad.CustomPostModelScoreStats
-import com.forbidad4tieba.hook.feature.perf.ComponentDisableHook
-import com.forbidad4tieba.hook.feature.perf.TitanPatchBlockHook
 import com.forbidad4tieba.hook.feature.signin.AutoSignInManager
 import com.forbidad4tieba.hook.feature.ui.AutoRefreshHook
 import com.forbidad4tieba.hook.ui.AboutInfoManager
@@ -56,7 +54,6 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
         // Titan patch loading only runs in the main process.
         if (!HookProcess.isMain(processName)) return
         // Install before Application.attach so Titan patch loading can be blocked early.
-        TitanPatchBlockHook.hook(defaultClassLoader)
     }
 
     override fun onPackageReady(packageName: String, classLoader: ClassLoader) {
@@ -203,15 +200,7 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
                 runStartupTask("apply cached runtime controls") {
                     AboutInfoManager.applyCachedRuntimeControlsIfNeeded(app)
                 }
-                runStartupTask("restore legacy component state") {
-                    ComponentDisableHook.apply(app)
-                }
-                if (startupSettings.isTitanPatchBlockEnabled) {
-                    runStartupTask("delete Titan patch files") {
-                        TitanPatchBlockHook.deletePatchFiles(app)
-                    }
-                }
-                if (startupSettings.isTitanPatchBlockEnabled || startupSettings.isDetailedLoggingEnabled) {
+                if (startupSettings.isDetailedLoggingEnabled) {
                     runStartupTask("log Titan startup") {
                         logTitanStartupIfNeeded(app, cl)
                     }
@@ -434,7 +423,7 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
     }
 
     private fun shouldInstallAttachHook(name: String): Boolean {
-        // Only the main process and image-viewer remote process need attach hooks.
+        // The catalog selects processes that need published settings and restored targets.
         return FeatureCatalog.shouldInstallAttachHook(name)
     }
 

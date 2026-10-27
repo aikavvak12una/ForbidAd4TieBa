@@ -343,10 +343,6 @@ data class PbBottomEnterBarHotTopicGuideSymbols(
     val refreshMethods: List<Method>,
 )
 
-data class PbScrollCoalesceSymbols(
-    val scrollMethod: Method,
-)
-
 data class PbCommentAutoLoadSymbols(
     val configMethod: Method,
     val batch: PbCommentBatchSymbols?,
@@ -436,20 +432,8 @@ data class DefaultOriginalImageSymbols(
     val directStartMethod: Method?,
 )
 
-data class AiComponentSymbols(
-    val spriteMemeEnableMethod: Method,
-    val pbInitSpriteMemeMethod: Method,
-    val pbInitAiWriteMethod: Method,
-    val pbAiEmojiCreationViewBindMethod: Method? = null,
-    val pbPageBrowserAiEmojiCreationBindMethod: Method? = null,
-)
-
 data class InputMemeBarSymbols(
     val enableMethod: Method,
-)
-
-data class AiImageViewerJumpButtonSymbols(
-    val initMethod: Method,
 )
 
 data class AutoSignInNetworkSymbols(

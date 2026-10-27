@@ -84,28 +84,6 @@ internal object HookSymbolDiagnostics {
             else -> null
         }
 
-        val aiComponentValue = if (
-            !symbols[AiContract.aiSpriteMemePanControllerClass].isNullOrBlank() &&
-            !symbols[AiContract.aiSpriteMemeEnableMethod].isNullOrBlank() &&
-            !symbols[AiContract.aiPbNewInputContainerClass].isNullOrBlank() &&
-            !symbols[AiContract.aiPbNewInputContainerInitSpriteMemeMethod].isNullOrBlank() &&
-            !symbols[AiContract.aiPbNewInputContainerInitAiWriteMethod].isNullOrBlank()
-        ) {
-            val imageViewerJumpButton = if (
-                !symbols[AiContract.aiImageViewerJumpButtonOwnerClass].isNullOrBlank() &&
-                !symbols[AiContract.aiImageViewerJumpButtonInitMethod].isNullOrBlank()
-            ) {
-                " / ${symbols[AiContract.aiImageViewerJumpButtonOwnerClass]}.${symbols[AiContract.aiImageViewerJumpButtonInitMethod]}"
-            } else {
-                ""
-            }
-            "${symbols[AiContract.aiSpriteMemePanControllerClass]}.${symbols[AiContract.aiSpriteMemeEnableMethod]} / " +
-                "${symbols[AiContract.aiPbNewInputContainerClass]}.{${symbols[AiContract.aiPbNewInputContainerInitSpriteMemeMethod]},${symbols[AiContract.aiPbNewInputContainerInitAiWriteMethod]}}" +
-                imageViewerJumpButton
-        } else {
-            null
-        }
-
         val pbAdBidCommonReady =
             !symbols[PbAdRequestContract.pbAdBidCommonRequestModelClass].isNullOrBlank() &&
                 !symbols[PbAdRequestContract.pbAdBidCommonRequestStartMethods].isNullOrEmpty() &&
@@ -185,7 +163,6 @@ internal object HookSymbolDiagnostics {
             ${fmt("RecommendCardNestedData", "${symbols[FeedContract.feedRecommendCardNestedDataMethod]}[${symbols[FeedContract.feedRecommendCardNestedDataListField]}]")}
             ${fmt("PbAdBid", pbAdBidValue)}
             ${fmt("PostAdDataFilter", "type=${StableTiebaHookPoints.TYPE_ADAPTER_CLASS}.${symbols[PostAdDataContract.typeAdapterSetDataMethod]} recycler=${StableTiebaHookPoints.RECYCLER_VIEW_TYPE_ADAPTER_CLASS}.${symbols[PostAdDataContract.recyclerViewTypeAdapterSetDataMethod]} item=${symbols[PostAdDataContract.typeAdapterDataItemClass]}.${symbols[PostAdDataContract.typeAdapterDataGetTypeMethod]}")}
-            ${fmt("AiComponents", aiComponentValue)}
 
             Source        : ${symbols.source}
             Scan Errors   : ${scanIssueLines.joinToString(" | ").ifEmpty { "-" }}

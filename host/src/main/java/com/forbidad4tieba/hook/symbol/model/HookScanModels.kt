@@ -323,11 +323,6 @@ internal data class AutoLoadMoreConfigScanSymbols(
 )
 
 internal data class PbCommentInteractionScanSymbols(
-    val scrollListenerClass: String? = null,
-    val scrollMethod: String? = null,
-    val scrollFragmentField: String? = null,
-    val scrollBottomListenerField: String? = null,
-    val scrollBottomMethod: String? = null,
     val gestureScaleManagerClass: String? = null,
     val gestureScaleDispatchMethod: String? = null,
     val gestureScaleListenerSetterMethod: String? = null,
@@ -368,19 +363,6 @@ internal data class ImageViewerShareScanSymbols(
     val itemNameByResMethod: String? = null,
     val itemNameByTextMethod: String? = null,
     val iconResId: Int? = null,
-)
-
-internal data class AiComponentScanSymbols(
-    val spriteMemePanControllerClass: String? = null,
-    val spriteMemeEnableMethod: String? = null,
-    val pbNewInputContainerClass: String? = null,
-    val pbInitSpriteMemeMethod: String? = null,
-    val pbInitAiWriteMethod: String? = null,
-    val pbAiEmojiCreationViewBindMethod: String? = null,
-    val pbPageBrowserAiEmojiCreationViewClass: String? = null,
-    val pbPageBrowserAiEmojiCreationBindMethod: String? = null,
-    val imageViewerJumpButtonOwnerClass: String? = null,
-    val imageViewerJumpButtonInitMethod: String? = null,
 )
 
 internal data class InputMemeBarScanSymbols(
@@ -480,13 +462,6 @@ internal data class DexOriginalImageMethodsMatch(
     val evidence: String,
 )
 
-internal data class DexAiComponentInitMatch(
-    val ownerMethodName: String,
-    val score: Int,
-    val evidence: String,
-    val strong: Boolean = true,
-)
-
 internal data class DexPbLikeAgreeClickMatch(
     val ownerMethodName: String,
     val score: Int,
@@ -497,13 +472,6 @@ internal data class DexGameFloatingBarMatch(
     val controllerClassName: String,
     val showMethodName: String,
     val floatingBarFieldName: String?,
-    val score: Int,
-    val evidence: String,
-)
-
-internal data class DexPbPageBrowserAiEmojiCreationMatch(
-    val viewClassName: String,
-    val bindMethodName: String,
     val score: Int,
     val evidence: String,
 )
