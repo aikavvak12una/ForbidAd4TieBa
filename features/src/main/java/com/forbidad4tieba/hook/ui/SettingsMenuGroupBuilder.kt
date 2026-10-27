@@ -228,6 +228,8 @@ internal object SettingsMenuGroupBuilder {
                 SwitchItem(PerformancePreferences.COOKIE_SYNC_DEDUP),
                 SwitchItem(PerformancePreferences.DISABLE_AD_SDK_COMPONENTS),
                 SwitchItem(PerformancePreferences.DISABLE_VIDEO_COMPONENTS),
+                SwitchItem(PerformancePreferences.DISABLE_YY_BACKGROUND),
+                SwitchItem(PerformancePreferences.DISABLE_SWAN_PRELOAD),
             ),
         ),
     )

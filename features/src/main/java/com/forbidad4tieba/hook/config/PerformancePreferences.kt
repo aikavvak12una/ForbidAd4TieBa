@@ -10,6 +10,8 @@ object PerformancePreferences {
     const val KEY_COOKIE_SYNC_DEDUP = "force_host_performance_flags"
     const val KEY_DISABLE_AD_SDK_COMPONENTS = "disable_ad_sdk_components"
     const val KEY_DISABLE_VIDEO_COMPONENTS = "disable_video_components"
+    const val KEY_DISABLE_YY_BACKGROUND = "disable_yy_background"
+    const val KEY_DISABLE_SWAN_PRELOAD = "disable_swan_preload"
 
     internal val ENABLE_PERFORMANCE_OPTIMIZATION = BooleanPreference(
         KEY_ENABLE_PERFORMANCE_OPTIMIZATION, false, PreferenceUse.SWITCH, null,
@@ -26,6 +28,15 @@ object PerformancePreferences {
     internal val DISABLE_VIDEO_COMPONENTS = BooleanPreference(
         KEY_DISABLE_VIDEO_COMPONENTS, true, PreferenceUse.SWITCH, HookFeatureKey.DISABLE_VIDEO_COMPONENTS,
         SwitchPresentation(UiText.Settings.DISABLE_VIDEO_COMPONENTS_LABEL, UiText.Settings.DISABLE_VIDEO_COMPONENTS_DESC),
+    )
+
+    internal val DISABLE_YY_BACKGROUND = BooleanPreference(
+        KEY_DISABLE_YY_BACKGROUND, true, PreferenceUse.SWITCH, HookFeatureKey.DISABLE_YY_BACKGROUND,
+        SwitchPresentation(UiText.Settings.DISABLE_YY_BACKGROUND_LABEL, UiText.Settings.DISABLE_YY_BACKGROUND_DESC),
+    )
+    internal val DISABLE_SWAN_PRELOAD = BooleanPreference(
+        KEY_DISABLE_SWAN_PRELOAD, true, PreferenceUse.SWITCH, HookFeatureKey.DISABLE_SWAN_PRELOAD,
+        SwitchPresentation(UiText.Settings.DISABLE_SWAN_PRELOAD_LABEL, UiText.Settings.DISABLE_SWAN_PRELOAD_DESC),
     )
 
     private val retiredKeys = listOf(
@@ -56,5 +67,7 @@ object PerformancePreferences {
         COOKIE_SYNC_DEDUP,
         DISABLE_AD_SDK_COMPONENTS,
         DISABLE_VIDEO_COMPONENTS,
+        DISABLE_YY_BACKGROUND,
+        DISABLE_SWAN_PRELOAD,
     )
 }

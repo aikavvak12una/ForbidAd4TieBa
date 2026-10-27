@@ -410,7 +410,7 @@ class ConfigManagerTest {
             assertFalse(snapshot.isPerformanceOptimizationEnabled)
             assertFalse(snapshot.isCookieSyncDedupEnabled)
             assertFalse(snapshot.isAdSdkComponentsDisabled)
-            assertFalse(snapshot.isVideoComponentsDisabled)
+            assertFalse(snapshot.isVideoPreloadDisabled)
         }
     }
 
@@ -427,7 +427,7 @@ class ConfigManagerTest {
             assertTrue(snapshot.isPerformanceOptimizationEnabled)
             assertTrue(snapshot.isCookieSyncDedupEnabled)
             assertTrue(snapshot.isAdSdkComponentsDisabled)
-            assertTrue(snapshot.isVideoComponentsDisabled)
+            assertTrue(snapshot.isVideoPreloadDisabled)
         }
     }
 
@@ -442,7 +442,7 @@ class ConfigManagerTest {
                 assertEquals(master, snapshot.isPerformanceOptimizationEnabled)
                 assertEquals(master, snapshot.isCookieSyncDedupEnabled)
                 assertEquals(master, snapshot.isAdSdkComponentsDisabled)
-                assertEquals(master, snapshot.isVideoComponentsDisabled)
+                assertEquals(master, snapshot.isVideoPreloadDisabled)
             }
         }
     }
@@ -455,7 +455,7 @@ class ConfigManagerTest {
             Triple(PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS, HookFeatureKey.DISABLE_AD_SDK_COMPONENTS,
                 { s: SettingsSnapshot -> s.isAdSdkComponentsDisabled }),
             Triple(PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS, HookFeatureKey.DISABLE_VIDEO_COMPONENTS,
-                { s: SettingsSnapshot -> s.isVideoComponentsDisabled }),
+                { s: SettingsSnapshot -> s.isVideoPreloadDisabled }),
         )
         val saved = targets.associate { it.first to true } + mapOf(
             AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
@@ -489,7 +489,7 @@ class ConfigManagerTest {
                     PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
                 ))
                 val lines = SettingsDiagnostics.formatPerformanceStatusLines(snapshot)
-                assertEquals(4, lines.size)
+                assertEquals(6, lines.size)
                 val status = lines.single { it.startsWith("PerformanceFeature[${keys[index]}]") }
                 assertTrue(status.contains("active=OFF scan=$state reason=scan_unavailable"))
             }

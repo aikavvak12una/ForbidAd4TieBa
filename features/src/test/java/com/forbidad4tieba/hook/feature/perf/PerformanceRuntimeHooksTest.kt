@@ -230,7 +230,7 @@ class PerformanceRuntimeHooksTest {
                             isPerformanceOptimizationEnabled = master,
                             isCookieSyncDedupEnabled = cookie,
                             isAdSdkComponentsDisabled = ads,
-                            isVideoComponentsDisabled = video,
+                            isVideoPreloadDisabled = video,
                             isPostPageAdBlockEnabled = postAd,
                         )
                         snapshotField.set(ConfigManager, settings)

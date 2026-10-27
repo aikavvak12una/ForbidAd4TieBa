@@ -4,7 +4,6 @@ import com.forbidad4tieba.hook.FeatureDefinition
 import com.forbidad4tieba.hook.FeaturePhase
 import com.forbidad4tieba.hook.FeatureProcess
 import com.forbidad4tieba.hook.HookInstallEntry
-import com.forbidad4tieba.hook.HookProcess
 import com.forbidad4tieba.hook.symbol.contract.PerformanceContract
 
 internal val PerformanceFeature = FeatureDefinition(
@@ -18,9 +17,7 @@ internal val PerformanceFeature = FeatureDefinition(
             CookieSyncDedupHook.hook(PerformanceContract.resolvePerformanceAbSymbols(cl, context.symbols))
         }
     }
-    if ((context.isMain && settings.isAdSdkComponentsDisabled) ||
-        (HookProcess.isVideoPlaybackProcess(context.processName) && settings.isVideoComponentsDisabled)
-    ) {
+    if (context.isMain && settings.isAdSdkComponentsDisabled) {
         entries += HookInstallEntry("AdSdkInitBlockHook") { cl ->
             AdSdkInitBlockHook.hook(PerformanceContract.resolveRuntimeSymbols(cl, context.symbols))
         }

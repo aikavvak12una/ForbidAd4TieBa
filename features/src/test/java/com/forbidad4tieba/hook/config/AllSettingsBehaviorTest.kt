@@ -158,7 +158,11 @@ class AllSettingsBehaviorTest {
                 assertEquals("ad SDK capability: $name/$state/$locked",
                     oldAdSdk && scanAvailable, result.snapshot.isAdSdkComponentsDisabled)
                 assertEquals("video capability: $name/$state/$locked",
-                    oldVideo && scanAvailable, result.snapshot.isVideoComponentsDisabled)
+                    oldVideo && scanAvailable, result.snapshot.isVideoPreloadDisabled)
+                val backgroundDefaultsEnabled = result.snapshot.areRestrictedFeaturesUnlocked &&
+                    result.snapshot.isPerformanceOptimizationEnabled && scanAvailable
+                assertEquals("YY default: $name/$state/$locked", backgroundDefaultsEnabled, result.snapshot.isYyBackgroundDisabled)
+                assertEquals("Swan default: $name/$state/$locked", backgroundDefaultsEnabled, result.snapshot.isSwanPreloadDisabled)
 
                 val retiredBeforeDefaultNotify =
                     ", isPbScrollCoalesceEnabled=${oldPerformanceValue("enable_pb_scroll_coalesce", true)}"
@@ -176,8 +180,10 @@ class AllSettingsBehaviorTest {
                         ", isLowEndDeviceConfigForced=${oldPerformanceValue("force_low_end_device_config", true)}" +
                         ", isTitanPatchBlockEnabled=${oldPerformanceValue("block_titan_patch", false, false)}"
                 val performanceProjection = result.snapshot.toString()
+                    .replace(", isYyBackgroundDisabled=$backgroundDefaultsEnabled, isSwanPreloadDisabled=$backgroundDefaultsEnabled", "")
+                    .replace("isVideoPreloadDisabled=", "isVideoComponentsDisabled=")
                     .replace("isCookieSyncDedupEnabled=", "isHostPerformanceFlagsForced=")
-                    .replace("isVideoComponentsDisabled=${result.snapshot.isVideoComponentsDisabled}", "isVideoComponentsDisabled=$oldVideo")
+                    .replace("isVideoComponentsDisabled=${result.snapshot.isVideoPreloadDisabled}", "isVideoComponentsDisabled=$oldVideo")
                     .replace("isAdSdkComponentsDisabled=${result.snapshot.isAdSdkComponentsDisabled}", "isAdSdkComponentsDisabled=$oldAdSdk")
                     .replace(", isDefaultNotifyTabEnabled=", "$retiredBeforeDefaultNotify, isDefaultNotifyTabEnabled=")
                     .replace(", isCustomPostFilterEnabled=", "$retiredBeforePostFilter, isCustomPostFilterEnabled=")

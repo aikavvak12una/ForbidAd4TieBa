@@ -13,7 +13,11 @@ class EffectiveSettingsPolicyTest {
             Triple(PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS, HookFeatureKey.DISABLE_AD_SDK_COMPONENTS,
                 { s: SettingsSnapshot -> s.isAdSdkComponentsDisabled }),
             Triple(PerformancePreferences.KEY_DISABLE_VIDEO_COMPONENTS, HookFeatureKey.DISABLE_VIDEO_COMPONENTS,
-                { s: SettingsSnapshot -> s.isVideoComponentsDisabled }),
+                { s: SettingsSnapshot -> s.isVideoPreloadDisabled }),
+            Triple(PerformancePreferences.KEY_DISABLE_YY_BACKGROUND, HookFeatureKey.DISABLE_YY_BACKGROUND,
+                { s: SettingsSnapshot -> s.isYyBackgroundDisabled }),
+            Triple(PerformancePreferences.KEY_DISABLE_SWAN_PRELOAD, HookFeatureKey.DISABLE_SWAN_PRELOAD,
+                { s: SettingsSnapshot -> s.isSwanPreloadDisabled }),
         )
         for ((key, capability, read) in targets) for (mask in 0 until 16) {
             for (availability in ScanFeatureAvailabilityState.entries) {
@@ -60,7 +64,7 @@ class EffectiveSettingsPolicyTest {
                 val before = saved.toMap()
                 val values = UserSettings(saved)
                 val snapshot = EffectiveSettingsPolicy.derive(values, host, RemoteSettingsPolicy(false)).snapshot
-                assertEquals(master && videoChoice, snapshot.isVideoComponentsDisabled)
+                assertEquals(master && videoChoice, snapshot.isVideoPreloadDisabled)
                 assertEquals(master && adChoice, snapshot.isAdSdkComponentsDisabled)
                 assertEquals(adChoice, values.getBoolean(PerformancePreferences.KEY_DISABLE_AD_SDK_COMPONENTS, !adChoice))
                 assertEquals(before, saved)
@@ -90,7 +94,7 @@ class EffectiveSettingsPolicyTest {
                 ))
                 val snapshot = EffectiveSettingsPolicy.derive(values, host, RemoteSettingsPolicy(false)).snapshot
                 assertEquals("video control: $mask/$videoAvailable/$filterAvailable",
-                    performance && videoDisabled && videoAvailable, snapshot.isVideoComponentsDisabled)
+                    performance && videoDisabled && videoAvailable, snapshot.isVideoPreloadDisabled)
                 assertEquals("video post filter: $mask/$videoAvailable/$filterAvailable",
                     filter && videoPostsFiltered && filterAvailable, snapshot.isPostVideoFilterEnabled)
             }

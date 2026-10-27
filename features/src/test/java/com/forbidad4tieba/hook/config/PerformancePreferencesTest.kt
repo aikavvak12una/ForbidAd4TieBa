@@ -13,15 +13,17 @@ class PerformancePreferencesTest {
         "force_low_end_device_config", "block_titan_patch",
     )
     private val capabilities = listOf(HookFeatureKey.COOKIE_SYNC_DEDUP,
-        HookFeatureKey.DISABLE_AD_SDK_COMPONENTS, HookFeatureKey.DISABLE_VIDEO_COMPONENTS)
+        HookFeatureKey.DISABLE_AD_SDK_COMPONENTS, HookFeatureKey.DISABLE_VIDEO_COMPONENTS,
+        HookFeatureKey.DISABLE_YY_BACKGROUND, HookFeatureKey.DISABLE_SWAN_PRELOAD)
 
-    @Test fun declarationKeepsOnlyTheMasterAndThreeVerifiedControlsWithOriginalChoices() {
+    @Test fun allPerformanceChildrenDefaultOnAndTheMasterDefaultIsPreserved() {
         assertEquals("force_host_performance_flags", PerformancePreferences.KEY_COOKIE_SYNC_DEDUP)
         assertEquals(listOf(
             "enable_performance_optimization", "force_host_performance_flags",
             "disable_ad_sdk_components", "disable_video_components",
+            "disable_yy_background", "disable_swan_preload",
         ), PerformancePreferences.preferences.map { it.key })
-        assertEquals(listOf(false, true, true, true), PerformancePreferences.preferences.map { it.defaultValue })
+        assertEquals(listOf(false, true, true, true, true, true), PerformancePreferences.preferences.map { it.defaultValue })
         assertEquals(listOf(null) + capabilities, PerformancePreferences.preferences.map { it.capabilityKey })
         retiredKeys.forEach { key -> assertFalse(key, SettingsCatalog.preferences.any { it.key == key }) }
         val fields = SettingsSnapshot::class.java.declaredFields.map { it.name }.toSet()
@@ -29,7 +31,7 @@ class PerformancePreferencesTest {
             "isPbPerformanceModeEnabled", "isPbScrollCoalesceEnabled", "isHostSlideAnimationDisabled",
             "isHostFeedColdOptEnabled", "isApsarasScheduleDisabled", "isFlutterPreinitDisabled",
             "isLowEndDeviceConfigForced", "isTitanPatchBlockEnabled", "isHostPerformanceFlagsForced",
-            "isVideoPreloadDisabled")) {
+            "isVideoComponentsDisabled")) {
             assertFalse("Obsolete runtime field: $field", field in fields)
         }
     }
@@ -39,6 +41,8 @@ class PerformancePreferencesTest {
             "force_host_performance_flags" to false,
             "disable_ad_sdk_components" to true,
             "disable_video_components" to false,
+            "disable_yy_background" to false,
+            "disable_swan_preload" to false,
             "enable_performance_optimization" to true,
             "unrelated" to 3,
         )
@@ -88,7 +92,9 @@ class PerformancePreferencesTest {
             )), host, RemoteSettingsPolicy(false)).snapshot
             assertEquals(chosen, snapshot.isCookieSyncDedupEnabled)
             assertTrue(snapshot.isAdSdkComponentsDisabled)
-            assertTrue(snapshot.isVideoComponentsDisabled)
+            assertTrue(snapshot.isVideoPreloadDisabled)
+            assertTrue(snapshot.isYyBackgroundDisabled)
+            assertTrue(snapshot.isSwanPreloadDisabled)
         }
     }
 

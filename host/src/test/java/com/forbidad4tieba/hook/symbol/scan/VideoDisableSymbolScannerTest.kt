@@ -1,8 +1,6 @@
 package com.forbidad4tieba.hook.symbol.scan
 
 import com.forbidad4tieba.hook.symbol.model.VideoDisableTarget
-import com.baidu.searchbox.player.kernel.AbsVideoKernel
-import com.baidu.searchbox.player.kernel.EmptyKernel
 import java.lang.reflect.Modifier
 import org.junit.Assert.*
 import org.junit.Test
@@ -27,8 +25,7 @@ class VideoDisableSymbolScannerTest {
             assertTrue(target.name, target.hasConsumer(1, 1))
             assertEquals(target.name, !target.requiresExternalConsumer, target.hasConsumer(1, 0))
         }
-        assertEquals(setOf(VideoDisableTarget.TB_START, VideoDisableTarget.TB_SET_PATH,
-            VideoDisableTarget.CYBER_START, VideoDisableTarget.CYBER_SET_PATH), VideoDisableTarget.entries.filter { it.requiresExternalConsumer }.toSet())
+
     }
 
     @Test fun pcdnOwnerAndStartAmbiguityFailClosed() {
@@ -47,18 +44,8 @@ class VideoDisableSymbolScannerTest {
         assertFalse(VideoDisableSymbolScanner.isPcdnStartSignature(Modifier.PUBLIC or Modifier.STATIC, "void", emptyList()))
     }
 
-    @Test fun playbackDispatchRequiresOneIntVoidInstanceTarget() {
-        assertNull(VideoDisableSymbolScanner.uniquePlayDispatch(emptyList()))
-        assertEquals("owner#dispatch", VideoDisableSymbolScanner.uniquePlayDispatch(listOf("owner#dispatch")))
-        assertNull(VideoDisableSymbolScanner.uniquePlayDispatch(listOf("owner#first", "owner#second")))
-        assertTrue(VideoDisableSymbolScanner.isPlayDispatchSignature(Modifier.PUBLIC, "void", listOf("int")))
-        assertFalse(VideoDisableSymbolScanner.isPlayDispatchSignature(Modifier.PUBLIC or Modifier.STATIC, "void", listOf("int")))
-        assertFalse(VideoDisableSymbolScanner.isPlayDispatchSignature(Modifier.PUBLIC, "boolean", listOf("int")))
-        assertFalse(VideoDisableSymbolScanner.isPlayDispatchSignature(Modifier.PUBLIC, "void", emptyList()))
-    }
-
     @Test fun virtualDispatchEvidenceAcceptsCompatibleAbstractInterfacesButNotPrivateStaticOrOtherOverloads() {
-        val target = VideoDisableTarget.BD_PREPARE
+        val target = VideoDisableTarget.PREBOOT_WORK
         assertTrue(VideoDisableSymbolScanner.isVirtualDispatchSignature(target, Modifier.PUBLIC or Modifier.ABSTRACT, "void", emptyList()))
         assertTrue(VideoDisableSymbolScanner.isVirtualDispatchSignature(target, Modifier.PROTECTED, "void", emptyList()))
         assertFalse(VideoDisableSymbolScanner.isVirtualDispatchSignature(target, Modifier.PUBLIC or Modifier.STATIC, "void", emptyList()))
@@ -67,20 +54,7 @@ class VideoDisableSymbolScannerTest {
         assertFalse(VideoDisableSymbolScanner.isVirtualDispatchSignature(target, Modifier.PUBLIC, "boolean", emptyList()))
         assertFalse(VideoDisableSymbolScanner.isVirtualDispatchSignature(VideoDisableTarget.PREBOOT_DELIVER, Modifier.PUBLIC,
             "void", VideoDisableTarget.PREBOOT_DELIVER.parameterTypeNames))
-        assertFalse(VideoDisableSymbolScanner.isVirtualDispatchSignature(VideoDisableTarget.MEDIA_PREFETCH, Modifier.PUBLIC,
-            "void", VideoDisableTarget.MEDIA_PREFETCH.parameterTypeNames))
+
     }
 
-    @Test fun emptyKernelSupportRejectsPrivateParameterizedAbstractAndUnrelatedConstruction() {
-        val base = AbsVideoKernel::class.java
-        assertTrue(VideoDisableSymbolScanner.isEmptyKernelConstructorValid(EmptyKernel::class.java.getDeclaredConstructor(), base))
-        for (type in listOf(PrivateEmpty::class.java, ParameterizedEmpty::class.java, AbstractEmpty::class.java, UnrelatedEmpty::class.java)) {
-            assertFalse(type.name, VideoDisableSymbolScanner.isEmptyKernelConstructorValid(type.declaredConstructors.first(), base))
-        }
-    }
-
-    class PrivateEmpty private constructor() : AbsVideoKernel()
-    class ParameterizedEmpty(val value: Int) : AbsVideoKernel()
-    abstract class AbstractEmpty : AbsVideoKernel()
-    class UnrelatedEmpty
 }

@@ -59,7 +59,9 @@ object SettingsDiagnostics {
                 "reason=${masterReason(masterConfigured, settings.isPerformanceOptimizationEnabled)}",
             childLine(PerformancePreferences.COOKIE_SYNC_DEDUP, settings.isCookieSyncDedupEnabled),
             childLine(PerformancePreferences.DISABLE_AD_SDK_COMPONENTS, settings.isAdSdkComponentsDisabled),
-            childLine(PerformancePreferences.DISABLE_VIDEO_COMPONENTS, settings.isVideoComponentsDisabled),
+            childLine(PerformancePreferences.DISABLE_VIDEO_COMPONENTS, settings.isVideoPreloadDisabled),
+            childLine(PerformancePreferences.DISABLE_YY_BACKGROUND, settings.isYyBackgroundDisabled),
+            childLine(PerformancePreferences.DISABLE_SWAN_PRELOAD, settings.isSwanPreloadDisabled),
         )
     }
 }

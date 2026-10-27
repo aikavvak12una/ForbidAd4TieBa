@@ -47,7 +47,7 @@ object PerformanceContract : SymbolContract("Performance") {
         PointOwner("PerformanceAB.${PerformanceAbTarget.PB_COMMENT_AD.methodName}", true, listOf(HookFeatureKey.BLOCK_AD_POST_PAGE)),
         PointOwner("PerformanceAB.${PerformanceAbTarget.PB_BANNER_AD.methodName}", true, listOf(HookFeatureKey.BLOCK_AD_POST_PAGE)),
     ) + PerformanceRuntimeTarget.entries.map {
-        PointOwner("PerformanceRuntime.${it.name}", true, listOf(it.featureKey, HookFeatureKey.DISABLE_VIDEO_COMPONENTS))
+        PointOwner("PerformanceRuntime.${it.name}", true, listOf(it.featureKey))
     }
 
     internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean {

@@ -23,7 +23,7 @@ object AdSdkInitBlockHook {
 
     fun hook(targets: Map<PerformanceRuntimeTarget, Method>): InstallOutcome? {
         val settings = ConfigManager.snapshot()
-        if (!settings.isAdSdkComponentsDisabled && !settings.isVideoComponentsDisabled) {
+        if (!settings.isAdSdkComponentsDisabled) {
             return InstallOutcome.skipped("config disabled")
         }
         val api = XposedCompat.module ?: return InstallOutcome.skipped("module unavailable")
@@ -90,7 +90,6 @@ object AdSdkInitBlockHook {
 
     private fun isEnabled(): Boolean {
         val settings = ConfigManager.snapshot()
-        return settings.isAdSdkComponentsDisabled ||
-            (settings.isVideoComponentsDisabled && VideoComponentsBlockHook.isInstallationActive())
+        return settings.isAdSdkComponentsDisabled
     }
 }

@@ -8,7 +8,6 @@ import com.forbidad4tieba.hook.symbol.model.VideoDisableCache
 import com.forbidad4tieba.hook.symbol.model.VideoDisableFamily
 import com.forbidad4tieba.hook.symbol.model.VideoDisableSymbols
 import com.forbidad4tieba.hook.symbol.model.VideoDisableTarget
-import com.forbidad4tieba.hook.symbol.model.PerformanceRuntimeTarget
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.FindMethod
 import org.luckypray.dexkit.query.FindClass
@@ -16,15 +15,9 @@ import org.luckypray.dexkit.query.matchers.MethodMatcher
 import org.luckypray.dexkit.query.matchers.ClassMatcher
 import org.luckypray.dexkit.result.MethodData
 import java.lang.reflect.Method
-import java.lang.reflect.Constructor
 import java.lang.reflect.Modifier
 
 internal object VideoDisableSymbolScanner {
-    private const val TB_VIDEO_VIEW = "com.baidu.tieba.play.TbVideoView"
-    private const val EMPTY_KERNEL = "com.baidu.searchbox.player.kernel.EmptyKernel"
-    private const val ABS_VIDEO_KERNEL = "com.baidu.searchbox.player.kernel.AbsVideoKernel"
-    internal const val EMPTY_KERNEL_CONSTRUCTOR = "com.baidu.searchbox.player.kernel.EmptyKernel#<init>()"
-
     fun scan(context: Context, cl: ClassLoader, logger: ScanLogger?): VideoDisableScan {
         val paths = listOfNotNull(context.applicationInfo?.sourceDir) + context.applicationInfo?.splitSourceDirs.orEmpty()
         return HookSymbolScanSession.withDexKitBridge(paths, logger) { source ->
@@ -75,15 +68,8 @@ internal object VideoDisableSymbolScanner {
             val pcdn = scanSubStep("VideoDisable.PCDN_START", logger, null as String?) {
                 scanPcdn(source.bridge, cl, logger)
             }
-            val playDispatch = scanSubStep("VideoDisable.PLAY_DISPATCH", logger, null as String?) {
-                scanPlayDispatch(source.bridge, cl, logger)
-            }
-            val emptyKernel = scanSubStep("VideoDisable.EMPTY_KERNEL_CONSTRUCTOR", logger, null as String?) {
-                restoreEmptyKernelConstructor(cl, EMPTY_KERNEL_CONSTRUCTOR)
-                EMPTY_KERNEL_CONSTRUCTOR
-            }
-            VideoDisableScan(VideoDisableCache(families), pcdn, playDispatch, emptyKernel)
-        } ?: VideoDisableScan(VideoDisableCache(), null, null, null)
+            VideoDisableScan(VideoDisableCache(families), pcdn)
+        } ?: VideoDisableScan(VideoDisableCache(), null)
     }
 
     private fun collectHierarchy(bridge: DexKitBridge, root: String): List<String> {
@@ -162,54 +148,6 @@ internal object VideoDisableSymbolScanner {
         return expected
     }
 
-    private fun scanPlayDispatch(bridge: DexKitBridge, cl: ClassLoader, logger: ScanLogger?): String? {
-        val starts = bridge.getClassData(TB_VIDEO_VIEW)?.methods.orEmpty().filter {
-            it.methodName == "start" && VideoDisableTarget.TB_START.matchesSignature(it.modifiers, it.returnTypeName, it.paramTypeNames)
-        }
-        val start = starts.singleOrNull() ?: return null
-        val candidates = start.invokes.filter { method ->
-            method.declaredClassName == TB_VIDEO_VIEW &&
-                isPlayDispatchSignature(method.modifiers, method.returnTypeName, method.paramTypeNames) && method.invokes.any {
-                    it.declaredClassName == "android.os.PowerManager\$WakeLock" && it.methodName == "acquire" && it.paramTypeNames.isEmpty()
-                }
-        }.distinctBy { it.descriptor }
-        val descriptor = uniquePlayDispatch(candidates.map { "${it.declaredClassName}#${it.methodName}" }) ?: run {
-            HookSymbolScanDiagnostics.log(logger, "VideoDisable.PLAY_DISPATCH: unavailable candidates=${candidates.size}")
-            return null
-        }
-        restorePlayDispatch(cl, descriptor)
-        return descriptor
-    }
-
-    internal fun uniquePlayDispatch(descriptors: List<String>): String? = descriptors.singleOrNull()
-    internal fun isPlayDispatchSignature(modifiers: Int, returnType: String, parameters: List<String>): Boolean =
-        !Modifier.isStatic(modifiers) && !Modifier.isAbstract(modifiers) && returnType == "void" && parameters == listOf("int")
-
-    internal fun restorePlayDispatch(cl: ClassLoader, descriptor: String): Method {
-        val parts = descriptor.split('#')
-        require(parts.size == 2 && parts[0] == TB_VIDEO_VIEW && parts[1].isNotBlank()) { "invalid play dispatch descriptor" }
-        val owner = Class.forName(TB_VIDEO_VIEW, false, cl)
-        return owner.declaredMethods.singleOrNull {
-            it.name == parts[1] && isPlayDispatchSignature(it.modifiers, it.returnType.name, it.parameterTypes.map { type -> type.name })
-        }?.apply { isAccessible = true } ?: error("invalid play dispatch signature")
-    }
-
-    internal fun restoreEmptyKernelConstructor(cl: ClassLoader, descriptor: String): Constructor<*> {
-        require(descriptor == EMPTY_KERNEL_CONSTRUCTOR) { "invalid empty-kernel constructor descriptor" }
-        val empty = Class.forName(EMPTY_KERNEL, false, cl)
-        val base = Class.forName(ABS_VIDEO_KERNEL, false, cl)
-        check(empty.name == EMPTY_KERNEL && base.name == ABS_VIDEO_KERNEL) { "wrong host empty-kernel types" }
-        return empty.getDeclaredConstructor().apply {
-            check(isEmptyKernelConstructorValid(this, base)) { "empty kernel requires a concrete AbsVideoKernel with a public no-argument constructor" }
-            isAccessible = true
-        }
-    }
-
-    internal fun isEmptyKernelConstructorValid(constructor: Constructor<*>, base: Class<*>): Boolean =
-        Modifier.isPublic(constructor.modifiers) && constructor.parameterCount == 0 &&
-            Modifier.isPublic(constructor.declaringClass.modifiers) && !Modifier.isAbstract(constructor.declaringClass.modifiers) &&
-            base.isAssignableFrom(constructor.declaringClass)
-
     private fun scanPcdn(bridge: DexKitBridge, cl: ClassLoader, logger: ScanLogger?): String? {
         val parsers = bridge.findMethod(FindMethod.create().searchPackages("com.baidu.tieba").matcher(
             MethodMatcher.create().returnType("void").paramTypes("org.json.JSONObject")
@@ -256,30 +194,19 @@ internal object VideoDisableSymbolScanner {
         }?.apply { isAccessible = true } ?: error("invalid PCDN start signature")
     }
 
-    fun restore(
-        cl: ClassLoader,
-        cache: VideoDisableCache,
-        pcdn: String?,
-        playDispatch: String?,
-        adTargets: Map<PerformanceRuntimeTarget, Method>,
-        emptyKernel: String?,
-    ): VideoDisableSymbols? {
-        if (!cache.isComplete() || pcdn.isNullOrBlank() || playDispatch.isNullOrBlank() || emptyKernel != EMPTY_KERNEL_CONSTRUCTOR) return null
+    fun restore(cl: ClassLoader, cache: VideoDisableCache, pcdn: String?): VideoDisableSymbols? {
+        if (!cache.isComplete() || pcdn.isNullOrBlank()) return null
         return scanSubStep("VideoDisable.Restore", null, null) {
-            val methods = VideoDisableTarget.entries.associateWith { restoreFamily(cl, it, cache.families.getValue(it.name)) }
-            VideoDisableSymbols(methods, restorePcdn(cl, pcdn), restorePlayDispatch(cl, playDispatch), adTargets,
-                restoreEmptyKernelConstructor(cl, emptyKernel))
+            VideoDisableSymbols(VideoDisableTarget.entries.associateWith { restoreFamily(cl, it, cache.families.getValue(it.name)) },
+                restorePcdn(cl, pcdn))
         }
     }
 
-    /** Partial scans remain valid evidence, but only a complete group may be installed. */
-    fun isCacheValid(cl: ClassLoader, cache: VideoDisableCache, pcdn: String?, playDispatch: String?, emptyKernel: String?): Boolean =
+    fun isCacheValid(cl: ClassLoader, cache: VideoDisableCache, pcdn: String?): Boolean =
         scanSubStep("VideoDisable.Cache", null, false) {
             if (!cache.hasValidMetadata()) return@scanSubStep false
             cache.families.forEach { (name, family) -> restoreFamily(cl, VideoDisableTarget.valueOf(name), family) }
             if (pcdn != null) restorePcdn(cl, pcdn)
-            if (playDispatch != null) restorePlayDispatch(cl, playDispatch)
-            if (emptyKernel != null) restoreEmptyKernelConstructor(cl, emptyKernel)
             true
         }
 }

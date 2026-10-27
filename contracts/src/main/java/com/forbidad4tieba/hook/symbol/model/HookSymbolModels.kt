@@ -48,6 +48,8 @@ object HookFeatureKey {
     const val COOKIE_SYNC_DEDUP = "force_host_performance_flags"
     const val DISABLE_AD_SDK_COMPONENTS = "disable_ad_sdk_components"
     const val DISABLE_VIDEO_COMPONENTS = "disable_video_components"
+    const val DISABLE_YY_BACKGROUND = "disable_yy_background"
+    const val DISABLE_SWAN_PRELOAD = "disable_swan_preload"
     const val DISABLE_PB_GESTURE_FONT_SCALE = "disable_pb_gesture_font_scale"
     const val DISABLE_FORUM_NATIVE_TOP_SHIFT = "disable_forum_native_top_shift"
     const val FREE_COPY = "enable_free_copy"
@@ -96,6 +98,8 @@ object HookFeatureKey {
         COOKIE_SYNC_DEDUP,
         DISABLE_AD_SDK_COMPONENTS,
         DISABLE_VIDEO_COMPONENTS,
+        DISABLE_YY_BACKGROUND,
+        DISABLE_SWAN_PRELOAD,
         DISABLE_PB_GESTURE_FONT_SCALE,
         DISABLE_FORUM_NATIVE_TOP_SHIFT,
         FREE_COPY,

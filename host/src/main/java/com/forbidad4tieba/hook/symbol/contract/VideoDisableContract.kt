@@ -9,38 +9,29 @@ import com.forbidad4tieba.hook.symbol.model.VideoDisableScan
 import com.forbidad4tieba.hook.symbol.model.VideoDisableCache
 import com.forbidad4tieba.hook.symbol.model.VideoDisableSymbols
 import com.forbidad4tieba.hook.symbol.model.VideoDisableTarget
-import com.forbidad4tieba.hook.symbol.model.PerformanceRuntimeTarget
 import com.forbidad4tieba.hook.symbol.scan.VideoDisableSymbolScanner
 import com.forbidad4tieba.hook.symbol.status.HookPointState
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
 
-/** Playback and background producers form one required installation group. */
+/** Owns only background video producers; no playback or ad-channel dependency. */
 object VideoDisableContract : SymbolContract("VideoDisable") {
     val methods = nested("videoDisableMethods", VideoDisableCache(), VideoDisableCache::fromJson, VideoDisableCache::toJson)
     val pcdnStartMethod = text("videoDisablePcdnStart")
-    val playDispatchMethod = text("videoDisablePlayDispatch")
-    val emptyKernelConstructor = text("videoDisableEmptyKernelConstructor")
 
     internal override fun scan(scan: SymbolScanContext, output: HookSymbolsBuilder) = with(scan) {
-        val found = runScanStep("VideoDisable", logger, scanErrors, VideoDisableScan(VideoDisableCache(), null, null, null)) {
+        val found = runScanStep("VideoDisable", logger, scanErrors, VideoDisableScan(VideoDisableCache(), null)) {
             VideoDisableSymbolScanner.scan(context, cl, logger)
         }
         output[methods] = found.methods
         output[pcdnStartMethod] = found.pcdnStart
-        output[playDispatchMethod] = found.playDispatch
-        output[emptyKernelConstructor] = found.emptyKernelConstructor
     }
 
     fun resolve(cl: ClassLoader, symbols: HookSymbols?): VideoDisableSymbols? = symbols?.let {
-        val adTargets = PerformanceContract.resolveRuntimeSymbols(cl, it)
-        if (adTargets.keys != PerformanceRuntimeTarget.entries.toSet()) return@let null
-        VideoDisableSymbolScanner.restore(cl, it[methods], it[pcdnStartMethod], it[playDispatchMethod], adTargets, it[emptyKernelConstructor])
+        VideoDisableSymbolScanner.restore(cl, it[methods], it[pcdnStartMethod])
     }
 
     internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> {
-        val adStatus = PerformanceContract.capabilities(symbols).getValue(HookFeatureKey.DISABLE_AD_SDK_COMPONENTS)
-        val missing = points(symbols).filter { it.isUnavailable() }.map { it.name } +
-            adStatus.missingCritical + adStatus.missingOptional
+        val missing = points(symbols).filter { it.isUnavailable() }.map { it.name }
         return mapOf(HookFeatureKey.DISABLE_VIDEO_COMPONENTS to HookFeatureStatus(
             if (missing.isEmpty()) HookFeatureState.FULL else HookFeatureState.DISABLED,
             missingCritical = missing,
@@ -59,13 +50,7 @@ object VideoDisableContract : SymbolContract("VideoDisable") {
         }
         val pcdn = symbols[pcdnStartMethod]
         val result = stable + HookPointStatus("VideoDisable.PCDN_START", if (pcdn.isNullOrBlank()) HookPointState.MISSING else HookPointState.FOUND,
-            if (pcdn.isNullOrBlank()) listOf("pcdnStart") else emptyList(), pcdn ?: "pcdn configuration service-start entry") +
-            HookPointStatus("VideoDisable.PLAY_DISPATCH", if (symbols[playDispatchMethod].isNullOrBlank()) HookPointState.MISSING else HookPointState.FOUND,
-                if (symbols[playDispatchMethod].isNullOrBlank()) listOf("playDispatch") else emptyList(), symbols[playDispatchMethod] ?: "video playback WakeLock dispatch") +
-            HookPointStatus("VideoDisable.EMPTY_KERNEL_CONSTRUCTOR",
-                if (symbols[emptyKernelConstructor] == VideoDisableSymbolScanner.EMPTY_KERNEL_CONSTRUCTOR) HookPointState.FOUND else HookPointState.MISSING,
-                if (symbols[emptyKernelConstructor] == VideoDisableSymbolScanner.EMPTY_KERNEL_CONSTRUCTOR) emptyList() else listOf("emptyKernelConstructor"),
-                VideoDisableSymbolScanner.EMPTY_KERNEL_CONSTRUCTOR)
+            if (pcdn.isNullOrBlank()) listOf("pcdnStart") else emptyList(), pcdn ?: "pcdn configuration service-start entry")
         return if (cache.hasValidMetadata()) result else result +
             HookPointStatus("VideoDisable.TargetSet", HookPointState.ERROR, listOf("unknownOrDuplicateTargets"), "invalid cached video target set")
     }
@@ -73,5 +58,5 @@ object VideoDisableContract : SymbolContract("VideoDisable") {
     internal override val pointOwners = listOf(PointOwner("VideoDisable.", true, listOf(HookFeatureKey.DISABLE_VIDEO_COMPONENTS)))
 
     internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean =
-        VideoDisableSymbolScanner.isCacheValid(cl, symbols[methods], symbols[pcdnStartMethod], symbols[playDispatchMethod], symbols[emptyKernelConstructor])
+        VideoDisableSymbolScanner.isCacheValid(cl, symbols[methods], symbols[pcdnStartMethod])
 }

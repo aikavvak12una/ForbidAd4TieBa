@@ -26,26 +26,10 @@ import org.junit.Test
 
 class VideoComponentsBlockHookTest {
     private val symbols = VideoDisableSymbols(
-        VideoDisableTarget.entries.associateWith { point ->
-            when (point) {
-                VideoDisableTarget.DUMEDIA_CREATE_KERNEL -> listOf(KernelFactory::class.java.getDeclaredMethod("create", String::class.java))
-                VideoDisableTarget.BD_DO_PLAY -> playerMethods("doPlay")
-                VideoDisableTarget.BD_START -> playerMethods("start")
-                VideoDisableTarget.BD_RESUME -> playerMethods("resume")
-                VideoDisableTarget.TB_START -> listOf(VideoViewFixture::class.java.getDeclaredMethod("start"))
-                else -> listOf(method(if (point.blockedResult == VideoDisableResult.BOOLEAN_FALSE) "feedGate" else "point${point.ordinal}"))
-            }
-        },
+        VideoDisableTarget.entries.associateWith { point -> listOf(method(if (point.blockedResult == VideoDisableResult.BOOLEAN_FALSE) "feedGate" else "point${point.ordinal}")) },
         method("pcdn"),
-        VideoViewFixture::class.java.getDeclaredMethod("dispatch", Int::class.javaPrimitiveType),
-        mapOf(
-            PerformanceRuntimeTarget.AD_CSJ to method("adCsj"),
-            PerformanceRuntimeTarget.AD_GDT to method("adGdt"),
-            PerformanceRuntimeTarget.AD_BAIDU to method("adBaidu"),
-        ),
-        EmptyKernel::class.java.getDeclaredConstructor(),
     )
-    private val allMembers get() = (symbols.targets.values.flatten() + symbols.pcdnStart + symbols.playDispatch).distinct()
+    private val allMembers get() = (symbols.targets.values.flatten() + symbols.pcdnStart).distinct()
     private val apis = ArrayList<FakeHookApi>()
 
     @After fun release() {
@@ -93,13 +77,11 @@ class VideoComponentsBlockHookTest {
                 when (point.blockedResult) {
                     VideoDisableResult.BOOLEAN_FALSE -> assertEquals(point.name, false, result)
                     VideoDisableResult.VOID -> assertNull(point.name, result)
-                    VideoDisableResult.EMPTY_KERNEL -> assertTrue(point.name, result is EmptyKernel)
                 }
                 assertEquals(0, calls)
             }
         }
         assertNull(api.invoke(symbols.pcdnStart) { error("PCDN producer ran") })
-        assertNull(api.invoke(symbols.playDispatch) { error("play dispatch ran") })
         enabled = false
         api.callbacks.values.forEach(::assertPassesThrough)
         enabled = true
@@ -174,71 +156,29 @@ class VideoComponentsBlockHookTest {
         staleCallbacks.forEach(::assertPassesThrough)
     }
 
-    @Test fun overrideBodiesAndDirectDispatchAreStoppedBeforeTheirOuterSideEffects() {
+    @Test fun foregroundPlaybackAndSharedInitializationAreNeverIntercepted() {
         val api = api()
-        var enabled = true
-        assertEquals(InstallState.INSTALLED, install(api, enabled = { enabled }).state)
-        val player = DerivedPlayer()
-        val view = VideoViewFixture()
-        val overrideMethods = listOf("doPlay", "start", "resume").map {
-            DerivedPlayer::class.java.getDeclaredMethod(it)
+        install(api)
+        var originalCalls = 0
+        for (member in ForegroundFixture::class.java.declaredMethods) {
+            assertFalse(api.callbacks.containsKey(member))
+            api.invoke(member) { originalCalls++; null }
         }
-        for (member in overrideMethods) {
-            assertTrue(api.callbacks.containsKey(member))
-            api.invoke(member) { member.invoke(player); null }
-        }
-        val start = VideoViewFixture::class.java.getDeclaredMethod("start")
-        api.invoke(start) { view.start(); null }
-        api.invoke(symbols.playDispatch) { view.dispatch(1); null }
-        assertEquals(0, player.progressStarts)
-        assertEquals(0, player.plays)
-        assertEquals(0, view.audioFocusRequests)
-        assertEquals(0, view.wakeLocks)
-
-        enabled = false
-        for (member in overrideMethods) api.invoke(member) { member.invoke(player); null }
-        api.invoke(start) { view.start(); null }
-        api.invoke(symbols.playDispatch) { view.dispatch(1); null }
-        assertEquals(3, player.progressStarts)
-        assertEquals(3, player.plays)
-        assertEquals(2, view.audioFocusRequests)
-        assertEquals(2, view.wakeLocks)
+        assertEquals(5, originalCalls)
     }
 
-    @Test fun constructionGetsANonNullIndependentLightweightKernelAndOffRestoresTheFactory() {
-        val api = api()
-        var enabled = true
-        val beforeInstall = EmptyKernel.created
-        assertEquals(InstallState.INSTALLED, install(api, enabled = { enabled }).state)
-        assertEquals("installation must not create an early video session", beforeInstall, EmptyKernel.created)
-        val create = KernelFactory::class.java.getDeclaredMethod("create", String::class.java)
-        assertEquals(XposedInterface.ExceptionMode.PASSTHROUGH, api.exceptionModes[create])
-        val factory = KernelFactory()
-        fun construct() = RequiresNonNullLayer {
-            api.invoke(create) { factory.create("fixture") } as FixtureKernel?
-        }
-        val first = construct()
-        val second = construct()
-        assertNotNull(first.layer)
-        assertTrue(first.layer.kernel is EmptyKernel)
-        assertTrue(second.layer.kernel is EmptyKernel)
-        assertNotSame(first.layer.kernel, second.layer.kernel)
-        assertFalse(first.layer.acceptVolumeChange)
-        assertEquals(0, factory.realKernelCreates)
-        assertEquals(beforeInstall + 2, EmptyKernel.created)
-        enabled = false
-        val restored = construct()
-        assertTrue(restored.layer.kernel is RealKernel)
-        assertFalse(restored.layer.acceptVolumeChange)
-        assertEquals(1, factory.realKernelCreates)
-        assertEquals(beforeInstall + 2, EmptyKernel.created)
+    class ForegroundFixture {
+        fun initCyberPlayer() = Unit
+        fun create() = Unit
+        fun setVideoPath() = Unit
+        fun start() = Unit
+        fun prefetch() = Unit
     }
 
     @Test fun duplicateMethodsAcrossFamiliesAndSemanticPointsHaveOnlyOneHandle() {
         val api = api()
         val duplicatedFamilies = symbols.targets.mapValues { (_, family) -> family + family }.toMutableMap()
-        duplicatedFamilies[VideoDisableTarget.CYBER_INIT] = duplicatedFamilies.getValue(VideoDisableTarget.CYBER_INIT) + symbols.pcdnStart
-        duplicatedFamilies[VideoDisableTarget.TB_START] = duplicatedFamilies.getValue(VideoDisableTarget.TB_START) + symbols.playDispatch
+        duplicatedFamilies[VideoDisableTarget.PREBOOT_WORK] = duplicatedFamilies.getValue(VideoDisableTarget.PREBOOT_WORK) + symbols.pcdnStart
         val duplicated = symbols.copy(targets = duplicatedFamilies)
         val outcome = install(api, duplicated)
         assertEquals(InstallState.INSTALLED, outcome.state)
@@ -252,94 +192,12 @@ class VideoComponentsBlockHookTest {
         assertEquals(allMembers.size, api.created)
     }
 
-    @Test fun videoAdSuppressionWaitsForSuccessfulGroupAndKeepsTheOriginalAdChoice() {
-        val snapshotField = ConfigManager::class.java.getDeclaredField("settingsSnapshot").apply { isAccessible = true }
-        val moduleField = XposedCompat::class.java.getDeclaredField("module").apply { isAccessible = true }
-        val originalSettings = snapshotField.get(ConfigManager)
-        val originalModule = moduleField.get(XposedCompat)
-        try {
-            for (adChoice in listOf(false, true)) {
-                val api = api()
-                XposedCompat.attachModule(object : XposedModule() {}.apply { attachFramework(api.value) {} })
-                val selected = SettingsSnapshot.bootstrap().copy(
-                    isVideoComponentsDisabled = true, isAdSdkComponentsDisabled = adChoice,
-                )
-                snapshotField.set(ConfigManager, selected)
-                fun prepareAds() = RuntimeHooks.measure("AdSdkInitBlockHook") { AdSdkInitBlockHook.hook(symbols.adTargets) }
-                fun installVideo() = RuntimeHooks.measure("VideoComponentsBlockHook") { VideoComponentsBlockHook.hook(symbols) }
-                fun assertAdResult(expected: Boolean) {
-                    symbols.adTargets.values.forEach { member -> assertEquals(expected, api.invoke(member) { true }) }
-                }
-                try {
-                    val beforeAds = installVideo()
-                    assertEquals(InstallState.SKIPPED, beforeAds.state)
-                    assertFalse(VideoComponentsBlockHook.isInstallationActive())
-                    assertEquals(0, api.created)
-                    if (!adChoice) {
-                        api.failInstall += symbols.adTargets.getValue(PerformanceRuntimeTarget.AD_CSJ)
-                        assertEquals(InstallState.PARTIAL, prepareAds().state)
-                        assertFalse(AdSdkInitBlockHook.isPreparedFor(symbols.adTargets))
-                        assertEquals(InstallState.SKIPPED, installVideo().state)
-                        assertFalse(VideoComponentsBlockHook.isInstallationActive())
-                        assertAdResult(true)
-                        api.failInstall.clear()
-                    }
-                    val prepared = prepareAds()
-                    assertEquals(InstallState.INSTALLED, prepared.state)
-                    assertEquals(3, prepared.installedCount)
-                    assertTrue(AdSdkInitBlockHook.isPreparedFor(symbols.adTargets))
-                    assertFalse(VideoComponentsBlockHook.isInstallationActive())
-                    assertAdResult(!adChoice)
-
-                    api.failInstall += symbols.playDispatch
-                    val failedVideo = installVideo()
-                    assertEquals(InstallState.ROLLED_BACK, failedVideo.state)
-                    assertFalse(VideoComponentsBlockHook.isInstallationActive())
-                    assertAdResult(!adChoice)
-                    assertEquals(symbols.adTargets.values.toSet(), api.callbacks.keys)
-
-                    api.failInstall.clear()
-                    val active = installVideo()
-                    assertEquals(InstallState.INSTALLED, active.state)
-                    assertEquals(allMembers.size, active.installedCount)
-                    assertTrue(VideoComponentsBlockHook.isInstallationActive())
-                    assertAdResult(false)
-                    assertEquals(adChoice, ConfigManager.snapshot().isAdSdkComponentsDisabled)
-                    val beforeRepeat = api.created
-                    assertEquals(InstallState.ALREADY_INSTALLED, prepareAds().state)
-                    assertEquals(InstallState.ALREADY_INSTALLED, installVideo().state)
-                    assertEquals(beforeRepeat, api.created)
-
-                    snapshotField.set(ConfigManager, selected.copy(isVideoComponentsDisabled = false))
-                    assertAdResult(!adChoice)
-                    assertEquals(adChoice, ConfigManager.snapshot().isAdSdkComponentsDisabled)
-                    if (!adChoice) {
-                        snapshotField.set(ConfigManager, selected)
-                        val channel = PerformanceRuntimeTarget.AD_CSJ
-                        val released = RuntimeHooks.builder(api.value, symbols.adTargets.getValue(channel), "AdSdkInitBlockHook", channel.name)
-                            .intercept { error("existing ad registration should be reused") }
-                        released.unhook()
-                        assertFalse(AdSdkInitBlockHook.isPreparedFor(symbols.adTargets))
-                        assertEquals(InstallState.SKIPPED, installVideo().state)
-                        assertFalse(VideoComponentsBlockHook.isInstallationActive())
-                        assertAdResult(true)
-                    }
-                } finally {
-                    release()
-                }
-            }
-        } finally {
-            snapshotField.set(ConfigManager, originalSettings)
-            moduleField.set(XposedCompat, originalModule)
-        }
-    }
-
     @Test fun featureUsesOnlyVideoProcessesAndDoesNotFollowVideoFilteringOrAdSettings() {
         assertEquals(FeaturePhase.POST_ATTACH, VideoComponentsFeature.phase)
         assertEquals(FeatureProcess.ANY, VideoComponentsFeature.process)
         for (video in listOf(false, true)) for (filter in listOf(false, true)) for (ads in listOf(false, true)) {
             val settings = SettingsSnapshot.bootstrap().copy(
-                isVideoComponentsDisabled = video,
+                isVideoPreloadDisabled = video,
                 isPostVideoFilterEnabled = filter,
                 isAdSdkComponentsDisabled = ads,
             )
@@ -356,14 +214,11 @@ class VideoComponentsBlockHookTest {
 
     private fun install(api: FakeHookApi, targets: VideoDisableSymbols? = symbols, enabled: () -> Boolean = { true }) =
         RuntimeHooks.measure("VideoComponentsBlockHook") {
-            VideoComponentsBlockHook.install(targets, api.value, dependenciesReady = true, enabled = enabled)
+            VideoComponentsBlockHook.install(targets, api.value, enabled = enabled)
         }
 
     private fun api() = FakeHookApi().also { apis += it }
     private fun method(name: String): Method = Fixture::class.java.getDeclaredMethod(name)
-    private fun playerMethods(name: String) = listOf(
-        BasePlayer::class.java.getDeclaredMethod(name), DerivedPlayer::class.java.getDeclaredMethod(name),
-    )
     private fun originalValue(member: Executable): Any? = if ((member as Method).returnType == Boolean::class.javaPrimitiveType) true else null
     private fun assertPassesThrough(callback: XposedInterface.Hooker) {
         val expected = Any()
@@ -400,45 +255,6 @@ class VideoComponentsBlockHookTest {
         fun adCsj() = true
         fun adGdt() = true
         fun adBaidu() = true
-    }
-
-    open class BasePlayer {
-        var plays = 0
-        open fun doPlay() { plays++ }
-        open fun start() { plays++ }
-        open fun resume() { plays++ }
-    }
-
-    class DerivedPlayer : BasePlayer() {
-        var progressStarts = 0
-        override fun doPlay() { super.doPlay(); progressStarts++ }
-        override fun start() { super.start(); progressStarts++ }
-        override fun resume() { super.resume(); progressStarts++ }
-    }
-
-    open class FixtureKernel
-    class EmptyKernel : FixtureKernel() {
-        init { created++ }
-        companion object { var created = 0 }
-    }
-    class RealKernel : FixtureKernel()
-    class KernelFactory {
-        var realKernelCreates = 0
-        fun create(url: String): FixtureKernel { realKernelCreates++; return RealKernel() }
-    }
-    class KernelLayer(val kernel: FixtureKernel) {
-        var acceptVolumeChange = true
-    }
-    class RequiresNonNullLayer(createKernel: () -> FixtureKernel?) {
-        val layer = KernelLayer(requireNotNull(createKernel()))
-        init { layer.acceptVolumeChange = false }
-    }
-
-    class VideoViewFixture {
-        var audioFocusRequests = 0
-        var wakeLocks = 0
-        fun start() { dispatch(0) }
-        fun dispatch(mode: Int) { audioFocusRequests++; wakeLocks++ }
     }
 
     private fun FakeHookApi.invoke(member: Executable, original: () -> Any?): Any? {

@@ -7,6 +7,8 @@ internal object SymbolContracts {
         CommentShortcutContract,
         PerformanceContract,
         VideoDisableContract,
+        YyBackgroundContract,
+        SwanPreloadContract,
         CrashReportContract,
         DefaultPopupsContract,
         ProfileContract,

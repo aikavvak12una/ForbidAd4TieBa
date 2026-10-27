@@ -73,6 +73,8 @@ import com.forbidad4tieba.hook.feature.web.MineTabWebBlockFeature
 import com.forbidad4tieba.hook.feature.web.plainUrlDirectBrowserFeature
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.ui.SettingsMenuFeature
+import com.forbidad4tieba.hook.feature.perf.YyBackgroundFeature
+import com.forbidad4tieba.hook.feature.perf.SwanPreloadFeature
 
 /** Explicit registration order is the only composition policy here. */
 internal object FeatureCatalog {
@@ -98,6 +100,8 @@ internal object FeatureCatalog {
         PostPageAdAbFeature,
         PerformanceFeature,
         VideoComponentsFeature,
+        YyBackgroundFeature,
+        SwanPreloadFeature,
         HelpCenterFooterBlockFeature,
         AccountListDedupFeature,
         MineTabWebBlockFeature,

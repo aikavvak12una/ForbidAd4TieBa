@@ -9,16 +9,14 @@ import com.forbidad4tieba.hook.symbol.model.VideoDisableResult
 import com.forbidad4tieba.hook.symbol.model.VideoDisableSymbols
 import com.forbidad4tieba.hook.symbol.model.VideoDisableTarget
 import io.github.libxposed.api.XposedInterface
-import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 
-/** Playback and initialization are one group: a partial installation must never block either. */
+/** Blocks background producers without replacing kernels or suppressing active playback. */
 object VideoComponentsBlockHook {
     private const val OWNER = "VideoComponentsBlockHook"
 
     private class Installation(
         val members: Map<Method, VideoDisableResult>,
-        val emptyKernelConstructor: Constructor<*>,
     ) {
         @Volatile var active = false
         val handles = LinkedHashMap<Method, XposedInterface.HookHandle>()
@@ -46,17 +44,13 @@ object VideoComponentsBlockHook {
     fun hook(targets: VideoDisableSymbols?): InstallOutcome {
         if (!isEnabled()) return InstallOutcome.skipped("config disabled")
         val api = XposedCompat.module ?: return InstallOutcome.skipped("module unavailable")
-        return install(
-            targets, api,
-            dependenciesReady = targets != null && AdSdkInitBlockHook.isPreparedFor(targets.adTargets),
-        )
+        return install(targets, api)
     }
 
     @Synchronized
     internal fun install(
         targets: VideoDisableSymbols?,
         api: XposedInterface,
-        dependenciesReady: Boolean,
         enabled: () -> Boolean = ::isEnabled,
     ): InstallOutcome {
         if (!enabled()) return InstallOutcome.skipped("config disabled")
@@ -65,7 +59,6 @@ object VideoComponentsBlockHook {
             val reason = if (targets == null) "complete video group unavailable" else "missing ${missing.joinToString()}"
             return invalidate(reason)
         }
-        if (!dependenciesReady) return invalidate("ad channel dependency is not fully prepared")
         val members = LinkedHashMap<Method, VideoDisableResult>()
         for (point in VideoDisableTarget.entries) {
             for (method in targets.targets.getValue(point)) {
@@ -75,15 +68,14 @@ object VideoComponentsBlockHook {
                 }
             }
         }
-        for (method in listOf(targets.pcdnStart, targets.playDispatch)) {
+        for (method in listOf(targets.pcdnStart)) {
             val previousResult = members.putIfAbsent(method, VideoDisableResult.VOID)
             if (previousResult != null && previousResult != VideoDisableResult.VOID) {
                 return invalidate("conflicting video results for $method")
             }
         }
         val previous = installation
-        if (previous?.active == true && previous.members == members &&
-            previous.emptyKernelConstructor == targets.emptyKernelConstructor
+        if (previous?.active == true && previous.members == members
         ) {
             return InstallOutcome(InstallState.ALREADY_INSTALLED, previous.handles.size)
         }
@@ -93,23 +85,17 @@ object VideoComponentsBlockHook {
             installation = null
         }
 
-        val emptyKernelConstructor = targets.emptyKernelConstructor
-        val group = Installation(members, emptyKernelConstructor)
+        val group = Installation(members)
         installation = group
         for ((method, result) in members) {
             try {
                 method.isAccessible = true
                 val builder = RuntimeHooks.builder(api, method, OWNER, "block")
-                if (result == VideoDisableResult.EMPTY_KERNEL) {
-                    // A failed replacement must not silently fall through to a real decoder factory.
-                    builder.setExceptionMode(XposedInterface.ExceptionMode.PASSTHROUGH)
-                }
                 group.handles[method] = builder.intercept { chain ->
                     if (!group.active || !enabled()) return@intercept chain.proceed()
                     when (result) {
                         VideoDisableResult.BOOLEAN_FALSE -> false
                         VideoDisableResult.VOID -> null
-                        VideoDisableResult.EMPTY_KERNEL -> emptyKernelConstructor.newInstance()
                     }
                 }
             } catch (failure: Throwable) {
@@ -136,5 +122,5 @@ object VideoComponentsBlockHook {
         return InstallOutcome.skipped(reason)
     }
 
-    private fun isEnabled() = ConfigManager.snapshot().isVideoComponentsDisabled
+    private fun isEnabled() = ConfigManager.snapshot().isVideoPreloadDisabled
 }

@@ -32,9 +32,9 @@ class PerformanceRuntimeStatusTest {
         }
     }
 
-    @Test fun eachAdPointIsSharedWithVideoWhileCookieIsIndependent() {
+    @Test fun adChannelsVideoPreloadAndCookieHaveIndependentCapabilities() {
         PerformanceRuntimeTarget.entries.forEach {
-            assertEquals(listOf(it.featureKey, HookFeatureKey.DISABLE_VIDEO_COMPONENTS), SymbolContracts.featuresForPoint("PerformanceRuntime.${it.name}"))
+            assertEquals(listOf(it.featureKey), SymbolContracts.featuresForPoint("PerformanceRuntime.${it.name}"))
         }
         val symbols = buildHookSymbols { this[PerformanceContract.runtimeMethods] = listOf("AD_CSJ", "retiredSdk") }
         val states = PerformanceContract.capabilities(symbols)
@@ -48,7 +48,7 @@ class PerformanceRuntimeStatusTest {
         val symbols = buildHookSymbols { this[PerformanceContract.runtimeMethods] = listOf("VIDEO_PREFETCH", "VIDEO_OPEN") }
         assertEquals(HookFeatureState.DISABLED,
             VideoDisableContract.capabilities(symbols).getValue(HookFeatureKey.DISABLE_VIDEO_COMPONENTS).state)
-        assertEquals(27, VideoDisableContract.capabilities(symbols).getValue(HookFeatureKey.DISABLE_VIDEO_COMPONENTS).missingCritical.size)
+        assertEquals(4, VideoDisableContract.capabilities(symbols).getValue(HookFeatureKey.DISABLE_VIDEO_COMPONENTS).missingCritical.size)
         assertFalse(PerformanceRuntimeStatus.hookPoints(symbols).any { it.name.contains("VIDEO_") })
     }
 }

@@ -11,7 +11,7 @@ internal val VideoComponentsFeature = FeatureDefinition.single(
     phase = FeaturePhase.POST_ATTACH,
     process = FeatureProcess.ANY,
     enabled = { settings ->
-        settings.isVideoComponentsDisabled && HookProcess.isVideoPlaybackProcess(processName)
+        settings.isVideoPreloadDisabled && HookProcess.isVideoPlaybackProcess(processName)
     },
 ) { cl, _ ->
     VideoComponentsBlockHook.hook(VideoDisableContract.resolve(cl, symbols))
