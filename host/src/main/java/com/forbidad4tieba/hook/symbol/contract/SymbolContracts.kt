@@ -40,7 +40,6 @@ internal object SymbolContracts {
         AutoSignInContract,
         ForumTopShiftContract,
         AutoRefreshContract,
-        PbPreloadContract,
         AutoLoadMoreContract,
         PbGestureScaleContract,
         PbLikeAutoReplyContract,

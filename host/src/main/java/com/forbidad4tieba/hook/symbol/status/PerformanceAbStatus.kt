@@ -3,7 +3,6 @@ package com.forbidad4tieba.hook.symbol.status
 import com.forbidad4tieba.hook.symbol.contract.*
 
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
-import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.symbol.model.HookFeatureState
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
@@ -25,12 +24,9 @@ internal object PerformanceAbStatus {
 
     fun features(symbols: HookSymbols): Map<String, HookFeatureStatus> {
         val found = symbols[PerformanceContract.performanceAbMethods].orEmpty().toSet()
-        return PerformanceAbTargets.featureRequirements.mapValues { (key, required) ->
+        return PerformanceAbTargets.featureRequirements.mapValues { (_, required) ->
             val missing = required.filter { it.methodName !in found }
-                .map { "PerformanceAB.${it.methodName}" }.toMutableList()
-            if (key == HookFeatureKey.FORCE_PB_PRELOAD) {
-                missing += PbPreloadContract.required.requiredStatus(symbols).missingCritical
-            }
+                .map { "PerformanceAB.${it.methodName}" }
             HookFeatureStatus(
                 state = if (missing.isEmpty()) HookFeatureState.FULL else HookFeatureState.DISABLED,
                 missingCritical = missing,

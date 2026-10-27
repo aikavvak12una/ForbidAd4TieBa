@@ -230,7 +230,6 @@ internal object SettingsMenuGroupBuilder {
                 SwitchItem(PerformancePreferences.FORCE_LOW_END_DEVICE_CONFIG),
                 SwitchItem(PerformancePreferences.DISABLE_APSARAS_SCHEDULE),
                 SwitchItem(PerformancePreferences.ENABLE_PB_PERFORMANCE_MODE),
-                SwitchItem(PerformancePreferences.FORCE_PB_PRELOAD),
                 SwitchItem(PerformancePreferences.ENABLE_PB_SCROLL_COALESCE),
             ),
         ),

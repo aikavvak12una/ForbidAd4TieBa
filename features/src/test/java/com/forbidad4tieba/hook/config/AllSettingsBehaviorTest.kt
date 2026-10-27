@@ -138,9 +138,16 @@ class AllSettingsBehaviorTest {
                 val legacyStyle = "BottomTabLiquidGlassConfig(heightDp=$legacyHeight, widthPercent=$legacyWidth, " +
                     "bottomGapDp=$legacyGap, blurEnabled=${result.snapshot.bottomTabLiquidGlass.blurEnabled}, " +
                     "refractionEnabled=true, highlightEnabled=true, shadowEnabled=true, tiltEnabled=true, pressEffectEnabled=true)"
+                // Reconstruct only the removed field for the frozen projection. Keeping the
+                // original cases and hashes verifies every surviving setting independently.
+                val retiredPreload = result.snapshot.areRestrictedFeaturesUnlocked &&
+                    result.snapshot.isPerformanceOptimizationEnabled &&
+                    (values["force_pb_preload"] as? Boolean ?: true) &&
+                    state in listOf(ConfigManager.ScanFeatureAvailabilityState.AVAILABLE, ConfigManager.ScanFeatureAvailabilityState.PARTIAL)
                 val legacySnapshot = result.snapshot.toString().substringBefore(", commentLevelFilter=")
                     .replace(", isHomeTopTabFixedEnabled=false, homeTopTabFixedKeys=[]", "")
                     .replace("isFloatingBottomBarEnabled=", "isBottomTabLiquidGlassEnabled=")
+                    .replace(", isHostSlideAnimationDisabled=", ", isPbPreloadForced=$retiredPreload, isHostSlideAnimationDisabled=")
                     .replace(result.snapshot.bottomTabLiquidGlass.toString(), legacyStyle) + ")"
                 val text = legacySnapshot + "/" + result.normalizedBottomTabs
                 val hash = MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }

@@ -8,7 +8,7 @@ import java.lang.reflect.Method
 object PbPerformanceModeHook {
     private val booleanOverrides = arrayOf(
         UbsAbTestBooleanOverride(PerformanceAbTarget.HYBRID_PB, true) {
-            PbPerformancePolicy.from(ConfigManager.snapshot()).enableHybridOptimization
+            ConfigManager.snapshot().isPbPerformanceModeEnabled
         },
         UbsAbTestBooleanOverride(PerformanceAbTarget.IMAGE_PERF_LOG, false) { ConfigManager.snapshot().isPbPerformanceModeEnabled },
         UbsAbTestBooleanOverride(PerformanceAbTarget.PB_COMMENT_AD, false) {

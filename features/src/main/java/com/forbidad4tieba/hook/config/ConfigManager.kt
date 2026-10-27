@@ -54,6 +54,7 @@ object ConfigManager {
             appContext = appCtx
             prefs = localPrefs
             ensureUserSettingsVersion(localPrefs)
+            PerformancePreferences.removeRetiredSettings(localPrefs)
             BottomTabLiquidGlassPreferences.ensureInitialized(localPrefs)
             TabCustomizationPreferences.ensureInitialized(localPrefs)
 

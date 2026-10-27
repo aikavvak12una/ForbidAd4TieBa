@@ -9,18 +9,17 @@ internal object LowEndConfigPolicy {
     private const val PRELOAD_FEED_IMAGE = "disable_preload_feed_image"
     private const val WEBVIEW_PROXY = "disable_webview_proxy"
 
-    fun blockList(original: String, preserveWebViewProxy: Boolean): String {
+    fun blockList(original: String): String {
         val source = try { JSONArray(original) } catch (_: Exception) { JSONArray() }
         val result = JSONArray()
         val existing = HashSet<String>()
         for (i in 0 until source.length()) {
             val item = source.opt(i)
-            if (preserveWebViewProxy && item == WEBVIEW_PROXY) continue
             result.put(item)
             if (item is String) existing.add(item)
         }
         if (existing.add(PRELOAD_FEED_IMAGE)) result.put(PRELOAD_FEED_IMAGE)
-        if (!preserveWebViewProxy && existing.add(WEBVIEW_PROXY)) result.put(WEBVIEW_PROXY)
+        if (existing.add(WEBVIEW_PROXY)) result.put(WEBVIEW_PROXY)
         return result.toString()
     }
 
@@ -34,25 +33,25 @@ internal object LowEndConfigPolicy {
 
 /** Two immutable entries: concurrent misses may recompute, but never wait for another callback. */
 internal class LowEndConfigPolicyCache {
-    private data class Entry(val source: String, val preserveWebViewProxy: Boolean, val result: String)
+    private data class Entry(val source: String, val result: String)
     @Volatile private var blockList: Entry? = null
     @Volatile private var keyValues: Entry? = null
 
-    fun apply(key: String, original: String, preserveWebViewProxy: Boolean): String = when (key) {
+    fun apply(key: String, original: String): String = when (key) {
         LowEndConfigPolicy.BLOCK_LIST -> {
             val cached = blockList
-            if (cached != null && cached.source == original && cached.preserveWebViewProxy == preserveWebViewProxy) {
+            if (cached != null && cached.source == original) {
                 cached.result
             } else {
-                LowEndConfigPolicy.blockList(original, preserveWebViewProxy).also {
-                    blockList = Entry(original, preserveWebViewProxy, it)
+                LowEndConfigPolicy.blockList(original).also {
+                    blockList = Entry(original, it)
                 }
             }
         }
         LowEndConfigPolicy.KV_CONFIG -> {
             val cached = keyValues
             if (cached != null && cached.source == original) cached.result
-            else LowEndConfigPolicy.keyValues(original).also { keyValues = Entry(original, false, it) }
+            else LowEndConfigPolicy.keyValues(original).also { keyValues = Entry(original, it) }
         }
         else -> original
     }

@@ -34,7 +34,6 @@ internal object PerformanceAbTargets {
             PerformanceAbTarget.HYBRID_PB, PerformanceAbTarget.IMAGE_PERF_LOG,
             PerformanceAbTarget.PB_COMMENT_AD, PerformanceAbTarget.PB_BANNER_AD,
         ),
-        HookFeatureKey.FORCE_PB_PRELOAD to listOf(PerformanceAbTarget.HYBRID_PB),
         HookFeatureKey.FORCE_HOST_FEED_COLD_OPT to listOf(PerformanceAbTarget.FEED_UI, PerformanceAbTarget.COLD_NET_DATA),
         HookFeatureKey.DISABLE_APSARAS_SCHEDULE to listOf(PerformanceAbTarget.APSARAS_SCHEDULE),
     )

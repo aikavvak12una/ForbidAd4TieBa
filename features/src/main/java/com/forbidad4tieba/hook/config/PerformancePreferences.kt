@@ -1,5 +1,6 @@
 package com.forbidad4tieba.hook.config
 
+import android.content.SharedPreferences
 import com.forbidad4tieba.hook.ui.UiText
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 
@@ -19,8 +20,6 @@ object PerformancePreferences {
     const val KEY_ENABLE_PERFORMANCE_OPTIMIZATION = "enable_performance_optimization"
 
     const val KEY_FORCE_HOST_PERFORMANCE_FLAGS = "force_host_performance_flags"
-
-    const val KEY_FORCE_PB_PRELOAD = "force_pb_preload"
 
     const val KEY_DISABLE_HOST_SLIDE_ANIMATION = "disable_host_slide_animation"
 
@@ -66,10 +65,6 @@ object PerformancePreferences {
         KEY_FORCE_HOST_PERFORMANCE_FLAGS, true, PreferenceUse.SWITCH, HookFeatureKey.FORCE_HOST_PERFORMANCE_FLAGS,
         SwitchPresentation(UiText.Settings.FORCE_HOST_PERFORMANCE_FLAGS_LABEL, UiText.Settings.FORCE_HOST_PERFORMANCE_FLAGS_DESC),
     )
-    internal val FORCE_PB_PRELOAD = BooleanPreference(
-        KEY_FORCE_PB_PRELOAD, true, PreferenceUse.SWITCH, HookFeatureKey.FORCE_PB_PRELOAD,
-        SwitchPresentation(UiText.Settings.PB_FORCE_PRELOAD_LABEL, UiText.Settings.PB_FORCE_PRELOAD_DESC),
-    )
     internal val DISABLE_HOST_SLIDE_ANIMATION = BooleanPreference(
         KEY_DISABLE_HOST_SLIDE_ANIMATION, true, PreferenceUse.SWITCH, null,
         SwitchPresentation(UiText.Settings.DISABLE_HOST_SLIDE_ANIMATION_LABEL, UiText.Settings.DISABLE_HOST_SLIDE_ANIMATION_DESC),
@@ -95,6 +90,12 @@ object PerformancePreferences {
         SwitchPresentation(UiText.Settings.BLOCK_TITAN_PATCH_LABEL, UiText.Settings.BLOCK_TITAN_PATCH_DESC),
     )
 
+    /** Upgrade cleanup only; the retired choice has no runtime consumer. */
+    internal fun removeRetiredSettings(prefs: SharedPreferences) {
+        val retiredKey = "force_pb_preload"
+        if (prefs.contains(retiredKey)) prefs.edit().remove(retiredKey).apply()
+    }
+
     internal val preferences: List<Preference<*>> = listOf(
         DISABLE_AI_COMPONENTS,
         DISABLE_AD_SDK_COMPONENTS,
@@ -104,7 +105,6 @@ object PerformancePreferences {
         ENABLE_PB_SCROLL_COALESCE,
         ENABLE_PERFORMANCE_OPTIMIZATION,
         FORCE_HOST_PERFORMANCE_FLAGS,
-        FORCE_PB_PRELOAD,
         DISABLE_HOST_SLIDE_ANIMATION,
         FORCE_HOST_FEED_COLD_OPT,
         DISABLE_APSARAS_SCHEDULE,

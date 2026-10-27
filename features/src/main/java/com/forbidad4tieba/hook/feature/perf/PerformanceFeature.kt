@@ -5,7 +5,6 @@ import com.forbidad4tieba.hook.FeaturePhase
 import com.forbidad4tieba.hook.FeatureProcess
 import com.forbidad4tieba.hook.HookInstallEntry
 import com.forbidad4tieba.hook.symbol.contract.LowEndContract
-import com.forbidad4tieba.hook.symbol.contract.PbPreloadContract
 import com.forbidad4tieba.hook.symbol.contract.PerformanceContract
 import com.forbidad4tieba.hook.symbol.contract.TrackingContract
 import java.lang.reflect.Method
@@ -22,13 +21,6 @@ internal val PerformanceFeature = FeatureDefinition(
         ?: PerformanceContract.resolvePerformanceAbSymbols(cl, symbols).also { abMethods = it }
     if (settings.isPbPerformanceModeEnabled || settings.isPostPageAdBlockEnabled) {
         entries += HookInstallEntry.observed("PbPerformanceModeHook") { cl -> PbPerformanceModeHook.hook(abSymbols(cl)) }
-    }
-    if (PbPerformancePolicy.from(settings).forcePreload) {
-        entries += HookInstallEntry.observed("PbForcePreloadHook") { cl ->
-            PbPreloadContract.resolvePbPreloadTargets(cl, symbols)?.let { targets ->
-                PbForcePreloadHook.hook(targets, abSymbols(cl))
-            }
-        }
     }
     if (settings.isAdSdkComponentsDisabled) {
         entries += HookInstallEntry.observed("AdSdkInitBlockHook") { cl -> AdSdkInitBlockHook.hook(cl) }

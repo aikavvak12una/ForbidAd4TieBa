@@ -190,7 +190,6 @@ internal object EffectiveSettingsPolicy {
             isVideoComponentsDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_VIDEO_COMPONENTS),
             isMonitorSyncComponentsDisabled = monitorSyncComponentsDisabled,
             isPbPerformanceModeEnabled = performanceChildBoolean(PerformancePreferences.ENABLE_PB_PERFORMANCE_MODE),
-            isPbPreloadForced = performanceChildBoolean(PerformancePreferences.FORCE_PB_PRELOAD),
             isHostSlideAnimationDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_HOST_SLIDE_ANIMATION),
             isHostFeedColdOptEnabled = performanceChildBoolean(PerformancePreferences.FORCE_HOST_FEED_COLD_OPT),
             isPerformanceOptimizationEnabled = performanceOptimizationEnabled,

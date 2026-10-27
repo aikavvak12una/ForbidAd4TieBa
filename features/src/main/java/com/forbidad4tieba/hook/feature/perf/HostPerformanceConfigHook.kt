@@ -110,7 +110,7 @@ object HostPerformanceConfigHook {
                                 val key = chain.args[0] as? String
                                 if (key == LowEndConfigPolicy.BLOCK_LIST || key == LowEndConfigPolicy.KV_CONFIG) {
                                     val original = chain.proceed() as? String ?: ""
-                                    policies!!.apply(key, original, PbPerformancePolicy.from(current).preserveWebViewProxy)
+                                    policies!!.apply(key, original)
                                 } else chain.proceed()
                             }
                         }

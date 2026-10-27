@@ -62,7 +62,6 @@ object SettingsDiagnostics {
             childLine(PerformancePreferences.FORCE_LOW_END_DEVICE_CONFIG, settings.isLowEndDeviceConfigForced, ConfigManager.isScanFeatureAvailable(KEY_FORCE_LOW_END_DEVICE_CONFIG)),
             childLine(PerformancePreferences.DISABLE_APSARAS_SCHEDULE, settings.isApsarasScheduleDisabled),
             childLine(PerformancePreferences.ENABLE_PB_PERFORMANCE_MODE, settings.isPbPerformanceModeEnabled),
-            childLine(PerformancePreferences.FORCE_PB_PRELOAD, settings.isPbPreloadForced),
             childLine(PerformancePreferences.DISABLE_HOST_SLIDE_ANIMATION, settings.isHostSlideAnimationDisabled),
             childLine(PerformancePreferences.ENABLE_PB_SCROLL_COALESCE, settings.isPbScrollCoalesceEnabled),
             childLine(PerformancePreferences.DISABLE_AD_SDK_COMPONENTS, settings.isAdSdkComponentsDisabled),
