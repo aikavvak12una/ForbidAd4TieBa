@@ -8,6 +8,7 @@ import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.GlobalDirectProfileSymbols
 import org.json.JSONObject
+import java.net.URI
 import java.net.URLDecoder
 
 /**
@@ -69,7 +70,8 @@ object CommentAvatarDirectProfileHook {
                     return@intercept chain.proceed()
                 }
                 val replacementArgs = try {
-                    rewritePersonInfoMessage(targets, chain.args)
+                    rewriteBusinessCardWebMessage(targets, chain.args)
+                        ?: rewritePersonInfoMessage(targets, chain.args)
                 } catch (t: Throwable) {
                     runtimeDisabled = true
                     XposedCompat.log("$TAG card message rewrite failed, disabled: ${t.message}")
@@ -81,6 +83,7 @@ object CommentAvatarDirectProfileHook {
             XposedCompat.log(
                 "$TAG hook INSTALLED: header=ClickableHeaderImageView.setData " +
                     "message=CustomMessage(int,Object) " +
+                    "webCard=${targets.businessCardWebConfigClass != null} " +
                     "routes=${targets.urlManagerDealOneLinkMethods.size}",
             )
         } catch (t: Throwable) {
@@ -110,6 +113,24 @@ object CommentAvatarDirectProfileHook {
             XposedCompat.log(t)
             false
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun rewriteBusinessCardWebMessage(
+        targets: GlobalDirectProfileSymbols,
+        args: List<Any?>,
+    ): Array<Any?>? {
+        if ((args.firstOrNull() as? Int) != PERSON_PROFILE_MSG_ID) return null
+        val webClass = targets.businessCardWebConfigClass ?: return null
+        val source = args.getOrNull(1)?.takeIf(webClass::isInstance) ?: return null
+        val intent = targets.personInfoGetIntentMethod.invoke(source) as? android.content.Intent ?: return null
+        val portrait = extractWebBusinessCardPortrait(
+            intent.getStringExtra("tag_url"), intent.getSerializableExtra("pageData"),
+        ) ?: return null
+        val context = targets.personInfoGetContextMethod.invoke(source) as? Context ?: return null
+        val config = createPortraitConfig(targets, context, portrait)
+        copySourceExtras(targets, intent, config)
+        return arrayOf(PERSON_PROFILE_MSG_ID, config)
     }
 
     private fun rewritePersonInfoMessage(
@@ -147,17 +168,23 @@ object CommentAvatarDirectProfileHook {
         val targets = runtimeTargets ?: return false
         return try {
             val context = targets.applicationGetInstMethod.invoke(null) as? Context ?: return false
-            val config = targets.personPolymericConfigConstructor.newInstance(context)
-            targets.personPolymericSetUriMethod.invoke(
-                config,
-                Uri.parse(USER_CENTER_ROUTE_PREFIX + Uri.encode(rawPortrait)),
-            )
+            val config = createPortraitConfig(targets, context, rawPortrait)
             sendProfileMessage(targets, config)
             true
         } catch (t: Throwable) {
             XposedCompat.logW("$TAG portrait route failed: ${t.message}")
             false
         }
+    }
+
+    private fun createPortraitConfig(
+        targets: GlobalDirectProfileSymbols,
+        context: Context,
+        portrait: String,
+    ): Any = targets.personPolymericConfigConstructor.newInstance(context).also { config ->
+        targets.personPolymericSetUriMethod.invoke(
+            config, Uri.parse(USER_CENTER_ROUTE_PREFIX + Uri.encode(portrait)),
+        )
     }
 
     private fun copySourceExtras(
@@ -232,6 +259,19 @@ object CommentAvatarDirectProfileHook {
         extractBusinessCardPortraitFromRoute(rawRoute)
 
     internal fun parsePositiveUserIdForTest(rawUserId: String?): Long? = parsePositiveUserId(rawUserId)
+
+    internal fun extractWebBusinessCardPortrait(url: String?, pageData: Any?): String? {
+        // Host-added query values can contain characters such as '|'. Only the
+        // address identifies this page; the portrait comes from its typed data.
+        val address = url?.substringBefore('?')?.substringBefore('#') ?: return null
+        val uri = runCatching { URI(address) }.getOrNull() ?: return null
+        if (uri.scheme !in setOf("https", "http") || uri.host != "tieba.baidu.com" ||
+            uri.userInfo != null || uri.port != -1 ||
+            uri.path !in setOf("/mo/q/$CUSTOM_BUSINESS_CARD_PATH", "/mo/q/$CUSTOM_BUSINESS_CARD_PATH/hybrid")
+        ) return null
+        return ((pageData as? Map<*, *>)?.get("friendPortrait") as? String)
+            ?.trim()?.takeIf(String::isNotEmpty)
+    }
 
     private fun tryMarkHooked(targets: GlobalDirectProfileSymbols): Boolean {
         synchronized(this) {

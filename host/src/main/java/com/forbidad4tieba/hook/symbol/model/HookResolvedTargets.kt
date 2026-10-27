@@ -372,6 +372,7 @@ data class GlobalDirectProfileSymbols(
     val personInfoConfigClass: Class<*>,
     val personInfoGetContextMethod: Method,
     val personInfoGetIntentMethod: Method,
+    val businessCardWebConfigClass: Class<*>?,
     val personPolymericConfigConstructor: java.lang.reflect.Constructor<*>,
     val personPolymericCreateNormalConfigMethod: Method,
     val personPolymericGetIntentMethod: Method,

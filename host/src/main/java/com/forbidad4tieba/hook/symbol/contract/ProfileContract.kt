@@ -62,6 +62,17 @@ object ProfileContract : SymbolContract("Profile") {
                 method.name == "getIntent" && method.parameterTypes.isEmpty() &&
                     android.content.Intent::class.java.isAssignableFrom(method.returnType)
             }?.apply { isAccessible = true } ?: error("PersonInfoActivityConfig.getIntent not found")
+            // Both configs inherit these accessors from IntentConfig. Validate that the
+            // restored methods can read the web config too, without callback discovery.
+            val businessCardWebConfigClass = try {
+                find("com.baidu.tbadk.core.atomData.WebViewActivityConfig").also { webClass ->
+                    check(personInfoGetContextMethod.declaringClass.isAssignableFrom(webClass))
+                    check(personInfoGetIntentMethod.declaringClass.isAssignableFrom(webClass))
+                }
+            } catch (t: Throwable) {
+                Diagnostics.log("[CommentAvatarDirectProfileHook] web card target unavailable: ${t.message}")
+                null
+            }
             val personPolymericClass = find(StableTiebaHookPoints.PERSON_POLYMERIC_ACTIVITY_CONFIG_CLASS)
             val polymericConstructor = personPolymericClass.getDeclaredConstructor(Context::class.java)
                 .apply { isAccessible = true }
@@ -111,6 +122,7 @@ object ProfileContract : SymbolContract("Profile") {
                 personInfoConfigClass = personInfoClass,
                 personInfoGetContextMethod = personInfoGetContextMethod,
                 personInfoGetIntentMethod = personInfoGetIntentMethod,
+                businessCardWebConfigClass = businessCardWebConfigClass,
                 personPolymericConfigConstructor = polymericConstructor,
                 personPolymericCreateNormalConfigMethod = createNormalMethod,
                 personPolymericGetIntentMethod = personPolymericGetIntentMethod,
