@@ -2,13 +2,11 @@ package com.forbidad4tieba.hook.symbol.contract
 
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.symbol.model.HookFeatureState
-import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.buildHookSymbols
 import com.forbidad4tieba.hook.symbol.status.HookFeatureStatusDeriver
 import com.forbidad4tieba.hook.symbol.status.HookPointState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,14 +35,6 @@ class AutoRefreshContractTest {
         val symbols = buildHookSymbols { this[AutoRefreshContract.autoRefreshPullGestureMethod] = "renamed" }
         assertEquals(HookFeatureState.DISABLED,
             AutoRefreshContract.capabilities(symbols).getValue(HookFeatureKey.DISABLE_AUTO_REFRESH).state)
-    }
-
-    @Test fun cachedGestureRoundTripsAsADescriptor() {
-        val original = core("renamed")
-        val restored = HookSymbols.fromJson(original.toJson())
-        assertNotNull(restored)
-        assertEquals(original, restored)
-        assertEquals("renamed", restored?.get(AutoRefreshContract.autoRefreshPullGestureMethod))
     }
 
     @Test fun restorationRequiresTheSavedNameAndExactSignature() {

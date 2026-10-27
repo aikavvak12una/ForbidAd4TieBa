@@ -14,6 +14,7 @@ import com.forbidad4tieba.hook.symbol.model.PerformanceRuntimeTarget
 import com.forbidad4tieba.hook.symbol.model.VideoDisableResult
 import com.forbidad4tieba.hook.symbol.model.VideoDisableSymbols
 import com.forbidad4tieba.hook.symbol.model.VideoDisableTarget
+import com.forbidad4tieba.hook.testing.FakeHookApi
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Executable
@@ -45,7 +46,7 @@ class VideoComponentsBlockHookTest {
         EmptyKernel::class.java.getDeclaredConstructor(),
     )
     private val allMembers get() = (symbols.targets.values.flatten() + symbols.pcdnStart + symbols.playDispatch).distinct()
-    private val apis = ArrayList<FakeApi>()
+    private val apis = ArrayList<FakeHookApi>()
 
     @After fun release() {
         apis.forEach { it.failUnhook.clear() }
@@ -353,12 +354,12 @@ class VideoComponentsBlockHookTest {
         }
     }
 
-    private fun install(api: FakeApi, targets: VideoDisableSymbols? = symbols, enabled: () -> Boolean = { true }) =
+    private fun install(api: FakeHookApi, targets: VideoDisableSymbols? = symbols, enabled: () -> Boolean = { true }) =
         RuntimeHooks.measure("VideoComponentsBlockHook") {
             VideoComponentsBlockHook.install(targets, api.value, dependenciesReady = true, enabled = enabled)
         }
 
-    private fun api() = FakeApi().also { apis += it }
+    private fun api() = FakeHookApi().also { apis += it }
     private fun method(name: String): Method = Fixture::class.java.getDeclaredMethod(name)
     private fun playerMethods(name: String) = listOf(
         BasePlayer::class.java.getDeclaredMethod(name), DerivedPlayer::class.java.getDeclaredMethod(name),
@@ -440,44 +441,9 @@ class VideoComponentsBlockHookTest {
         fun dispatch(mode: Int) { audioFocusRequests++; wakeLocks++ }
     }
 
-    private class FakeApi {
-        val callbacks = LinkedHashMap<Executable, XposedInterface.Hooker>()
-        val snapshots = ArrayList<XposedInterface.Hooker>()
-        val failInstall = HashSet<Executable>()
-        val failUnhook = HashSet<Executable>()
-        var afterInstall: () -> Unit = {}
-        var created = 0
-        val exceptionModes = LinkedHashMap<Executable, XposedInterface.ExceptionMode>()
-        val value = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface::class.java)) { _, method, args ->
-            check(method.name == "hook")
-            val member = args!![0] as Executable
-            object : XposedInterface.HookBuilder {
-                override fun setId(id: String?) = this
-                override fun setPriority(priority: Int) = this
-                override fun setExceptionMode(mode: XposedInterface.ExceptionMode) = apply { exceptionModes[member] = mode }
-                override fun intercept(hooker: XposedInterface.Hooker): XposedInterface.HookHandle {
-                    check(member !in failInstall) { "fixture install failure" }
-                    callbacks[member] = hooker
-                    snapshots += hooker
-                    created++
-                    afterInstall()
-                    return object : XposedInterface.HookHandle {
-                        override fun getExecutable() = member
-                        override fun getId(): String? = null
-                        override fun unhook() {
-                            check(member !in failUnhook) { "fixture unhook failure" }
-                            callbacks.remove(member)
-                        }
-                        override fun replaceHook(hooker: XposedInterface.Hooker): XposedInterface.HookHandle = error("unused")
-                    }
-                }
-            }
-        } as XposedInterface
-
-        fun invoke(member: Executable, original: () -> Any?): Any? {
-            val callback = callbacks[member] ?: return original()
-            return callback.intercept(chain(original))
-        }
+    private fun FakeHookApi.invoke(member: Executable, original: () -> Any?): Any? {
+        val callback = callbacks[member] ?: return original()
+        return callback.intercept(chain(original))
     }
 
     companion object {

@@ -7,7 +7,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.lang.reflect.Proxy
 
 class ConfigManagerTest {
     private val performanceCapabilities = listOf(
@@ -653,24 +652,10 @@ class ConfigManagerTest {
         }
     }
 
-    private fun sharedPreferences(values: Map<String, Any?>): SharedPreferences {
-        return Proxy.newProxyInstance(
-            SharedPreferences::class.java.classLoader,
-            arrayOf(SharedPreferences::class.java),
-        ) { _, method, args ->
-            val key = args?.firstOrNull() as? String
-            when (method.name) {
-                "getBoolean" -> values[key] as? Boolean ?: args?.getOrNull(1) as Boolean
-                "getInt" -> values[key] as? Int ?: args?.getOrNull(1) as Int
-                "getString" -> values[key] as? String ?: args?.getOrNull(1) as? String
-                "contains" -> values.containsKey(key)
-                "getAll" -> values
-                "registerOnSharedPreferenceChangeListener",
-                "unregisterOnSharedPreferenceChangeListener",
-                -> Unit
-                "edit" -> error("edit() is not supported by test SharedPreferences")
-                else -> error("Unexpected SharedPreferences call: ${method.name}")
-            }
-        } as SharedPreferences
-    }
+    private fun sharedPreferences(values: Map<String, Any?>): SharedPreferences = TestPreferences(
+        values,
+        readMethods = setOf("getBoolean", "getInt", "getString", "getAll",
+            "registerOnSharedPreferenceChangeListener", "unregisterOnSharedPreferenceChangeListener"),
+        typedDefaults = true,
+    ).prefs
 }

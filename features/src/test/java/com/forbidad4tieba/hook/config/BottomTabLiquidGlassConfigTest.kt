@@ -1,7 +1,6 @@
 package com.forbidad4tieba.hook.config
 
 import android.content.SharedPreferences
-import java.lang.reflect.Proxy
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -157,25 +156,7 @@ class BottomTabLiquidGlassConfigTest {
         assertEquals(BottomTabLiquidGlassConfig.DEFAULT, BottomTabLiquidGlassPreferences.read(prefs))
     }
 
-    private fun preferences(values: MutableMap<String, Any>): SharedPreferences {
-        val editor = Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader,
-            arrayOf(SharedPreferences.Editor::class.java)) { proxy, method, args ->
-            when (method.name) {
-                "putInt", "putBoolean" -> { values[args!![0] as String] = args[1]; proxy }
-                "clear" -> { values.clear(); proxy }
-                "commit" -> true
-                "apply" -> null
-                else -> error("Unexpected editor call: ${method.name}")
-            }
-        } as SharedPreferences.Editor
-        return Proxy.newProxyInstance(SharedPreferences::class.java.classLoader,
-            arrayOf(SharedPreferences::class.java)) { _, method, args ->
-            when (method.name) {
-                "getInt", "getBoolean" -> values[args!![0]] ?: args[1]
-                "contains" -> values.containsKey(args!![0])
-                "edit" -> editor
-                else -> error("Unexpected preferences call: ${method.name}")
-            }
-        } as SharedPreferences
-    }
+    private fun preferences(values: MutableMap<String, Any>): SharedPreferences =
+        TestPreferences(values, readMethods = setOf("getInt", "getBoolean"),
+            editorMethods = setOf("putInt", "putBoolean", "clear", "commit", "apply")).prefs
 }

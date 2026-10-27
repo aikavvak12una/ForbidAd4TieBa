@@ -147,6 +147,14 @@ class DetailedLogSessionTest {
         assertTrue(output.contains("[TIEBA][INFO][HostTag] host line"))
     }
 
+    @Test fun cleanupRecognizesGeneratedExportsAndSystemCollisionSuffixesOnly() {
+        val name = DetailedLogFileFormatter.fileName(0L, ZoneId.of("UTC"))
+        assertTrue(DetailedLogFileFormatter.isExportFileName(name))
+        assertTrue(DetailedLogFileFormatter.isExportFileName(name.replace(".log", " (2).log")))
+        for (other in listOf("notes.log", "FA4TB_notes.log", "../$name", "$name.bak", name.replace(".log", ".png")))
+            assertFalse(DetailedLogFileFormatter.isExportFileName(other))
+    }
+
     @Test
     fun detailedLogSessionRetainsAtMostTenThousandEntries() {
         DetailedLogSession.start("main", "{}")

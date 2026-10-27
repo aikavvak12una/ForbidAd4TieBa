@@ -76,19 +76,6 @@ class HookSymbolsJsonTest {
         assertEquals(expected, actual)
     }
 
-    @Test
-    fun roundTripPreservesHomeBottomEasterEggParserSymbols() {
-        val symbols = buildHookSymbols {
-            this[HomeBottomEasterEggContract.homeBottomEasterEggParserClass] = "com.tieba.EasterEggParser"
-            this[HomeBottomEasterEggContract.homeBottomEasterEggParserMethod] = "parseJson"
-        }
-
-        val parsed = HookSymbols.fromJson(symbols.toJson())
-
-        assertEquals("com.tieba.EasterEggParser", parsed?.get(HomeBottomEasterEggContract.homeBottomEasterEggParserClass))
-        assertEquals("parseJson", parsed?.get(HomeBottomEasterEggContract.homeBottomEasterEggParserMethod))
-    }
-
     private fun sampleValue(
         type: Class<*>,
         genericType: java.lang.reflect.Type,

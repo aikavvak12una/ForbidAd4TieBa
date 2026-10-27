@@ -3,7 +3,6 @@ package com.forbidad4tieba.hook.config
 import android.content.SharedPreferences
 import org.junit.Assert.*
 import org.junit.Test
-import java.lang.reflect.Proxy
 
 class HomeGlassPreferencesTest {
     @Test fun legacyStyleOnlySeedsLightModeAndAnyModeValueStopsFallback() {
@@ -69,23 +68,7 @@ class HomeGlassPreferencesTest {
     private fun readLight(prefs: SharedPreferences) =
         HomeGlassPreferences.readHomeNativeGlassStyle(prefs, HomeGlassPreferences.HOME_NATIVE_GLASS_LIGHT_STYLE_KEYS)
 
-    private fun preferences(values: MutableMap<String, Any>, applied: () -> Unit = {}): SharedPreferences {
-        val editor = Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader,
-            arrayOf(SharedPreferences.Editor::class.java)) { proxy, method, args ->
-            when (method.name) {
-                "putInt", "putBoolean" -> { values[args!![0] as String] = args[1]; proxy }
-                "apply" -> { applied(); null }
-                else -> error("Unexpected editor method: ${method.name}")
-            }
-        }
-        return Proxy.newProxyInstance(SharedPreferences::class.java.classLoader,
-            arrayOf(SharedPreferences::class.java)) { _, method, args ->
-            when (method.name) {
-                "contains" -> values.containsKey(args!![0] as String)
-                "getString", "getInt", "getBoolean" -> values[args!![0] as String] ?: args[1]
-                "edit" -> editor
-                else -> error("Unexpected preferences method: ${method.name}")
-            }
-        } as SharedPreferences
-    }
+    private fun preferences(values: MutableMap<String, Any>, applied: () -> Unit = {}): SharedPreferences =
+        TestPreferences(values, readMethods = setOf("getString", "getInt", "getBoolean"),
+            editorMethods = setOf("putInt", "putBoolean", "apply"), onApply = applied).prefs
 }

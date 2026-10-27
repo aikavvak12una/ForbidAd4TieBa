@@ -8,6 +8,7 @@ import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.symbol.model.HomeTabItemTargets
 import com.forbidad4tieba.hook.symbol.model.HomeTabResolvedSymbols
+import com.forbidad4tieba.hook.testing.FakeHookApi
 import io.github.libxposed.api.XposedInterface
 import org.junit.After
 import org.junit.Assert.*
@@ -40,7 +41,7 @@ class HomeTabFixedHookTest {
 
     @Test fun firstColdBindExcludesCachedNewTabsWithoutOpeningSettingsAndKeepsRawCatalog() {
         publish("code:recommend", TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED)
-        val api = FakeApi()
+        val api = FakeHookApi()
         assertEquals(2, install(api).installedCount)
         val host = Host(listOf(Item(code = "event"), Item(), Item(code = "live", kind = 6)))
         rebuild(api, host)
@@ -52,7 +53,7 @@ class HomeTabFixedHookTest {
 
     @Test fun lateUnselectedUpdatesAreFilteredAtParseAndSelectedMetadataChangesStillReachConsumers() {
         publish("code:recommend", TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED)
-        val api = FakeApi()
+        val api = FakeHookApi()
         install(api)
         val host = Host(listOf(Item()))
         rebuild(api, host)
@@ -71,7 +72,7 @@ class HomeTabFixedHookTest {
 
     @Test fun partialDisappearanceKeepsSurvivorsAndOrderAndReturningSelectionsReappear() {
         publish("code:recommend", "code:season")
-        val api = FakeApi()
+        val api = FakeHookApi()
         install(api)
         val host = Host(listOf(Item(code = "season"), Item(), Item(code = "extra")))
         rebuild(api, host)
@@ -89,7 +90,7 @@ class HomeTabFixedHookTest {
         val url = "https://example.com/tab?source=host"
         publish("code:recommend")
         ConfigManager.updateRuntimeSettings { it.copy(isHomeTopTabFixedEnabled = false, isHomeTopTabFollowedEnabled = false) }
-        val api = FakeApi()
+        val api = FakeHookApi()
         install(api)
         val host = Host(listOf(Item(kind = 202, code = "", title = "页面", url = url), Item()))
         rebuild(api, host)
@@ -106,7 +107,7 @@ class HomeTabFixedHookTest {
 
     @Test fun unknownItemsAreExcludedAndConflictsOrAllMissingKeepTheOriginalList() {
         publish("code:recommend")
-        val api = FakeApi()
+        val api = FakeHookApi()
         install(api)
         val host = Host(listOf(null, Item(code = "", kind = -1), Item()))
         assertEquals(listOf("recommend"), codes(parse(api, host)))
@@ -120,7 +121,7 @@ class HomeTabFixedHookTest {
 
     @Test fun onlyFollowedCanBeCreatedAndFailureNeverCommitsAnEmptyHomepage() {
         publish(TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED)
-        val api = FakeApi()
+        val api = FakeHookApi()
         install(api)
         val host = Host(listOf(Item()))
         rebuild(api, host)
@@ -136,7 +137,7 @@ class HomeTabFixedHookTest {
 
     @Test fun existingFollowedAliasesDeduplicateThroughTheExistingModulePath() {
         publish(TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED)
-        val api = FakeApi()
+        val api = FakeHookApi()
         install(api)
         val host = Host(listOf(Item(code = "myfollowed"), Item(code = "followed"), Item()))
         rebuild(api, host)
@@ -147,7 +148,7 @@ class HomeTabFixedHookTest {
     @Test fun publishedModeChangesUseTheInstalledParserAndParentOffPassesThrough() {
         publish("code:recommend")
         ConfigManager.updateRuntimeSettings { it.copy(isHomeTopTabFixedEnabled = false, isHomeTopTabFollowedEnabled = false) }
-        val api = FakeApi()
+        val api = FakeHookApi()
         install(api)
         val host = Host(listOf(Item(), Item(code = "new")))
         assertSame(host.raw, parse(api, host))
@@ -164,7 +165,7 @@ class HomeTabFixedHookTest {
 
     @Test fun independentInstallFailuresRetainTheOtherPathAndRepeatedInstallsCountRealHandles() {
         publish("code:recommend")
-        val api = FakeApi(failedMethod = "parse")
+        val api = FakeHookApi(setOf(targets.parseMethod!!))
         val outcome = install(api)
         assertEquals(InstallState.PARTIAL, outcome.state)
         assertEquals(1, outcome.installedCount)
@@ -172,12 +173,12 @@ class HomeTabFixedHookTest {
         rebuild(api, host)
         assertTrue("Ordinary mode stays active after parser failure", "new" in codes(host.visible))
         releaseHooks()
-        val fixedOnly = FakeApi(failedMethod = "rebuild")
+        val fixedOnly = FakeHookApi(setOf(targets.rebuildMethod))
         assertEquals(1, install(fixedOnly).installedCount)
         rebuild(fixedOnly, host)
         assertEquals(listOf("recommend"), codes(host.visible))
         releaseHooks()
-        val complete = FakeApi()
+        val complete = FakeHookApi()
         assertEquals(InstallState.INSTALLED, install(complete).state)
         assertEquals(InstallState.ALREADY_INSTALLED, install(complete).state)
         assertEquals(2, complete.callbacks.size)
@@ -186,7 +187,7 @@ class HomeTabFixedHookTest {
         assertSame(host.raw, stale.intercept(complete.chain(host) { host.raw }))
     }
 
-    private fun install(api: FakeApi) = RuntimeHooks.measure("HomeTabHook") {
+    private fun install(api: FakeHookApi) = RuntimeHooks.measure("HomeTabHook") {
         HomeTabHook.hook(targets, api.value)
         null
     }
@@ -203,10 +204,10 @@ class HomeTabFixedHookTest {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun parse(api: FakeApi, host: Host): List<Any?> =
+    private fun parse(api: FakeHookApi, host: Host): List<Any?> =
         api.invoke(targets.parseMethod!!, host) { host.raw } as List<Any?>
 
-    private fun rebuild(api: FakeApi, host: Host) {
+    private fun rebuild(api: FakeHookApi, host: Host) {
         api.invoke(targets.rebuildMethod, host) {
             host.visible.clear()
             host.visible.addAll(parse(api, host))
@@ -214,7 +215,7 @@ class HomeTabFixedHookTest {
         }
     }
 
-    private fun changed(api: FakeApi, host: Host): Boolean = parse(api, host) != host.visible
+    private fun changed(api: FakeHookApi, host: Host): Boolean = parse(api, host) != host.visible
     private fun codes(items: List<Any?>): List<String> = items.map {
         when (it) {
             is HomeTabCatalogSnapshot.Item -> it.code.orEmpty()
@@ -245,40 +246,17 @@ class HomeTabFixedHookTest {
         fun rebuild() = Unit
     }
 
-    private class FakeApi(private val failedMethod: String? = null) {
-        val callbacks = LinkedHashMap<Executable, XposedInterface.Hooker>()
-        val value = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface::class.java)) { _, method, args ->
-            check(method.name == "hook")
-            val member = args!![0] as Executable
-            object : XposedInterface.HookBuilder {
-                override fun setId(id: String?) = this
-                override fun setPriority(priority: Int) = this
-                override fun setExceptionMode(mode: XposedInterface.ExceptionMode) = this
-                override fun intercept(hooker: XposedInterface.Hooker): XposedInterface.HookHandle {
-                    check(member.name != failedMethod) { "fixture install failure" }
-                    callbacks[member] = hooker
-                    return object : XposedInterface.HookHandle {
-                        override fun getExecutable() = member
-                        override fun getId(): String? = null
-                        override fun unhook() { callbacks.remove(member) }
-                        override fun replaceHook(hooker: XposedInterface.Hooker): XposedInterface.HookHandle = error("unused")
-                    }
-                }
-            }
-        } as XposedInterface
-
-        fun invoke(member: Executable, receiver: Any, proceed: () -> Any?): Any? {
-            val callback = callbacks[member]
-            return if (callback == null) proceed() else callback.intercept(chain(receiver, proceed))
-        }
-
-        fun chain(receiver: Any, proceed: () -> Any?): XposedInterface.Chain =
-            Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, method, _ ->
-                when (method.name) {
-                    "proceed" -> proceed()
-                    "getThisObject" -> receiver
-                    else -> error("Unexpected chain call: ${method.name}")
-                }
-            } as XposedInterface.Chain
+    private fun FakeHookApi.invoke(member: Executable, receiver: Any, proceed: () -> Any?): Any? {
+        val callback = callbacks[member]
+        return if (callback == null) proceed() else callback.intercept(chain(receiver, proceed))
     }
+
+    private fun FakeHookApi.chain(receiver: Any, proceed: () -> Any?): XposedInterface.Chain =
+        Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, method, _ ->
+            when (method.name) {
+                "proceed" -> proceed()
+                "getThisObject" -> receiver
+                else -> error("Unexpected chain call: ${method.name}")
+            }
+        } as XposedInterface.Chain
 }

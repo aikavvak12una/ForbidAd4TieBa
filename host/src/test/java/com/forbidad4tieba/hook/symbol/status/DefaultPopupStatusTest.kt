@@ -1,11 +1,7 @@
 package com.forbidad4tieba.hook.symbol.status
 
-import com.forbidad4tieba.hook.symbol.contract.*
-
 import com.forbidad4tieba.hook.symbol.model.DefaultPopupSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
-import com.forbidad4tieba.hook.symbol.model.HookSymbols
-import com.forbidad4tieba.hook.symbol.model.buildHookSymbols
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -37,13 +33,6 @@ class DefaultPopupStatusTest {
         assertFalse(features.getValue(HookFeatureKey.BLOCK_FIRST_LIKE_POPUP).isSupported())
         assertTrue(features.getValue(HookFeatureKey.BLOCK_NOTIFICATION_GUIDE).isSupported())
         assertEquals(listOf("toastParser"), features.getValue(HookFeatureKey.BLOCK_FIRST_LIKE_POPUP).missingCritical)
-    }
-
-    @Test
-    fun mainCacheRoundTripPreservesBothTargets() {
-        val targets = first.copy(notificationGuideClass = "host.PushGuide", notificationGuideMethod = "tryShow")
-        val symbols = buildHookSymbols { this[DefaultPopupsContract.defaultPopups] = targets }
-        assertEquals(targets, HookSymbols.fromJson(symbols.toJson())?.get(DefaultPopupsContract.defaultPopups))
     }
 
     @Test

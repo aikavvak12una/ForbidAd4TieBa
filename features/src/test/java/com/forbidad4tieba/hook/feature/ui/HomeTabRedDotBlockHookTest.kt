@@ -7,6 +7,7 @@ import com.forbidad4tieba.hook.InstallState
 import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.symbol.contract.*
+import com.forbidad4tieba.hook.testing.FakeHookApi
 import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Executable
 import java.lang.reflect.Method
@@ -35,7 +36,7 @@ class HomeTabRedDotBlockHookTest {
     }
 
     @Test fun hostReshowCannotPaintPlainDotsAndContentSurvivesRapidUpdates() {
-        val api = FakeApi()
+        val api = FakeHookApi()
         val badge = Badge()
         install(api, targets())
         for (label in listOf(null, "", " ", "7", "...", "99+", "活动", "新", null, "0")) {
@@ -49,7 +50,7 @@ class HomeTabRedDotBlockHookTest {
     }
 
     @Test fun featureOffBypassesTheReaderAndReenablingUsesTheLatestContent() {
-        val api = FakeApi()
+        val api = FakeHookApi()
         val badge = Badge()
         var enabled = true
         install(api, targets(), { enabled })
@@ -66,7 +67,7 @@ class HomeTabRedDotBlockHookTest {
     }
 
     @Test fun failedReaderPreservesHostDrawing() {
-        val api = FakeApi()
+        val api = FakeHookApi()
         val badge = Badge().apply { brokenReader = true }
         install(api, targets())
         var paints = 0
@@ -75,7 +76,7 @@ class HomeTabRedDotBlockHookTest {
     }
 
     @Test fun failedMessageHookDoesNotPreventIndependentVisibilityHook() {
-        val api = FakeApi(setOf(draw))
+        val api = FakeHookApi(setOf(draw))
         val outcome = install(api, targets(listOf(visible)))
         assertEquals(InstallState.PARTIAL, outcome.state)
         assertEquals(1, outcome.installedCount)
@@ -87,7 +88,7 @@ class HomeTabRedDotBlockHookTest {
     }
 
     @Test fun repeatedInstallCountsHandlesAndReleasedCallbacksAreInert() {
-        val api = FakeApi()
+        val api = FakeHookApi()
         assertEquals(1, install(api, targets()).installedCount)
         assertEquals(InstallState.ALREADY_INSTALLED, install(api, targets()).state)
         assertEquals(1, api.created)
@@ -99,7 +100,7 @@ class HomeTabRedDotBlockHookTest {
     }
 
     @Test fun resourceScopeOnlyMasksNamedArtworkAfterTheHostSetter() {
-        val api = FakeApi()
+        val api = FakeHookApi()
         val member = Skin::class.java.getDeclaredMethod("background", View::class.java, Int::class.javaPrimitiveType)
         val view = allocate(View::class.java)
         val events = mutableListOf<String>()
@@ -128,7 +129,7 @@ class HomeTabRedDotBlockHookTest {
     }
 
     @Test fun navigationReshowKeepsTheSeparateDotTransparentWithoutRescanningOrTouchingText() {
-        val api = FakeApi()
+        val api = FakeHookApi()
         val dot = allocate(AlphaView::class.java).apply { value = 0.8f }
         val holder = Holder(dot)
         val adapter = Adapter()
@@ -155,7 +156,7 @@ class HomeTabRedDotBlockHookTest {
     @Test fun failedNavigationBindingRollsBackItsCreateHookAndLeavesMessageDrawing() {
         val create = Adapter::class.java.getDeclaredMethod("create", ViewGroup::class.java, Int::class.javaPrimitiveType)
         val bind = Adapter::class.java.getDeclaredMethod("bind", Holder::class.java, Int::class.javaPrimitiveType)
-        val api = FakeApi(setOf(bind))
+        val api = FakeHookApi(setOf(bind))
         val nav = RedDotNavigationTargets(create, bind) { error("No callback should remain") }
         val outcome = install(api, targets(navigation = nav))
         assertEquals(InstallState.PARTIAL, outcome.state)
@@ -164,7 +165,7 @@ class HomeTabRedDotBlockHookTest {
         assertTrue(draw in api.callbacks)
     }
 
-    private fun install(api: FakeApi, targets: RedDotTargets, enabled: () -> Boolean = { true }) =
+    private fun install(api: FakeHookApi, targets: RedDotTargets, enabled: () -> Boolean = { true }) =
         RuntimeHooks.measure("HomeTabRedDotBlockHook") { HomeTabRedDotBlockHook.install(targets, api.value, enabled) }
 
     class Badge {
@@ -196,48 +197,22 @@ class HomeTabRedDotBlockHookTest {
         return checkNotNull(type.cast((field.get(null) as Unsafe).allocateInstance(type)))
     }
 
-    private class FakeApi(private val failing: Set<Executable> = emptySet()) {
-        val callbacks = LinkedHashMap<Executable, XposedInterface.Hooker>()
-        var created = 0
-        val value = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface::class.java)) { _, method, args ->
-            check(method.name == "hook")
-            val member = args!![0] as Executable
-            object : XposedInterface.HookBuilder {
-                override fun setId(id: String?) = this
-                override fun setPriority(priority: Int) = this
-                override fun setExceptionMode(mode: XposedInterface.ExceptionMode) = this
-                override fun intercept(hooker: XposedInterface.Hooker): XposedInterface.HookHandle {
-                    check(member !in failing) { "fixture installation failure" }
-                    callbacks[member] = hooker
-                    created++
-                    return object : XposedInterface.HookHandle {
-                        override fun getExecutable() = member
-                        override fun getId(): String? = null
-                        override fun unhook() { callbacks.remove(member) }
-                        override fun replaceHook(hooker: XposedInterface.Hooker): XposedInterface.HookHandle = error("unused")
-                    }
-                }
-            }
-        } as XposedInterface
-
-        fun invoke(member: Executable, receiver: Any, args: Array<Any?>,
-                   proceed: (Array<Any?>) -> Any?): Any? {
-            val callback = callbacks[member]
-            return if (callback == null) proceed(args) else callback.intercept(chain(receiver, args, proceed))
-        }
-
-        fun chain(receiver: Any, args: Array<Any?>, proceed: (Array<Any?>) -> Any?): XposedInterface.Chain =
-            Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, method, call ->
-                when (method.name) {
-                    "proceed" -> {
-                        @Suppress("UNCHECKED_CAST")
-                        proceed(if (call.isNullOrEmpty()) args else call[0] as Array<Any?>)
-                    }
-                    "getThisObject" -> receiver
-                    "getArgs" -> args.asList()
-                    else -> error("Unexpected chain call: " + method.name)
-                }
-            } as XposedInterface.Chain
+    private fun FakeHookApi.invoke(member: Executable, receiver: Any, args: Array<Any?>,
+                                   proceed: (Array<Any?>) -> Any?): Any? {
+        val callback = callbacks[member]
+        return if (callback == null) proceed(args) else callback.intercept(chain(receiver, args, proceed))
     }
-}
 
+    private fun FakeHookApi.chain(receiver: Any, args: Array<Any?>, proceed: (Array<Any?>) -> Any?): XposedInterface.Chain =
+        Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, method, call ->
+            when (method.name) {
+                "proceed" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    proceed(if (call.isNullOrEmpty()) args else call[0] as Array<Any?>)
+                }
+                "getThisObject" -> receiver
+                "getArgs" -> args.asList()
+                else -> error("Unexpected chain call: " + method.name)
+            }
+        } as XposedInterface.Chain
+}

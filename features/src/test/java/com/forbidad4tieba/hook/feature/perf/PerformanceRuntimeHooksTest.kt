@@ -12,6 +12,7 @@ import com.forbidad4tieba.hook.feature.ad.PostPageAdAbFeature
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.PerformanceAbTarget
 import com.forbidad4tieba.hook.symbol.model.PerformanceRuntimeTarget
+import com.forbidad4tieba.hook.testing.FakeHookApi
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Executable
@@ -44,7 +45,7 @@ class PerformanceRuntimeHooksTest {
         val keys = methods.keys.toList()
         for (mask in 0 until (1 shl keys.size)) {
             val available = methods.filterKeys { key -> mask and (1 shl keys.indexOf(key)) != 0 }
-            val api = FakeApi()
+            val api = FakeHookApi(allowLog = true)
             try {
                 val ad = RuntimeHooks.measure("AdSdkInitBlockHook") {
                     AdSdkInitBlockHook.install(available, api.value) { true }
@@ -61,7 +62,7 @@ class PerformanceRuntimeHooksTest {
 
     @Test fun eachInstallationFailureCanRetryWithoutDuplicatingSuccessfulPoints() {
         for (failedMethod in methods.values) {
-            val api = FakeApi().apply { failing += failedMethod }
+            val api = FakeHookApi(allowLog = true).apply { failInstall += failedMethod }
             val expected = 3
             val owner = "AdSdkInitBlockHook"
             fun install() = RuntimeHooks.measure(owner) {
@@ -72,7 +73,7 @@ class PerformanceRuntimeHooksTest {
                 assertEquals(InstallState.PARTIAL, partial.state)
                 assertEquals(expected - 1, partial.installedCount)
                 assertFalse(api.callbacks.containsKey(failedMethod))
-                api.failing.clear()
+                api.failInstall.clear()
                 val recovered = install()
                 assertEquals(InstallState.INSTALLED, recovered.state)
                 assertEquals(expected, recovered.installedCount)
@@ -88,7 +89,7 @@ class PerformanceRuntimeHooksTest {
     }
 
     @Test fun disabledAdInstallDoesNoWorkAndItsCallbacksFollowTheSetting() {
-        val api = FakeApi()
+        val api = FakeHookApi(allowLog = true)
         var ads = false
         assertEquals(InstallState.SKIPPED, AdSdkInitBlockHook.install(methods, api.value, requested = ads) { ads }?.state)
         assertEquals(0, api.created)
@@ -110,7 +111,7 @@ class PerformanceRuntimeHooksTest {
     }
 
     @Test fun adPreparationTracksCurrentOwnedHandlesAndRecoversFromAnInactiveReleaseFailure() {
-        val api = FakeApi()
+        val api = FakeHookApi(allowLog = true)
         fun prepare() = RuntimeHooks.measure("AdSdkInitBlockHook") {
             AdSdkInitBlockHook.install(methods, api.value, requested = true) { false }
         }
@@ -127,7 +128,7 @@ class PerformanceRuntimeHooksTest {
         try {
             assertFalse(RuntimeHooks.ownsActiveHandle(foreign))
             assertFalse(AdSdkInitBlockHook.isPreparedFor(methods + (PerformanceRuntimeTarget.AD_CSJ to method("sdkStart"))))
-            api.failingUnhook += selected
+            api.failUnhook += selected
             assertThrows(IllegalStateException::class.java) { retained.unhook() }
             assertFalse(RuntimeHooks.ownsActiveHandle(retained))
             assertFalse(AdSdkInitBlockHook.isPreparedFor(methods))
@@ -137,7 +138,7 @@ class PerformanceRuntimeHooksTest {
             assertEquals(InstallState.ROLLBACK_FAILED, failed.state)
             assertFalse(AdSdkInitBlockHook.isPreparedFor(methods))
             assertEquals(beforeRetry, api.created)
-            api.failingUnhook.clear()
+            api.failUnhook.clear()
             val recovered = prepare()
             assertEquals(InstallState.INSTALLED, recovered.state)
             assertEquals(3, recovered.installedCount)
@@ -151,7 +152,7 @@ class PerformanceRuntimeHooksTest {
             assertEquals(InstallState.INSTALLED, prepare().state)
             assertTrue(AdSdkInitBlockHook.isPreparedFor(methods))
         } finally {
-            api.failingUnhook.clear()
+            api.failUnhook.clear()
             foreign.unhook()
         }
     }
@@ -161,7 +162,7 @@ class PerformanceRuntimeHooksTest {
         val moduleField = XposedCompat::class.java.getDeclaredField("module").apply { isAccessible = true }
         val originalSettings = snapshotField.get(ConfigManager)
         val originalModule = moduleField.get(XposedCompat)
-        val api = FakeApi()
+        val api = FakeHookApi(allowLog = true)
         val module = object : XposedModule() {}.apply { attachFramework(api.value) {} }
         val cookie = method("cookie")
         val abMethods = mapOf(
@@ -180,12 +181,12 @@ class PerformanceRuntimeHooksTest {
             setEnabled(true)
             val missing = RuntimeHooks.measure("CookieSyncDedupHook") { CookieSyncDedupHook.hook(emptyMap()); null }
             assertEquals(InstallState.SKIPPED, missing.state)
-            api.failing += cookie
+            api.failInstall += cookie
             val failed = RuntimeHooks.measure("CookieSyncDedupHook") { CookieSyncDedupHook.hook(abMethods); null }
             assertEquals(InstallState.FAILED, failed.state)
             assertEquals(0, failed.installedCount)
             assertEquals(0, api.created)
-            api.failing.clear()
+            api.failInstall.clear()
             val installed = RuntimeHooks.measure("CookieSyncDedupHook") { CookieSyncDedupHook.hook(abMethods); null }
             assertEquals(InstallState.INSTALLED, installed.state)
             assertEquals(1, installed.installedCount)
@@ -222,7 +223,7 @@ class PerformanceRuntimeHooksTest {
             for (master in listOf(false, true)) for (cookie in listOf(false, true))
                 for (ads in listOf(false, true)) for (video in listOf(false, true))
                     for (postAd in listOf(false, true)) {
-                        val api = FakeApi()
+                        val api = FakeHookApi(allowLog = true)
                         val module = object : XposedModule() {}.apply { attachFramework(api.value) {} }
                         XposedCompat.attachModule(module)
                         val settings = SettingsSnapshot.bootstrap().copy(
@@ -289,48 +290,14 @@ class PerformanceRuntimeHooksTest {
         fun unrelatedAdAb() = true
     }
 
-    private class FakeApi {
-        val callbacks = LinkedHashMap<Executable, XposedInterface.Hooker>()
-        val failing = HashSet<Executable>()
-        val failingUnhook = HashSet<Executable>()
-        var created = 0
-        val value = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface::class.java)) { _, method, args ->
+    private fun FakeHookApi.invoke(member: Executable, original: () -> Any?): Any? {
+        val callback = callbacks[member] ?: return original()
+        val chain = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, method, _ ->
             when (method.name) {
-                "hook" -> builder(args!![0] as Executable)
-                "log" -> null
-                else -> error("Unexpected API call: " + method.name)
+                "proceed" -> original()
+                else -> error("Unexpected callback work: " + method.name)
             }
-        } as XposedInterface
-
-        private fun builder(member: Executable) = object : XposedInterface.HookBuilder {
-            override fun setId(id: String?) = this
-            override fun setPriority(priority: Int) = this
-            override fun setExceptionMode(mode: XposedInterface.ExceptionMode) = this
-            override fun intercept(hooker: XposedInterface.Hooker): XposedInterface.HookHandle {
-                check(member !in failing) { "fixture installation failure" }
-                callbacks[member] = hooker
-                created++
-                return object : XposedInterface.HookHandle {
-                    override fun getExecutable() = member
-                    override fun getId(): String? = null
-                    override fun unhook() {
-                        check(member !in failingUnhook) { "fixture unhook failure" }
-                        callbacks.remove(member)
-                    }
-                    override fun replaceHook(hooker: XposedInterface.Hooker): XposedInterface.HookHandle = error("unused")
-                }
-            }
-        }
-
-        fun invoke(member: Executable, original: () -> Any?): Any? {
-            val callback = callbacks[member] ?: return original()
-            val chain = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, method, _ ->
-                when (method.name) {
-                    "proceed" -> original()
-                    else -> error("Unexpected callback work: " + method.name)
-                }
-            } as XposedInterface.Chain
-            return callback.intercept(chain)
-        }
+        } as XposedInterface.Chain
+        return callback.intercept(chain)
     }
 }

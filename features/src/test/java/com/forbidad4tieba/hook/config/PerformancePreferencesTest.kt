@@ -1,8 +1,6 @@
 package com.forbidad4tieba.hook.config
 
-import android.content.SharedPreferences
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
-import java.lang.reflect.Proxy
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -48,8 +46,9 @@ class PerformancePreferencesTest {
             val cases = listOf(emptyMap(), retiredKeys.associateWith { oldValue }) +
                 retiredKeys.map { mapOf(it to oldValue) }
             for (retired in cases) {
-                val prefs = MigrationPreferences((preserved + retired).toMutableMap())
-                repeat(2) { PerformancePreferences.removeRetiredSettings(prefs.instance) }
+                val prefs = TestPreferences((preserved + retired).toMutableMap(),
+                    editorMethods = setOf("remove", "apply"))
+                repeat(2) { PerformancePreferences.removeRetiredSettings(prefs.prefs) }
                 assertEquals(preserved, prefs.values)
                 assertEquals(if (retired.isEmpty()) 0 else 1, prefs.edits)
                 assertEquals(if (retired.isEmpty()) 0 else 1, prefs.writes)
@@ -93,24 +92,4 @@ class PerformancePreferencesTest {
         }
     }
 
-    private class MigrationPreferences(val values: MutableMap<String, Any>) {
-        var edits = 0
-        var writes = 0
-        private val editor = Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader,
-            arrayOf(SharedPreferences.Editor::class.java)) { proxy, method, args ->
-            when (method.name) {
-                "remove" -> { values.remove(args!![0]); proxy }
-                "apply" -> { writes++; null }
-                else -> error("Unexpected editor call: ${method.name}")
-            }
-        } as SharedPreferences.Editor
-        val instance = Proxy.newProxyInstance(SharedPreferences::class.java.classLoader,
-            arrayOf(SharedPreferences::class.java)) { _, method, args ->
-            when (method.name) {
-                "contains" -> values.containsKey(args!![0])
-                "edit" -> { edits++; editor }
-                else -> error("Unexpected preferences call: ${method.name}")
-            }
-        } as SharedPreferences
-    }
 }

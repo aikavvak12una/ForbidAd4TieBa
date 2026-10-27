@@ -1,6 +1,5 @@
 package com.forbidad4tieba.hook.config
 
-import android.content.SharedPreferences
 import com.forbidad4tieba.hook.config.TabPreferences.FixedHomeTopTab
 import com.forbidad4tieba.hook.config.TabPreferences.HomeTopTabCatalogEntry
 import com.forbidad4tieba.hook.config.TabPreferences.HOME_TOP_TAB_KEY_FOLLOWED
@@ -15,7 +14,6 @@ import com.forbidad4tieba.hook.config.TabPreferences.KEY_HOME_TOP_TAB_FOLLOWED
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import org.junit.Assert.*
 import org.junit.Test
-import java.lang.reflect.Proxy
 
 class HomeTopTabFixedSettingsTest {
     private val choices = mapOf<String, Any>(
@@ -105,7 +103,8 @@ class HomeTopTabFixedSettingsTest {
     }
 
     @Test fun modeAndSelectionSaveTogetherAndDisablingFixedKeepsKnownChoices() {
-        val store = PreferenceStore(choices.toMutableMap())
+        val store = TestPreferences(choices.toMutableMap(), readMethods = setOf("getBoolean", "getString"),
+            editorMethods = setOf("putBoolean", "putString", "apply"))
         val catalog = listOf(
             HomeTopTabCatalogEntry("type:1", "推荐"), HomeTopTabCatalogEntry("code:live", "直播"),
             HomeTopTabCatalogEntry("code:new", "新项"), TabPreferences.followedHomeTopTabCatalogEntry(),
@@ -132,24 +131,4 @@ class HomeTopTabFixedSettingsTest {
     private fun derive(values: Map<String, Any>, capabilities: HostCapabilities = available) =
         EffectiveSettingsPolicy.derive(UserSettings(values), capabilities, RemoteSettingsPolicy(false)).snapshot
 
-    private class PreferenceStore(val values: MutableMap<String, Any>) {
-        var applies = 0
-        var edits = 0
-        private val pending = mutableMapOf<String, Any>()
-        private val editor = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(SharedPreferences.Editor::class.java)) { proxy, method, args ->
-            when (method.name) {
-                "putBoolean", "putString" -> { pending[args!![0] as String] = args[1]; proxy }
-                "apply" -> { values.putAll(pending); pending.clear(); applies++; null }
-                else -> error("Unexpected edit: ${method.name}")
-            }
-        } as SharedPreferences.Editor
-        val prefs = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(SharedPreferences::class.java)) { _, method, args ->
-            when (method.name) {
-                "contains" -> values.containsKey(args!![0])
-                "getBoolean", "getString" -> values[args!![0]] ?: args[1]
-                "edit" -> { edits++; editor }
-                else -> error("Unexpected read: ${method.name}")
-            }
-        } as SharedPreferences
-    }
 }
