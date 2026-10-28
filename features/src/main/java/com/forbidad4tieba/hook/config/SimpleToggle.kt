@@ -3,13 +3,14 @@ package com.forbidad4tieba.hook.config
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.ui.UiText
 
-/** Independent extension switches. Complex parent/child and restricted policies stay with their owners. */
+/** Independent switches. Complex parent/child and restricted policies stay with their owners. */
 enum class SimpleToggle(
     val prefKey: String,
     val capabilityKey: String,
     val defaultValue: Boolean,
     val label: String,
     val description: String,
+    val group: Group = Group.EXTENSION,
 ) {
     DEFAULT_ORIGINAL_IMAGE(
         "enable_default_original_image", HookFeatureKey.DEFAULT_ORIGINAL_IMAGE, false,
@@ -18,7 +19,14 @@ enum class SimpleToggle(
     DEFAULT_LZL_EARLIEST(
         "default_lzl_earliest", HookFeatureKey.DEFAULT_LZL_EARLIEST, false,
         UiText.Settings.DEFAULT_LZL_EARLIEST_LABEL, UiText.Settings.DEFAULT_LZL_EARLIEST_DESC,
+    ),
+    HIDE_RECOMMEND_SEARCH_BOX(
+        "hide_recommend_search_box", HookFeatureKey.HIDE_RECOMMEND_SEARCH_BOX, false,
+        UiText.Settings.HIDE_RECOMMEND_SEARCH_BOX_LABEL, UiText.Settings.HIDE_RECOMMEND_SEARCH_BOX_DESC,
+        Group.UI_OPTIMIZE,
     );
+
+    enum class Group { EXTENSION, UI_OPTIMIZE }
 
     internal val preference = BooleanPreference(
         prefKey, defaultValue, PreferenceUse.SWITCH, capabilityKey,

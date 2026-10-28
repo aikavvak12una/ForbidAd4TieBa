@@ -42,6 +42,7 @@ import com.forbidad4tieba.hook.feature.ui.FreeCopyNativeFeature
 import com.forbidad4tieba.hook.feature.ui.HistorySearchFeature
 import com.forbidad4tieba.hook.feature.ui.HomeBottomTabAutoHideFeature
 import com.forbidad4tieba.hook.feature.ui.HomeFeedPromptBarBlockFeature
+import com.forbidad4tieba.hook.feature.ui.RecommendSearchBoxFeature
 import com.forbidad4tieba.hook.feature.ui.nativeglass.HomeNativeGlassFeature
 import com.forbidad4tieba.hook.feature.ui.HomeSideBarSettingsEntryFeature
 import com.forbidad4tieba.hook.feature.ui.HomeTabFeature
@@ -128,6 +129,7 @@ internal object FeatureCatalog {
         HomeTabFeature,
         MainTabBottomFeature,
         SearchBoxTextAdFeature,
+        RecommendSearchBoxFeature,
         HomeTopBarRightSlotFeature,
         EnterForumWebFeature,
         plainUrlDirectBrowserFeature { context, userId -> CommentAvatarDirectProfileHook.openUserId(context, userId) },

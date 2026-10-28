@@ -38,22 +38,26 @@ internal object HomeHeaderSymbolScanner {
             listOf(SearchBoxSetHintRule()),
             logger,
             "searchBoxHint",
-        ) ?: return HomeHeaderScanSymbols()
+        )
+        // Hiding the whole search box does not depend on the optional hint-text API.
+        val searchBoxClass = ScanReflection.safeFindClass(StableTiebaHookPoints.TB_SEARCH_BOX_VIEW_CLASS, cl)
+            ?.takeIf { android.view.ViewGroup::class.java.isAssignableFrom(it) }
+            ?: return HomeHeaderScanSymbols()
         val ownerMatch = ScanReflection.runRules(
             listOf(StableTiebaHookPoints.HOME_SEARCH_BOX_OWNER_CLASS),
             cl,
             listOf(
                 HomeSearchBoxOwnerRule(
                     StableTiebaHookPoints.HOME_SEARCH_BOX_OWNER_CLASS,
-                    searchBoxMatch.className,
+                    searchBoxClass.name,
                 ),
             ),
             logger,
             "homeSearchBoxOwner",
         )
         return HomeHeaderScanSymbols(
-            searchBoxViewClass = searchBoxMatch.className,
-            searchBoxSetHintMethod = searchBoxMatch.methodName,
+            searchBoxViewClass = searchBoxClass.name,
+            searchBoxSetHintMethod = searchBoxMatch?.methodName,
             homeSearchBoxOwnerClass = ownerMatch?.className,
             homeSearchBoxInitMethod = ownerMatch?.methodName,
             homeSearchBoxGetterMethod = ownerMatch?.fieldName,

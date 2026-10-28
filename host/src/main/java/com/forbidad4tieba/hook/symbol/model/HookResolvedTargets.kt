@@ -156,6 +156,11 @@ data class HomeNativeGlassHostDarkModeSwitchTargets(
     val switchCallbackMethod: Method,
 )
 
+data class HomeSearchBoxSymbols(
+    val ownerInitMethod: Method,
+    val ownerGetterMethod: Method,
+)
+
 data class SearchBoxTextAdSymbols(
     val setHintMethod: Method,
     val ownerInitMethod: Method,

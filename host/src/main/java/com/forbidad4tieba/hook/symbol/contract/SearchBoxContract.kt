@@ -1,194 +1,131 @@
 package com.forbidad4tieba.hook.symbol.contract
 
+import android.view.ViewGroup
 import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
-import com.forbidad4tieba.hook.symbol.contract.CapabilityPolicy.statusFromMissing
 import com.forbidad4tieba.hook.symbol.model.HomeHeaderScanSymbols
+import com.forbidad4tieba.hook.symbol.model.HomeSearchBoxSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.HookSymbolsBuilder
 import com.forbidad4tieba.hook.symbol.model.SearchBoxTextAdSymbols
 import com.forbidad4tieba.hook.symbol.scan.HomeHeaderSymbolScanner
-import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
+import java.lang.reflect.Method
+import java.lang.reflect.Modifier
 
-/** Owns the cached descriptors and host rules for this capability. */
+/** Owns the shared home-search target; hint blocking adds its own API dependency. */
 object SearchBoxContract : SymbolContract("SearchBox") {
-    internal override val candidateClasses = listOf(
-        StableTiebaHookPoints.TB_SEARCH_BOX_VIEW_CLASS,
-    )
+    internal override val candidateClasses = listOf(StableTiebaHookPoints.TB_SEARCH_BOX_VIEW_CLASS)
 
     val searchBoxViewClass = text("searchBoxViewClass")
     val searchBoxSetHintMethod = text("searchBoxSetHintMethod")
     val homeSearchBoxOwnerClass = text("homeSearchBoxOwnerClass")
     val homeSearchBoxInitMethod = text("homeSearchBoxInitMethod")
     val homeSearchBoxGetterMethod = text("homeSearchBoxGetterMethod")
+    private val home = SymbolDependencies(
+        searchBoxViewClass, homeSearchBoxOwnerClass, homeSearchBoxInitMethod, homeSearchBoxGetterMethod,
+    )
+    private val hint = SymbolDependencies(searchBoxSetHintMethod)
 
     internal override fun scan(scan: SymbolScanContext, output: HookSymbolsBuilder) = with(scan) {
-        val homeHeaderScan = once(HomeHeaderSymbolScanner) {
-runScanStep(
-            "HomeHeaderHooks",
-            logger,
-            scanErrors,
-            HomeHeaderScanSymbols(),
-        ) {
-            HomeHeaderSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
+        val result = once(HomeHeaderSymbolScanner) {
+            runScanStep("HomeHeaderHooks", logger, scanErrors, HomeHeaderScanSymbols()) {
+                HomeHeaderSymbolScanner.scan(candidatesWithWhitelist, cl, logger)
+            }
         }
-        }
-
-        output[SearchBoxContract.searchBoxViewClass] = homeHeaderScan.searchBoxViewClass
-        output[SearchBoxContract.searchBoxSetHintMethod] = homeHeaderScan.searchBoxSetHintMethod
-        output[SearchBoxContract.homeSearchBoxOwnerClass] = homeHeaderScan.homeSearchBoxOwnerClass
-        output[SearchBoxContract.homeSearchBoxInitMethod] = homeHeaderScan.homeSearchBoxInitMethod
-        output[SearchBoxContract.homeSearchBoxGetterMethod] = homeHeaderScan.homeSearchBoxGetterMethod
+        output[searchBoxViewClass] = result.searchBoxViewClass
+        output[searchBoxSetHintMethod] = result.searchBoxSetHintMethod
+        output[homeSearchBoxOwnerClass] = result.homeSearchBoxOwnerClass
+        output[homeSearchBoxInitMethod] = result.homeSearchBoxInitMethod
+        output[homeSearchBoxGetterMethod] = result.homeSearchBoxGetterMethod
     }
 
-    private const val SEARCH_BOX_HEADER_CONTAINER_CLASS = "androidx.coordinatorlayout.widget.CoordinatorLayout"
+    private const val HEADER_CONTAINER = "androidx.coordinatorlayout.widget.CoordinatorLayout"
 
-    fun resolveSearchBoxTextAdSymbols(
-        cl: ClassLoader,
-        symbols: HookSymbols?,
-    ): SearchBoxTextAdSymbols? {
+    fun resolveHomeSearchBoxSymbols(cl: ClassLoader, symbols: HookSymbols): HomeSearchBoxSymbols? {
+        if (home.missing(symbols).isNotEmpty()) return null
         return try {
-            val resolvedSymbols = symbols ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: scan symbols unavailable")
-                return null
-            }
-            val searchBoxClassName = resolvedSymbols[SearchBoxContract.searchBoxViewClass]?.takeIf { it.isNotBlank() } ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: missing searchBoxViewClass")
-                return null
-            }
-            val setHintMethodName = resolvedSymbols[SearchBoxContract.searchBoxSetHintMethod]?.takeIf { it.isNotBlank() } ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: missing searchBoxSetHintMethod")
-                return null
-            }
-            val ownerClassName = resolvedSymbols[SearchBoxContract.homeSearchBoxOwnerClass]?.takeIf { it.isNotBlank() } ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: missing homeSearchBoxOwnerClass")
-                return null
-            }
-            val ownerInitMethodName = resolvedSymbols[SearchBoxContract.homeSearchBoxInitMethod]?.takeIf { it.isNotBlank() } ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: missing homeSearchBoxInitMethod")
-                return null
-            }
-            val ownerGetterMethodName = resolvedSymbols[SearchBoxContract.homeSearchBoxGetterMethod]?.takeIf { it.isNotBlank() } ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: missing homeSearchBoxGetterMethod")
-                return null
-            }
-
-            val searchBoxClass = ScanReflection.safeFindClass(searchBoxClassName, cl) ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: class not found: $searchBoxClassName")
-                return null
-            }
-            val ownerClass = ScanReflection.safeFindClass(ownerClassName, cl) ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: class not found: $ownerClassName")
-                return null
-            }
-            val recyclerClass = ScanReflection.safeFindClass(StableTiebaHookPoints.BD_TYPE_RECYCLER_VIEW_CLASS, cl) ?: run {
-                Diagnostics.log(
-                    "[SearchBoxTextAdHook] skipped: class not found: " +
-                        StableTiebaHookPoints.BD_TYPE_RECYCLER_VIEW_CLASS,
-                )
-                return null
-            }
-            val containerClass = ScanReflection.safeFindClass(SEARCH_BOX_HEADER_CONTAINER_CLASS, cl) ?: run {
-                Diagnostics.log("[SearchBoxTextAdHook] skipped: class not found: $SEARCH_BOX_HEADER_CONTAINER_CLASS")
-                return null
-            }
-
-            val setHintMethod = searchBoxClass.declaredMethods.singleOrNull { method ->
-                method.name == setHintMethodName &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 2 &&
-                    List::class.java.isAssignableFrom(method.parameterTypes[0]) &&
-                    method.parameterTypes[1] == Boolean::class.javaPrimitiveType
-            } ?: run {
-                Diagnostics.log(
-                    "[SearchBoxTextAdHook] skipped: method mismatch: " +
-                        "$searchBoxClassName.$setHintMethodName(List,boolean)",
-                )
-                return null
-            }
-
-            val ownerMethods = ScanReflection.collectInstanceMethods(ownerClass)
-            val ownerInitMethod = ownerMethods.singleOrNull { method ->
-                method.name == ownerInitMethodName &&
-                    method.returnType == Void.TYPE &&
-                    method.parameterTypes.size == 2 &&
-                    recyclerClass.isAssignableFrom(method.parameterTypes[0]) &&
-                    containerClass.isAssignableFrom(method.parameterTypes[1])
-            } ?: run {
-                Diagnostics.log(
-                    "[SearchBoxTextAdHook] skipped: method mismatch: " +
-                        "$ownerClassName.$ownerInitMethodName(${recyclerClass.name},${containerClass.name})",
-                )
-                return null
-            }
-            val ownerGetterMethod = ownerMethods.singleOrNull { method ->
-                method.name == ownerGetterMethodName &&
-                    method.parameterTypes.isEmpty() &&
-                    searchBoxClass.isAssignableFrom(method.returnType)
-            } ?: run {
-                Diagnostics.log(
-                    "[SearchBoxTextAdHook] skipped: method mismatch: " +
-                        "$ownerClassName.$ownerGetterMethodName()",
-                )
-                return null
-            }
-
-            setHintMethod.isAccessible = true
-            ownerInitMethod.isAccessible = true
-            ownerGetterMethod.isAccessible = true
-            SearchBoxTextAdSymbols(
-                setHintMethod = setHintMethod,
-                ownerInitMethod = ownerInitMethod,
-                ownerGetterMethod = ownerGetterMethod,
+            check(symbols[searchBoxViewClass] == StableTiebaHookPoints.TB_SEARCH_BOX_VIEW_CLASS)
+            check(symbols[homeSearchBoxOwnerClass] == StableTiebaHookPoints.HOME_SEARCH_BOX_OWNER_CLASS)
+            val searchBox = Class.forName(requireNotNull(symbols[searchBoxViewClass]), false, cl)
+            check(ViewGroup::class.java.isAssignableFrom(searchBox))
+            restoreHome(
+                Class.forName(requireNotNull(symbols[homeSearchBoxOwnerClass]), false, cl),
+                searchBox,
+                Class.forName(StableTiebaHookPoints.BD_TYPE_RECYCLER_VIEW_CLASS, false, cl),
+                Class.forName(HEADER_CONTAINER, false, cl),
+                requireNotNull(symbols[homeSearchBoxInitMethod]),
+                requireNotNull(symbols[homeSearchBoxGetterMethod]),
             )
-        } catch (t: Throwable) {
-            Diagnostics.log("[SearchBoxTextAdHook] symbol resolve FAILED: ${t.message}")
-            Diagnostics.log(t)
+        } catch (failure: Throwable) {
+            Diagnostics.log("[SearchBox] cached home target invalid: ${failure.message}")
             null
         }
     }
 
-    internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> {
-        val out = linkedMapOf<String, HookFeatureStatus>()
-        out[HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT] = statusFromMissing(
-            listOfNotNull(
-                "searchBoxViewClass".takeIf { symbols[SearchBoxContract.searchBoxViewClass].isNullOrBlank() },
-                "searchBoxSetHintMethod".takeIf { symbols[SearchBoxContract.searchBoxSetHintMethod].isNullOrBlank() },
-                "homeSearchBoxOwnerClass".takeIf { symbols[SearchBoxContract.homeSearchBoxOwnerClass].isNullOrBlank() },
-                "homeSearchBoxInitMethod".takeIf { symbols[SearchBoxContract.homeSearchBoxInitMethod].isNullOrBlank() },
-                "homeSearchBoxGetterMethod".takeIf { symbols[SearchBoxContract.homeSearchBoxGetterMethod].isNullOrBlank() },
-            ),
-        )
-        return out
+    internal fun restoreHome(
+        owner: Class<*>,
+        searchBox: Class<*>,
+        recycler: Class<*>,
+        container: Class<*>,
+        initName: String,
+        getterName: String,
+    ): HomeSearchBoxSymbols {
+        val init = owner.getDeclaredMethod(initName, recycler, container)
+        check(isInstanceMethod(init) && init.returnType == Void.TYPE) { "Invalid home search initializer" }
+        val getter = owner.getDeclaredMethod(getterName)
+        check(isInstanceMethod(getter) && getter.returnType == searchBox) { "Invalid home search getter" }
+        init.isAccessible = true
+        getter.isAccessible = true
+        return HomeSearchBoxSymbols(init, getter)
     }
 
+    private fun isInstanceMethod(method: Method): Boolean =
+        !Modifier.isStatic(method.modifiers) && !Modifier.isAbstract(method.modifiers)
+
+    fun resolveSearchBoxTextAdSymbols(cl: ClassLoader, symbols: HookSymbols?): SearchBoxTextAdSymbols? {
+        val resolved = symbols ?: return null
+        val target = resolveHomeSearchBoxSymbols(cl, resolved) ?: return null
+        val name = resolved[searchBoxSetHintMethod] ?: return null
+        return try {
+            val method = target.ownerGetterMethod.returnType.getDeclaredMethod(
+                name, List::class.java, Boolean::class.javaPrimitiveType,
+            )
+            check(isInstanceMethod(method) && method.returnType == Void.TYPE) { "Invalid search hint setter" }
+            method.isAccessible = true
+            SearchBoxTextAdSymbols(method, target.ownerInitMethod, target.ownerGetterMethod)
+        } catch (failure: Throwable) {
+            Diagnostics.log("[SearchBoxTextAdHook] cached hint target invalid: ${failure.message}")
+            null
+        }
+    }
+
+    internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> = mapOf(
+        HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT to (home + hint).requiredStatus(symbols),
+        HookFeatureKey.HIDE_RECOMMEND_SEARCH_BOX to home.requiredStatus(symbols),
+    )
+
     internal override fun points(symbols: HookSymbols): List<HookPointStatus> = SymbolPointCollector().apply {
-        add(
-            "SearchBoxTextAdHook.Hint",
-            "${symbols[SearchBoxContract.searchBoxViewClass]}.${symbols[SearchBoxContract.searchBoxSetHintMethod]}",
-            listOf(
-                SearchBoxContract.searchBoxViewClass.check(symbols),
-                SearchBoxContract.searchBoxSetHintMethod.check(symbols),
-            ),
-        )
-        add(
-            "SearchBoxTextAdHook.Owner",
-            "${symbols[SearchBoxContract.homeSearchBoxOwnerClass]}.{${symbols[SearchBoxContract.homeSearchBoxInitMethod]},${symbols[SearchBoxContract.homeSearchBoxGetterMethod]}}",
-            listOf(
-                SearchBoxContract.homeSearchBoxOwnerClass.check(symbols),
-                SearchBoxContract.homeSearchBoxInitMethod.check(symbols),
-                SearchBoxContract.homeSearchBoxGetterMethod.check(symbols),
-            ),
-        )
+        add("SearchBoxTextAdHook.Hint",
+            "${symbols[searchBoxViewClass]}.${symbols[searchBoxSetHintMethod]}",
+            SymbolDependencies(searchBoxViewClass, searchBoxSetHintMethod).checks(symbols))
+        add("SearchBoxTextAdHook.Owner",
+            "${symbols[homeSearchBoxOwnerClass]}.{${symbols[homeSearchBoxInitMethod]},${symbols[homeSearchBoxGetterMethod]}}",
+            home.checks(symbols))
+        add("RecommendSearchBoxHook",
+            "${symbols[homeSearchBoxOwnerClass]}.${symbols[homeSearchBoxInitMethod]}",
+            home.checks(symbols))
     }.build()
 
     internal override val pointOwners = listOf(
         PointOwner("SearchBoxTextAdHook.", true, listOf(HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT)),
+        PointOwner("RecommendSearchBoxHook", false, listOf(HookFeatureKey.HIDE_RECOMMEND_SEARCH_BOX)),
     )
 
-    // No persisted reflective targets outside the delegated contract.
-    internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean = true
+    internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean =
+        // Missing/partial discoveries are valid negative-cache entries. Complete groups must restore.
+        (home.missing(symbols).isNotEmpty() || resolveHomeSearchBoxSymbols(cl, symbols) != null) &&
+            ((home + hint).missing(symbols).isNotEmpty() || resolveSearchBoxTextAdSymbols(cl, symbols) != null)
 }

@@ -160,7 +160,7 @@ internal object SettingsMenuGroupBuilder {
             ),
             SwitchItem(ExtensionPreferences.DISABLE_AUTO_REFRESH),
             SwitchItem(ExtensionPreferences.DISABLE_PB_GESTURE_FONT_SCALE),
-            *SimpleToggle.entries.map(::SwitchItem).toTypedArray(),
+            *SimpleToggle.entries.filter { it.group == SimpleToggle.Group.EXTENSION }.map(::SwitchItem).toTypedArray(),
             SwitchItem(ExtensionPreferences.OPEN_WEB_LINK_IN_SYSTEM_BROWSER),
         )
         if (restrictedFeaturesUnlocked) {
@@ -242,6 +242,7 @@ internal object SettingsMenuGroupBuilder {
             onActionClick = { actions.onTabCustomization(tabCustomizationItems(actions)) },
         ),
         SwitchItem(TabPreferences.HIDE_HOME_TAB_RED_DOT),
+        *SimpleToggle.entries.filter { it.group == SimpleToggle.Group.UI_OPTIMIZE }.map(::SwitchItem).toTypedArray(),
         SwitchItem(ExtensionPreferences.HIDE_INPUT_MEME_BAR),
         SwitchItem(ExtensionPreferences.HIDE_PB_TOP_ENTER_BAR),
         SwitchItem(

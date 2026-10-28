@@ -9,6 +9,7 @@ import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.ui.SettingsMenuGroupActions
 import com.forbidad4tieba.hook.ui.SettingsMenuGroupBuilder
 import com.forbidad4tieba.hook.ui.SettingsSwitchSupportResolver
+import com.forbidad4tieba.hook.ui.UiText
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -30,12 +31,17 @@ class SimpleToggleIntegrationTest {
                 assertTrue(row.supported)
                 assertTrue(toggle.capabilityKey in HookFeatureKey.orderedKeys)
                 assertEquals(toggle.capabilityKey, SettingsCatalog.capabilityFor(row.prefKey))
+                val group = SettingsMenuGroupBuilder.build(unlocked, noActions).single { candidate ->
+                    candidate.items.any { it.prefKey == toggle.prefKey }
+                }
+                assertEquals(if (toggle.group == SimpleToggle.Group.UI_OPTIMIZE) UiText.Settings.GROUP_UI_OPTIMIZE
+                    else UiText.Settings.GROUP_EXTENSION, group.name)
             }
         }
     }
 
     @Test fun savedKeysDefaultsAndMenuOrderRemainCompatible() {
-        assertEquals(listOf("enable_default_original_image", "default_lzl_earliest"),
+        assertEquals(listOf("enable_default_original_image", "default_lzl_earliest", "hide_recommend_search_box"),
             SimpleToggle.entries.map { it.prefKey })
         assertTrue(SimpleToggle.entries.none { it.defaultValue })
         val keys = SettingsMenuGroupBuilder.build(false, noActions).flatMap { it.items }.map { it.prefKey }
@@ -91,6 +97,9 @@ class SimpleToggleIntegrationTest {
     // Exhaustive fixtures require a new toggle to demonstrate its own real symbol dependency.
     private fun symbolsFor(toggle: SimpleToggle): HookSymbols {
         val keys = when (toggle) {
+            SimpleToggle.HIDE_RECOMMEND_SEARCH_BOX -> listOf(
+                "searchBoxViewClass", "homeSearchBoxOwnerClass", "homeSearchBoxInitMethod", "homeSearchBoxGetterMethod",
+            )
             SimpleToggle.DEFAULT_LZL_EARLIEST -> listOf("lzlDefaultSortSetter")
             SimpleToggle.DEFAULT_ORIGINAL_IMAGE -> listOf(
                 "origImageUrlDragImageViewClass", "origImageDataClass", "origImageTriggerMethod",

@@ -36,6 +36,7 @@ object HookFeatureKey {
     const val FIXED_HOME_TOP_TABS = "home_top_tab_fixed_enabled"
     const val SIMPLIFY_BOTTOM_TABS = "simplify_bottom_tabs"
     const val HIDE_INPUT_MEME_BAR = "hide_input_meme_bar"
+    const val HIDE_RECOMMEND_SEARCH_BOX = "hide_recommend_search_box"
     const val HIDE_PB_BOTTOM_BANNER = "hide_pb_bottom_enter_bar"
     const val HIDE_PB_TOP_ENTER_BAR = "hide_pb_top_enter_bar"
     const val FILTER_ENTER_FORUM_WEB = "filter_enter_forum_web"
@@ -86,6 +87,7 @@ object HookFeatureKey {
         FIXED_HOME_TOP_TABS,
         SIMPLIFY_BOTTOM_TABS,
         HIDE_INPUT_MEME_BAR,
+        HIDE_RECOMMEND_SEARCH_BOX,
         HIDE_PB_BOTTOM_BANNER,
         HIDE_PB_TOP_ENTER_BAR,
         FILTER_ENTER_FORUM_WEB,
