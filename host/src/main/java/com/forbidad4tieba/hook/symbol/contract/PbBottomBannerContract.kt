@@ -201,6 +201,10 @@ object PbBottomBannerContract : SymbolContract("PbBottomBanner") {
             val refreshMethods = resolvedSymbols[PbBottomBannerContract.pbHotTopicGuideRefreshMethodSpecs].orEmpty()
                 .mapNotNull { spec -> resolvePbHotTopicGuideRefreshMethod(guideClass, spec) }
                 .distinct()
+            if (!isHotTopicRefreshGroupValid(refreshMethods)) {
+                Diagnostics.log("[PbBottomEnterBarHook] hot topic guide skipped: incomplete refresh group")
+                return null
+            }
             totalViewMethod.isAccessible = true
             refreshMethods.forEach { it.isAccessible = true }
             PbBottomEnterBarHotTopicGuideSymbols(
@@ -243,11 +247,16 @@ object PbBottomBannerContract : SymbolContract("PbBottomBanner") {
 
     private fun isPbHotTopicGuideRefreshSignature(method: Method): Boolean {
         if (Modifier.isStatic(method.modifiers)) return false
-        if (method.returnType != Void.TYPE) return false
         val params = method.parameterTypes
-        return params.isEmpty() ||
-            (params.size == 1 && params[0] == Int::class.javaPrimitiveType)
+        return (params.isEmpty() && method.returnType in listOf(Void.TYPE, Boolean::class.javaPrimitiveType)) ||
+            (method.returnType == Void.TYPE && params.size == 1 && params[0] == Int::class.javaPrimitiveType)
     }
+
+    internal fun isHotTopicRefreshGroupValid(methods: List<Method>): Boolean =
+        methods.size == 3 && methods.all(::isPbHotTopicGuideRefreshSignature) &&
+            methods.count { it.returnType == Boolean::class.javaPrimitiveType } == 1 &&
+            methods.count { it.returnType == Void.TYPE && it.parameterCount == 0 } == 1 &&
+            methods.count { it.parameterCount == 1 } == 1
 
     internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> {
         val out = linkedMapOf<String, HookFeatureStatus>()
@@ -488,27 +497,15 @@ object PbBottomBannerContract : SymbolContract("PbBottomBanner") {
             ) {
                 return false
             }
-            symbols[PbBottomBannerContract.pbHotTopicGuideRefreshMethodSpecs].orEmpty().all { spec ->
-                isPbHotTopicGuideRefreshMethodValid(targetClass, spec)
-            }
+            val specs = symbols[PbBottomBannerContract.pbHotTopicGuideRefreshMethodSpecs].orEmpty()
+            if (specs.isEmpty()) return true
+            val methods = specs.map { resolvePbHotTopicGuideRefreshMethod(targetClass, it) ?: return false }
+            isHotTopicRefreshGroupValid(methods)
         } catch (_: Throwable) {
             false
         }
     }
 
-    private fun isPbHotTopicGuideRefreshMethodValid(targetClass: Class<*>, spec: String): Boolean {
-        val parts = spec.split('|', limit = 2)
-        if (parts.size != 2 || parts[0].isBlank()) return false
-        val paramTypes = when (parts[1].trim()) {
-            "" -> emptyArray<Class<*>>()
-            "int" -> arrayOf<Class<*>>(Integer.TYPE)
-            else -> return false
-        }
-        val method = targetClass.getDeclaredMethod(parts[0].trim(), *paramTypes)
-        if (Modifier.isStatic(method.modifiers)) return false
-        if (method.returnType != Void.TYPE) return false
-        return true
-    }
     private fun isBottomEnterBarReady(symbols: HookSymbols): Boolean =
         !symbols[PbBottomBannerContract.pbBottomEnterBarViewClass].isNullOrBlank() &&
             (symbols[PbBottomBannerContract.pbBottomEnterBarConstructorCount] ?: 0) > 0

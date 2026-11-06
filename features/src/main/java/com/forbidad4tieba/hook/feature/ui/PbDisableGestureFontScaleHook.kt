@@ -1,15 +1,16 @@
 package com.forbidad4tieba.hook.feature.ui
 
 import com.forbidad4tieba.hook.core.RuntimeHooks
+import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.symbol.model.PbGestureScaleSymbols
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.utils.ReflectionUtils
 import java.lang.reflect.Method
-import java.util.concurrent.ConcurrentHashMap
+import io.github.libxposed.api.XposedInterface
 
 object PbDisableGestureFontScaleHook {
-    private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
+    private val installedMethods = OwnedHookSet<Method, XposedInterface.HookHandle> { it.unhook() }
 
     internal fun hook(targets: PbGestureScaleSymbols) {
         if (!ConfigManager.snapshot().isPbGestureFontScaleDisabled) {
@@ -41,12 +42,15 @@ object PbDisableGestureFontScaleHook {
         mod: io.github.libxposed.api.XposedModule,
         method: Method,
     ): Boolean {
-        val methodKey = ReflectionUtils.methodSignature(method)
-        if (!installedMethodKeys.add(methodKey)) return false
-
-        RuntimeHooks.builder(mod, method, "PbDisableGestureFontScaleHook", "installDispatchHook:method").intercept { chain ->
-            if (ConfigManager.snapshot().isPbGestureFontScaleDisabled) false else chain.proceed()
+        var added = false
+        installedMethods.install(method) {
+            RuntimeHooks.builder(mod, method, "PbDisableGestureFontScaleHook", "installDispatchHook:method").intercept { chain ->
+                dispatchResult(ConfigManager.snapshot().isPbGestureFontScaleDisabled) { chain.proceed() }
+            }.also { added = true }
         }
-        return true
+        return added
     }
+
+    internal inline fun dispatchResult(disabled: Boolean, original: () -> Any?): Any? =
+        if (disabled) false else original()
 }

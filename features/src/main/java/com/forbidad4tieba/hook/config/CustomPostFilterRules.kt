@@ -20,6 +20,17 @@ internal data class CustomPostFilterRules(
     val modelScore: Boolean,
     val modelScoreThresholds: List<ModelScoreSettings.ModelScoreThreshold>,
 ) {
+    val needsTemplateKeyCheck: Boolean =
+        vote ||
+            video ||
+            reply ||
+            hot ||
+            goods ||
+            gameBooking ||
+            help ||
+            score ||
+            recommendForum
+
     val needsFeedHeadParamsCheck: Boolean =
         reply ||
             gameBooking ||

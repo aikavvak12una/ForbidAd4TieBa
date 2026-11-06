@@ -19,7 +19,7 @@ object CustomPostCardBlockHook {
         rules: CustomPostFilterRules? = CustomPostFilterMatcher.runtimeRules(),
         recordModelScores: (Map<String, Double>) -> Unit = { CustomPostModelScoreStats.record(it) },
     ): List<*> {
-        if (rules == null && templateKeyBlockReason == null) return list
+        if (list.isEmpty() || (rules == null && templateKeyBlockReason == null)) return list
         val filtered = filterItems(
             list = list,
             targets = runtimeFilter,
@@ -44,46 +44,42 @@ object CustomPostCardBlockHook {
     ): List<*> {
         val size = list.size
         var out: ArrayList<Any?>? = null
-        var payloadCache: IdentityHashMap<Any, Any>? = null
-        val keyCache = IdentityHashMap<Any, Any?>(size.coerceAtLeast(8))
+        var decisionCache: IdentityHashMap<Any, CustomPostFilterMatcher.Decision>? = null
+        val keyCache = TemplateKeyCache(targets.templateKeyMethod, size.coerceAtLeast(8))
+        val templateKeyRuleEnabled = rules?.needsTemplateKeyCheck == true
+        val outerKeyNeeded = templateKeyRuleEnabled || templateKeyBlockReason != null
         var adBlockedCount = 0
         var customPostBlockedCount = 0
 
-        fun getPayloadCached(target: Any?): Any? {
-            if (target == null) return null
-            val cache = payloadCache ?: IdentityHashMap<Any, Any>(size.coerceAtLeast(8)).also {
-                payloadCache = it
+        fun getDecisionCached(target: Any?): CustomPostFilterMatcher.Decision {
+            if (target == null || rules == null || !targets.templatePayloadMethod.declaringClass.isInstance(target)) {
+                return CustomPostFilterMatcher.KEEP
             }
-            val cached = cache[target]
-            if (cached != null) {
-                return if (cached === NO_VALUE) null else cached
+            val cache = decisionCache ?: IdentityHashMap<Any, CustomPostFilterMatcher.Decision>(size.coerceAtLeast(8)).also {
+                decisionCache = it
             }
-            val resolved = invoke(targets.templatePayloadMethod, target)
-            cache[target] = resolved ?: NO_VALUE
-            return resolved
-        }
-
-        fun getKeyCached(target: Any?): String? {
-            if (target == null) return null
-            val cached = keyCache[target]
-            if (cached != null) {
-                return if (cached === NO_VALUE) null else cached as String
-            }
-            val resolved = invoke(targets.templateKeyMethod, target) as? String
-            keyCache[target] = resolved ?: NO_VALUE
-            return resolved
+            cache[target]?.let { return it }
+            val cardData = invoke(targets.templatePayloadMethod, target)
+            val decision = if (cardData == null) CustomPostFilterMatcher.KEEP else decideBlock(
+                cardData = cardData,
+                targets = targets,
+                rules = rules,
+                keyCache = keyCache,
+            )
+            cache[target] = decision
+            return decision
         }
 
         for (i in 0 until size) {
             val item = list[i]
-            val key = getKeyCached(item)
+            val key = if (outerKeyNeeded) keyCache.read(item) else null
             val directBlockReason = templateKeyBlockReason?.invoke(key)
             val templateKeyDecision = if (directBlockReason != null) {
                 CustomPostFilterMatcher.Decision(
                     blocked = true,
                     reason = directBlockReason,
                 )
-            } else if (rules != null) {
+            } else if (templateKeyRuleEnabled && rules != null) {
                 CustomPostFilterMatcher.decideByTemplateKey(key, rules)
             } else {
                 CustomPostFilterMatcher.KEEP
@@ -91,16 +87,7 @@ object CustomPostCardBlockHook {
             val decision = if (templateKeyDecision.blocked) {
                 templateKeyDecision
             } else if (rules != null) {
-                val cardData = getPayloadCached(item)
-                if (cardData != null) {
-                    decideBlock(
-                        cardData = cardData,
-                        targets = targets,
-                        rules = rules,
-                    )
-                } else {
-                    CustomPostFilterMatcher.KEEP
-                }
+                getDecisionCached(item)
             } else {
                 CustomPostFilterMatcher.KEEP
             }
@@ -136,6 +123,7 @@ object CustomPostCardBlockHook {
         cardData: Any,
         targets: CustomPostCardFilterSymbols,
         rules: CustomPostFilterRules,
+        keyCache: TemplateKeyCache,
     ): CustomPostFilterMatcher.Decision {
         val list = read(targets.dataListField, cardData) as? List<*>
             ?: if (rules.recommendForum) {
@@ -146,29 +134,23 @@ object CustomPostCardBlockHook {
         if (list.isEmpty()) return CustomPostFilterMatcher.KEEP
 
         val headRuleEnabled = rules.needsFeedHeadParamsCheck
+        val templateKeyRuleEnabled = rules.needsTemplateKeyCheck
+        val headParamsField = targets.headParamsField
         var headParams: Map<*, *>? = null
-        val keyCache = IdentityHashMap<Any, Any?>(list.size.coerceAtLeast(8))
         for (item in list) {
             if (item == null) continue
-            val cached = keyCache[item]
-            val key = if (cached != null) {
-                if (cached === NO_VALUE) null else cached as String
-            } else {
-                val resolved = invoke(targets.templateKeyMethod, item) as? String
-                keyCache[item] = resolved ?: NO_VALUE
-                resolved
-            }
-            if (
-                headRuleEnabled &&
-                headParams == null &&
-                targets.headParamsField != null &&
-                key == FEED_HEAD_TEMPLATE_KEY
-            ) {
-                val params = read(targets.headParamsField, item) as? Map<*, *>
+            val headCandidate = headRuleEnabled && headParams == null && headParamsField != null &&
+                headParamsField.declaringClass.isInstance(item)
+            if (!templateKeyRuleEnabled && !headCandidate) continue
+            val key = keyCache.read(item)
+            if (headCandidate && key == FEED_HEAD_TEMPLATE_KEY) {
+                val params = read(headParamsField, item) as? Map<*, *>
                 headParams = params?.takeIf { looksLikeFeedHeadParams(it, rules) }
             }
-            val decision = CustomPostFilterMatcher.decideByTemplateKey(key, rules)
-            if (decision.blocked) return decision
+            if (templateKeyRuleEnabled) {
+                val decision = CustomPostFilterMatcher.decideByTemplateKey(key, rules)
+                if (decision.blocked) return decision
+            }
         }
         val headDecision = if (headRuleEnabled) {
             CustomPostFilterMatcher.decideByFeedHeadParams(headParams, rules)
@@ -186,6 +168,20 @@ object CustomPostCardBlockHook {
             }
         }
         return headDecision
+    }
+
+    private class TemplateKeyCache(private val method: Method, private val initialSize: Int) {
+        private var values: IdentityHashMap<Any, Any?>? = null
+
+        fun read(target: Any?): String? {
+            if (target == null || !method.declaringClass.isInstance(target)) return null
+            val cache = values ?: IdentityHashMap<Any, Any?>(initialSize).also { values = it }
+            val cached = cache[target]
+            if (cached != null) return if (cached === NO_VALUE) null else cached as String
+            val resolved = invoke(method, target) as? String
+            cache[target] = resolved ?: NO_VALUE
+            return resolved
+        }
     }
 
     private fun invoke(method: Method, receiver: Any): Any? =

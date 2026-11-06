@@ -14,6 +14,7 @@ import com.forbidad4tieba.hook.symbol.model.HookFeatureStatus
 import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.symbol.model.HookSymbolsBuilder
 import com.forbidad4tieba.hook.symbol.scan.ForumPageAdSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.ForumRainSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import com.forbidad4tieba.hook.symbol.status.HookPointState
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
@@ -40,10 +41,9 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
     val forumSpriteBubbleSetterMethod = text("forumSpriteBubbleSetterMethod")
     val forumMaskPopSetterMethod = text("forumMaskPopSetterMethod")
     val forumBottomGameBarMapperMethod = text("forumBottomGameBarMapperMethod")
-    val forumHeaderDataMapperMethod = text("forumHeaderDataMapperMethod")
-    val forumHeaderDataClass = text("forumHeaderDataClass")
+    val forumRainMapperClass = text("forumRainMapperClass")
+    val forumRainMapperMethod = text("forumRainMapperMethod")
     val forumRainDataClass = text("forumRainDataClass")
-    val forumRainSetterMethod = text("forumRainSetterMethod")
     val forumDialogControllerClass = text("forumDialogControllerClass")
     val forumBusinessPromotShowMethod = text("forumBusinessPromotShowMethod")
     val forumGameFloatingBarControllerClass = text("forumGameFloatingBarControllerClass")
@@ -75,10 +75,9 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
         output[ForumPageAdContract.forumSpriteBubbleSetterMethod] = forumPageAdScan.spriteBubbleSetterMethod
         output[ForumPageAdContract.forumMaskPopSetterMethod] = forumPageAdScan.maskPopSetterMethod
         output[ForumPageAdContract.forumBottomGameBarMapperMethod] = forumPageAdScan.bottomGameBarMapperMethod
-        output[ForumPageAdContract.forumHeaderDataMapperMethod] = forumPageAdScan.headerDataMapperMethod
-        output[ForumPageAdContract.forumHeaderDataClass] = forumPageAdScan.headerDataClass
+        output[ForumPageAdContract.forumRainMapperClass] = forumPageAdScan.rainMapperClass
+        output[ForumPageAdContract.forumRainMapperMethod] = forumPageAdScan.rainMapperMethod
         output[ForumPageAdContract.forumRainDataClass] = forumPageAdScan.rainDataClass
-        output[ForumPageAdContract.forumRainSetterMethod] = forumPageAdScan.rainSetterMethod
         output[ForumPageAdContract.forumDialogControllerClass] = forumPageAdScan.dialogControllerClass
         output[ForumPageAdContract.forumBusinessPromotShowMethod] = forumPageAdScan.businessPromotShowMethod
         output[ForumPageAdContract.forumGameFloatingBarControllerClass] = forumPageAdScan.gameFloatingBarControllerClass
@@ -106,7 +105,7 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
                 returnClassName = null,
                 label = "bottom game bar mapper",
             )
-            val headerTargets = resolveForumPageHeaderTargets(cl, resolvedSymbols)
+            val rainMapper = resolveForumPageRainMapper(cl, resolvedSymbols)
             val businessPromotShowMethod = resolveForumPageBusinessDialogMethod(cl, resolvedSymbols)
             val floatingTargets = resolveForumPageFloatingTargets(cl, resolvedSymbols)
             val businessPromotJumpMethod = resolveForumPageBusinessPromotJumpMethod(cl, resolvedSymbols)
@@ -115,7 +114,7 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
                 responseTargets == null &&
                 bottomTargets == null &&
                 bottomGameBarMapper == null &&
-                headerTargets == null &&
+                rainMapper == null &&
                 businessPromotShowMethod == null &&
                 floatingTargets.first == null &&
                 businessPromotJumpMethod == null
@@ -130,8 +129,7 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
                 bottomDataMapperMethod = bottomTargets?.first,
                 bottomDataSetterMethods = bottomTargets?.second.orEmpty(),
                 bottomGameBarMapperMethod = bottomGameBarMapper,
-                headerDataMapperMethod = headerTargets?.first,
-                rainSetterMethod = headerTargets?.second,
+                rainMapperMethod = rainMapper,
                 businessPromotShowMethod = businessPromotShowMethod,
                 gameFloatingBarShowMethod = floatingTargets.first,
                 gameFloatingBarField = floatingTargets.second,
@@ -211,39 +209,15 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
         return mapperMethod to setters
     }
 
-    private fun resolveForumPageHeaderTargets(
+    private fun resolveForumPageRainMapper(
         cl: ClassLoader,
         symbols: HookSymbols,
-    ): Pair<Method, Method>? {
-        val mapperMethod = resolveForumPageMapperMethod(
-            cl = cl,
-            mapperClassName = symbols[ForumPageAdContract.forumPageMapperClass],
-            methodName = symbols[ForumPageAdContract.forumHeaderDataMapperMethod],
-            returnClassName = symbols[ForumPageAdContract.forumHeaderDataClass],
-            label = "header data mapper",
-        ) ?: return null
-        val headerClassName = symbols[ForumPageAdContract.forumHeaderDataClass]?.takeIf { it.isNotBlank() } ?: return null
-        val rainClassName = symbols[ForumPageAdContract.forumRainDataClass]?.takeIf { it.isNotBlank() } ?: return null
-        val setterName = symbols[ForumPageAdContract.forumRainSetterMethod]?.takeIf { it.isNotBlank() } ?: return null
-        val headerClass = ScanReflection.safeFindClass(headerClassName, cl) ?: run {
-            Diagnostics.log("[ForumPageAdBlockHook] header data class NOT FOUND: $headerClassName")
-            return null
-        }
-        val rainClass = ScanReflection.safeFindClass(rainClassName, cl) ?: run {
-            Diagnostics.log("[ForumPageAdBlockHook] rain data class NOT FOUND: $rainClassName")
-            return null
-        }
-        val setter = ScanReflection.collectInstanceMethods(headerClass).singleOrNull { method ->
-            method.name == setterName &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.contentEquals(arrayOf(rainClass))
-        } ?: run {
-            Diagnostics.log("[ForumPageAdBlockHook] rain setter NOT FOUND: $headerClassName.$setterName")
-            return null
-        }
-        setter.isAccessible = true
-        return mapperMethod to setter
-    }
+    ): Method? = ForumRainSymbolScanner.restore(
+        cl,
+        symbols[forumRainMapperClass],
+        symbols[forumRainMapperMethod],
+        symbols[forumRainDataClass],
+    )
 
     private fun resolveForumPageMapperMethod(
         cl: ClassLoader,
@@ -437,14 +411,12 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
         )
         addOptional(
             "ForumPageAdBlockHook.Rain",
-            "${symbols[ForumPageAdContract.forumPageMapperClass]}.${symbols[ForumPageAdContract.forumHeaderDataMapperMethod]} -> " +
-                "${symbols[ForumPageAdContract.forumHeaderDataClass]}.${symbols[ForumPageAdContract.forumRainSetterMethod]}(${symbols[ForumPageAdContract.forumRainDataClass]})",
+            "${symbols[ForumPageAdContract.forumRainMapperClass]}.${symbols[ForumPageAdContract.forumRainMapperMethod]}" +
+                "(tbclient.FrsPage.FrsRainInfo) -> ${symbols[ForumPageAdContract.forumRainDataClass]}",
             listOf(
-                ForumPageAdContract.forumPageMapperClass.check(symbols),
-                ForumPageAdContract.forumHeaderDataMapperMethod.check(symbols),
-                ForumPageAdContract.forumHeaderDataClass.check(symbols),
+                ForumPageAdContract.forumRainMapperClass.check(symbols),
+                ForumPageAdContract.forumRainMapperMethod.check(symbols),
                 ForumPageAdContract.forumRainDataClass.check(symbols),
-                ForumPageAdContract.forumRainSetterMethod.check(symbols),
             ),
         )
         addOptional(
@@ -505,10 +477,9 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
                 symbols[ForumPageAdContract.forumSpriteBubbleSetterMethod] != null ||
                 symbols[ForumPageAdContract.forumMaskPopSetterMethod] != null ||
                 symbols[ForumPageAdContract.forumBottomGameBarMapperMethod] != null ||
-                symbols[ForumPageAdContract.forumHeaderDataMapperMethod] != null ||
-                symbols[ForumPageAdContract.forumHeaderDataClass] != null ||
+                symbols[ForumPageAdContract.forumRainMapperClass] != null ||
+                symbols[ForumPageAdContract.forumRainMapperMethod] != null ||
                 symbols[ForumPageAdContract.forumRainDataClass] != null ||
-                symbols[ForumPageAdContract.forumRainSetterMethod] != null ||
                 symbols[ForumPageAdContract.forumDialogControllerClass] != null ||
                 symbols[ForumPageAdContract.forumBusinessPromotShowMethod] != null ||
                 symbols[ForumPageAdContract.forumGameFloatingBarControllerClass] != null ||
@@ -604,23 +575,7 @@ object ForumPageAdContract : SymbolContract("ForumPageAd") {
     }
 
     private fun isForumPageRainPathValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
-        if (!isForumPageStaticMapperValid(
-                symbols[ForumPageAdContract.forumPageMapperClass],
-                symbols[ForumPageAdContract.forumHeaderDataMapperMethod],
-                symbols[ForumPageAdContract.forumHeaderDataClass],
-                cl,
-            )
-        ) {
-            return false
-        }
-        val headerClass = ScanReflection.safeFindClass(symbols[ForumPageAdContract.forumHeaderDataClass] ?: return false, cl) ?: return false
-        val rainClass = ScanReflection.safeFindClass(symbols[ForumPageAdContract.forumRainDataClass] ?: return false, cl) ?: return false
-        val setterName = symbols[ForumPageAdContract.forumRainSetterMethod] ?: return false
-        return ScanReflection.collectInstanceMethods(headerClass).any { method ->
-            method.name == setterName &&
-                method.returnType == Void.TYPE &&
-                method.parameterTypes.contentEquals(arrayOf(rainClass))
-        }
+        return resolveForumPageRainMapper(cl, symbols) != null
     }
 
     private fun isForumPageStaticMapperValid(

@@ -42,7 +42,7 @@ class FilterRuntimeTest {
         assertEquals(listOf(high, high, null), filtered)
         assertEquals(listOf(high, low, high, null), input)
         assertEquals(listOf(0.8, 0.2, 0.8), samples)
-        assertEquals(1, high.keyReads)
+        assertEquals(0, high.keyReads)
         assertEquals(1, high.payloadReads)
     }
 
@@ -52,6 +52,39 @@ class FilterRuntimeTest {
             rules = scoreSettings().customPostRules, recordModelScores = {}))
         assertSame(input, CustomPostCardBlockHook.filterList(input, filter, "test",
             rules = null, recordModelScores = { error("Disabled rules must not produce observations") }))
+    }
+
+    @Test fun repeatedCardsReuseDecisionsButStillRecordEveryOccurrence() {
+        val head = Head(mutableMapOf("extra" to "msd_score:0.8"))
+        val card = Card(Data(listOf(head)))
+        val input = listOf(card, card, card)
+        val samples = mutableListOf<Double>()
+
+        assertSame(input, CustomPostCardBlockHook.filterList(input, filter, "repeated-card",
+            rules = scoreSettings().customPostRules,
+            recordModelScores = { samples += it.getValue("msd_score") }))
+
+        assertEquals(listOf(0.8, 0.8, 0.8), samples)
+        assertEquals(0, card.keyReads)
+        assertEquals(1, card.payloadReads)
+        assertEquals(1, head.keyReads)
+    }
+
+    @Test fun sharedComponentsReuseKeysOnlyWithinTheCurrentListSubmission() {
+        val params = mutableMapOf("extra" to "msd_score:0.8")
+        val head = Head(params)
+        val input = listOf(Card(Data(listOf(head))), Card(Data(listOf(head))))
+        val samples = mutableListOf<Double>()
+        fun submit() = CustomPostCardBlockHook.filterList(input, filter, "shared-component",
+            rules = scoreSettings().customPostRules,
+            recordModelScores = { samples += it.getValue("msd_score") })
+
+        assertSame(input, submit())
+        assertEquals(1, head.keyReads)
+        params["extra"] = "msd_score:0.2"
+        assertTrue(submit().isEmpty())
+        assertEquals(2, head.keyReads)
+        assertEquals(listOf(0.8, 0.8, 0.2, 0.2), samples)
     }
 
     private fun scoreSettings() = SettingsSnapshot.bootstrap().copy(
@@ -69,5 +102,8 @@ class FilterRuntimeTest {
         override fun payload(): Data { payloadReads++; return data }
     }
     class Data(@JvmField val dataList: List<Head>)
-    class Head(@JvmField val params: Map<String, String>) : FeedTemplateFixture { override fun templateKey() = "feed_head" }
+    class Head(@JvmField val params: Map<String, String>) : FeedTemplateFixture {
+        var keyReads = 0
+        override fun templateKey(): String { keyReads++; return "feed_head" }
+    }
 }

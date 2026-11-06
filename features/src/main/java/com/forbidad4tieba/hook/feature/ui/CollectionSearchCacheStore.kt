@@ -151,18 +151,7 @@ internal object CollectionSearchCacheStore {
 
     private fun writeAtomically(file: File, text: String): Boolean {
         return try {
-            val parent = file.parentFile ?: return false
-            if (!parent.exists()) parent.mkdirs()
-            val tmp = File(parent, "${file.name}.tmp")
-            tmp.writeText(text)
-            if (file.exists() && !file.delete()) {
-                tmp.delete()
-                return false
-            }
-            if (!tmp.renameTo(file)) {
-                file.writeText(text)
-                tmp.delete()
-            }
+            CollectionSearchCacheFile.write(file, text)
             writeBackoffUntilMs = 0L
             true
         } catch (t: Throwable) {

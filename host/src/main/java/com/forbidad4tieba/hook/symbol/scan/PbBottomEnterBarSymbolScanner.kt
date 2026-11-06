@@ -113,7 +113,7 @@ internal object PbBottomEnterBarSymbolScanner {
         val totalViewMethod = scanHotTopicGuideTotalViewMethod(clazz, methods, logger)
         return PbBottomEnterBarScanSymbols(
             hotTopicGuideTotalViewMethod = totalViewMethod,
-            hotTopicGuideRefreshMethodSpecs = scanHotTopicGuideRefreshMethodSpecs(methods, logger),
+            hotTopicGuideRefreshMethodSpecs = scanHotTopicGuideRefreshMethodSpecs(methods, totalViewMethod, logger),
         )
     }
 
@@ -137,11 +137,20 @@ internal object PbBottomEnterBarSymbolScanner {
 
     private fun scanHotTopicGuideRefreshMethodSpecs(
         methods: List<Method>,
+        rootGetter: String?,
         logger: ScanLogger?,
     ): List<String> {
-        val specs = methods
+        if (rootGetter == null) return emptyList()
+        val specs = selectHotTopicRefreshMethods(methods, logger) { method ->
+            val dex = ScanDexQueries.method(method, logger) ?: return@selectHotTopicRefreshMethods false
+            dex.calls(method.declaringClass.name, rootGetter) &&
+                if (method.returnType == Void.TYPE && method.parameterCount == 0) {
+                    dex.calls("com.baidu.tbadk.core.util.SkinManager", "setBackgroundResource")
+                } else {
+                    dex.calls(View::class.java.name, "setVisibility")
+                }
+        }
             .asSequence()
-            .filter(::isHotTopicGuideRefreshMethod)
             .map(::toRefreshMethodSpec)
             .distinct()
             .sorted()
@@ -154,6 +163,24 @@ internal object PbBottomEnterBarSymbolScanner {
         return specs
     }
 
+    internal fun selectHotTopicRefreshMethods(
+        methods: List<Method>,
+        logger: ScanLogger?,
+        hasEvidence: (Method) -> Boolean,
+    ): List<Method> {
+        val candidates = methods.filter { isHotTopicGuideRefreshMethod(it) && hasEvidence(it) }
+        val binding = uniqueSemanticCandidate("PbHotTopic.Binding", candidates.filter {
+            it.returnType == Boolean::class.javaPrimitiveType
+        }, logger) ?: return emptyList()
+        val skin = uniqueSemanticCandidate("PbHotTopic.Skin", candidates.filter {
+            it.returnType == Void.TYPE && it.parameterCount == 0
+        }, logger) ?: return emptyList()
+        val visibility = uniqueSemanticCandidate("PbHotTopic.Visibility", candidates.filter {
+            it.parameterCount == 1
+        }, logger) ?: return emptyList()
+        return listOf(binding, skin, visibility)
+    }
+
     private fun isHotTopicGuideTotalViewMethod(method: Method): Boolean {
         return !Modifier.isStatic(method.modifiers) &&
             method.parameterTypes.isEmpty() &&
@@ -162,10 +189,9 @@ internal object PbBottomEnterBarSymbolScanner {
 
     private fun isHotTopicGuideRefreshMethod(method: Method): Boolean {
         if (Modifier.isStatic(method.modifiers)) return false
-        if (method.returnType != Void.TYPE) return false
         val params = method.parameterTypes
-        return params.isEmpty() ||
-            (params.size == 1 && params[0] == Int::class.javaPrimitiveType)
+        return (params.isEmpty() && method.returnType in listOf(Void.TYPE, Boolean::class.javaPrimitiveType)) ||
+            (method.returnType == Void.TYPE && params.size == 1 && params[0] == Int::class.javaPrimitiveType)
     }
 
     private fun isBottomEnterBarRefreshMethod(method: Method): Boolean {

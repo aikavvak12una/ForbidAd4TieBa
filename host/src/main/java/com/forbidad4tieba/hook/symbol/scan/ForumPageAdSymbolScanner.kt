@@ -60,11 +60,11 @@ internal object ForumPageAdSymbolScanner {
         val bottom = step("bottomData", logger, null as BottomPath?) {
             dataResClass?.let { resolveBottomPath(classNames, cl, it, protoTypes, logger) }
         }
-        val header = step("headerRain", logger, null as HeaderRainPath?) {
-            dataResClass?.let { resolveHeaderRainPath(bottom?.mapperClass, classNames, cl, it, protoTypes, logger) }
+        val rain = step("rain", logger, null as ForumRainSymbolScanner.ScanPath?) {
+            ForumRainSymbolScanner.scan(cl, logger)
         }
         val gameBar = step("bottomGameBar", logger, null as Method?) {
-            val mapperClass = bottom?.mapperClass ?: header?.mapperClass
+            val mapperClass = bottom?.mapperClass ?: rain?.headerMapperClass
             if (mapperClass != null && dataResClass != null) {
                 resolveBottomGameBarMapper(context, mapperClass, dataResClass, cl, logger)
             } else null
@@ -83,7 +83,7 @@ internal object ForumPageAdSymbolScanner {
             responseDataClass = response?.dataClass?.name,
             responseParserMethod = response?.parserMethod?.name,
             responseAdFields = response?.adFields.orEmpty().map { it.name },
-            mapperClass = bottom?.mapperClass?.name ?: header?.mapperClass?.name,
+            mapperClass = bottom?.mapperClass?.name ?: rain?.headerMapperClass?.name,
             bottomDataMapperMethod = bottom?.mapperMethod?.name,
             bottomDataClass = bottom?.dataClass?.name,
             businessPromotSetterMethod = bottom?.businessPromotSetter?.name,
@@ -91,10 +91,9 @@ internal object ForumPageAdSymbolScanner {
             spriteBubbleSetterMethod = bottom?.spriteBubbleSetter?.name,
             maskPopSetterMethod = bottom?.maskPopSetter?.name,
             bottomGameBarMapperMethod = gameBar?.name,
-            headerDataMapperMethod = header?.mapperMethod?.name,
-            headerDataClass = header?.headerDataClass?.name,
-            rainDataClass = header?.rainDataClass?.name,
-            rainSetterMethod = header?.rainSetter?.name,
+            rainMapperClass = rain?.converter?.declaringClass?.name,
+            rainMapperMethod = rain?.converter?.name,
+            rainDataClass = rain?.converter?.returnType?.name,
             dialogControllerClass = dialog?.controllerClass?.name,
             businessPromotShowMethod = dialog?.businessPromotShowMethod?.name,
             gameFloatingBarControllerClass = floating?.controllerClass?.name,
@@ -290,66 +289,6 @@ internal object ForumPageAdSymbolScanner {
         return best
     }
 
-    private fun resolveHeaderRainPath(
-        preferredMapperClass: Class<*>?,
-        candidates: List<String>,
-        cl: ClassLoader,
-        dataResClass: Class<*>,
-        protoTypes: ProtoFieldTypes,
-        logger: ScanLogger?,
-    ): HeaderRainPath? {
-        val rainProtoClass = protoTypes.rainInfoClass ?: run {
-            log(logger, "forumPageAd.rain: FrsRainInfo type not inferred")
-            return null
-        }
-        val mapperClasses = collectMapperClasses(preferredMapperClass, candidates, cl)
-        val matches = ArrayList<HeaderRainPath>()
-        var skippedByReflection = 0
-        var firstReflectionError: String? = null
-        for (mapperClass in mapperClasses) {
-            try {
-                val methods = declaredMethods("rain.mapper.${mapperClass.name}", mapperClass, logger) ?: continue
-                val rainDataMappers = methods.filter { method ->
-                    Modifier.isStatic(method.modifiers) &&
-                        method.parameterTypes.size == 1 &&
-                        method.parameterTypes[0] == rainProtoClass &&
-                        method.returnType != Void.TYPE
-                }
-                for (rainDataMapper in rainDataMappers) {
-                    val rainDataClass = rainDataMapper.returnType
-                    val headerMappers = methods.filter { method ->
-                        Modifier.isStatic(method.modifiers) &&
-                            method.parameterTypes.size == 1 &&
-                            method.parameterTypes[0] == dataResClass &&
-                            method.returnType != Void.TYPE
-                    }
-                    for (headerMapper in headerMappers) {
-                        val rainSetter = resolveSetter(headerMapper.returnType, rainDataClass, logger) ?: continue
-                        matches += HeaderRainPath(mapperClass, headerMapper, headerMapper.returnType, rainDataClass, rainSetter)
-                    }
-                }
-            } catch (t: Throwable) {
-                skippedByReflection++
-                if (firstReflectionError == null) {
-                    firstReflectionError = describeThrowable(t)
-                }
-            }
-        }
-        logReflectionSkips(logger, "forumPageAd.rain", skippedByReflection, firstReflectionError)
-        val resolved = selectUniqueScanCandidate(
-            "forumPageAd.rain",
-            matches.distinctBy { it.mapperMethod to it.rainSetter },
-            logger,
-        ) { "${it.mapperClass.name}.${it.mapperMethod.name} -> ${it.rainSetter}" } ?: return null
-        if (preferredMapperClass != null && resolved.mapperClass != preferredMapperClass) {
-            log(logger, "forumPageAd.rain: header owner differs from the cached bottom mapper owner")
-            return null
-        }
-        log(logger, "forumPageAd.rain: ${resolved.mapperClass.name}.${resolved.mapperMethod.name} -> " +
-            "${resolved.headerDataClass.name}.${resolved.rainSetter.name}")
-        return resolved
-    }
-
     private fun resolveBottomGameBarMapper(
         context: Context,
         mapperClass: Class<*>,
@@ -477,9 +416,6 @@ internal object ForumPageAdSymbolScanner {
         val popInfoClass =
             resolveDataResFieldType(dataResClass, DATA_RES_MASK_POP_FIELD, logger)
                 ?: resolveDataResFieldType(dataResClass, DATA_RES_ENTER_POP_FIELD, logger)
-        val rainInfoClass =
-            resolveDataResFieldType(dataResClass, DATA_RES_RAIN_FIELD, logger)
-
         if (dataResClass != null) {
             log(
                 logger,
@@ -487,8 +423,7 @@ internal object ForumPageAdSymbolScanner {
                     "business=${businessPromotClass?.name ?: "-"} " +
                     "privatePop=${privatePopClass?.name ?: "-"} " +
                     "sprite=${spriteBubbleClass?.name ?: "-"} " +
-                    "pop=${popInfoClass?.name ?: "-"} " +
-                    "rain=${rainInfoClass?.name ?: "-"}",
+                    "pop=${popInfoClass?.name ?: "-"}",
             )
         }
 
@@ -497,7 +432,6 @@ internal object ForumPageAdSymbolScanner {
             privatePopClass = privatePopClass,
             spriteBubbleClass = spriteBubbleClass,
             popInfoClass = popInfoClass,
-            rainInfoClass = rainInfoClass,
         )
     }
 
@@ -672,7 +606,6 @@ internal object ForumPageAdSymbolScanner {
         val privatePopClass: Class<*>?,
         val spriteBubbleClass: Class<*>?,
         val popInfoClass: Class<*>?,
-        val rainInfoClass: Class<*>?,
     )
 
     private data class BottomPath(
@@ -684,14 +617,6 @@ internal object ForumPageAdSymbolScanner {
         val spriteBubbleSetter: Method?,
         val maskPopSetter: Method?,
         val setterCount: Int,
-    )
-
-    private data class HeaderRainPath(
-        val mapperClass: Class<*>,
-        val mapperMethod: Method,
-        val headerDataClass: Class<*>,
-        val rainDataClass: Class<*>,
-        val rainSetter: Method,
     )
 
     private data class DialogPath(

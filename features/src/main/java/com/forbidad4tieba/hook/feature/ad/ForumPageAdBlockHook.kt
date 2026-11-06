@@ -20,7 +20,6 @@ object ForumPageAdBlockHook {
 
     private val responseErrorLogged = AtomicBoolean(false)
     private val bottomErrorLogged = AtomicBoolean(false)
-    private val rainErrorLogged = AtomicBoolean(false)
     private val floatingErrorLogged = AtomicBoolean(false)
 
     @Synchronized
@@ -51,7 +50,7 @@ object ForumPageAdBlockHook {
         install("response") { installResponseSanitizer(targets) }
         install("bottom") { installBottomDataSanitizer(targets) }
         install("game") { installBottomGameBarBlocker(targets) }
-        install("rain") { installHeaderRainSanitizer(targets) }
+        install("rain") { installRainMapperBlocker(targets) }
         install("dialog") { installBusinessPromotDialogBlocker(targets) }
         install("floating") { installFloatingBarBlocker(targets) }
         install("biz") { installBusinessPromotBizBlocker(targets) }
@@ -119,19 +118,17 @@ object ForumPageAdBlockHook {
         return 1
     }
 
-    private fun installHeaderRainSanitizer(targets: ForumPageAdBlockSymbols): Int {
+    private fun installRainMapperBlocker(targets: ForumPageAdBlockSymbols): Int {
         val mod = XposedCompat.module ?: return 0
-        val method = targets.headerDataMapperMethod ?: return 0
-        val setter = targets.rainSetterMethod ?: return 0
-        val setters = listOf(setter)
+        val method = targets.rainMapperMethod ?: return 0
 
         installedMethods.install(method) {
-            RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installHeaderRainSanitizer:method").intercept { chain ->
-                val result = chain.proceed()
+            RuntimeHooks.builder(mod, method, "ForumPageAdBlockHook", "installRainMapperBlocker:method").intercept { chain ->
                 if (ConfigManager.snapshot().isForumPageAdBlockEnabled) {
-                    invokeNullSetters(result, setters, rainErrorLogged, "rain data")
+                    null
+                } else {
+                    chain.proceed()
                 }
-                result
             }
         }
         return 1

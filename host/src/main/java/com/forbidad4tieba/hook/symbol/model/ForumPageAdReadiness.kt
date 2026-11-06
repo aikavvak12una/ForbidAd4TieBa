@@ -44,11 +44,9 @@ internal object ForumPageAdSymbolReadiness {
                 bottomSetterCount >= 3,
             gameBar = has(symbols[ForumPageAdContract.forumPageMapperClass]) &&
                 has(symbols[ForumPageAdContract.forumBottomGameBarMapperMethod]),
-            rain = has(symbols[ForumPageAdContract.forumPageMapperClass]) &&
-                has(symbols[ForumPageAdContract.forumHeaderDataMapperMethod]) &&
-                has(symbols[ForumPageAdContract.forumHeaderDataClass]) &&
-                has(symbols[ForumPageAdContract.forumRainDataClass]) &&
-                has(symbols[ForumPageAdContract.forumRainSetterMethod]),
+            rain = has(symbols[ForumPageAdContract.forumRainMapperClass]) &&
+                has(symbols[ForumPageAdContract.forumRainMapperMethod]) &&
+                has(symbols[ForumPageAdContract.forumRainDataClass]),
             dialog = has(symbols[ForumPageAdContract.forumDialogControllerClass]) &&
                 has(symbols[ForumPageAdContract.forumBusinessPromotShowMethod]),
             floating = has(symbols[ForumPageAdContract.forumGameFloatingBarControllerClass]) &&

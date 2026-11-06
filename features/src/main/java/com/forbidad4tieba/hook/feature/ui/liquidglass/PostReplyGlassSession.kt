@@ -551,6 +551,7 @@ internal class PostReplyGlassSession(
     }
 
     private fun restore() {
+        val native = original ?: return
         autoHide?.reset()
         releaseBackdropLayer()
         if (panel.visibility != View.GONE) panel.visibility = View.GONE
@@ -559,7 +560,6 @@ internal class PostReplyGlassSession(
         comments = null
         bounds = null
         layoutDirty = true
-        val native = original ?: return
         animator?.cancel()
         animator = null
         pressed = false

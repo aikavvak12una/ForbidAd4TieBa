@@ -14,6 +14,7 @@ import java.lang.reflect.Method
 
 object PbBottomEnterBarHook {
     private const val MAX_PREDRAW_SQUASH_CHECKS = 3
+    private val refreshGuard = BannerRefreshGuard()
 
     internal fun hookStable(targets: PbBottomEnterBarStableSymbols) {
         val mod = XposedCompat.module ?: return
@@ -50,12 +51,8 @@ object PbBottomEnterBarHook {
             for (ctor in clazz.declaredConstructors) {
                 ctor.isAccessible = true
                 RuntimeHooks.builder(mod, ctor, "PbBottomEnterBarHook", "installBottomEnterBarHook:ctor").intercept { chain ->
-                    val result = chain.proceed()
-                    val view = chain.thisObject as? View
-                    if (view != null) {
-                        squashBottomEnterBar(view)
-                    }
-                    result
+                    val view = chain.thisObject as? View ?: return@intercept chain.proceed()
+                    refreshGuard.run(view, { chain.proceed() }, { squashBottomEnterBar(view) })
                 }
                 installed++
             }
@@ -63,11 +60,8 @@ object PbBottomEnterBarHook {
             for (method in targets.bottomEnterBarRefreshMethods.distinct()) {
                 method.isAccessible = true
                 RuntimeHooks.builder(mod, method, "PbBottomEnterBarHook", "installBottomEnterBarHook:method").intercept { chain ->
-                    val result = chain.proceed()
-                    (chain.thisObject as? View)?.let { view ->
-                        squashBottomEnterBar(view)
-                    }
-                    result
+                    val view = chain.thisObject as? View ?: return@intercept chain.proceed()
+                    refreshGuard.run(view, { chain.proceed() }, { squashBottomEnterBar(view) })
                 }
                 installed++
             }
@@ -91,11 +85,8 @@ object PbBottomEnterBarHook {
             for (ctor in clazz.declaredConstructors) {
                 ctor.isAccessible = true
                 RuntimeHooks.builder(mod, ctor, "PbBottomEnterBarHook", "installHotTopicGuideHook:ctor").intercept { chain ->
-                    val result = chain.proceed()
-                    chain.thisObject?.let { guide ->
-                        squashHotTopicGuide(guide, totalViewMethod)
-                    }
-                    result
+                    val guide = chain.thisObject ?: return@intercept chain.proceed()
+                    refreshGuard.run(guide, { chain.proceed() }, { squashHotTopicGuide(guide, totalViewMethod) })
                 }
                 installed++
             }
@@ -103,11 +94,8 @@ object PbBottomEnterBarHook {
             for (method in targets.refreshMethods.distinct()) {
                 method.isAccessible = true
                 RuntimeHooks.builder(mod, method, "PbBottomEnterBarHook", "installHotTopicGuideHook:method").intercept { chain ->
-                    val result = chain.proceed()
-                    chain.thisObject?.let { guide ->
-                        squashHotTopicGuide(guide, totalViewMethod)
-                    }
-                    result
+                    val guide = chain.thisObject ?: return@intercept chain.proceed()
+                    refreshGuard.run(guide, { chain.proceed() }, { squashHotTopicGuide(guide, totalViewMethod) })
                 }
                 installed++
             }
@@ -180,6 +168,7 @@ object PbBottomEnterBarHook {
 
     private fun squashBannerView(view: View) {
         val wasSquashed = isSquashedZeroLayout(view)
+        if (wasSquashed && view.getTag(ViewExt.TAG_EMPTY_VIEW) == true) return
         ViewExt.squashViewRemembering(view)
         val listenerInstalled = installPersistentSquash(view)
         if (!listenerInstalled && wasSquashed) return

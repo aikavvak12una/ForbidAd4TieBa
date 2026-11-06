@@ -24,7 +24,7 @@ object HomeSideBarWebBlockHook {
     private const val SCHEDULE_DEDUPE_WINDOW_MS = 1200L
     private val INJECT_DELAYS_MS = longArrayOf(0L, 80L, 260L, 900L, 1800L)
 
-    private const val HIDE_SIDE_BAR_BLOCKS_JS = """
+    internal const val HIDE_SIDE_BAR_BLOCKS_JS = """
         (function () {
           var styleId = 'tbhook_home_sidebar_hide_blocks_style_v1';
           var rootSelector = '.main-sidebar';
@@ -46,25 +46,7 @@ object HomeSideBarWebBlockHook {
             return true;
           }
 
-          function run() {
-            ensureStyle();
-            return !!document.querySelector(rootSelector);
-          }
-
-          run();
-          if (!window.__tbhookHomeSideBarHideObserverV1) {
-            var observer = new MutationObserver(function () { run(); });
-            observer.observe(document.body || document.documentElement || document, {
-              childList: true,
-              subtree: true
-            });
-            window.__tbhookHomeSideBarHideObserverV1 = observer;
-            setTimeout(function () {
-              try { observer.disconnect(); } catch (e) {}
-              try { delete window.__tbhookHomeSideBarHideObserverV1; } catch (e) {}
-            }, 6000);
-          }
-          return true;
+          return ensureStyle();
         })();
     """
 
