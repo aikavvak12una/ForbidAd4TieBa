@@ -55,7 +55,13 @@ class FeedDependenciesTest {
             assertEquals("ad filter mask=$mask",
                 expectedStatus(listOf("feedTemplateKeyMethod").filter { it in missing },
                     listOf("feedTemplateLoadMoreMethod").filter { it in missing }),
-                capabilities.getValue(HookFeatureKey.BLOCK_AD_FEED))
+                FeedContract.templateAdapterCapability(symbols))
+            assertEquals("combined ad filter mask=$mask",
+                HookFeatureStatus(
+                    state = if ("feedTemplateKeyMethod" in missing) HookFeatureState.DISABLED else HookFeatureState.PARTIAL,
+                    missingCritical = listOf("feedTemplateKeyMethod").filter { it in missing } + "bannerAdConversionMethodSpec",
+                    missingOptional = listOf("feedTemplateLoadMoreMethod").filter { it in missing },
+                ), capabilities.getValue(HookFeatureKey.BLOCK_AD_FEED))
 
             val points = FeedContract.points(symbols)
             assertEquals(pointRequirements.keys.toList(), points.map { it.name })
@@ -73,7 +79,7 @@ class FeedDependenciesTest {
         val symbols = fixture(setOf("feedTemplateLoadMoreMethod"))
         val statuses = FeedContract.capabilities(symbols)
         assertEquals(HookFeatureStatus(HookFeatureState.PARTIAL,
-            missingOptional = listOf("feedTemplateLoadMoreMethod")), statuses[HookFeatureKey.BLOCK_AD_FEED])
+            missingOptional = listOf("feedTemplateLoadMoreMethod")), FeedContract.templateAdapterCapability(symbols))
         assertEquals(HookFeatureStatus(HookFeatureState.DISABLED,
             missingCritical = listOf("feedTemplateLoadMoreMethod")), statuses[HookFeatureKey.ENABLE_CUSTOM_POST_FILTER])
         assertEquals(HookPointState.FOUND, FeedContract.points(symbols).first().state)

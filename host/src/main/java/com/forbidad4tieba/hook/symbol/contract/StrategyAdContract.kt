@@ -171,8 +171,9 @@ object StrategyAdContract : SymbolContract("StrategyAd") {
     internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> {
         val out = linkedMapOf<String, HookFeatureStatus>()
         val strategyOptional = ArrayList<String>(9)
-        strategyOptional.addAll(FeedContract.capabilities(symbols).getValue(HookFeatureKey.BLOCK_AD_FEED).missingCritical)
-        strategyOptional.addAll(FeedContract.capabilities(symbols).getValue(HookFeatureKey.BLOCK_AD_FEED).missingOptional)
+        val adapterStatus = FeedContract.templateAdapterCapability(symbols)
+        strategyOptional.addAll(adapterStatus.missingCritical)
+        strategyOptional.addAll(adapterStatus.missingOptional)
         if (symbols[StrategyAdContract.splashAdHelperClass].isNullOrBlank()) strategyOptional.add("splashAdHelperClass")
         if (symbols[StrategyAdContract.splashAdHelperMethod].isNullOrBlank()) strategyOptional.add("splashAdHelperMethod")
         if (symbols[StrategyAdContract.closeAdDataClass].isNullOrBlank()) strategyOptional.add("closeAdDataClass")

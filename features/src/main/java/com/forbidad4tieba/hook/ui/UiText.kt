@@ -24,7 +24,7 @@ object UiText {
         const val BLOCK_AD_DIALOG_TITLE = BLOCK_AD_LABEL
         const val BLOCK_AD_SAVED = "屏蔽广告子功能配置已保存"
         const val BLOCK_AD_FEED_LABEL = "信息流广告"
-        const val BLOCK_AD_FEED_DESC = "屏蔽首页信息流广告卡片和广告容器"
+        const val BLOCK_AD_FEED_DESC = "屏蔽首页信息流广告卡片、广告容器和活动推广横幅"
         const val BLOCK_AD_POST_PAGE_LABEL = "帖子页广告"
         const val BLOCK_AD_POST_PAGE_DESC = "屏蔽帖子详情页列表广告、广告请求、掉落广告和广告实验"
         const val BLOCK_AD_FORUM_PAGE_LABEL = "吧页面广告"

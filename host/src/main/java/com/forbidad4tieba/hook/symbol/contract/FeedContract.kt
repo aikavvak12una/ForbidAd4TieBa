@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.symbol.contract
 
 import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.symbol.contract.CapabilityPolicy.combineSubFeatureStatuses
 import com.forbidad4tieba.hook.symbol.contract.CapabilityPolicy.statusFromMissing
 import com.forbidad4tieba.hook.symbol.contract.RestoredMembers.resolveMethodByCachedSpec
 import com.forbidad4tieba.hook.symbol.model.CustomPostCardFilterSymbols
@@ -272,9 +273,14 @@ object FeedContract : SymbolContract("Feed") {
         )
     }
 
+    fun templateAdapterCapability(symbols: HookSymbols): HookFeatureStatus =
+        statusFromMissing(templateKey.missing(symbols), loadMore.missing(symbols))
+
     internal override fun capabilities(symbols: HookSymbols): Map<String, HookFeatureStatus> = linkedMapOf(
         HookFeatureKey.ENABLE_CUSTOM_POST_FILTER to statusFromMissing(customRequired.missing(symbols), customOptional.missing(symbols)),
-        HookFeatureKey.BLOCK_AD_FEED to statusFromMissing(templateKey.missing(symbols), loadMore.missing(symbols)),
+        HookFeatureKey.BLOCK_AD_FEED to combineSubFeatureStatuses(
+            listOf(templateAdapterCapability(symbols), BannerAdContract.pathStatus(symbols)),
+        ),
     )
 
     internal override fun points(symbols: HookSymbols): List<HookPointStatus> = SymbolPointCollector().apply {

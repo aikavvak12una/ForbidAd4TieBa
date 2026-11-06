@@ -5,6 +5,7 @@ import com.forbidad4tieba.hook.feature.comment.CommentLevelFilterFeature
 import com.forbidad4tieba.hook.feature.comment.CommentShortcutFeature
 import com.forbidad4tieba.hook.feature.account.AccountListDedupFeature
 import com.forbidad4tieba.hook.feature.ad.FeedAdFeature
+import com.forbidad4tieba.hook.feature.ad.BannerAdFeature
 import com.forbidad4tieba.hook.feature.ad.FeedInfoLogFeature
 import com.forbidad4tieba.hook.feature.ad.ForumPageAdBlockFeature
 import com.forbidad4tieba.hook.feature.ad.HomeBottomEasterEggAdFeature
@@ -118,6 +119,7 @@ internal object FeatureCatalog {
         PbBottomEnterBarHotTopicGuideFeature,
         PbTopEnterBarBlockFeature,
         FeedAdFeature,
+        BannerAdFeature,
         PostAdFeature,
         ForumPageAdBlockFeature,
         StrategyAdSymbolsFeature,

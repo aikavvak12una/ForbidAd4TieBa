@@ -27,7 +27,8 @@ internal val FeedAdFeature = FeatureDefinition.single(
 }
 
 internal fun HookInstallContext.canInstallFeedListAdBlock(settings: SettingsSnapshot): Boolean {
-    return (settings.isFeedAdBlockEnabled || settings.isStrategyAdBlockEnabled) && available(HookFeatureKey.BLOCK_AD_FEED)
+    return (settings.isFeedAdBlockEnabled || settings.isStrategyAdBlockEnabled) &&
+        FeedContract.templateAdapterCapability(symbols).isSupported()
 }
 
 internal fun HookInstallContext.canInstallCustomPostFilter(settings: SettingsSnapshot): Boolean {

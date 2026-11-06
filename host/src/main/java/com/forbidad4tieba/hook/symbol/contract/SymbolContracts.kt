@@ -18,6 +18,7 @@ internal object SymbolContracts {
         HomeTabsContract,
         SettingsContract,
         FeedContract,
+        BannerAdContract,
         StrategyAdContract,
         HomeBottomEasterEggContract,
         SearchBoxContract,
