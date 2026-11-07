@@ -208,6 +208,13 @@ internal data class PlainUrlClickableSpanScanSymbols(
     val textField: String? = null,
 )
 
+internal data class PlainUrlMessageDataScanSymbols(
+    val dataClass: String? = null,
+    val typeField: String? = null,
+    val urlField: String? = null,
+    val textField: String? = null,
+)
+
 internal data class PlainUrlMessageDispatchScanSymbols(
     val messageManagerClass: String? = null,
     val dispatchMethod: String? = null,
@@ -217,6 +224,10 @@ internal data class PlainUrlMessageDispatchScanSymbols(
     val getDataMethod: String? = null,
     val applicationClass: String? = null,
     val getInstMethod: String? = null,
+    val dataClass: String? = null,
+    val typeField: String? = null,
+    val urlField: String? = null,
+    val textField: String? = null,
 )
 
 internal data class PlainUrlBrowserHelperScanSymbols(

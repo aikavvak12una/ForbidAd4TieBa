@@ -15,7 +15,6 @@ import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.MountCardLinkLayoutSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlBrowserHelperSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlClickableSpanSymbols
-import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDataSymbols
 import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDispatchSymbols
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -51,7 +50,6 @@ object PlainUrlDirectBrowserHook {
         val mountCardTargets: MountCardLinkLayoutSymbols?,
         val clickSpanMarkerField: Field?,
         val isClickMessageCmd: (Int) -> Boolean,
-        val resolveMessageDataSymbols: (Any) -> PlainUrlMessageDataSymbols?,
         val openUserProfile: (Context?, String?) -> Boolean,
     )
 
@@ -125,8 +123,8 @@ object PlainUrlDirectBrowserHook {
                     if (!targets.isClickMessageCmd(cmd)) return@intercept chain.proceed()
                     val data = runCatching { messageTarget.getDataMethod.invoke(message) }.getOrNull()
                         ?: return@intercept chain.proceed()
-                    val dataSymbols = targets.resolveMessageDataSymbols(data)
-                        ?: return@intercept chain.proceed()
+                    val dataSymbols = messageTarget.dataSymbols
+                    if (data.javaClass != dataSymbols.dataClass) return@intercept chain.proceed()
                     val type = readIntField(dataSymbols.typeField, data)
                         ?: return@intercept chain.proceed()
                     val rawUrl = runCatching { dataSymbols.urlField.get(data) as? String }.getOrNull()

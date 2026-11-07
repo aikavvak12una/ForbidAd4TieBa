@@ -21,11 +21,11 @@ import com.forbidad4tieba.hook.symbol.model.PlainUrlMessageDispatchSymbols
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlBrowserHelperSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlClickableSpanSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.PlainUrlMessageSymbolScanner
+import com.forbidad4tieba.hook.symbol.scan.PlainUrlMessageDataSymbolScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
 import com.forbidad4tieba.hook.symbol.status.HookPointStatus
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
-import java.util.concurrent.ConcurrentHashMap
 
 /** Owns the cached descriptors and host rules for this capability. */
 object PlainUrlContract : SymbolContract("PlainUrl") {
@@ -43,6 +43,10 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
     val plainUrlCustomResponsedMessageGetDataMethod = text("plainUrlCustomResponsedMessageGetDataMethod")
     val plainUrlApplicationClass = text("plainUrlApplicationClass")
     val plainUrlApplicationGetInstMethod = text("plainUrlApplicationGetInstMethod")
+    val plainUrlMessageDataClass = text("plainUrlMessageDataClass")
+    val plainUrlMessageDataTypeField = text("plainUrlMessageDataTypeField")
+    val plainUrlMessageDataUrlField = text("plainUrlMessageDataUrlField")
+    val plainUrlMessageDataTextField = text("plainUrlMessageDataTextField")
     val plainUrlBrowserHelperClass = text("plainUrlBrowserHelperClass")
     val plainUrlBrowserHelperStartWebActivityMethod = text("plainUrlBrowserHelperStartWebActivityMethod")
 
@@ -121,13 +125,15 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
         output[PlainUrlContract.plainUrlCustomResponsedMessageGetDataMethod] = plainUrlCustomResponsedMessageGetDataMethod
         output[PlainUrlContract.plainUrlApplicationClass] = plainUrlApplicationClass
         output[PlainUrlContract.plainUrlApplicationGetInstMethod] = plainUrlApplicationGetInstMethod
+        output[PlainUrlContract.plainUrlMessageDataClass] = plainUrlMessageScan.dataClass
+        output[PlainUrlContract.plainUrlMessageDataTypeField] = plainUrlMessageScan.typeField
+        output[PlainUrlContract.plainUrlMessageDataUrlField] = plainUrlMessageScan.urlField
+        output[PlainUrlContract.plainUrlMessageDataTextField] = plainUrlMessageScan.textField
         output[PlainUrlContract.plainUrlBrowserHelperClass] = plainUrlBrowserHelperClass
         output[PlainUrlContract.plainUrlBrowserHelperStartWebActivityMethod] = plainUrlBrowserHelperStartWebActivityMethod
     }
 
     private const val PLAIN_URL_CLICK_MESSAGE_CMD = 2001332
-
-    private val plainUrlMessageDataSymbolsCache = ConcurrentHashMap<Class<*>, PlainUrlMessageDataSymbols>()
 
     fun resolvePlainUrlClickableSpanSymbols(
         cl: ClassLoader,
@@ -301,6 +307,8 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
                     method.parameterTypes.isEmpty() &&
                     applicationClass.isAssignableFrom(method.returnType)
             } ?: return null
+            if (!responsedMessageClass.isAssignableFrom(customResponsedMessageClass)) return null
+            val dataSymbols = resolvePlainUrlMessageDataSymbols(cl, resolvedSymbols) ?: return null
 
             listOf(dispatchMethod, getCmdMethod, getDataMethod, getInstMethod).forEach { it.isAccessible = true }
             PlainUrlMessageDispatchSymbols(
@@ -312,6 +320,7 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
                 getDataMethod = getDataMethod,
                 applicationClass = applicationClass,
                 getInstMethod = getInstMethod,
+                dataSymbols = dataSymbols,
             )
         } catch (t: Throwable) {
             Diagnostics.log("[PlainUrlDirectBrowserHook] message symbol resolve FAILED: ${t.message}")
@@ -371,24 +380,29 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
         }
     }
 
-    fun resolvePlainUrlMessageDataSymbols(data: Any): PlainUrlMessageDataSymbols? {
-        val dataClass = data.javaClass
-        plainUrlMessageDataSymbolsCache[dataClass]?.let { return it }
-        val fields = ScanReflection.collectInstanceFields(dataClass)
-        val intFields = fields.filter { field ->
-            !Modifier.isStatic(field.modifiers) && ScanReflection.isIntType(field.type)
-        }
-        val stringFields = fields.filter { field ->
-            !Modifier.isStatic(field.modifiers) && field.type == String::class.java
-        }
-        val typeField = intFields.firstOrNull() ?: return null
-        val urlField = stringFields.firstOrNull() ?: return null
-        val textField = stringFields.getOrNull(1) ?: urlField
-        listOf(typeField, urlField, textField).forEach { it.isAccessible = true }
-        val resolved = PlainUrlMessageDataSymbols(typeField, urlField, textField)
-        plainUrlMessageDataSymbolsCache[dataClass] = resolved
-        return resolved
-    }
+    fun resolvePlainUrlMessageDataSymbols(cl: ClassLoader, symbols: HookSymbols?): PlainUrlMessageDataSymbols? =
+        PlainUrlMessageDataSymbolScanner.restore(
+            cl,
+            symbols?.get(plainUrlMessageDataClass),
+            symbols?.get(plainUrlMessageDataTypeField),
+            symbols?.get(plainUrlMessageDataUrlField),
+            symbols?.get(plainUrlMessageDataTextField),
+        )
+
+    internal fun messageMissing(symbols: HookSymbols): List<String> = listOf(
+        plainUrlMessageManagerClass,
+        plainUrlMessageDispatchMethod,
+        plainUrlResponsedMessageClass,
+        plainUrlResponsedMessageGetCmdMethod,
+        plainUrlCustomResponsedMessageClass,
+        plainUrlCustomResponsedMessageGetDataMethod,
+        plainUrlApplicationClass,
+        plainUrlApplicationGetInstMethod,
+        plainUrlMessageDataClass,
+        plainUrlMessageDataTypeField,
+        plainUrlMessageDataUrlField,
+        plainUrlMessageDataTextField,
+    ).filter { symbols[it].isNullOrBlank() }.map { it.cacheKey }
 
     fun isPlainUrlClickMessageCmd(cmd: Int): Boolean {
         return cmd == PLAIN_URL_CLICK_MESSAGE_CMD
@@ -428,31 +442,7 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
         if (symbols[PlainUrlContract.plainUrlClickableSpanTextField].isNullOrBlank()) {
             plainUrlDirectMissing.add("plainUrlClickableSpanTextField")
         }
-        val plainUrlMessageMissing = ArrayList<String>(8)
-        if (symbols[PlainUrlContract.plainUrlMessageManagerClass].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlMessageManagerClass")
-        }
-        if (symbols[PlainUrlContract.plainUrlMessageDispatchMethod].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlMessageDispatchMethod")
-        }
-        if (symbols[PlainUrlContract.plainUrlResponsedMessageClass].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlResponsedMessageClass")
-        }
-        if (symbols[PlainUrlContract.plainUrlResponsedMessageGetCmdMethod].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlResponsedMessageGetCmdMethod")
-        }
-        if (symbols[PlainUrlContract.plainUrlCustomResponsedMessageClass].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlCustomResponsedMessageClass")
-        }
-        if (symbols[PlainUrlContract.plainUrlCustomResponsedMessageGetDataMethod].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlCustomResponsedMessageGetDataMethod")
-        }
-        if (symbols[PlainUrlContract.plainUrlApplicationClass].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlApplicationClass")
-        }
-        if (symbols[PlainUrlContract.plainUrlApplicationGetInstMethod].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlApplicationGetInstMethod")
-        }
+        val plainUrlMessageMissing = messageMissing(symbols)
         val mountCardMissing = ArrayList<String>(5)
         if (symbols[MountCardContract.mountCardLinkLayoutClass].isNullOrBlank()) mountCardMissing.add("mountCardLinkLayoutClass")
         if (symbols[MountCardContract.mountCardLinkLayoutOnClickMethod].isNullOrBlank()) {
@@ -516,7 +506,7 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
         )
         addOptional(
             "PlainUrlDirectBrowserHook.Message",
-            "${symbols[PlainUrlContract.plainUrlMessageManagerClass]}.${symbols[PlainUrlContract.plainUrlMessageDispatchMethod]}(${symbols[PlainUrlContract.plainUrlResponsedMessageClass]})",
+            "${symbols[PlainUrlContract.plainUrlMessageManagerClass]}.${symbols[PlainUrlContract.plainUrlMessageDispatchMethod]}(${symbols[PlainUrlContract.plainUrlResponsedMessageClass]}) data=${symbols[plainUrlMessageDataClass]}[${symbols[plainUrlMessageDataTypeField]},${symbols[plainUrlMessageDataUrlField]},${symbols[plainUrlMessageDataTextField]}]",
             listOf(
                 PlainUrlContract.plainUrlMessageManagerClass.check(symbols),
                 PlainUrlContract.plainUrlMessageDispatchMethod.check(symbols),
@@ -526,6 +516,10 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
                 PlainUrlContract.plainUrlCustomResponsedMessageGetDataMethod.check(symbols),
                 PlainUrlContract.plainUrlApplicationClass.check(symbols),
                 PlainUrlContract.plainUrlApplicationGetInstMethod.check(symbols),
+                plainUrlMessageDataClass.check(symbols),
+                plainUrlMessageDataTypeField.check(symbols),
+                plainUrlMessageDataUrlField.check(symbols),
+                plainUrlMessageDataTextField.check(symbols),
             ),
         )
         add(
@@ -546,6 +540,9 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
     )
 
     internal override fun isCacheValid(symbols: HookSymbols, cl: ClassLoader): Boolean {
+        val hasMessageData = listOf(plainUrlMessageDataClass, plainUrlMessageDataTypeField,
+            plainUrlMessageDataUrlField, plainUrlMessageDataTextField).any { symbols[it] != null }
+        if (hasMessageData && resolvePlainUrlMessageDataSymbols(cl, symbols) == null) return false
         val hasPlainUrlSymbols =
                 symbols[PlainUrlContract.plainUrlClickableSpanClass] != null ||
                 symbols[PlainUrlContract.plainUrlClickableSpanOnClickMethod] != null ||
@@ -561,6 +558,10 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
                 symbols[PlainUrlContract.plainUrlCustomResponsedMessageGetDataMethod] != null ||
                 symbols[PlainUrlContract.plainUrlApplicationClass] != null ||
                 symbols[PlainUrlContract.plainUrlApplicationGetInstMethod] != null ||
+                symbols[plainUrlMessageDataClass] != null ||
+                symbols[plainUrlMessageDataTypeField] != null ||
+                symbols[plainUrlMessageDataUrlField] != null ||
+                symbols[plainUrlMessageDataTextField] != null ||
                 symbols[PlainUrlContract.plainUrlBrowserHelperClass] != null ||
                 symbols[PlainUrlContract.plainUrlBrowserHelperStartWebActivityMethod] != null
         if (hasPlainUrlSymbols && !isPlainUrlValid(symbols, cl)) return false
@@ -627,6 +628,7 @@ object PlainUrlContract : SymbolContract("PlainUrl") {
             val responsedMessageClass = ScanReflection.safeFindClass(responsedMessageClassName, cl) ?: return false
             val customResponsedMessageClass = ScanReflection.safeFindClass(customResponsedMessageClassName, cl) ?: return false
             val applicationClass = ScanReflection.safeFindClass(applicationClassName, cl) ?: return false
+            if (resolvePlainUrlMessageDataSymbols(cl, symbols) == null) return false
             if (!responsedMessageClass.isAssignableFrom(customResponsedMessageClass)) return false
             messageManagerClass.declaredMethods.singleOrNull { method ->
                 method.name == dispatchMethodName &&

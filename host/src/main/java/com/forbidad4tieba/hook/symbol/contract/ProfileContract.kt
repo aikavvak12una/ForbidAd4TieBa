@@ -159,31 +159,7 @@ object ProfileContract : SymbolContract("Profile") {
         if (symbols[PlainUrlContract.plainUrlClickableSpanTextField].isNullOrBlank()) {
             plainUrlDirectMissing.add("plainUrlClickableSpanTextField")
         }
-        val plainUrlMessageMissing = ArrayList<String>(8)
-        if (symbols[PlainUrlContract.plainUrlMessageManagerClass].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlMessageManagerClass")
-        }
-        if (symbols[PlainUrlContract.plainUrlMessageDispatchMethod].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlMessageDispatchMethod")
-        }
-        if (symbols[PlainUrlContract.plainUrlResponsedMessageClass].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlResponsedMessageClass")
-        }
-        if (symbols[PlainUrlContract.plainUrlResponsedMessageGetCmdMethod].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlResponsedMessageGetCmdMethod")
-        }
-        if (symbols[PlainUrlContract.plainUrlCustomResponsedMessageClass].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlCustomResponsedMessageClass")
-        }
-        if (symbols[PlainUrlContract.plainUrlCustomResponsedMessageGetDataMethod].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlCustomResponsedMessageGetDataMethod")
-        }
-        if (symbols[PlainUrlContract.plainUrlApplicationClass].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlApplicationClass")
-        }
-        if (symbols[PlainUrlContract.plainUrlApplicationGetInstMethod].isNullOrBlank()) {
-            plainUrlMessageMissing.add("plainUrlApplicationGetInstMethod")
-        }
+        val plainUrlMessageMissing = PlainUrlContract.messageMissing(symbols)
         val plainUrlDirectReady = plainUrlDirectMissing.isEmpty()
         val plainUrlMessageReady = plainUrlMessageMissing.isEmpty()
         val directProfileNavigationMissing = buildList {

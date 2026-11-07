@@ -60,7 +60,7 @@ android {
 
     compileSdk = 37
 
-    val moduleVersionCode = 49
+    val moduleVersionCode = 50
     val minSupportedUserSettingsVersionCode = 20
 
     defaultConfig {
@@ -68,7 +68,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = moduleVersionCode
-        versionName = "26110701"
+        versionName = "26110801"
         buildConfigField(
             "int",
             "MIN_SUPPORTED_USER_SETTINGS_VERSION_CODE",

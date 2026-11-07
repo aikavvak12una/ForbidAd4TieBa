@@ -86,6 +86,9 @@ internal object PlainUrlMessageSymbolScanner {
             logger,
             "plainUrlMessage matched: ${messageManagerClass.name}.${dispatchMethod.name} cmd=$CLICK_MESSAGE_CMD",
         )
+        val dataScan = scanSubStep("PlainUrlMessage.Payload", logger, PlainUrlMessageDataScanSymbols()) {
+            PlainUrlMessageDataSymbolScanner.scan(cl, logger)
+        }
         return PlainUrlMessageDispatchScanSymbols(
             messageManagerClass = messageManagerClass.name,
             dispatchMethod = dispatchMethod.name,
@@ -95,6 +98,10 @@ internal object PlainUrlMessageSymbolScanner {
             getDataMethod = getDataMethod.name,
             applicationClass = applicationClass.name,
             getInstMethod = getInstMethod.name,
+            dataClass = dataScan.dataClass,
+            typeField = dataScan.typeField,
+            urlField = dataScan.urlField,
+            textField = dataScan.textField,
         )
     }
 

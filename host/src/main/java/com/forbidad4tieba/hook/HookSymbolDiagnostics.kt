@@ -71,15 +71,8 @@ internal object HookSymbolDiagnostics {
                 !symbols[PlainUrlContract.plainUrlClickableSpanTextField].isNullOrBlank() -> {
                 "${plainUrlClickableSpanOnClickOwnerClasses.joinToString(",")}.${symbols[PlainUrlContract.plainUrlClickableSpanOnClickMethod]}[${symbols[PlainUrlContract.plainUrlClickableSpanTypeField]},${symbols[PlainUrlContract.plainUrlClickableSpanUrlField]},${symbols[PlainUrlContract.plainUrlClickableSpanTextField]}]"
             }
-            !symbols[PlainUrlContract.plainUrlMessageManagerClass].isNullOrBlank() &&
-                !symbols[PlainUrlContract.plainUrlMessageDispatchMethod].isNullOrBlank() &&
-                !symbols[PlainUrlContract.plainUrlResponsedMessageClass].isNullOrBlank() &&
-                !symbols[PlainUrlContract.plainUrlResponsedMessageGetCmdMethod].isNullOrBlank() &&
-                !symbols[PlainUrlContract.plainUrlCustomResponsedMessageClass].isNullOrBlank() &&
-                !symbols[PlainUrlContract.plainUrlCustomResponsedMessageGetDataMethod].isNullOrBlank() &&
-                !symbols[PlainUrlContract.plainUrlApplicationClass].isNullOrBlank() &&
-                !symbols[PlainUrlContract.plainUrlApplicationGetInstMethod].isNullOrBlank() -> {
-                "${symbols[PlainUrlContract.plainUrlMessageManagerClass]}.${symbols[PlainUrlContract.plainUrlMessageDispatchMethod]}(${symbols[PlainUrlContract.plainUrlResponsedMessageClass]}) cmd=${symbols[PlainUrlContract.plainUrlResponsedMessageGetCmdMethod]} data=${symbols[PlainUrlContract.plainUrlCustomResponsedMessageClass]}.${symbols[PlainUrlContract.plainUrlCustomResponsedMessageGetDataMethod]} app=${symbols[PlainUrlContract.plainUrlApplicationClass]}.${symbols[PlainUrlContract.plainUrlApplicationGetInstMethod]}"
+            PlainUrlContract.messageMissing(symbols).isEmpty() -> {
+                "${symbols[PlainUrlContract.plainUrlMessageManagerClass]}.${symbols[PlainUrlContract.plainUrlMessageDispatchMethod]}(${symbols[PlainUrlContract.plainUrlResponsedMessageClass]}) cmd=${symbols[PlainUrlContract.plainUrlResponsedMessageGetCmdMethod]} data=${symbols[PlainUrlContract.plainUrlMessageDataClass]}[${symbols[PlainUrlContract.plainUrlMessageDataTypeField]},${symbols[PlainUrlContract.plainUrlMessageDataUrlField]},${symbols[PlainUrlContract.plainUrlMessageDataTextField]}] app=${symbols[PlainUrlContract.plainUrlApplicationClass]}.${symbols[PlainUrlContract.plainUrlApplicationGetInstMethod]}"
             }
             else -> null
         }

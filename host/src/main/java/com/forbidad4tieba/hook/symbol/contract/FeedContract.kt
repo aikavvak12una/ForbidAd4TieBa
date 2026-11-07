@@ -8,6 +8,7 @@ import com.forbidad4tieba.hook.symbol.contract.RestoredMembers.resolveMethodByCa
 import com.forbidad4tieba.hook.symbol.model.CustomPostCardFilterSymbols
 import com.forbidad4tieba.hook.symbol.model.FeedAdSymbols
 import com.forbidad4tieba.hook.symbol.model.FeedCardScanSymbols
+import com.forbidad4tieba.hook.symbol.model.FeedInfoLogSchema
 import com.forbidad4tieba.hook.symbol.model.FeedInfoLogSymbols
 import com.forbidad4tieba.hook.symbol.model.FeedTemplateScanSymbols
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
@@ -209,9 +210,15 @@ object FeedContract : SymbolContract("Feed") {
                 return null
             }
             bindMethod.isAccessible = true
+            val templateKeyMethodName = resolvedSymbols[FeedContract.feedTemplateKeyMethod]
+                ?.takeIf { it.isNotBlank() }
+            val schema = FeedInfoLogSchema.from(bindMethod, templateKeyMethodName)
+            schema.discoveryError?.let { error ->
+                Diagnostics.log("[FeedInfoLogHook] schema discovery partial: $error")
+            }
             FeedInfoLogSymbols(
                 bindMethod = bindMethod,
-                templateKeyMethodName = resolvedSymbols[FeedContract.feedTemplateKeyMethod]?.takeIf { it.isNotBlank() },
+                schema = schema,
             )
         } catch (t: Throwable) {
             Diagnostics.log("[FeedInfoLogHook] symbol resolve FAILED: ${t.message}")

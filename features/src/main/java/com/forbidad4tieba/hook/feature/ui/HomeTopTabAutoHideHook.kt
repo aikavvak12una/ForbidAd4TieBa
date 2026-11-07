@@ -17,12 +17,15 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 object HomeTopTabAutoHideHook {
+    private const val APP_BAR_LAYOUT_CLASS = "com.google.android.material.appbar.AppBarLayout"
     private const val APP_BAR_LAYOUT_PARAMS_CLASS =
         "com.google.android.material.appbar.AppBarLayout\$LayoutParams"
     private const val APP_BAR_SCROLLING_VIEW_BEHAVIOR_CLASS =
         "com.google.android.material.appbar.AppBarLayout\$ScrollingViewBehavior"
     private const val COORDINATOR_LAYOUT_BEHAVIOR_CLASS =
         "androidx.coordinatorlayout.widget.CoordinatorLayout\$Behavior"
+    private const val COORDINATOR_LAYOUT_CLASS = "androidx.coordinatorlayout.widget.CoordinatorLayout"
+    private const val COORDINATOR_LAYOUT_PARAMS_CLASS = "$COORDINATOR_LAYOUT_CLASS\$LayoutParams"
     private const val METHOD_DISPATCH_NESTED_PRE_SCROLL = "dispatchNestedPreScroll"
     private const val METHOD_DISPATCH_ON_PAGE_SELECTED = "dispatchOnPageSelected"
     private const val METHOD_SET_FORM = "setForm"
@@ -76,6 +79,7 @@ object HomeTopTabAutoHideHook {
 
         targetScrollFlags = resolveScrollFlags(cl)
         runtimeTargets = resolveRuntimeTargets(cl)
+        prepareFrameworkMethods(cl)
         var installed = 0
         try {
             for (className in targetClassNames) {
@@ -84,6 +88,7 @@ object HomeTopTabAutoHideHook {
                     XposedCompat.log("[HomeTopTabAutoHideHook] class NOT FOUND: $className")
                     continue
                 }
+                prepareAppBarMethods(clazz)
                 for (ctor in clazz.declaredConstructors) {
                     ctor.isAccessible = true
                     RuntimeHooks.builder(mod, ctor, "HomeTopTabAutoHideHook", "hook:ctor").intercept { chain ->
@@ -622,6 +627,30 @@ object HomeTopTabAutoHideHook {
             }
             false
         }
+    }
+
+    /** Warm known classes before callbacks; unfamiliar runtime subclasses keep their existing caches. */
+    internal fun prepareFrameworkMethods(cl: ClassLoader) {
+        optionalFrameworkClass(APP_BAR_LAYOUT_CLASS, cl)?.let(::prepareAppBarMethods)
+        optionalFrameworkClass(APP_BAR_LAYOUT_PARAMS_CLASS, cl)?.let(::scrollFlagMethods)
+        optionalFrameworkClass(COORDINATOR_LAYOUT_PARAMS_CLASS, cl)?.let(::behaviorMethods)
+        optionalFrameworkClass(COORDINATOR_LAYOUT_CLASS, cl)?.let(::dependentDispatchMethod)
+        for (className in arrayOf(
+            "$APP_BAR_LAYOUT_CLASS\$Behavior",
+            "$APP_BAR_LAYOUT_CLASS\$BaseBehavior",
+            "com.google.android.material.appbar.ViewOffsetBehavior",
+        )) {
+            optionalFrameworkClass(className, cl)?.let(::offsetMethods)
+        }
+    }
+
+    private fun optionalFrameworkClass(name: String, cl: ClassLoader): Class<*>? =
+        runCatching { MemberAccess.findClassOrNull(name, cl) }.getOrNull()
+
+    private fun prepareAppBarMethods(clazz: Class<*>) {
+        expandedMethod(clazz)
+        totalScrollRangeMethod(clazz)
+        offsetChangedMethod(clazz)
     }
 
     private fun expandedMethod(clazz: Class<*>): Method? {

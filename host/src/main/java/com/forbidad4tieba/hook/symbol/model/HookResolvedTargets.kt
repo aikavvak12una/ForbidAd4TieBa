@@ -56,9 +56,11 @@ data class PlainUrlMessageDispatchSymbols(
     val getDataMethod: Method,
     val applicationClass: Class<*>,
     val getInstMethod: Method,
+    val dataSymbols: PlainUrlMessageDataSymbols,
 )
 
 data class PlainUrlMessageDataSymbols(
+    val dataClass: Class<*>,
     val typeField: Field,
     val urlField: Field,
     val textField: Field,
@@ -263,7 +265,7 @@ data class FeedAdSymbols(
 
 data class FeedInfoLogSymbols(
     val bindMethod: Method,
-    val templateKeyMethodName: String?,
+    val schema: FeedInfoLogSchema,
 )
 
 data class ForumPageAdBlockSymbols(

@@ -33,6 +33,10 @@ class PlainUrlCapabilityTest {
             this[PlainUrlContract.plainUrlCustomResponsedMessageGetDataMethod] = "getData"
             this[PlainUrlContract.plainUrlApplicationClass] = "application.App"
             this[PlainUrlContract.plainUrlApplicationGetInstMethod] = "getInst"
+            this[PlainUrlContract.plainUrlMessageDataClass] = "message.Payload"
+            this[PlainUrlContract.plainUrlMessageDataTypeField] = "category"
+            this[PlainUrlContract.plainUrlMessageDataUrlField] = "destination"
+            this[PlainUrlContract.plainUrlMessageDataTextField] = "caption"
             this[MountCardContract.mountCardLinkLayoutClass] = "card.Link"
             this[MountCardContract.mountCardLinkLayoutOnClickMethod] = "onClick"
             this[MountCardContract.mountCardLinkLayoutDataField] = "data"
@@ -42,5 +46,31 @@ class PlainUrlCapabilityTest {
         val state = HookFeatureStatusDeriver.derive(symbols).getValue(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
         assertEquals(HookFeatureState.FULL, state.state)
         assertTrue(state.missingCritical.isEmpty())
+    }
+
+    @Test fun eachMissingPayloadRoleDisablesOnlyMessageWhileOtherNavigationPathsRemainAvailable() {
+        val dataFields = listOf(PlainUrlContract.plainUrlMessageDataClass, PlainUrlContract.plainUrlMessageDataTypeField,
+            PlainUrlContract.plainUrlMessageDataUrlField, PlainUrlContract.plainUrlMessageDataTextField)
+        dataFields.forEach { missing ->
+            val symbols = buildHookSymbols {
+                PlainUrlContract.fields.filterNot {
+                    it == missing || it == PlainUrlContract.plainUrlClickableSpanOnClickOwnerClasses
+                }.forEach { field ->
+                    @Suppress("UNCHECKED_CAST")
+                    this[field as com.forbidad4tieba.hook.symbol.contract.SymbolField<String?>] = "fixture"
+                }
+                this[PlainUrlContract.plainUrlClickableSpanOnClickOwnerClasses] = listOf("span.Owner")
+            }
+            val states = HookFeatureStatusDeriver.derive(symbols)
+            val browser = states.getValue(HookFeatureKey.OPEN_WEB_LINK_IN_SYSTEM_BROWSER)
+            assertEquals(HookFeatureState.PARTIAL, browser.state)
+            assertTrue(browser.missingCritical.isEmpty())
+            assertTrue(browser.missingOptional.contains(missing.cacheKey))
+            val points = PlainUrlContract.points(symbols)
+            assertEquals(listOf(missing.cacheKey), points.single { it.name == "PlainUrlDirectBrowserHook.Message" }.missing)
+            assertTrue(points.single { it.name == "PlainUrlDirectBrowserHook.Direct" }.missing.isEmpty())
+            assertTrue(points.single { it.name == "PlainUrlDirectBrowserHook.BrowserHelper" }.missing.isEmpty())
+            assertTrue(states.getValue(HookFeatureKey.ENABLE_COMMENT_AVATAR_DIRECT_PROFILE).missingOptional.contains(missing.cacheKey))
+        }
     }
 }

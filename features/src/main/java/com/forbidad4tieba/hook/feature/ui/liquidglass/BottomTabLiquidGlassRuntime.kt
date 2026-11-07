@@ -565,9 +565,10 @@ internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
                 // A hug requests a layout, but a few host transitions can coalesce that pass. The
                 // pre-draw retry is cheap (the target width is cached) and prevents one stale
                 // full-width frame from leaking through if the global-layout callback was skipped.
-                if (refreshEnvironment(state) || (state.floating && !state.geometryReady) ||
-                    hugInputSignature(state.widget) != state.hugSignature) {
-                    if (positionPanel(state)) markDirty(state)
+                val needsGeometry = refreshEnvironment(state) || (state.floating && !state.geometryReady)
+                val inputSignature = if (needsGeometry) 0L else hugInputSignature(state.widget)
+                if (needsGeometry || inputSignature != state.hugSignature) {
+                    if (positionPanel(state, if (needsGeometry) null else inputSignature)) markDirty(state)
                 }
                 // This must run even while the panel is INVISIBLE: auto-hide sets the wrapper
                 // invisible at the end of its animation, and on show the panel has to be made
@@ -872,9 +873,10 @@ internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
      * Returns true when the panel's geometry actually moved, so callers can tell a real change from
      * one of the many layout passes that leave the bar exactly where it was.
      */
-    private fun positionPanel(state: GlassState): Boolean {
+    private fun positionPanel(state: GlassState, inputSignature: Long? = null): Boolean {
         if (!prepareRendering(state)) return false
-        refreshEnvironment(state)
+        val environmentChanged = refreshEnvironment(state)
+        var reusableInputSignature = if (environmentChanged) null else inputSignature
         state.contentRoot?.let { content ->
             if (LiquidGlassGeom.expandContentThroughNavigationBar(content,
                     SystemBarCompatHook.gestureNavigationInsetBottom(state.activity))) {
@@ -906,6 +908,8 @@ internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
         if (state.viewport.left != leftLimit || state.viewport.right != rightLimit ||
             state.viewport.top != topLimit || state.viewport.bottom != bottomLimit) {
             state.touchOverlay?.cancelInteraction()
+            // Cancellation can dispatch into the native tab and change its content synchronously.
+            reusableInputSignature = null
             state.viewport.set(leftLimit, topLimit, rightLimit, bottomLimit)
             state.hugWidth = 0
         }
@@ -918,7 +922,9 @@ internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
             host.height, hostWindowPosition[1] + host.height, rootWindowPosition[1] + root.height,
             navigation, state.baselineHeight, minimumHeight, state.density, state.config, topLimit,
         ) ?: return restoreNativeLayout(state)
-        if (!hugWidthFor(state)) return restoreNativeLayout(state)
+        // The pre-draw signature is still current here: this path has not written the widget.
+        // Hugging and hairline suppression below mutate it, so their post-write reads stay separate.
+        if (!hugWidthFor(state, reusableInputSignature)) return restoreNativeLayout(state)
         if (!hugColumnsSettled(state)) {
             state.geometryReady = false
             panel.visibility = View.INVISIBLE
@@ -983,9 +989,9 @@ internal object BottomTabLiquidGlassRuntime : HomeBottomBarOwnership.Owner {
      * Cache that work until the inputs change. The host can mutate a badge, label or
      * icon in place, so a compact content/layout signature supplements child count and row width.
      */
-    private fun hugWidthFor(state: GlassState): Boolean {
+    private fun hugWidthFor(state: GlassState, inputSignature: Long? = null): Boolean {
         val widget = state.widget
-        val signature = hugInputSignature(widget)
+        val signature = inputSignature ?: hugInputSignature(widget)
         if (state.floating && state.hugWidth > 0 && state.hugChildCount == widget.childCount &&
             state.hugRowWidth == widget.width && state.hugSignature == signature) return true
         val count = (0 until widget.childCount).count { widget.getChildAt(it).visibility != View.GONE }

@@ -39,7 +39,6 @@ internal fun plainUrlDirectBrowserFeature(
         mountCardTargets = mountCardTargets,
         clickSpanMarkerField = clickSpanMarkerField,
         isClickMessageCmd = PlainUrlContract::isPlainUrlClickMessageCmd,
-        resolveMessageDataSymbols = PlainUrlContract::resolvePlainUrlMessageDataSymbols,
         openUserProfile = openUserProfile,
     )
     PlainUrlDirectBrowserHook.hook(targets)
