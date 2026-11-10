@@ -2,6 +2,7 @@ package com.forbidad4tieba.hook.feature.ui
 
 import com.forbidad4tieba.hook.core.RuntimeHooks
 import android.view.View
+import android.view.ViewTreeObserver
 import com.forbidad4tieba.hook.core.XposedCompat
 import com.forbidad4tieba.hook.symbol.model.ForumNativeTopShiftSymbols
 import com.forbidad4tieba.hook.utils.ReflectionUtils
@@ -27,7 +28,8 @@ object ForumNativeTopShiftBlockHook {
     private class PendingNativeExpansion {
         var layoutReady = false
         var deferredInitScroll: DeferredInitScroll? = null
-        var layoutListener: View.OnLayoutChangeListener? = null
+        var preDrawListener: ViewTreeObserver.OnPreDrawListener? = null
+        var preDrawObserver: ViewTreeObserver? = null
         var attachListener: View.OnAttachStateChangeListener? = null
         var timeoutRunnable: Runnable? = null
     }
@@ -127,13 +129,17 @@ object ForumNativeTopShiftBlockHook {
                 if (originalMode != NATIVE_COLLAPSED_MODE &&
                     originalMode != NATIVE_PARTIAL_EXPANDED_MODE
                 ) {
-                    return@intercept chain.proceed()
-                }
-                val smoothInit = readSmoothInit(targets, targetView, terminalStateSyncFailureLogged)
-                if (smoothInit != NATIVE_WEB_HEIGHT_INIT_STATE) {
+                    if (originalMode != NATIVE_FULLY_EXPANDED_MODE) {
+                        logTerminalStateFailureOnce(
+                            terminalStateSyncFailureLogged,
+                            "unsupported native setup mode=$originalMode; initialization left unchanged",
+                        )
+                    }
                     return@intercept chain.proceed()
                 }
 
+                // Both first layout and web-height updates can expand the header. SmoothInit
+                // describes animation, not whether setup is an automatic initialization.
                 val args = chain.args.toTypedArray()
                 args[0] = NATIVE_FULLY_EXPANDED_MODE
                 fallbackPendingNativeInit(
@@ -145,28 +151,19 @@ object ForumNativeTopShiftBlockHook {
                 )
                 val pendingExpansion = PendingNativeExpansion()
                 pendingNativeExpansionTargets[targetView] = pendingExpansion
-                val terminalStateListener = object : View.OnLayoutChangeListener {
-                    override fun onLayoutChange(
-                        view: View,
-                        left: Int,
-                        top: Int,
-                        right: Int,
-                        bottom: Int,
-                        oldLeft: Int,
-                        oldTop: Int,
-                        oldRight: Int,
-                        oldBottom: Int,
-                    ) {
-                        pendingExpansion.layoutReady = true
-                        replayDeferredNativeInit(
-                            targets = targets,
-                            targetView = view,
-                            pendingExpansion = pendingExpansion,
-                            pendingTargets = pendingNativeExpansionTargets,
-                            nativeScrollChangedMethod = nativeScrollChangedMethod,
-                            failureLogged = terminalStateSyncFailureLogged,
-                        )
-                    }
+                val terminalStateListener = ViewTreeObserver.OnPreDrawListener {
+                    // A second setup can change the scroll range without changing this
+                    // View's bounds, so OnLayoutChangeListener is not a layout-complete signal.
+                    pendingExpansion.layoutReady = !targetView.isLayoutRequested
+                    replayDeferredNativeInit(
+                        targets = targets,
+                        targetView = targetView,
+                        pendingExpansion = pendingExpansion,
+                        pendingTargets = pendingNativeExpansionTargets,
+                        nativeScrollChangedMethod = nativeScrollChangedMethod,
+                        failureLogged = terminalStateSyncFailureLogged,
+                    )
+                    true
                 }
                 val detachListener = object : View.OnAttachStateChangeListener {
                     override fun onViewAttachedToWindow(view: View) = Unit
@@ -182,6 +179,15 @@ object ForumNativeTopShiftBlockHook {
                     }
                 }
                 val timeoutFallback = Runnable {
+                    if (pendingNativeExpansionTargets[targetView] === pendingExpansion) {
+                        logTerminalStateFailureOnce(
+                            terminalStateSyncFailureLogged,
+                            "native initialization timed out: " +
+                                "layoutReady=${pendingExpansion.layoutReady}, " +
+                                "initReceived=${pendingExpansion.deferredInitScroll != null}; " +
+                                "restoring host initialization",
+                        )
+                    }
                     fallbackPendingNativeInit(
                         targets = targets,
                         targetView = targetView,
@@ -190,11 +196,14 @@ object ForumNativeTopShiftBlockHook {
                         failureLogged = terminalStateSyncFailureLogged,
                     )
                 }
-                pendingExpansion.layoutListener = terminalStateListener
+                pendingExpansion.preDrawListener = terminalStateListener
                 pendingExpansion.attachListener = detachListener
                 pendingExpansion.timeoutRunnable = timeoutFallback
                 try {
-                    targetView.addOnLayoutChangeListener(terminalStateListener)
+                    targetView.viewTreeObserver.also { observer ->
+                        pendingExpansion.preDrawObserver = observer
+                        observer.addOnPreDrawListener(terminalStateListener)
+                    }
                     targetView.addOnAttachStateChangeListener(detachListener)
                     targetView.postDelayed(timeoutFallback, NATIVE_STATE_TIMEOUT_MS)
                     chain.proceed(args)
@@ -275,6 +284,18 @@ object ForumNativeTopShiftBlockHook {
                 deferredInitScroll.showBounceGuide,
                 deferredInitScroll.completion,
             )
+            // Verify synchronous initialization before a new input/layout event can legitimately
+            // change the position. Animated initialization is only checked for a stuck state below.
+            val smoothInit = readSmoothInit(targets, targetView, failureLogged)
+            if (smoothInit != null && smoothInit != NATIVE_WEB_HEIGHT_INIT_STATE &&
+                targetView.scrollY != fullyExpandedTarget
+            ) {
+                logTerminalStateFailureOnce(
+                    failureLogged,
+                    "native terminal state mismatch: scrollY=${targetView.scrollY}, " +
+                        "expected=$fullyExpandedTarget",
+                )
+            }
         } catch (t: Throwable) {
             logTerminalStateFailureOnce(
                 failureLogged,
@@ -370,10 +391,13 @@ object ForumNativeTopShiftBlockHook {
         targetView: View,
         pendingExpansion: PendingNativeExpansion,
     ) {
-        pendingExpansion.layoutListener?.let(targetView::removeOnLayoutChangeListener)
+        pendingExpansion.preDrawListener?.let { listener ->
+            pendingExpansion.preDrawObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener)
+        }
         pendingExpansion.attachListener?.let(targetView::removeOnAttachStateChangeListener)
         pendingExpansion.timeoutRunnable?.let(targetView::removeCallbacks)
-        pendingExpansion.layoutListener = null
+        pendingExpansion.preDrawListener = null
+        pendingExpansion.preDrawObserver = null
         pendingExpansion.attachListener = null
         pendingExpansion.timeoutRunnable = null
     }
@@ -397,7 +421,7 @@ object ForumNativeTopShiftBlockHook {
         message: String,
     ) {
         if (failureLogged.compareAndSet(false, true)) {
-            XposedCompat.log("[ForumNativeTopShiftBlockHook] $message")
+            XposedCompat.logW("[ForumNativeTopShiftBlockHook] $message")
         }
     }
 }
