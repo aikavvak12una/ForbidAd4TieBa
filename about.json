@@ -63,7 +63,7 @@
     {
       "name": "usage_daily",
       "enabled": true,
-      "endpoint": "https://arasaka.asia/v1/heartbeat",
+      "endpoint": "https://1937773.xyz/v1/heartbeat",
       "method": "POST",
       "headers": {
         "Content-Type": "application/json",
