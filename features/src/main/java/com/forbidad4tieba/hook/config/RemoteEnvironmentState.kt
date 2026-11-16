@@ -13,6 +13,8 @@ object RemoteEnvironmentState {
     private const val KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING =
         "pending_post_scan_environment_warning"
 
+    const val KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED = "environment_warning_acknowledged"
+
     @Volatile internal var restrictedFeatureUnlockBlockedByRemote: Boolean = false
 
     @Volatile private var environmentWarningDialogActive: Boolean = false
@@ -43,12 +45,33 @@ object RemoteEnvironmentState {
         return REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE.read(ConfigManager.getModuleStatePrefs(context))
     }
 
+    fun isEnvironmentWarningAcknowledged(context: Context): Boolean {
+        val p = ConfigManager.getPrefs(context)
+        if (p.contains(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED)) {
+            return p.getBoolean(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, false)
+        }
+        if (p.all.isNotEmpty()) {
+            p.edit().putBoolean(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, true).apply()
+            return true
+        }
+        return false
+    }
+
+    fun markEnvironmentWarningAcknowledged(context: Context) {
+        val appCtx = context.applicationContext ?: context
+        ConfigManager.getPrefs(appCtx).edit()
+            .putBoolean(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, true)
+            .apply()
+    }
+
     fun shouldShowEnvironmentWarningDialog(context: Context): Boolean {
+        if (isEnvironmentWarningAcknowledged(context)) return false
         if (environmentWarningDialogActive) return true
         return REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE.read(ConfigManager.getModuleStatePrefs(context))
     }
 
     fun markPostScanEnvironmentWarningPending(context: Context) {
+        if (isEnvironmentWarningAcknowledged(context)) return
         ConfigManager.getModuleStatePrefs(context).edit()
             .putBoolean(KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, true)
             .apply()
