@@ -46,22 +46,14 @@ object RemoteEnvironmentState {
     }
 
     fun isEnvironmentWarningAcknowledged(context: Context): Boolean {
-        val p = ConfigManager.getPrefs(context)
-        if (p.contains(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED)) {
-            return p.getBoolean(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, false)
-        }
-        if (p.all.isNotEmpty()) {
-            p.edit().putBoolean(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, true).apply()
-            return true
-        }
-        return false
+        return ENVIRONMENT_WARNING_ACKNOWLEDGED.read(ConfigManager.getPrefs(context))
     }
 
     fun markEnvironmentWarningAcknowledged(context: Context) {
         val appCtx = context.applicationContext ?: context
         ConfigManager.getPrefs(appCtx).edit()
             .putBoolean(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, true)
-            .apply()
+            .commit()
     }
 
     fun shouldShowEnvironmentWarningDialog(context: Context): Boolean {
@@ -119,11 +111,15 @@ object RemoteEnvironmentState {
     internal val PENDING_POST_SCAN_ENVIRONMENT_WARNING = BooleanPreference(
         KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, false, PreferenceUse.MODULE_STATE, null,
     )
+    internal val ENVIRONMENT_WARNING_ACKNOWLEDGED = BooleanPreference(
+        KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, false, PreferenceUse.AUTOMATIC, null,
+    )
 
     internal val preferences: List<Preference<*>> = listOf(
         REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE,
         REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE,
         PENDING_POST_SCAN_ENVIRONMENT_WARNING,
+        ENVIRONMENT_WARNING_ACKNOWLEDGED,
     )
 
 }

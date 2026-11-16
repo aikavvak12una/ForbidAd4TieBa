@@ -164,7 +164,6 @@ internal object SettingsScanController {
             }
             dialog.setOnDismissListener {
                 countdownRunnable?.let { handler.removeCallbacks(it) }
-                RemoteEnvironmentState.markEnvironmentWarningAcknowledged(activity)
                 onConfirmed()
             }
             dialog.showSettingsDialog(density)
