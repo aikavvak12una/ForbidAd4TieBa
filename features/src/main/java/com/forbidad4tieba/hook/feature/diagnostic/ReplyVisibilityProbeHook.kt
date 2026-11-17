@@ -14,6 +14,8 @@ import org.json.JSONObject
 object ReplyVisibilityProbeHook {
     private const val TAG = "[ReplyVisibilityProbeHook]"
     private const val RESPONSE_TIMEOUT_MS = 3000L
+    private const val LATE_RESPONSE_RETENTION_MS = 60_000L
+    private const val MAX_PENDING_PROBES = 64
     private const val AGREE_OP_TYPE_ADD = 0
     private const val AGREE_OP_TYPE_CANCEL = 1
     private const val AGREE_OBJ_TYPE_REPLY = 1
@@ -23,7 +25,7 @@ object ReplyVisibilityProbeHook {
     private const val CODE_NOT_EXISTS = "3280005"
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val pendingByTag = ConcurrentHashMap<Any, ProbeRequest>()
+    private val pendingByTag = ConcurrentHashMap<Any, PendingProbe>()
 
     @Volatile private var hooked = false
     @Volatile private var runtimeDisabled = false
@@ -34,7 +36,7 @@ object ReplyVisibilityProbeHook {
         try {
             RuntimeHooks.builder(mod, targets.replyDecodeMethod, "ReplyVisibilityProbeHook", "hook:targets.replyDecodeMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (!runtimeDisabled && ConfigManager.snapshot().isReplyVisibilityProbeEnabled) {
+                if (isProbeEnabled()) {
                     runCatching { onReplyDecoded(targets, chain.thisObject) }
                         .onFailure { disableRuntime("reply handling failed", it) }
                 }
@@ -42,7 +44,8 @@ object ReplyVisibilityProbeHook {
             }
             RuntimeHooks.builder(mod, targets.agreeDecodeLogicMethod, "ReplyVisibilityProbeHook", "hook:targets.agreeDecodeLogicMethod").intercept { chain ->
                 val result = chain.proceed()
-                if (!runtimeDisabled && ConfigManager.snapshot().isReplyVisibilityProbeEnabled && pendingByTag.isNotEmpty()) {
+                // Existing requests retain their cleanup owner after new probes are disabled.
+                if (pendingByTag.isNotEmpty()) {
                     runCatching {
                         onAgreeDecoded(
                             targets = targets,
@@ -109,7 +112,7 @@ object ReplyVisibilityProbeHook {
 
     private fun dispatchProbe(targets: ReplyVisibilityProbeSymbols, request: ProbeRequest) {
         mainHandler.postDelayed({
-            if (runtimeDisabled || !ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return@postDelayed
+            if (!isProbeEnabled()) return@postDelayed
             sendProbe(targets, request)
         }, probeIntervalMs())
     }
@@ -118,10 +121,9 @@ object ReplyVisibilityProbeHook {
         sendAgreeRequest(targets, request, AGREE_OP_TYPE_ADD, trackResponse = true)
     }
 
-    private fun sendCancel(targets: ReplyVisibilityProbeSymbols, request: ProbeRequest) {
+    private fun sendCancel(targets: ReplyVisibilityProbeSymbols, pending: PendingProbe) {
         mainHandler.post {
-            if (runtimeDisabled || !ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return@post
-            sendAgreeRequest(targets, request, AGREE_OP_TYPE_CANCEL, trackResponse = false)
+            sendAgreeRequest(targets, pending.request, AGREE_OP_TYPE_CANCEL, trackResponse = false, requestZid = pending.zid)
         }
     }
 
@@ -130,14 +132,16 @@ object ReplyVisibilityProbeHook {
         request: ProbeRequest,
         opType: Int,
         trackResponse: Boolean,
+        requestZid: String? = null,
     ) {
         var tag: Any? = null
+        var pending: PendingProbe? = null
         try {
             val cmd = (targets.cmdPbFloorAgreeField.get(null) as? Number)?.toInt() ?: run {
                 handleSendFailed(targets, request, trackResponse)
                 return
             }
-            val zid = resolveZid(targets)
+            val zid = requestZid ?: resolveZid(targets)
             if (zid.isNullOrBlank()) {
                 handleSendFailed(targets, request, trackResponse)
                 return
@@ -174,20 +178,35 @@ object ReplyVisibilityProbeHook {
                     return
                 }
                 targets.messageSetTagMethod.invoke(message, tag)
-                pendingByTag[tag] = request
+                val owner = PendingProbe(request, zid)
+                val registered = synchronized(pendingByTag) {
+                    pendingByTag.size < MAX_PENDING_PROBES && pendingByTag.putIfAbsent(tag, owner) == null
+                }
+                if (!registered) {
+                    handleSendFailed(targets, request, trackResponse = true)
+                    return
+                }
+                pending = owner
             }
 
             val sent = targets.messageManagerSendMethod.invoke(manager, message) as? Boolean ?: false
             if (!sent) {
-                tag?.let { pendingByTag.remove(it) }
+                pending?.let { pendingByTag.remove(tag, it) }
                 handleSendFailed(targets, request, trackResponse)
             } else if (trackResponse) {
-                tag?.let { scheduleResponseTimeout(targets, it, request) }
+                pending?.let { scheduleResponseTimeout(targets, checkNotNull(tag), it) }
             }
         } catch (t: Throwable) {
-            tag?.let { pendingByTag.remove(it) }
             XposedCompat.logD { "$TAG agree request send failed: ${t.message}" }
-            handleSendFailed(targets, request, trackResponse)
+            val owner = pending
+            if (owner != null && tag != null) {
+                retainPendingAfterFailure(targets, tag, owner, AgreeResult(
+                    UiText.Settings.REPLY_VISIBILITY_PROBE_CODE_SEND_FAILED,
+                    UiText.Settings.REPLY_VISIBILITY_PROBE_SEND_FAILED,
+                ))
+            } else {
+                handleSendFailed(targets, request, trackResponse)
+            }
         }
     }
 
@@ -212,12 +231,10 @@ object ReplyVisibilityProbeHook {
         response ?: return
         val originalMessage = targets.getOriginalMessageMethod.invoke(response) ?: return
         val tag = targets.messageGetTagMethod.invoke(originalMessage) ?: return
-        val request = pendingByTag.remove(tag) ?: return
-        if (!ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return
+        val pending = pendingByTag[tag] ?: return
         if (json == null) {
-            handleProbeResult(
-                targets,
-                request,
+            retainPendingAfterFailure(
+                targets, tag, pending,
                 AgreeResult(
                     UiText.Settings.REPLY_VISIBILITY_PROBE_CODE_EMPTY_RESPONSE,
                     UiText.Settings.REPLY_VISIBILITY_PROBE_EMPTY_RESPONSE,
@@ -228,9 +245,8 @@ object ReplyVisibilityProbeHook {
 
         val result = parseAgreeResult(json)
         if (result.code.isNullOrBlank()) {
-            handleProbeResult(
-                targets,
-                request,
+            retainPendingAfterFailure(
+                targets, tag, pending,
                 AgreeResult(
                     UiText.Settings.REPLY_VISIBILITY_PROBE_CODE_MISSING_RESULT,
                     UiText.Settings.REPLY_VISIBILITY_PROBE_MISSING_RESULT,
@@ -239,7 +255,16 @@ object ReplyVisibilityProbeHook {
             return
         }
 
-        handleProbeResult(targets, request, result)
+        val notify = synchronized(pending) {
+            if (!pendingByTag.remove(tag, pending)) return
+            !pending.timedOut && isProbeEnabled()
+        }
+        if (result.code == CODE_SUCCESS) {
+            sendCancel(targets, pending)
+            if (notify) showToast(result.code.orEmpty() + result.message.orEmpty())
+        } else if (notify) {
+            handleProbeResult(targets, pending.request, result)
+        }
     }
 
     private fun parseAgreeResult(json: JSONObject): AgreeResult {
@@ -265,11 +290,6 @@ object ReplyVisibilityProbeHook {
         request: ProbeRequest,
         result: AgreeResult,
     ) {
-        if (result.code == CODE_SUCCESS) {
-            showToast(result.code.orEmpty() + result.message.orEmpty())
-            sendCancel(targets, request)
-            return
-        }
         if (result.code != CODE_NOT_EXISTS) {
             showToast(result.code.orEmpty() + result.message.orEmpty())
             return
@@ -289,7 +309,11 @@ object ReplyVisibilityProbeHook {
         request: ProbeRequest,
         trackResponse: Boolean,
     ) {
-        if (!trackResponse) return
+        if (!trackResponse) {
+            XposedCompat.logW("$TAG cancel send failed: pid=${request.pid}")
+            return
+        }
+        if (!isProbeEnabled()) return
         handleProbeResult(
             targets,
             request,
@@ -302,18 +326,15 @@ object ReplyVisibilityProbeHook {
 
     private fun scheduleRetry(targets: ReplyVisibilityProbeSymbols, request: ProbeRequest) {
         mainHandler.postDelayed({
-            if (runtimeDisabled || !ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return@postDelayed
+            if (!isProbeEnabled()) return@postDelayed
             sendProbe(targets, request.copy(attempt = request.attempt + 1))
         }, probeIntervalMs())
     }
 
-    private fun scheduleResponseTimeout(targets: ReplyVisibilityProbeSymbols, tag: Any, request: ProbeRequest) {
+    private fun scheduleResponseTimeout(targets: ReplyVisibilityProbeSymbols, tag: Any, pending: PendingProbe) {
         mainHandler.postDelayed({
-            val pending = pendingByTag.remove(tag) ?: return@postDelayed
-            if (runtimeDisabled || !ConfigManager.snapshot().isReplyVisibilityProbeEnabled) return@postDelayed
-            handleProbeResult(
-                targets,
-                pending,
+            retainPendingAfterFailure(
+                targets, tag, pending,
                 AgreeResult(
                     UiText.Settings.REPLY_VISIBILITY_PROBE_CODE_TIMEOUT,
                     UiText.Settings.REPLY_VISIBILITY_PROBE_TIMEOUT,
@@ -321,6 +342,26 @@ object ReplyVisibilityProbeHook {
             )
         }, RESPONSE_TIMEOUT_MS)
     }
+
+    private fun retainPendingAfterFailure(
+        targets: ReplyVisibilityProbeSymbols,
+        tag: Any,
+        pending: PendingProbe,
+        result: AgreeResult,
+    ) {
+        synchronized(pending) {
+            if (pendingByTag[tag] !== pending || pending.timedOut) return
+            pending.timedOut = true
+        }
+        mainHandler.postDelayed({
+            if (pendingByTag.remove(tag, pending)) {
+                XposedCompat.logW("$TAG response grace expired; cleanup unconfirmed: pid=${pending.request.pid}")
+            }
+        }, LATE_RESPONSE_RETENTION_MS)
+        if (isProbeEnabled()) handleProbeResult(targets, pending.request, result)
+    }
+
+    private fun isProbeEnabled(): Boolean = !runtimeDisabled && ConfigManager.snapshot().isReplyVisibilityProbeEnabled
 
     private fun maxAttempts(): Int = ConfigManager.snapshot().replyVisibilityProbeMaxAttempts
 
@@ -342,6 +383,7 @@ object ReplyVisibilityProbeHook {
     private fun showToast(message: String) {
         val appContext = ConfigManager.getAppContext() ?: return
         mainHandler.post {
+            if (!isProbeEnabled()) return@post
             runCatching {
                 Toast.makeText(appContext, message, Toast.LENGTH_SHORT).show()
             }
@@ -379,6 +421,11 @@ object ReplyVisibilityProbeHook {
         val objType: Int,
         val attempt: Int,
     )
+
+    private class PendingProbe(val request: ProbeRequest, val zid: String) {
+        // Response completion and timeout serialize on this request, avoiding duplicate notifications.
+        var timedOut = false
+    }
 
     private data class AgreeResult(
         val code: String?,
