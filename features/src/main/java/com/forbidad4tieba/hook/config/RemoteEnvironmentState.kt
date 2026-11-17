@@ -13,6 +13,8 @@ object RemoteEnvironmentState {
     private const val KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING =
         "pending_post_scan_environment_warning"
 
+    const val KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED = "environment_warning_acknowledged"
+
     @Volatile internal var restrictedFeatureUnlockBlockedByRemote: Boolean = false
 
     @Volatile private var environmentWarningDialogActive: Boolean = false
@@ -43,12 +45,25 @@ object RemoteEnvironmentState {
         return REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE.read(ConfigManager.getModuleStatePrefs(context))
     }
 
+    fun isEnvironmentWarningAcknowledged(context: Context): Boolean {
+        return ENVIRONMENT_WARNING_ACKNOWLEDGED.read(ConfigManager.getPrefs(context))
+    }
+
+    fun markEnvironmentWarningAcknowledged(context: Context) {
+        val appCtx = context.applicationContext ?: context
+        ConfigManager.getPrefs(appCtx).edit()
+            .putBoolean(KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, true)
+            .commit()
+    }
+
     fun shouldShowEnvironmentWarningDialog(context: Context): Boolean {
+        if (isEnvironmentWarningAcknowledged(context)) return false
         if (environmentWarningDialogActive) return true
         return REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE.read(ConfigManager.getModuleStatePrefs(context))
     }
 
     fun markPostScanEnvironmentWarningPending(context: Context) {
+        if (isEnvironmentWarningAcknowledged(context)) return
         ConfigManager.getModuleStatePrefs(context).edit()
             .putBoolean(KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, true)
             .apply()
@@ -96,11 +111,15 @@ object RemoteEnvironmentState {
     internal val PENDING_POST_SCAN_ENVIRONMENT_WARNING = BooleanPreference(
         KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, false, PreferenceUse.MODULE_STATE, null,
     )
+    internal val ENVIRONMENT_WARNING_ACKNOWLEDGED = BooleanPreference(
+        KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED, false, PreferenceUse.AUTOMATIC, null,
+    )
 
     internal val preferences: List<Preference<*>> = listOf(
         REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE,
         REMOTE_RESTRICTED_FEATURES_LOCK_ACTIVE,
         PENDING_POST_SCAN_ENVIRONMENT_WARNING,
+        ENVIRONMENT_WARNING_ACKNOWLEDGED,
     )
 
 }

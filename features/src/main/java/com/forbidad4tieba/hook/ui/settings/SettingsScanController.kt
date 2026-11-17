@@ -157,7 +157,10 @@ internal object SettingsScanController {
                 }
                 handler.postDelayed(countdownRunnable!!, 1000L)
 
-                confirmButton.setOnClickListener { dialog.dismiss() }
+                confirmButton.setOnClickListener {
+                    RemoteEnvironmentState.markEnvironmentWarningAcknowledged(activity)
+                    dialog.dismiss()
+                }
             }
             dialog.setOnDismissListener {
                 countdownRunnable?.let { handler.removeCallbacks(it) }
