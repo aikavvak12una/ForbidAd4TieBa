@@ -68,15 +68,17 @@ class FeedInfoLogRuntimeTest {
 
     private fun invoke(callback: XposedInterface.Hooker, card: Card, allowArgs: Boolean) {
         var proceeded = 0
+        var argumentReads = 0
         val chain = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, method, args ->
             when (method.name) {
                 "proceed" -> { check(args.isNullOrEmpty()); proceeded++; "host-result" }
-                "getArgs" -> { check(allowArgs) { "Disabled callback read card arguments" }; listOf(card) }
+                "getArgs" -> { argumentReads++; check(allowArgs) { "Disabled callback read card arguments" }; listOf(card) }
                 else -> error("Unexpected callback access: ${method.name}")
             }
         } as XposedInterface.Chain
         assertEquals("host-result", callback.intercept(chain))
         assertEquals(1, proceeded)
+        if (!allowArgs) assertEquals("Caught failures must not hide argument reads", 0, argumentReads)
     }
 
     private fun release() {

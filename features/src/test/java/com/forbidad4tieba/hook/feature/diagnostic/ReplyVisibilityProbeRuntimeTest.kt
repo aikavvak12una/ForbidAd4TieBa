@@ -64,6 +64,21 @@ class ReplyVisibilityProbeRuntimeTest {
         assertFalse(Manager.liked)
     }
 
+    @Test fun actualMetadataFailureLogsOnceAndPreservesRecoverableCleanup() = withRuntime { f ->
+        val probe = f.start()
+        val before = android.util.Log.entries.size
+        Response.failMetadata = true
+        f.complete(probe)
+        f.complete(probe)
+        assertEquals(1, android.util.Log.entries.drop(before).count { it.contains("runtime FAILED, disabled") })
+        assertEquals(1, f.pendingCount())
+        Response.failMetadata = false
+        f.complete(probe)
+        Handler.runCurrent()
+        assertEquals(listOf(0, 1), f.operations())
+        assertFalse(Manager.liked)
+    }
+
     @Test fun successAfterTimeoutRetainsCorrelationAndCancelsWhileDisabled() = withRuntime { f ->
         val probe = f.start()
         Handler.advanceBy(3_000L)
@@ -196,16 +211,22 @@ class ReplyVisibilityProbeRuntimeTest {
             .apply { isAccessible = true }.get(null) as Map<*, *>).size
         private fun invoke(method: Method, response: Response, args: List<Any?>, allowResponse: Boolean) {
             var proceeded = 0
+            var responseReads = 0
+            var argumentReads = 0
             val chain = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, member, values ->
                 when (member.name) {
                     "proceed" -> { check(values.isNullOrEmpty()); proceeded++; "host-result" }
-                    "getThisObject" -> { check(allowResponse) { "Disabled callback read response" }; response }
-                    "getArgs" -> { check(allowResponse); args }
+                    "getThisObject" -> { responseReads++; check(allowResponse) { "Disabled callback read response" }; response }
+                    "getArgs" -> { argumentReads++; check(allowResponse); args }
                     else -> error("Unexpected callback access: ${member.name}")
                 }
             } as XposedInterface.Chain
             assertEquals("host-result", checkNotNull(api.callbacks[method]).intercept(chain))
             assertEquals(1, proceeded)
+            if (!allowResponse) {
+                assertEquals("Caught failures must not hide response reads", 0, responseReads)
+                assertEquals("Caught failures must not hide argument reads", 0, argumentReads)
+            }
         }
     }
 
@@ -219,6 +240,7 @@ class ReplyVisibilityProbeRuntimeTest {
         try {
             reset()
             Manager.sent.clear(); Manager.liked = false; Manager.accept = true; Manager.throwAfterAccept = false
+            Response.failMetadata = false
             Core.zid = "fixture-account"
             XposedCompat.attachModule(object : XposedModule() {}.apply { attachFramework(api.value) {} })
             val f = Fixture(api)
@@ -268,9 +290,13 @@ class ReplyVisibilityProbeRuntimeTest {
         fun getExtra(): Any? = extra
     }
     class Response(private val message: Message, @JvmField val json: JSONObject) {
-        fun original() = message
+        fun original(): Message {
+            check(!failMetadata) { "fixture response metadata failure" }
+            return message
+        }
         fun replyDecode() = Unit
         fun agreeDecode(code: Int, data: JSONObject?) = Unit
+        companion object { @JvmField var failMetadata = false }
     }
     class Request { @JvmField val data = mapOf("fid" to "fixture-forum") }
     class Task(command: Int, url: String) {

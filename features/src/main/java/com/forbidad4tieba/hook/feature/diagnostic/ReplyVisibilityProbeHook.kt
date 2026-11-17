@@ -386,7 +386,9 @@ object ReplyVisibilityProbeHook {
         }
     }
 
+    @Synchronized
     private fun disableRuntime(reason: String, throwable: Throwable) {
+        if (runtimeDisabled) return
         runtimeDisabled = true
         XposedCompat.log("$TAG runtime FAILED, disabled for this process: $reason: ${throwable.message}")
         XposedCompat.log(throwable)
