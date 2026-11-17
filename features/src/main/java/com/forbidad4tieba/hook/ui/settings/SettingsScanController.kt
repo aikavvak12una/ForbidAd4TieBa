@@ -97,11 +97,6 @@ internal object SettingsScanController {
         onConfirmed: () -> Unit,
     ) {
         try {
-            if (!RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(activity)) {
-                onConfirmed()
-                return
-            }
-
             val tokens = UiStyle.tokens(activity)
             val density = activity.resources.displayMetrics.density
             val padding = settingsDialogPadding(density)
@@ -139,7 +134,6 @@ internal object SettingsScanController {
                 val confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 confirmButton.setTextColor(tokens.danger)
                 var secondsLeft = INITIAL_SCAN_ENVIRONMENT_WARNING_DELAY_SECONDS
-                confirmButton.text = UiText.Settings.initialScanEnvironmentWarningConfirmWaiting(secondsLeft)
                 confirmButton.updateButtonEnabledState(false)
 
                 countdownRunnable = object : Runnable {
