@@ -56,14 +56,17 @@ object RemoteEnvironmentState {
             .commit()
     }
 
+    private fun shouldSkipEnvironmentWarning(context: Context): Boolean =
+        isEnvironmentWarningAcknowledged(context) || isRestrictedFeaturesUnlocked(context)
+
     fun shouldShowEnvironmentWarningDialog(context: Context): Boolean {
-        if (isEnvironmentWarningAcknowledged(context)) return false
+        if (shouldSkipEnvironmentWarning(context)) return false
         if (environmentWarningDialogActive) return true
         return REMOTE_ENVIRONMENT_WARNING_DIALOG_ACTIVE.read(ConfigManager.getModuleStatePrefs(context))
     }
 
     fun markPostScanEnvironmentWarningPending(context: Context) {
-        if (isEnvironmentWarningAcknowledged(context)) return
+        if (shouldSkipEnvironmentWarning(context)) return
         ConfigManager.getModuleStatePrefs(context).edit()
             .putBoolean(KEY_PENDING_POST_SCAN_ENVIRONMENT_WARNING, true)
             .apply()
