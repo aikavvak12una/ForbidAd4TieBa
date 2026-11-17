@@ -15,7 +15,7 @@ class ArchitectureBoundaryTest {
 
     @Test fun lowerModulesDoNotImportApplicationOrFeatureImplementation() {
         for (module in listOf("contracts", "host", "runtime")) {
-            val files = Konsist.scopeFromExternalDirectory(File(root, "$module/src/main").path).files
+            val files = productionFiles(module)
             assertTrue("$module must contain production code", files.isNotEmpty())
             val violations = files.flatMap { forbiddenImports(it, module) }
             assertEquals("$module imports cross its build boundary", emptyList<String>(), violations)
@@ -23,7 +23,7 @@ class ArchitectureBoundaryTest {
     }
 
     @Test fun featureDomainsUseSharedContractsInsteadOfOtherInstallers() {
-        val files = Konsist.scopeFromExternalDirectory(File(root, "features/src/main").path).files
+        val files = productionFiles("features")
         val violations = files.flatMap { file ->
             val owner = featureDomain(file.packagee?.name.orEmpty())
             file.imports.mapNotNull { dependency ->
@@ -37,7 +37,7 @@ class ArchitectureBoundaryTest {
     }
 
     @Test fun hooksCannotImportDiscoveryOrCacheImplementations() {
-        val files = Konsist.scopeFromExternalDirectory(File(root, "features/src/main").path).files
+        val files = productionFiles("features")
         val forbidden = listOf("symbol.scan.", "symbol.dexkit.", "symbol.validation.", "symbol.cache.")
         val violations = files.flatMap { file ->
             file.imports.filter { dependency -> forbidden.any { dependency.name.contains(it) } }
@@ -51,14 +51,14 @@ class ArchitectureBoundaryTest {
         val publisher = File(configRoot, "ConfigManager.kt").readText()
         val declarations = Regex("(?:fun (?:parse|serialize|round|format|normalize)ModelScore|data class ModelScoreThreshold)")
         assertTrue("Model-score rules belong to ModelScoreSettings", declarations.find(publisher) == null)
-        val owner = Konsist.scopeFromExternalDirectory(configRoot.path).files.single { it.name == "ModelScoreSettings" || it.name == "ModelScoreSettings.kt" }
+        val owner = productionFiles("features").single { it.name == "ModelScoreSettings" || it.name == "ModelScoreSettings.kt" }
         assertEquals(emptyList<String>(), owner.imports.filter {
             it.name.startsWith("android.") || it.name.endsWith("ConfigManager") || it.name.contains(".ui.")
         }.map { it.name })
     }
 
     @Test fun settingsFormsDoNotInstallHooksOrDriveScanAndMenuControllers() {
-        val files = Konsist.scopeFromExternalDirectory(File(root, "features/src/main").path).files
+        val files = productionFiles("features")
         assertEquals(emptyList<String>(), files.flatMap(::settingsFormViolations))
     }
 
@@ -141,5 +141,20 @@ class ArchitectureBoundaryTest {
                 dependency.name.startsWith("java.lang.reflect.") ||
                 dependency.name.startsWith("io.github.libxposed.")
         }.map { "${file.name}: ${it.name}" }
+    }
+
+    private fun productionFiles(module: String): List<KoFileDeclaration> {
+        val directory = File(root, "$module/src/main").canonicalPath
+        return synchronized(productionFilesByDirectory) {
+            productionFilesByDirectory.getOrPut(directory) {
+                Konsist.scopeFromExternalDirectory(directory).files
+            }
+        }
+    }
+
+    private companion object {
+        // Production sources are immutable within one test worker. Negative fixtures
+        // still use fresh scopes so this cache cannot hide their source changes.
+        val productionFilesByDirectory = HashMap<String, List<KoFileDeclaration>>()
     }
 }

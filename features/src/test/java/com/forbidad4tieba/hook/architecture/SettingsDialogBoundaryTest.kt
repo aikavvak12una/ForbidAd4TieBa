@@ -55,8 +55,15 @@ class SettingsDialogBoundaryTest {
         }
     }.map { it.removeSuffix(".class").replace('/', '.') }.distinct().sorted()
 
-    // Every JVM reference to show has that UTF-8 method name in its constant pool.
-    private fun referencesShow(bytes: ByteArray): Boolean = bytes.toString(Charsets.ISO_8859_1).contains("show")
+    // Every method/handle reference contains CONSTANT_Utf8(length=4, "show").
+    // Names such as showSettingsDialog do not need javap unless they also call show.
+    private fun referencesShow(bytes: ByteArray): Boolean {
+        val name = SHOW_UTF8
+        for (start in 0..bytes.size - name.size) {
+            if (name.indices.all { bytes[start + it] == name[it] }) return true
+        }
+        return false
+    }
 
     private fun platformDialogShows(classpath: List<File>, classes: List<String>): List<String> {
         assertTrue("No compiled classes were inspected", classes.isNotEmpty())
@@ -93,6 +100,7 @@ class SettingsDialogBoundaryTest {
 
     private companion object {
         const val ENTRY_CLASS = "com.forbidad4tieba.hook.ui.SettingsMenuUiKt"
+        val SHOW_UTF8 = byteArrayOf(1, 0, 4, 's'.code.toByte(), 'h'.code.toByte(), 'o'.code.toByte(), 'w'.code.toByte())
     }
 }
 

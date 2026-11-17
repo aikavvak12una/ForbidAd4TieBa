@@ -15,6 +15,13 @@ tasks.register("verify") {
     }
 }
 
+tasks.register("verifyQuick") {
+    group = "verification"
+    description = "Compile Debug and run behavior/configuration tests; use verify before delivery."
+    dependsOn("verifyModuleGraph", ":contracts:test", ":app:compileDebugSources",
+        ":host:testDebugUnitTest", ":runtime:testDebugUnitTest", ":features:testDebugBehavior")
+}
+
 val allowedProjectDependencies = mapOf(
     ":contracts" to emptySet(),
     ":host" to setOf(":contracts"),

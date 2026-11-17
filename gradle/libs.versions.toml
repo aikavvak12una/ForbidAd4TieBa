@@ -2,7 +2,7 @@
 agp = "9.2.1"
 junit = "4.13.2"
 json = "20240303"
-dexkit = "2.2.0"
+dexkit = "2.3.0"
 kotlin = "2.2.10"
 konsist = "0.17.3"
 androidx-annotation = "1.9.1"

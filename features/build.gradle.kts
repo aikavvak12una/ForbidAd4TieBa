@@ -23,6 +23,16 @@ dependencies {
     testImplementation(libs.konsist)
 }
 
+tasks.register<Test>("testDebugBehavior") {
+    group = "verification"
+    description = "Run Debug behavior and configuration tests without the separate architecture checks."
+    val debugTests = tasks.named<Test>("testDebugUnitTest").get()
+    testClassesDirs = debugTests.testClassesDirs
+    classpath = debugTests.classpath
+    dependsOn(testClassesDirs)
+    exclude("com/forbidad4tieba/hook/architecture/**")
+}
+
 val featureBuildDirectory = layout.buildDirectory
 tasks.withType<Test>().configureEach {
     doFirst {
