@@ -219,7 +219,7 @@ class FeedInfoLogHookTest {
     private fun formatterSchema(type: Class<*>): FeedInfoLogSchema {
         require(type == Card::class.java) { "Unsupported fixture: $type" }
         val bind = javaClass.getDeclaredMethod("bindCard", Card::class.java)
-        return FeedInfoLogSchema.from(bind, "templateKey")
+        return FeedInfoLogSchema.from(bind, Template::class.java.getMethod("templateKey"))
     }
 
     private fun bindCard(card: Card) = Unit

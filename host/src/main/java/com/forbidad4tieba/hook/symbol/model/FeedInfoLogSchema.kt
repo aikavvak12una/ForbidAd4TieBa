@@ -38,7 +38,7 @@ class FeedInfoLogSchema private constructor(
         private const val MAX_SCHEMA_FIELDS = 32
         private const val MAX_DISCOVERY_ERROR_CHARS = 240
 
-        fun from(bindMethod: Method, templateKeyMethodName: String?): FeedInfoLogSchema {
+        fun from(bindMethod: Method, templateKeyMethod: Method?): FeedInfoLogSchema {
             val cardClass = bindMethod.parameterTypes.singleOrNull()
                 ?: return FeedInfoLogSchema(
                     emptyList(),
@@ -59,6 +59,18 @@ class FeedInfoLogSchema private constructor(
                         ?: failure.javaClass.name
                 }
                 truncated = true
+            }
+
+            val templateAccessor = try {
+                templateKeyMethod?.apply {
+                    require(!Modifier.isStatic(modifiers) && parameterTypes.isEmpty() && returnType == String::class.java) {
+                        "template key accessor must be an instance method with no parameters returning String"
+                    }
+                    isAccessible = true
+                }
+            } catch (t: Throwable) {
+                recordFailure(t)
+                null
             }
 
             queue.add(cardClass)
@@ -98,11 +110,7 @@ class FeedInfoLogSchema private constructor(
                     schemas += FeedInfoLogObjectSchema(
                         owner = owner,
                         fields = fields,
-                        templateKeyMethod = resolveTemplateKeyMethod(
-                            owner,
-                            templateKeyMethodName,
-                            { recordFailure(it) },
-                        ),
+                        templateKeyMethod = templateAccessor?.takeIf { it.declaringClass.isAssignableFrom(owner) },
                         truncated = schemaTruncated,
                     )
 
@@ -128,26 +136,6 @@ class FeedInfoLogSchema private constructor(
                 recordFailure(t)
             }
             return FeedInfoLogSchema(schemas, truncated, discoveryError)
-        }
-
-        private fun resolveTemplateKeyMethod(
-            owner: Class<*>,
-            name: String?,
-            recordFailure: (Throwable) -> Unit,
-        ): Method? {
-            if (name.isNullOrBlank()) return null
-            return try {
-                owner.getMethod(name).takeIf {
-                    !Modifier.isStatic(it.modifiers) &&
-                        it.parameterTypes.isEmpty() &&
-                        it.returnType == String::class.java
-                }?.apply { isAccessible = true }
-            } catch (_: NoSuchMethodException) {
-                null
-            } catch (t: Throwable) {
-                recordFailure(t)
-                null
-            }
         }
 
         private fun schemaTypes(rawType: Class<*>, genericType: Type): List<Class<*>> {

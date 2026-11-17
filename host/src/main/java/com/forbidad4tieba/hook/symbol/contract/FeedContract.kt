@@ -210,9 +210,8 @@ object FeedContract : SymbolContract("Feed") {
                 return null
             }
             bindMethod.isAccessible = true
-            val templateKeyMethodName = resolvedSymbols[FeedContract.feedTemplateKeyMethod]
-                ?.takeIf { it.isNotBlank() }
-            val schema = FeedInfoLogSchema.from(bindMethod, templateKeyMethodName)
+            val templateKeyMethod = FeedTargetRestoration.templateKey(cl, resolvedSymbols[FeedContract.feedTemplateKeyMethod])
+            val schema = FeedInfoLogSchema.from(bindMethod, templateKeyMethod)
             schema.discoveryError?.let { error ->
                 Diagnostics.log("[FeedInfoLogHook] schema discovery partial: $error")
             }
