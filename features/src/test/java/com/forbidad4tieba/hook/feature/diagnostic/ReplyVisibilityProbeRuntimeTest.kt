@@ -77,13 +77,15 @@ class ReplyVisibilityProbeRuntimeTest {
         assertEquals(0, f.pendingCount())
     }
 
-    @Test fun unresolvedRequestsExpireWithoutUnboundedCorrelation() = withRuntime { f ->
+    @Test fun longDelayedSuccessStillOwnsCancellation() = withRuntime { f ->
         val probe = f.start()
-        Handler.advanceBy(63_000L)
-        assertEquals(0, f.pendingCount())
+        Handler.advanceBy(3_600_000L)
+        assertEquals(1, f.pendingCount())
         f.complete(probe)
         Handler.runCurrent()
-        assertEquals(listOf(0), f.operations())
+        assertEquals(listOf(0, 1), f.operations())
+        assertFalse(Manager.liked)
+        assertEquals(0, f.pendingCount())
     }
 
     @Test fun disabledReplyCallbackDoesNotReadResponseOrStartARequest() = withRuntime { f ->
@@ -145,13 +147,21 @@ class ReplyVisibilityProbeRuntimeTest {
         assertFalse(Manager.liked)
     }
 
-    @Test fun outstandingProbeCountIsBoundedAndCapacityRecoversAfterExpiry() = withRuntime { f ->
+    @Test fun outstandingProbeCountIsBoundedAndCompletionRestoresCapacity() = withRuntime { f ->
         repeat(65) { f.reply() }
         Handler.advanceBy(1_000L)
         assertEquals(64, Manager.sent.size)
         assertEquals(64, f.pendingCount())
-        Handler.advanceBy(63_000L)
-        assertEquals(0, f.pendingCount())
+        Handler.advanceBy(3_600_000L)
+        assertEquals(64, f.pendingCount())
+        f.reply()
+        Handler.advanceBy(1_000L)
+        assertEquals(64, Manager.sent.size)
+        f.complete(Manager.sent.first(), JSONObject().put("errno", "3280005"))
+        f.enabled(false)
+        Handler.runCurrent()
+        assertEquals(63, f.pendingCount())
+        f.enabled(true)
         f.start()
         assertEquals(65, Manager.sent.size)
     }

@@ -14,7 +14,6 @@ import org.json.JSONObject
 object ReplyVisibilityProbeHook {
     private const val TAG = "[ReplyVisibilityProbeHook]"
     private const val RESPONSE_TIMEOUT_MS = 3000L
-    private const val LATE_RESPONSE_RETENTION_MS = 60_000L
     private const val MAX_PENDING_PROBES = 64
     private const val AGREE_OP_TYPE_ADD = 0
     private const val AGREE_OP_TYPE_CANCEL = 1
@@ -353,11 +352,8 @@ object ReplyVisibilityProbeHook {
             if (pendingByTag[tag] !== pending || pending.timedOut) return
             pending.timedOut = true
         }
-        mainHandler.postDelayed({
-            if (pendingByTag.remove(tag, pending)) {
-                XposedCompat.logW("$TAG response grace expired; cleanup unconfirmed: pid=${pending.request.pid}")
-            }
-        }, LATE_RESPONSE_RETENTION_MS)
+        // Keep the correlation until a definitive response. The count bound stops
+        // new probes instead of abandoning cleanup when the server stays silent.
         if (isProbeEnabled()) handleProbeResult(targets, pending.request, result)
     }
 
