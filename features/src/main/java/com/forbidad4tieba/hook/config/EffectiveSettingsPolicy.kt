@@ -28,9 +28,14 @@ internal object EffectiveSettingsPolicy {
         fun restrictedBoolean(setting: BooleanPreference): Boolean =
             restrictedUnlocked && featureBoolean(setting)
 
-        val adBlockEnabled = restrictedBoolean(AdPreferences.BLOCK_AD)
+        val adBlockMasterConfigured = restrictedUnlocked && AdPreferences.BLOCK_AD.read(p)
+        val adBlockEnabled = adBlockMasterConfigured && capabilities.isAvailable(AdPreferences.BLOCK_AD.key)
         fun adBlockChildBoolean(setting: BooleanPreference): Boolean =
             adBlockEnabled && featureBoolean(setting)
+        val cloudDialogAdBlockEnabled = adBlockMasterConfigured &&
+            capabilities.isAvailable(AdPreferences.BLOCK_AD_CLOUD_DIALOGS.key)
+        val cloudDialogWhitelistEnabled =
+            cloudDialogAdBlockEnabled && AdPreferences.BLOCK_AD_CLOUD_DIALOGS.read(p)
 
         val performanceOptimizationEnabled = restrictedBoolean(PerformancePreferences.ENABLE_PERFORMANCE_OPTIMIZATION)
         fun performanceChildBoolean(setting: BooleanPreference): Boolean =
@@ -117,6 +122,8 @@ internal object EffectiveSettingsPolicy {
             isMineTabWebAdBlockEnabled = adBlockChildBoolean(AdPreferences.BLOCK_AD_MINE_TAB_WEB),
             isHomeSideBarWebAdBlockEnabled = adBlockChildBoolean(AdPreferences.BLOCK_AD_HOME_SIDE_BAR_WEB),
             isHomeBottomEasterEggAdBlockEnabled = adBlockChildBoolean(AdPreferences.BLOCK_AD_HOME_BOTTOM_EASTER_EGG),
+            isCloudDialogAdBlockEnabled = cloudDialogAdBlockEnabled,
+            isCloudDialogWhitelistEnabled = cloudDialogWhitelistEnabled,
             isHomeTopTabsCustomEnabled = homeTopTabsCustomEnabled,
             isHomeTopTabMaterialEnabled = homeTopTabSelection.materialEnabled,
             isHomeTopTabRecommendEnabled = homeTopTabSelection.recommendEnabled,

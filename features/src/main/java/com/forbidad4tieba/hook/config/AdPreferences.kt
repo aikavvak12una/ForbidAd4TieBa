@@ -24,6 +24,8 @@ object AdPreferences {
 
     const val KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG = "block_ad_home_bottom_easter_egg"
 
+    const val KEY_BLOCK_AD_CLOUD_DIALOGS = "block_ad_cloud_dialogs"
+
     internal val BLOCK_AD = BooleanPreference(
         KEY_BLOCK_AD, false, PreferenceUse.SWITCH, HookFeatureKey.BLOCK_AD,
         SwitchPresentation(UiText.Settings.BLOCK_AD_LABEL, UiText.Settings.BLOCK_AD_DESC),
@@ -64,12 +66,17 @@ object AdPreferences {
         KEY_BLOCK_AD_HOME_BOTTOM_EASTER_EGG, true, PreferenceUse.SWITCH, HookFeatureKey.BLOCK_AD_HOME_BOTTOM_EASTER_EGG,
         SwitchPresentation(UiText.Settings.BLOCK_AD_HOME_BOTTOM_EASTER_EGG_LABEL, UiText.Settings.BLOCK_AD_HOME_BOTTOM_EASTER_EGG_DESC),
     )
+    internal val BLOCK_AD_CLOUD_DIALOGS = BooleanPreference(
+        KEY_BLOCK_AD_CLOUD_DIALOGS, false, PreferenceUse.SWITCH, HookFeatureKey.BLOCK_AD_CLOUD_DIALOGS,
+        SwitchPresentation(UiText.Settings.BLOCK_AD_CLOUD_DIALOGS_LABEL, UiText.Settings.BLOCK_AD_CLOUD_DIALOGS_DESC),
+    )
 
     internal val preferences: List<Preference<*>> = listOf(
         BLOCK_AD,
         BLOCK_AD_FEED,
         BLOCK_AD_POST_PAGE,
         BLOCK_AD_FORUM_PAGE,
+        BLOCK_AD_CLOUD_DIALOGS,
         BLOCK_AD_STRATEGY,
         BLOCK_AD_SEARCH_BOX_TEXT,
         BLOCK_AD_HOME_TOP_BAR,

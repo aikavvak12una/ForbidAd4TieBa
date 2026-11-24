@@ -14,6 +14,7 @@ object AdFamilyContract : SymbolContract("AdFamily") {
             HookFeatureKey.BLOCK_AD_FEED,
             HookFeatureKey.BLOCK_AD_POST_PAGE,
             HookFeatureKey.BLOCK_AD_FORUM_PAGE,
+            HookFeatureKey.BLOCK_AD_CLOUD_DIALOGS,
             HookFeatureKey.BLOCK_AD_STRATEGY,
             HookFeatureKey.BLOCK_AD_SEARCH_BOX_TEXT,
             HookFeatureKey.BLOCK_AD_HOME_TOP_BAR,

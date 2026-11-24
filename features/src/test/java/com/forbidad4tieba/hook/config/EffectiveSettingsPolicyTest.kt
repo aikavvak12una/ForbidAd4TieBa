@@ -141,4 +141,74 @@ class EffectiveSettingsPolicyTest {
             ).normalizedBottomTabs,
         )
     }
+
+    @Test
+    fun cloudDialogModeRequiresMasterAndOwnCapabilityIndependentOfTheWhitelistToggle() {
+        val values = mapOf<String, Any?>(
+            AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+            AdPreferences.KEY_BLOCK_AD to true,
+        )
+        val cloudOnly = HostCapabilities(mapOf(
+            HookFeatureKey.BLOCK_AD to ScanFeatureAvailabilityState.DISABLED,
+            HookFeatureKey.BLOCK_AD_CLOUD_DIALOGS to ScanFeatureAvailabilityState.AVAILABLE,
+        ))
+
+        val blacklist = EffectiveSettingsPolicy.derive(
+            UserSettings(values),
+            cloudOnly,
+            RemoteSettingsPolicy(false),
+        ).snapshot
+        assertFalse(blacklist.isAdBlockEnabled)
+        assertTrue(blacklist.isCloudDialogAdBlockEnabled)
+        assertFalse(blacklist.isCloudDialogWhitelistEnabled)
+
+        val whitelist = EffectiveSettingsPolicy.derive(
+            UserSettings(values + (AdPreferences.KEY_BLOCK_AD_CLOUD_DIALOGS to true)),
+            cloudOnly,
+            RemoteSettingsPolicy(false),
+        ).snapshot
+        assertTrue(whitelist.isCloudDialogAdBlockEnabled)
+        assertTrue(whitelist.isCloudDialogWhitelistEnabled)
+
+        val masterOff = EffectiveSettingsPolicy.derive(
+            UserSettings(values + (AdPreferences.KEY_BLOCK_AD to false)),
+            cloudOnly,
+            RemoteSettingsPolicy(false),
+        ).snapshot
+        assertFalse(masterOff.isCloudDialogAdBlockEnabled)
+        assertFalse(masterOff.isCloudDialogWhitelistEnabled)
+
+        val cloudUnavailable = EffectiveSettingsPolicy.derive(
+            UserSettings(values + (AdPreferences.KEY_BLOCK_AD_CLOUD_DIALOGS to true)),
+            HostCapabilities(mapOf(
+                HookFeatureKey.BLOCK_AD to ScanFeatureAvailabilityState.AVAILABLE,
+                HookFeatureKey.BLOCK_AD_CLOUD_DIALOGS to ScanFeatureAvailabilityState.DISABLED,
+            )),
+            RemoteSettingsPolicy(false),
+        ).snapshot
+        assertFalse(cloudUnavailable.isCloudDialogAdBlockEnabled)
+        assertFalse(cloudUnavailable.isCloudDialogWhitelistEnabled)
+
+        val cloudPartial = EffectiveSettingsPolicy.derive(
+            UserSettings(values),
+            HostCapabilities(mapOf(
+                HookFeatureKey.BLOCK_AD_CLOUD_DIALOGS to ScanFeatureAvailabilityState.PARTIAL,
+            )),
+            RemoteSettingsPolicy(false),
+        ).snapshot
+        assertTrue(cloudPartial.isCloudDialogAdBlockEnabled)
+        assertFalse(cloudPartial.isCloudDialogWhitelistEnabled)
+
+        val remoteLocked = EffectiveSettingsPolicy.derive(
+            UserSettings(values + (AdPreferences.KEY_BLOCK_AD_CLOUD_DIALOGS to true)),
+            cloudOnly,
+            RemoteSettingsPolicy(true),
+        ).snapshot
+        assertFalse(remoteLocked.isCloudDialogAdBlockEnabled)
+        assertFalse(remoteLocked.isCloudDialogWhitelistEnabled)
+
+        val bootstrap = SettingsSnapshot.bootstrap()
+        assertFalse(bootstrap.isCloudDialogAdBlockEnabled)
+        assertFalse(bootstrap.isCloudDialogWhitelistEnabled)
+    }
 }

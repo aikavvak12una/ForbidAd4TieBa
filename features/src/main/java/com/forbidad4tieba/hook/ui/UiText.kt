@@ -20,7 +20,7 @@ object UiText {
         const val DEFAULT_ENABLED_DESC = "默认启用的功能"
         const val SYSTEM_SPLASH_DARK_LABEL = "启动画面跟随系统深色模式（需在启用系统界面作用域并重启系统界面或设备）"
         const val BLOCK_AD_LABEL = "屏蔽广告"
-        const val BLOCK_AD_DESC = "屏蔽开屏、信息流、帖子详情页等推广广告"
+        const val BLOCK_AD_DESC = "屏蔽开屏、信息流、帖子详情页、云弹窗等推广广告"
         const val BLOCK_AD_DIALOG_TITLE = BLOCK_AD_LABEL
         const val BLOCK_AD_SAVED = "屏蔽广告子功能配置已保存"
         const val BLOCK_AD_FEED_LABEL = "信息流广告"
@@ -41,6 +41,9 @@ object UiText {
         const val BLOCK_AD_HOME_SIDE_BAR_WEB_DESC = "隐藏首页侧边栏 Web 推广区块"
         const val BLOCK_AD_HOME_BOTTOM_EASTER_EGG_LABEL = "首页悬浮广告"
         const val BLOCK_AD_HOME_BOTTOM_EASTER_EGG_DESC = "屏蔽首页底部倒计时彩蛋广告及视频素材预下载"
+        const val BLOCK_AD_CLOUD_DIALOGS_LABEL = "云弹窗屏蔽"
+        const val BLOCK_AD_CLOUD_DIALOGS_DESC =
+            "开启后仅放行已确认的正常业务弹窗\n*某些弹窗通知被误屏蔽时尝试关闭该功能，关闭时仍然会屏蔽已确认的基础广告弹窗"
         const val CUSTOM_POST_FILTER_LABEL = "首页推荐自定义屏蔽"
         const val CUSTOM_POST_FILTER_DESC = "按帖子类型或特征屏蔽信息流卡片"
         const val CUSTOM_POST_FILTER_VOTE_LABEL = "屏蔽投票帖"

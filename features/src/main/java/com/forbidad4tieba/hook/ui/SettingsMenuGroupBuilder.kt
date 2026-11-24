@@ -53,6 +53,7 @@ internal object SettingsMenuGroupBuilder {
         SwitchItem(AdPreferences.BLOCK_AD_FEED),
         SwitchItem(AdPreferences.BLOCK_AD_POST_PAGE),
         SwitchItem(AdPreferences.BLOCK_AD_FORUM_PAGE),
+        SwitchItem(AdPreferences.BLOCK_AD_CLOUD_DIALOGS),
         SwitchItem(AdPreferences.BLOCK_AD_STRATEGY),
         SwitchItem(AdPreferences.BLOCK_AD_SEARCH_BOX_TEXT),
         SwitchItem(AdPreferences.BLOCK_AD_HOME_TOP_BAR),

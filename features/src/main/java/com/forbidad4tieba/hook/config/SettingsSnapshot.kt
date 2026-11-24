@@ -12,6 +12,8 @@ data class SettingsSnapshot(
     val isMineTabWebAdBlockEnabled: Boolean,
     val isHomeSideBarWebAdBlockEnabled: Boolean,
     val isHomeBottomEasterEggAdBlockEnabled: Boolean,
+    val isCloudDialogAdBlockEnabled: Boolean,
+    val isCloudDialogWhitelistEnabled: Boolean,
     val isHomeTopTabsCustomEnabled: Boolean,
     val isHomeTopTabMaterialEnabled: Boolean,
     val isHomeTopTabRecommendEnabled: Boolean,
@@ -103,6 +105,8 @@ data class SettingsSnapshot(
             isMineTabWebAdBlockEnabled = false,
             isHomeSideBarWebAdBlockEnabled = false,
             isHomeBottomEasterEggAdBlockEnabled = false,
+            isCloudDialogAdBlockEnabled = false,
+            isCloudDialogWhitelistEnabled = false,
             isHomeTopTabsCustomEnabled = false,
             isHomeTopTabMaterialEnabled = true,
             isHomeTopTabRecommendEnabled = true,
@@ -177,7 +181,7 @@ data class SettingsSnapshot(
             postModelScoreStatsPostLimit = ModelScoreSettings.DEFAULT_MODEL_SCORE_STATS_POST_LIMIT,
             isDetailedLoggingEnabled = false,
             commentLevelFilter = CommentLevelFilterSettings(false, CommentFilterPreferences.DEFAULT_MINIMUM_LEVEL, false, false),
-            isCommentShortcutEnabled = true,
+            isCommentShortcutEnabled = false,
             isPbTopEnterBarHidden = false,
         )
     }

@@ -50,6 +50,20 @@ object SettingsDiagnostics {
         }
 
         val masterConfigured = configured(PerformancePreferences.ENABLE_PERFORMANCE_OPTIMIZATION)
+        val cloudDialogMasterConfigured = configured(AdPreferences.BLOCK_AD)
+        val cloudDialogWhitelistConfigured = configured(AdPreferences.BLOCK_AD_CLOUD_DIALOGS)
+        val cloudDialogMode = when {
+            !settings.isCloudDialogAdBlockEnabled -> "inactive"
+            settings.isCloudDialogWhitelistEnabled -> "whitelist"
+            else -> "blacklist"
+        }
+        val cloudDialogReason = when {
+            settings.isCloudDialogAdBlockEnabled -> "active"
+            !settings.areRestrictedFeaturesUnlocked -> "restricted_locked"
+            !cloudDialogMasterConfigured -> "master_off"
+            !ConfigManager.isScanFeatureAvailable(AdPreferences.KEY_BLOCK_AD_CLOUD_DIALOGS) -> "scan_unavailable"
+            else -> "inactive"
+        }
 
         return listOf(
             "PerformanceFeature[$KEY_ENABLE_PERFORMANCE_OPTIMIZATION] " +
@@ -63,6 +77,12 @@ object SettingsDiagnostics {
             childLine(PerformancePreferences.DISABLE_YY_BACKGROUND, settings.isYyBackgroundDisabled),
             childLine(PerformancePreferences.DISABLE_SWAN_PRELOAD, settings.isSwanPreloadDisabled),
             childLine(PerformancePreferences.DISABLE_AI_IMAGE_CREATION, settings.isAiImageCreationDisabled),
+            "AdFeature[${AdPreferences.KEY_BLOCK_AD_CLOUD_DIALOGS}] " +
+                "root=${onOff(settings.areRestrictedFeaturesUnlocked)} " +
+                "master=${onOff(settings.isAdBlockEnabled)} master_config=${onOff(cloudDialogMasterConfigured)} " +
+                "whitelist_config=${onOff(cloudDialogWhitelistConfigured)} " +
+                "mode=$cloudDialogMode active=${onOff(settings.isCloudDialogAdBlockEnabled)} " +
+                "scan=${scanState(AdPreferences.KEY_BLOCK_AD_CLOUD_DIALOGS)} reason=$cloudDialogReason",
         )
     }
 }

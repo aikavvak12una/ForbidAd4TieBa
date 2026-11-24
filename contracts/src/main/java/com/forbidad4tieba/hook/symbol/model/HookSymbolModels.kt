@@ -24,6 +24,7 @@ object HookFeatureKey {
     const val BLOCK_AD_FEED = "block_ad_feed"
     const val BLOCK_AD_POST_PAGE = "block_ad_post_page"
     const val BLOCK_AD_FORUM_PAGE = "block_ad_forum_page"
+    const val BLOCK_AD_CLOUD_DIALOGS = "block_ad_cloud_dialogs"
     const val BLOCK_AD_STRATEGY = "block_ad_strategy"
     const val BLOCK_AD_SEARCH_BOX_TEXT = "block_ad_search_box_text"
     const val BLOCK_AD_HOME_TOP_BAR = "block_ad_home_top_bar"
@@ -77,6 +78,7 @@ object HookFeatureKey {
         BLOCK_AD_FEED,
         BLOCK_AD_POST_PAGE,
         BLOCK_AD_FORUM_PAGE,
+        BLOCK_AD_CLOUD_DIALOGS,
         BLOCK_AD_STRATEGY,
         BLOCK_AD_SEARCH_BOX_TEXT,
         BLOCK_AD_HOME_TOP_BAR,

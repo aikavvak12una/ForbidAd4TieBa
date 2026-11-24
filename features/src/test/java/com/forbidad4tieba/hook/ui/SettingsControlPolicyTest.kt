@@ -95,6 +95,29 @@ class SettingsControlPolicyTest {
         assertFalse(disabledChild.unknown)
     }
 
+    @Test
+    fun cloudDialogSwitchUsesItsOwnCapabilityWhenLegacyAdMasterStatusIsDisabled() {
+        val statuses = mapOf(
+            HookFeatureKey.BLOCK_AD to HookFeatureStatus(
+                state = HookFeatureState.DISABLED,
+                missingCritical = listOf("legacyAdFamily"),
+            ),
+            HookFeatureKey.BLOCK_AD_CLOUD_DIALOGS to HookFeatureStatus(
+                state = HookFeatureState.PARTIAL,
+                missingOptional = listOf("mysteryCloudDialogRenderer"),
+            ),
+        )
+        val support = SettingsSwitchSupportResolver.resolve(
+            AdPreferences.KEY_BLOCK_AD_CLOUD_DIALOGS,
+            supported = true,
+            featureStatusMap = statuses,
+        )
+
+        assertTrue(support.supported)
+        assertTrue(support.partial)
+        assertFalse(support.unknown)
+    }
+
     private fun withScanAvailability(
         value: Map<String, ConfigManager.ScanFeatureAvailabilityState>,
         block: () -> Unit,

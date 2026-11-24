@@ -199,7 +199,9 @@ class AllSettingsBehaviorTest {
                         ", isFlutterPreinitDisabled=${oldPerformanceValue("disable_flutter_preinit", false)}" +
                         ", isLowEndDeviceConfigForced=${oldPerformanceValue("force_low_end_device_config", true)}" +
                         ", isTitanPatchBlockEnabled=${oldPerformanceValue("block_titan_patch", false, false)}"
+                // Preserve the pre-cloud-dialog baseline; its independent behavior is covered by EffectiveSettingsPolicyTest.
                 val performanceProjection = result.snapshot.toString()
+                    .replace(Regex(", isCloudDialogAdBlockEnabled=(?:true|false), isCloudDialogWhitelistEnabled=(?:true|false)"), "")
                     .replace(", isAiImageCreationDisabled=false", "")
                     .replace(", isYyBackgroundDisabled=$backgroundDefaultsEnabled, isSwanPreloadDisabled=$backgroundDefaultsEnabled", "")
                     .replace("isVideoPreloadDisabled=", "isVideoComponentsDisabled=")

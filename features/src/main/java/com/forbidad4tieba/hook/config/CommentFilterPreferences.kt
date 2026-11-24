@@ -29,7 +29,7 @@ object CommentFilterPreferences {
         SwitchPresentation(UiText.Settings.COMMENT_SKIP_NESTED_LABEL, UiText.Settings.COMMENT_SKIP_NESTED_DESC),
     )
     internal val SHORTCUT = BooleanPreference(
-        KEY_SHORTCUT, true, PreferenceUse.SWITCH, HookFeatureKey.COMMENT_SHORTCUT,
+        KEY_SHORTCUT, false, PreferenceUse.SWITCH, HookFeatureKey.COMMENT_SHORTCUT,
         SwitchPresentation(UiText.Settings.COMMENT_SHORTCUT_LABEL, UiText.Settings.COMMENT_SHORTCUT_DESC),
     )
     internal val preferences: List<Preference<*>> = listOf(ENABLE, MINIMUM_LEVEL, KEEP_WITH_REPLIES, SKIP_NESTED, SHORTCUT)

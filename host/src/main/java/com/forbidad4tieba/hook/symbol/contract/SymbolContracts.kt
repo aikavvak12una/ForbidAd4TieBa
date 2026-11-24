@@ -20,6 +20,7 @@ internal object SymbolContracts {
         SettingsContract,
         FeedContract,
         BannerAdContract,
+        CloudDialogContract,
         StrategyAdContract,
         HomeBottomEasterEggContract,
         SearchBoxContract,
