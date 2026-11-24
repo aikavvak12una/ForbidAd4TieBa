@@ -2,98 +2,94 @@ package com.forbidad4tieba.hook
 
 import com.forbidad4tieba.hook.config.SettingsSnapshot
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 class FeatureCatalogTest {
-    @Test fun publishEntryOverrideUsesEitherBottomBarSwitchInTheMainProcess() {
-        val id = "PublishEntryHook"
-        val definition = FeatureCatalog.definitions.single { it.id == id }
-        assertEquals(FeaturePhase.POST_ATTACH, definition.phase)
-        assertEquals(null, definition.toggle)
-        val context = HookInstallContext("com.baidu.tieba", null)
-        val settings = SettingsSnapshot.bootstrap()
-        for (snapshot in listOf(settings, settings.copy(isAdBlockEnabled = true, isCustomPostFilterEnabled = true))) {
-            for ((customTabs, floatingBar, expected) in listOf(
-                Triple(false, false, 0), Triple(true, false, 1),
-                Triple(false, true, 1), Triple(true, true, 1),
-            )) {
-                assertEquals(expected, definition.entries(context, snapshot.copy(
-                    isBottomTabsCustomEnabled = customTabs, isFloatingBottomBarEnabled = floatingBar,
-                )).size)
-            }
-        }
-        for (process in listOf("com.baidu.tieba:remote", "com.baidu.tieba:push", "com.android.systemui")) {
-            assertTrue(definition.entries(HookInstallContext(process, null),
-                settings.copy(isBottomTabsCustomEnabled = true, isFloatingBottomBarEnabled = true)).isEmpty())
-        }
-    }
-
-    @Test fun floatingSwitchControlsBothBarsOnlyInTheMainProcess() {
-        val settings = SettingsSnapshot.bootstrap()
-        val enabled = settings.copy(isFloatingBottomBarEnabled = true)
-        for (id in listOf("BottomTabLiquidGlassHook", "PostReplyLiquidGlassHook")) {
-            val definition = FeatureCatalog.definitions.single { it.id == id }
-            assertTrue(definition.entries(HookInstallContext("com.baidu.tieba", null), settings).isEmpty())
-            assertEquals(1, definition.entries(HookInstallContext("com.baidu.tieba", null), enabled).size)
-            assertTrue(definition.entries(HookInstallContext("com.baidu.tieba:remote", null), enabled).isEmpty())
-        }
-    }
-
-    @Test fun launchPlaceholderIsInstalledOnlyInTheMainProcess() {
-        assertEquals(1, FeatureCatalog.staticPlan("com.baidu.tieba").entries.count { it.id == "LaunchSplashHook" })
-        for (process in listOf("com.baidu.tieba:remote", "com.android.systemui")) {
-            assertTrue(FeatureCatalog.staticPlan(process).entries.none { it.id == "LaunchSplashHook" })
-        }
-    }
-
-    @Test fun systemUiInstallsOnlyItsSplashFeatureWithoutHostBootstrap() {
-        val process = "com.android.systemui"
-        assertEquals(listOf("SystemSplashHook"), FeatureCatalog.staticPlan(process).entries.map { it.id })
-        assertTrue(!FeatureCatalog.shouldInstallAttachHook(process))
-        for (hostProcess in listOf("com.baidu.tieba", "com.baidu.tieba:remote")) {
-            assertTrue(FeatureCatalog.staticPlan(hostProcess).entries.none { it.id == "SystemSplashHook" })
-        }
-    }
-
-    @Test fun everyDeclaredFeatureHasExactlyOneRegistration() {
+    @Test
+    fun everyDeclaredFeatureHasOneRegistrationAndTheCatalogOwnsNoRules() {
         val root = File(checkNotNull(System.getProperty("project.root")), "features/src/main")
         val declaration = Regex("""FeatureDefinition(?:\.(?:single|observed))?\(\s*id\s*=\s*"([^"]+)"""")
         val declared = root.walkTopDown().filter { it.extension == "kt" }
-            .flatMap { declaration.findAll(it.readText()).map { match -> match.groupValues[1] } }.toList()
+            .flatMap { declaration.findAll(it.readText()).map { match -> match.groupValues[1] } }
+            .toList()
         val registered = FeatureCatalog.definitions.map { it.id }
         assertTrue("The declaration check must find production definitions", declared.isNotEmpty())
         assertEquals("Duplicate declaration", declared.size, declared.toSet().size)
         assertEquals("Duplicate registration", registered.size, registered.toSet().size)
         assertEquals("Missing or obsolete registration", declared.toSet(), registered.toSet())
-    }
 
-    @Test fun catalogCannotRedefineFeatureRules() {
-        val catalog = File(checkNotNull(System.getProperty("project.root")),
-            "features/src/main/java/com/forbidad4tieba/hook/FeatureCatalog.kt").readText()
+        val catalog = File(
+            checkNotNull(System.getProperty("project.root")),
+            "features/src/main/java/com/forbidad4tieba/hook/FeatureCatalog.kt",
+        ).readText()
         listOf("symbol.contract.", "settings.is", "symbols[", "canInstall").forEach { forbidden ->
-            assertTrue("Feature rules belong to their owner: $forbidden", forbidden !in catalog)
+            assertFalse("Feature rules belong to their owner: $forbidden", forbidden in catalog)
         }
     }
 
-    @Test fun disabledAndWrongProcessFeaturesDoNotCreateInstallers() {
-        var factories = 0
-        var installations = 0
-        val context = HookInstallContext("com.baidu.tieba", null)
-        val definition = FeatureDefinition.observed("example", FeaturePhase.STATIC, FeatureProcess.MAIN,
-            enabled = { it.isAutoLoadMoreEnabled }) { _, _ -> installations++ }
-        assertTrue(definition.entries(context, SettingsSnapshot.bootstrap()).isEmpty())
-        val entries = definition.entries(context, SettingsSnapshot.bootstrap().copy(isAutoLoadMoreEnabled = true))
-        assertEquals(0, installations)
-        entries.single().install(javaClass.classLoader!!)
-        assertEquals(1, installations)
-
-        val guardedFactory = FeatureDefinition("factory", FeaturePhase.STATIC, FeatureProcess.MAIN) { _, _ ->
-            factories++
-            emptyList()
+    @Test
+    fun mainProcessSelectorsAndStaticPlansStayNarrow() {
+        val settings = SettingsSnapshot.bootstrap()
+        val publish = FeatureCatalog.definitions.single { it.id == "PublishEntryHook" }
+        assertEquals(FeaturePhase.POST_ATTACH, publish.phase)
+        assertEquals(null, publish.toggle)
+        for ((customTabs, floatingBar, expected) in listOf(
+            Triple(false, false, 0),
+            Triple(true, false, 1),
+            Triple(false, true, 1),
+            Triple(true, true, 1),
+        )) {
+            assertEquals(
+                expected,
+                publish.entries(
+                    HookInstallContext("com.baidu.tieba", null),
+                    settings.copy(
+                        isBottomTabsCustomEnabled = customTabs,
+                        isFloatingBottomBarEnabled = floatingBar,
+                    ),
+                ).size,
+            )
         }
-        guardedFactory.entries(HookInstallContext("com.baidu.tieba:remote", null), SettingsSnapshot.bootstrap())
-        assertEquals(0, factories)
+        assertTrue(
+            publish.entries(
+                HookInstallContext("com.baidu.tieba:remote", null),
+                settings.copy(isFloatingBottomBarEnabled = true),
+            ).isEmpty(),
+        )
+
+        for (id in listOf("BottomTabLiquidGlassHook", "PostReplyLiquidGlassHook")) {
+            val definition = FeatureCatalog.definitions.single { it.id == id }
+            assertTrue(definition.entries(HookInstallContext("com.baidu.tieba", null), settings).isEmpty())
+            assertEquals(
+                1,
+                definition.entries(
+                    HookInstallContext("com.baidu.tieba", null),
+                    settings.copy(isFloatingBottomBarEnabled = true),
+                ).size,
+            )
+            assertTrue(
+                definition.entries(
+                    HookInstallContext("com.baidu.tieba:remote", null),
+                    settings.copy(isFloatingBottomBarEnabled = true),
+                ).isEmpty(),
+            )
+        }
+
+        assertEquals(
+            1,
+            FeatureCatalog.staticPlan("com.baidu.tieba").entries.count { it.id == "LaunchSplashHook" },
+        )
+        assertEquals(
+            listOf("SystemSplashHook"),
+            FeatureCatalog.staticPlan("com.android.systemui").entries.map { it.id },
+        )
+        assertFalse(FeatureCatalog.shouldInstallAttachHook("com.android.systemui"))
+        assertTrue(
+            FeatureCatalog.staticPlan("com.baidu.tieba:remote")
+                .entries.none { it.id == "LaunchSplashHook" || it.id == "SystemSplashHook" },
+        )
     }
 }

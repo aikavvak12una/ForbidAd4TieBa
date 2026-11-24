@@ -10,6 +10,12 @@ internal object CacheTargetValidation {
     internal const val TAG = "[HookSymbolResolver]"
 
     internal fun resolveCachedParameterClass(typeName: String, cl: ClassLoader): Class<*>? {
+        // DexKit spells arrays as Component[]; cached reflection descriptors use
+        // JVM names such as [Ljava.lang.Void;. Both must restore the same type.
+        if (typeName.endsWith("[]")) {
+            val component = resolveCachedParameterClass(typeName.removeSuffix("[]"), cl) ?: return null
+            return java.lang.reflect.Array.newInstance(component, 0).javaClass
+        }
         return when (typeName) {
             "boolean" -> java.lang.Boolean.TYPE
             "byte" -> java.lang.Byte.TYPE

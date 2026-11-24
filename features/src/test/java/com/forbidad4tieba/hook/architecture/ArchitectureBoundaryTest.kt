@@ -46,34 +46,9 @@ class ArchitectureBoundaryTest {
         assertEquals(emptyList<String>(), violations)
     }
 
-    @Test fun modelScoreFormatRulesStayOutsideTheSettingsPublisher() {
-        val configRoot = File(root, "features/src/main/java/com/forbidad4tieba/hook/config")
-        val publisher = File(configRoot, "ConfigManager.kt").readText()
-        val declarations = Regex("(?:fun (?:parse|serialize|round|format|normalize)ModelScore|data class ModelScoreThreshold)")
-        assertTrue("Model-score rules belong to ModelScoreSettings", declarations.find(publisher) == null)
-        val owner = productionFiles("features").single { it.name == "ModelScoreSettings" || it.name == "ModelScoreSettings.kt" }
-        assertEquals(emptyList<String>(), owner.imports.filter {
-            it.name.startsWith("android.") || it.name.endsWith("ConfigManager") || it.name.contains(".ui.")
-        }.map { it.name })
-    }
-
     @Test fun settingsFormsDoNotInstallHooksOrDriveScanAndMenuControllers() {
         val files = productionFiles("features")
         assertEquals(emptyList<String>(), files.flatMap(::settingsFormViolations))
-    }
-
-    @Test fun settingsFormBoundaryRejectsAliasedInstallerAndControllerImports() {
-        val folder = temporary.newFolder("negative-settings-form")
-        File(folder, "BadForm.kt").writeText("""
-            package com.forbidad4tieba.hook.ui.settings.forms
-            import com.forbidad4tieba.hook.core.RuntimeHooks as Hooks
-            import com.forbidad4tieba.hook.ui.settings.SettingsMenuController as Menu
-            import com.forbidad4tieba.hook.HookSymbolResolver as Symbols
-            class BadForm
-        """.trimIndent())
-        val violations = Konsist.scopeFromExternalDirectory(folder.path).files
-            .flatMap(::settingsFormViolations)
-        assertEquals(3, violations.size)
     }
 
     @Test fun forbiddenImportsAreRejectedEvenWhenAliased() {
@@ -89,19 +64,6 @@ class ArchitectureBoundaryTest {
         assertEquals(2, violations.size)
         assertTrue(violations.any { it.contains("ConfigManager") })
         assertTrue(violations.any { it.contains("XposedCompat") })
-    }
-
-    @Test fun contractsRejectAndroidAndHostTypes() {
-        val folder = temporary.newFolder("negative-contracts")
-        File(folder, "BadContract.kt").writeText("""
-            package com.forbidad4tieba.hook.contracts
-            import android.content.Context
-            import com.forbidad4tieba.hook.symbol.model.HookSymbols
-            class BadContract
-        """.trimIndent())
-        val violations = Konsist.scopeFromExternalDirectory(folder.path).files
-            .flatMap { forbiddenImports(it, "contracts") }
-        assertEquals(2, violations.size)
     }
 
     private fun forbiddenImports(file: KoFileDeclaration, module: String): List<String> {

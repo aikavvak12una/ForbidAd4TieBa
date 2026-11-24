@@ -235,12 +235,6 @@ internal class FeatureLifecycle(private val detach: () -> Unit) : HookLifecycle 
             )
         }
         val isMainProcess = HookProcess.isMain(processName)
-        if (isMainProcess) {
-            // Scan availability is applied above, so this gating reflects the
-            // real feature state (the early startup snapshot cannot, because the
-            // scan has not run yet). registerForegroundCallbacks is idempotent.
-            AutoRefreshHook.registerForegroundCallbacks(app)
-        }
         val settingsSnapshot = ConfigManager.snapshot()
 
         if (

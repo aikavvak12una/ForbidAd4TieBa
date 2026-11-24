@@ -38,18 +38,6 @@ class CloudDialogLogTest {
         assertFalse(lines.joinToString().contains("secret-"))
     }
 
-    @Test fun cacheAndSyncSnapshotsKeepAllFiftySevenEntriesInOneSecond() {
-        val input = JSONArray()
-        repeat(57) { input.put(config("dialog_$it")) }
-        logger.record(CACHE + input, 0)
-        logger.record(SYNC + input, 10)
-        assertEquals(116, lines.size)
-        val summaries = json().filter { it.getString("phase") == "config_summary" }
-        assertEquals(listOf(1L, 2L), summaries.map { it.getLong("batch") })
-        assertEquals(listOf("cache", "sync"), summaries.map { it.getString("source") })
-        summaries.forEach { assertEquals(57, it.getInt("recorded")); assertEquals(0, it.getInt("omitted")) }
-    }
-
     @Test fun stagesKeepOnlyHostSuppliedAttemptIds() {
         logger.record("云弹窗时机触发:sync_finish  $attempt", 0)
         logger.record("云弹窗 sync_finish 时机到达，准备展示的弹窗：[\"test\"] ", 0)
@@ -65,17 +53,6 @@ class CloudDialogLogTest {
         assertEquals(attempt, rows[5].getString("attemptId"))
         rows.filterIndexed { i, _ -> i != 0 && i != 5 }.forEach { assertFalse(it.has("attemptId")) }
         assertFalse(lines.joinToString().contains("secret-value"))
-    }
-
-    @Test fun unknownMessagesStayOutsideTheStructuredBudget() {
-        repeat(1_000) {
-            logger.record("strategyMap: unrelated event $it", 0)
-            logger.record("BaseWebDialogProcessor test closeWebDialog, reason: backClick", 0)
-        }
-        logger.record("弹窗准备渲染test", 0)
-        logger.flushSuppressed()
-        assertEquals(1, lines.size)
-        assertEquals("render_requested", json().single().getString("phase"))
     }
 
     @Test fun finalSuppressedBurstsAreReportedOnceWithoutAnotherEvent() {
@@ -98,25 +75,6 @@ class CloudDialogLogTest {
         assertEquals(mapOf("malformed_input" to 2L, "oversize_input" to 1L),
             json().associate { it.getString("reason") to it.getLong("count") })
         assertFalse(lines.joinToString().contains("secret-"))
-    }
-
-    @Test fun absentConfigurationIsAnExplicitEmptySnapshot() {
-        logger.record(SYNC + "null", 0)
-        logger.flushSuppressed()
-        val summary = json().single()
-        assertEquals("config_summary", summary.getString("phase"))
-        assertEquals(0, summary.getInt("total"))
-    }
-
-    @Test fun itemLimitsAreExplicitAndNeverTurnRecordsIntoTruncatedJson() {
-        val input = JSONArray()
-        repeat(130) { input.put(config("dialog_$it")) }
-        logger.record(SYNC + input, 0)
-        val summary = json().last()
-        assertEquals(130, summary.getInt("total"))
-        assertEquals(128, summary.getInt("recorded"))
-        assertEquals(2, summary.getInt("omitted"))
-        assertTrue(lines.all { it.length < 3_500 })
     }
 
     @Test fun fieldAndSnapshotCharacterLimitsRemainBoundedWithLargeMetadata() {

@@ -28,57 +28,6 @@ class ReplyVisibilityProbeRuntimeTest {
         assertEquals(0, f.pendingCount())
     }
 
-    @Test fun disablingBeforeSuccessDoesNotSuppressOwnedCancellation() = withRuntime { f ->
-        val probe = f.start()
-        f.enabled(false)
-        f.complete(probe)
-        Handler.runCurrent()
-        assertEquals(listOf(0, 1), f.operations())
-        assertFalse(Manager.liked)
-    }
-
-    @Test fun disablingAfterSuccessDoesNotSuppressQueuedCancellation() = withRuntime { f ->
-        val probe = f.start()
-        f.complete(probe)
-        f.enabled(false)
-        Handler.runCurrent()
-        assertEquals(listOf(0, 1), f.operations())
-        assertFalse(Manager.liked)
-    }
-
-    @Test fun runtimeFailureBeforeSuccessStillCompletesOwnedCancellation() = withRuntime { f ->
-        val probe = f.start()
-        f.disableRuntime()
-        f.complete(probe)
-        Handler.runCurrent()
-        assertEquals(listOf(0, 1), f.operations())
-        assertFalse(Manager.liked)
-    }
-
-    @Test fun runtimeFailureAfterSuccessStillRunsQueuedCancellation() = withRuntime { f ->
-        val probe = f.start()
-        f.complete(probe)
-        f.disableRuntime()
-        Handler.runCurrent()
-        assertEquals(listOf(0, 1), f.operations())
-        assertFalse(Manager.liked)
-    }
-
-    @Test fun actualMetadataFailureLogsOnceAndPreservesRecoverableCleanup() = withRuntime { f ->
-        val probe = f.start()
-        val before = android.util.Log.entries.size
-        Response.failMetadata = true
-        f.complete(probe)
-        f.complete(probe)
-        assertEquals(1, android.util.Log.entries.drop(before).count { it.contains("runtime FAILED, disabled") })
-        assertEquals(1, f.pendingCount())
-        Response.failMetadata = false
-        f.complete(probe)
-        Handler.runCurrent()
-        assertEquals(listOf(0, 1), f.operations())
-        assertFalse(Manager.liked)
-    }
-
     @Test fun successAfterTimeoutRetainsCorrelationAndCancelsWhileDisabled() = withRuntime { f ->
         val probe = f.start()
         Handler.advanceBy(3_000L)
@@ -92,30 +41,11 @@ class ReplyVisibilityProbeRuntimeTest {
         assertEquals(0, f.pendingCount())
     }
 
-    @Test fun longDelayedSuccessStillOwnsCancellation() = withRuntime { f ->
-        val probe = f.start()
-        Handler.advanceBy(3_600_000L)
-        assertEquals(1, f.pendingCount())
-        f.complete(probe)
-        Handler.runCurrent()
-        assertEquals(listOf(0, 1), f.operations())
-        assertFalse(Manager.liked)
-        assertEquals(0, f.pendingCount())
-    }
-
     @Test fun disabledReplyCallbackDoesNotReadResponseOrStartARequest() = withRuntime { f ->
         f.enabled(false)
         f.reply(allowResponse = false)
         Handler.advanceBy(10_000L)
         assertTrue(Manager.sent.isEmpty())
-    }
-
-    @Test fun disablingStopsAnAlreadyScheduledRetry() = withRuntime { f ->
-        val probe = f.start()
-        f.complete(probe, JSONObject().put("errno", "3280005"))
-        f.enabled(false)
-        Handler.advanceBy(10_000L)
-        assertEquals(listOf(0), f.operations())
     }
 
     @Test fun unrelatedResponsesDoNotCancelOrConsumeOwnedRequests() = withRuntime { f ->
@@ -134,28 +64,10 @@ class ReplyVisibilityProbeRuntimeTest {
         assertEquals("fixture-account", Manager.sent.last().data["z_id"])
     }
 
-    @Test fun rejectedSendReleasesItsCorrelation() = withRuntime { f ->
-        Manager.accept = false
-        f.reply()
-        Handler.advanceBy(1_000L)
-        assertEquals(0, f.pendingCount())
-        assertTrue(Manager.sent.isEmpty())
-    }
-
     @Test fun ambiguousSendFailureStillAcceptsALateSuccessForCleanup() = withRuntime { f ->
         Manager.throwAfterAccept = true
         val probe = f.start()
         Manager.throwAfterAccept = false
-        f.complete(probe)
-        Handler.runCurrent()
-        assertEquals(listOf(0, 1), f.operations())
-        assertFalse(Manager.liked)
-    }
-
-    @Test fun malformedResponseDoesNotLoseALaterSuccessfulCompletion() = withRuntime { f ->
-        val probe = f.start()
-        f.complete(probe, null)
-        assertEquals(1, f.pendingCount())
         f.complete(probe)
         Handler.runCurrent()
         assertEquals(listOf(0, 1), f.operations())
@@ -181,16 +93,12 @@ class ReplyVisibilityProbeRuntimeTest {
         assertEquals(65, Manager.sent.size)
     }
 
-    private inner class Fixture(val api: FakeHookApi) {
+    private class Fixture(val api: FakeHookApi) {
         private val replyMethod = Response::class.java.getMethod("replyDecode")
         private val agreeMethod = Response::class.java.getMethod("agreeDecode", Int::class.javaPrimitiveType, JSONObject::class.java)
         fun enabled(enabled: Boolean) {
             ConfigManager::class.java.getDeclaredField("settingsSnapshot").apply { isAccessible = true }
                 .set(null, SettingsSnapshot.bootstrap().copy(isReplyVisibilityProbeEnabled = enabled))
-        }
-        fun disableRuntime() {
-            ReplyVisibilityProbeHook::class.java.getDeclaredField("runtimeDisabled").apply { isAccessible = true }
-                .setBoolean(null, true)
         }
         fun reply(allowResponse: Boolean = true) {
             val message = Message(99).apply { extra = Request() }

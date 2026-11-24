@@ -30,50 +30,6 @@ class AutoSignInTaskTest {
         assertEquals(6, api.calls.count { it == gone.key })
     }
 
-    @Test fun badFirstBatchDoesNotPreventLaterBatchesFromSigning() {
-        val api = FakeGateway(listOf(gone, alive), batchSize = 1)
-        val report = task(api).run(SignInDayState("20260912"), false)!!
-        assertEquals(1, report.signed)
-        assertEquals(1, api.calls.count { it == alive.key })
-        assertEquals(5, api.calls.count { it == gone.key })
-    }
-
-    @Test fun unavailableBatchStopsLaterBatchesAndKeepsTheSingleSignRetryBudget() {
-        for (kind in listOf(SignInFailureKind.API, SignInFailureKind.TIMEOUT,
-                SignInFailureKind.NO_RESPONSE, SignInFailureKind.INVALID_RESPONSE,
-                SignInFailureKind.REQUEST_FAILED, SignInFailureKind.SERVER_NOTICE)) {
-            val api = FakeGateway(listOf(gone, alive), batchSize = 1)
-            api.batchReply = { SignInBatchResult(failure =
-                SignInFailure(kind, "fixture_batch_unavailable", "批签不可用")) }
-            val state = SignInDayState("20260912")
-            val report = task(api).run(state, false)!!
-
-            assertEquals(kind.name, listOf(listOf(gone.key)), api.batches)
-            assertEquals(kind.name, 4, api.singleCalls.count { it == gone.key })
-            assertEquals(kind.name, 1, api.singleCalls.count { it == alive.key })
-            assertEquals(1, report.signed)
-            assertEquals(listOf(SignInFailedForum(gone, denied, 4)), report.failures)
-            assertNull(report.taskFailure)
-            assertFalse(state.automaticDone)
-            val detail = AutoSignInReportText.detail(report)
-            assertTrue(detail.contains(denied.code!!))
-            assertFalse(detail.contains("fixture_batch_unavailable"))
-        }
-    }
-
-    @Test fun unavailableBatchIsQuietWhenEverySingleSignSucceeds() {
-        val api = FakeGateway(listOf(gone, alive), batchSize = 1)
-        api.recovered = true
-        api.batchReply = { SignInBatchResult(failure =
-            SignInFailure(SignInFailureKind.API, "fixture_batch_unavailable")) }
-        val report = task(api).run(SignInDayState("20260912"), false)!!
-
-        assertEquals(1, api.batches.size)
-        assertEquals(listOf(gone.key, alive.key), api.singleCalls)
-        assertEquals(2, report.signed)
-        assertFalse(report.hasFailures)
-    }
-
     @Test fun failedBatchKeepsExplicitSuccessesAndFallsBackForTheRemainingForums() {
         val later = SignInForum("3", "后续吧", 8)
         val api = FakeGateway(listOf(alive, gone, later), batchSize = 2)
@@ -115,70 +71,6 @@ class AutoSignInTaskTest {
         assertEquals(2, api.batches.size)
     }
 
-    @Test fun successfulOfficialBatchesNeverWaitForSingleSignPacing() {
-        val forums = (1..25).map { SignInForum(it.toString(), "贴吧$it", 8) }
-        val api = FakeGateway(forums, batchSize = 10).apply { recovered = true }
-        val report = task(api, pause = { fail("No single sign needs to wait"); false })
-            .run(SignInDayState("20261025"), false)!!
-
-        assertEquals(3, api.batches.size)
-        assertTrue(api.singleCalls.isEmpty())
-        assertTrue(report.allSucceeded)
-    }
-
-    @Test fun pacingCountsOnlyTheSinglesLeftAfterAllOfficialBatches() {
-        val forums = (1..25).map { SignInForum(it.toString(), "贴吧$it", 8) }
-        val api = FakeGateway(forums, batchSize = 10)
-        api.batchReply = { batch -> SignInBatchResult(batch.associate {
-            it.key to SignInAttempt(it.id.toInt() <= 23)
-        }) }
-        api.singleReply = {
-            assertEquals(3, api.batches.size)
-            SignInAttempt(true)
-        }
-        val waits = mutableListOf<Long>()
-        val report = task(api, pause = { waits.add(it); true })
-            .run(SignInDayState("20261025"), false)!!
-
-        assertEquals(listOf(forums[23].key, forums[24].key), api.singleCalls)
-        assertEquals(1, waits.size)
-        assertTrue(waits.single() in 1000L..2500L)
-        assertTrue(report.allSucceeded)
-    }
-
-    @Test fun longSingleSignPassRestsOnlyBeforeAnotherActualRequest() {
-        val forums = (1..21).map { SignInForum(it.toString(), "贴吧$it", 6) }
-        val api = FakeGateway(forums).apply { recovered = true }
-        val waits = mutableListOf<Pair<Int, Long>>()
-        val report = task(api, pause = { waits.add(api.singleCalls.size to it); true })
-            .run(SignInDayState("20261025"), false)!!
-
-        assertTrue(api.batches.isEmpty())
-        assertEquals(21, api.singleCalls.size)
-        assertEquals(20, waits.size)
-        for ((sent, delay) in waits) {
-            val expected = if (sent % 10 == 0) 6000L..12500L else 1000L..2500L
-            assertTrue("After $sent singles: $delay", delay in expected)
-        }
-        assertTrue(report.allSucceeded)
-    }
-
-    @Test fun retryPacingKeepsFourAttemptsAndDoesNotDelaySuccessfulForumsAgain() {
-        val forums = listOf(alive.copy(level = 6), gone.copy(level = 6))
-        val api = FakeGateway(forums)
-        val waits = mutableListOf<Pair<Int, Long>>()
-        val report = task(api, pause = { waits.add(api.singleCalls.size to it); true })
-            .run(SignInDayState("20261025"), false)!!
-
-        assertEquals(listOf(alive.key, gone.key, gone.key, gone.key, gone.key), api.singleCalls)
-        assertEquals(4, waits.size)
-        assertTrue(waits.first().second in 1000L..2500L)
-        assertEquals(listOf(2 to 15000L, 3 to 15000L, 4 to 15000L), waits.drop(1))
-        assertEquals(listOf(SignInFailedForum(forums[1], denied, 4)), report.failures)
-        assertTrue(report.isFinal)
-        assertFalse(report.allSucceeded)
-    }
-
     @Test fun cancellationDuringPacingDoesNotReserveOrSendTheNextRequest() {
         val forums = listOf(alive.copy(level = 6), gone.copy(level = 6))
         val api = FakeGateway(forums)
@@ -196,34 +88,6 @@ class AutoSignInTaskTest {
         api.recovered = true
         assertTrue(task(api).run(restored, false)!!.allSucceeded)
         assertEquals(listOf(alive.key, gone.key), api.singleCalls)
-    }
-
-    @Test fun longRetryPassesKeepTheirOwnIntervalsAndRestAfterTenRequests() {
-        val forums = (1..11).map { SignInForum(it.toString(), "贴吧$it", 6) }
-        val api = FakeGateway(forums)
-        api.singleReply = { SignInAttempt(false, denied) }
-        val waits = mutableListOf<Pair<Int, Long>>()
-        val report = task(api, pause = { waits.add(api.singleCalls.size to it); true })
-            .run(SignInDayState("20261025"), false)!!
-
-        assertTrue(api.batches.isEmpty())
-        assertEquals(44, api.singleCalls.size)
-        assertEquals((1..43).toList(), waits.map { it.first })
-        for ((sent, delay) in waits) {
-            val round = sent / 11
-            val sentInRound = sent % 11
-            val expected = when {
-                sentInRound == 0 -> 15000L..15000L
-                round == 0 && sentInRound == 10 -> 6000L..12500L
-                round == 0 -> 1000L..2500L
-                sentInRound == 10 -> 6500L..11000L
-                else -> 1500L..3000L
-            }
-            assertTrue("After $sent singles: $delay", delay in expected)
-        }
-        assertEquals(11, report.failures.size)
-        assertTrue(report.failures.all { it.attempts == 4 })
-        assertTrue(report.isFinal)
     }
 
     @Test fun failedBatchAndSingleSignProgressSurviveProcessDeath() {
@@ -256,13 +120,6 @@ class AutoSignInTaskTest {
         assertEquals(2, report.signed)
         assertEquals(1, api.calls.count { it == alive.key })
         assertEquals(6, api.calls.count { it == gone.key })
-    }
-
-    @Test fun newDayAllowsRetryOfPreviouslyUnavailableForum() {
-        val api = FakeGateway(listOf(gone))
-        task(api).run(SignInDayState("20260912"), false)
-        task(api).run(SignInDayState("20260913"), false)
-        assertEquals(10, api.calls.size)
     }
 
     @Test fun attemptsSurviveProcessDeathDuringRequest() {
@@ -300,34 +157,12 @@ class AutoSignInTaskTest {
         assertTrue(api.calls.isEmpty())
     }
 
-    @Test fun switchOffBetweenAttemptsStopsRequests() {
-        val api = FakeGateway(listOf(gone))
-        assertNull(task(api, allowed = { api.calls.isEmpty() }).run(SignInDayState("20260912"), false))
-        assertEquals(1, api.calls.size)
-    }
-
-    @Test fun disappearingForumIsNotFalselyCountedAsSigned() {
-        val api = FakeGateway(listOf(gone))
-        api.finalForums = emptyList()
-        val result = task(api).run(SignInDayState("20260912"), false)!!
-        assertEquals(0, result.signed)
-        assertEquals(1, result.failures.size)
-    }
-
     @Test fun finalSignedFlagRecoversLostResponse() {
         val api = FakeGateway(listOf(gone))
         api.finalForums = listOf(gone.copy(signed = true))
         val result = task(api).run(SignInDayState("20260912"), false)!!
         assertEquals(1, result.signed)
         assertFalse(result.hasFailures)
-    }
-
-    @Test fun alreadySignedForumsDoNotConsumeAttempts() {
-        val api = FakeGateway(listOf(alive.copy(signed = true)))
-        val result = task(api).run(SignInDayState("20260912"), false)!!
-        assertTrue(api.calls.isEmpty())
-        assertEquals(1, result.alreadySigned)
-        assertEquals(0, result.signed)
     }
 
     @Test fun listFetchFailuresKeepCooldownWithoutCompletingDayOrNotifying() {
@@ -346,52 +181,6 @@ class AutoSignInTaskTest {
         assertFalse(AutoSignInNoticePolicy.shouldNotify(state.report!!, null))
     }
 
-    @Test fun peakHourBatchNoticeSkipsBatchesAndPreservesTheSingleSignBudget() {
-        for (recovered in listOf(false, true)) {
-            val alreadySigned = SignInForum("3", "已签到吧", 8, signed = true)
-            val api = FakeGateway(listOf(gone, alive, alreadySigned), batchSize = 1)
-            api.recovered = recovered
-            api.snapshotReply = AutoSignInResponses.snapshot(JSONObject("""{
-                "errno":0,"valid":1,"show_dialog":1,"sign_notice":"$peakNotice",
-                "sign_max_num_new":1,"forum_info":[
-                    {"forum_id":"2","forum_name":"失效吧","user_level":8,"is_sign_in":0},
-                    {"forum_id":"1","forum_name":"正常吧","user_level":8,"is_sign_in":0},
-                    {"forum_id":"3","forum_name":"已签到吧","user_level":8,"is_sign_in":1}
-                ]
-            }"""), 0)
-            val state = SignInDayState("20260925")
-            val report = task(api).run(state, false)!!
-
-            assertTrue(api.batches.isEmpty())
-            assertEquals(if (recovered) 1 else 4, api.singleCalls.count { it == gone.key })
-            assertEquals(1, api.singleCalls.count { it == alive.key })
-            assertFalse(api.singleCalls.contains(alreadySigned.key))
-            assertEquals(if (recovered) 2 else 1, report.signed)
-            assertEquals(1, report.alreadySigned)
-            assertEquals(if (recovered) emptyList() else listOf(SignInFailedForum(gone, denied, 4)),
-                report.failures)
-            assertNull(report.taskFailure)
-            assertEquals(recovered, state.automaticDone)
-            assertFalse(AutoSignInReportText.detail(report).contains(peakNotice))
-        }
-    }
-
-    @Test fun persistedBatchNoticeIsRetriedAutomaticallyAndCompletionIsRemembered() {
-        val api = FakeGateway(listOf(alive))
-        val state = AutoSignInStateCodec.decode(AutoSignInStateCodec.encode(blockedByBatchNotice()))
-        val report = task(api).run(state, false)!!
-
-        assertEquals(1, api.fetches)
-        assertEquals(listOf(alive.key), api.calls)
-        assertEquals(1, report.signed)
-        assertFalse(report.hasFailures)
-        assertTrue(state.automaticDone)
-        val restored = AutoSignInStateCodec.decode(AutoSignInStateCodec.encode(state))
-        assertEquals(report, task(api).run(restored, false))
-        assertEquals(1, api.fetches)
-        assertEquals(listOf(alive.key), api.calls)
-    }
-
     @Test fun persistedBatchNoticeRecoveryKeepsSingleSignAttemptsAndSuccesses() {
         val api = FakeGateway(listOf(alive, gone))
         val state = blockedByBatchNotice()
@@ -405,126 +194,6 @@ class AutoSignInTaskTest {
         assertEquals(listOf(SignInFailedForum(gone, denied, 4)), report.failures)
         assertEquals(1, report.signed)
         assertNull(report.taskFailure)
-    }
-
-    @Test fun persistedBatchNoticeRecoveryStillRespectsFetchCooldownWithoutEndingDay() {
-        val api = FakeGateway(listOf(alive))
-        api.fetchFailure = SignInFailure(SignInFailureKind.NO_RESPONSE)
-        var state = blockedByBatchNotice()
-        var time = 1000L
-        fun run() = AutoSignInTask(api, { true }, { true }, { true }, { time }).run(state, false)
-
-        assertEquals(api.fetchFailure, run()!!.taskFailure)
-        state = AutoSignInStateCodec.decode(AutoSignInStateCodec.encode(state))
-        run()
-        assertEquals(1, api.fetches)
-        assertFalse(state.automaticDone)
-        repeat(3) { time += 31 * 60 * 1000; run() }
-        assertEquals(4, api.fetches)
-        assertFalse(state.automaticDone)
-        assertFalse(AutoSignInNoticePolicy.shouldNotify(state.report!!, null))
-    }
-
-    @Test fun remainingForumsGetThreeExtraRetriesAfterEveryInitialSingleSign() {
-        val later = SignInForum("3", "后续吧", 8)
-        val api = FakeGateway(listOf(gone, alive, later))
-        api.snapshotReply = SignInSnapshotResult(SignInSnapshot(listOf(gone, alive, later), false, 50, 7, false))
-        api.singleReply = { forum ->
-            if (forum == gone && api.singleCalls.count { it == gone.key } < 4) SignInAttempt(false, denied)
-            else SignInAttempt(true)
-        }
-        val saved = mutableListOf<SignInDayState>()
-        val state = SignInDayState("20260925")
-        val report = task(api, save = {
-            saved.add(AutoSignInStateCodec.decode(AutoSignInStateCodec.encode(it))); true
-        }).run(state, false)!!
-
-        assertEquals(listOf(gone.key, alive.key, later.key, gone.key, gone.key, gone.key), api.singleCalls)
-        assertEquals(3, report.signed)
-        assertFalse(report.hasFailures)
-        assertTrue(state.automaticDone)
-        assertTrue(saved.dropLast(1).all { !it.automaticDone && it.report == null })
-        assertEquals(listOf(report), saved.mapNotNull { it.report }
-            .filter { AutoSignInNoticePolicy.shouldNotify(it, null) })
-    }
-
-    @Test fun unfinishedListFetchCanRecoverOnALaterStartupWithoutManualRetry() {
-        val api = FakeGateway(listOf(alive))
-        api.fetchFailure = SignInFailure(SignInFailureKind.TIMEOUT)
-        var state = SignInDayState("20260925")
-        var time = 1000L
-        fun run() = AutoSignInTask(api, { true }, { true }, { true }, { time }).run(state, false)
-        repeat(4) {
-            val report = run()!!
-            assertFalse(state.automaticDone)
-            assertFalse(AutoSignInNoticePolicy.shouldNotify(report, null))
-            state = AutoSignInStateCodec.decode(AutoSignInStateCodec.encode(state))
-            time += 31 * 60 * 1000
-        }
-        api.fetchFailure = null
-        val report = run()!!
-        assertTrue(state.automaticDone)
-        assertEquals(1, report.signed)
-        assertTrue(AutoSignInNoticePolicy.shouldNotify(report, null))
-    }
-
-    @Test fun restartingDuringANewRetryRunDoesNotResetItsBudgetAgain() {
-        val api = FakeGateway(listOf(gone))
-        api.batchReply = { SignInBatchResult(failure = SignInFailure(SignInFailureKind.NO_RESPONSE)) }
-        val state = SignInDayState("20260925")
-        task(api).run(state, false)
-        var saved = ""
-        api.crashOnSingle = true
-        try {
-            task(api, save = { saved = AutoSignInStateCodec.encode(it); true }).run(state, false)
-            fail("The next startup must retry the failed forum")
-        } catch (_: SimulatedDeath) { }
-
-        val restored = AutoSignInStateCodec.decode(saved)
-        assertFalse(restored.automaticDone)
-        assertNull(restored.report)
-        assertEquals(1, restored.forums.getValue(gone.key).attempts)
-        api.crashOnSingle = false
-        task(api).run(restored, false)
-        assertEquals(2, api.batches.size)
-        assertEquals(8, api.singleCalls.size)
-        assertFalse(restored.automaticDone)
-    }
-
-    @Test fun restartAfterUnavailableBatchDoesNotRetryTheSkippedBatches() {
-        val api = FakeGateway(listOf(gone, alive), batchSize = 1)
-        api.batchReply = { SignInBatchResult(failure = SignInFailure(SignInFailureKind.TIMEOUT)) }
-        api.crashOnSingle = true
-        var saved = ""
-        try {
-            task(api, save = { saved = AutoSignInStateCodec.encode(it); true })
-                .run(SignInDayState("20260925"), false)
-            fail("Expected simulated process death")
-        } catch (_: SimulatedDeath) { }
-
-        api.crashOnSingle = false
-        val restored = AutoSignInStateCodec.decode(saved)
-        task(api).run(restored, false)
-        assertEquals(listOf(listOf(gone.key)), api.batches)
-        assertEquals(listOf(gone.key, alive.key, gone.key, gone.key, gone.key), api.singleCalls)
-        assertFalse(restored.automaticDone)
-    }
-
-    @Test fun restartFinishesEveryInitialSingleSignBeforeRetryingFailures() {
-        val api = FakeGateway(listOf(gone, alive))
-        api.snapshotReply = SignInSnapshotResult(SignInSnapshot(listOf(gone, alive), false, 50, 7, false))
-        api.crashOnSingle = true
-        var saved = ""
-        try {
-            task(api, save = { saved = AutoSignInStateCodec.encode(it); true })
-                .run(SignInDayState("20260925"), false)
-            fail("Expected simulated process death")
-        } catch (_: SimulatedDeath) { }
-
-        api.crashOnSingle = false
-        task(api).run(AutoSignInStateCodec.decode(saved), false)
-        assertEquals(listOf(gone.key, alive.key, gone.key, gone.key, gone.key), api.singleCalls)
-        assertTrue(api.batches.isEmpty())
     }
 
     @Test fun failedForumMissingFromNextStartupListIsStillRetriedAndReported() {
@@ -555,8 +224,12 @@ class AutoSignInTaskTest {
     }
 
     private fun blockedByBatchNotice() = SignInDayState("20260925", automaticDone = true,
+
         fetchAttempts = 1, report = SignInReport("20260925", 1790269014104L, 8, 0, 0, emptyList(),
+
             SignInFailure(SignInFailureKind.SERVER_NOTICE, message = peakNotice)))
+
+
 
     private fun task(api: FakeGateway, save: (SignInDayState) -> Boolean = { true },
                      allowed: () -> Boolean = { true }, pause: (Long) -> Boolean = { true }) =

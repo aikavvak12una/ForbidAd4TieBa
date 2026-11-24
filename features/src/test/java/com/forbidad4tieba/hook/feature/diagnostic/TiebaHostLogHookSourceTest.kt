@@ -1,43 +1,20 @@
 package com.forbidad4tieba.hook.feature.diagnostic
 
 import java.io.File
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 class TiebaHostLogHookSourceTest {
-    @Test
-    fun hostLogCallbackOnlyUsesBoundedInMemoryLogging() {
-        val source = readSource(
-            "features/src/main/java/com/forbidad4tieba/hook/feature/diagnostic/TiebaHostLogHook.kt",
-        )
-
-        assertTrue(source.contains("DetailedLogSession.recordTieba("))
-        assertTrue(source.contains("ConfigManager.snapshot().isDetailedLoggingEnabled"))
-        assertFalse(source.contains("MediaStore"))
-        assertFalse(source.contains("FileOutputStream"))
-        assertFalse(source.contains("OutputStream"))
-        assertFalse(source.contains("contentResolver"))
-    }
-
-    @Test fun structuredEvidenceUsesTheExistingDialogLogScopeBeforeGeneralRateLimiting() {
-        val source = readSource("features/src/main/java/com/forbidad4tieba/hook/feature/diagnostic/TiebaHostLogHook.kt")
-        assertTrue(source.contains("space == \"dialog\" && tag == \"YunDialogManager\""))
-        assertTrue(source.indexOf("cloudDialogLog.value.record(") < source.indexOf("budget.acquire("))
-        val parser = readSource("features/src/main/java/com/forbidad4tieba/hook/feature/diagnostic/CloudDialogLog.kt")
-        assertFalse(parser.contains("Class.forName"))
-        assertFalse(parser.contains("getDeclared"))
-        assertFalse(parser.contains("getSharedPreferences"))
-        assertFalse(parser.contains("openConnection"))
-    }
-
-    private fun readSource(relativePath: String): String {
-        var directory = File(requireNotNull(System.getProperty("user.dir"))).canonicalFile
-        repeat(5) {
-            val candidate = File(directory, relativePath)
-            if (candidate.isFile) return candidate.readText()
-            directory = directory.parentFile ?: return@repeat
+    @Test fun hostLogCallbacksKeepDiskAndDiscoveryOffTheHotPath() {
+        val root = File(checkNotNull(System.getProperty("project.root")))
+        val directory = File(root, "features/src/main/java/com/forbidad4tieba/hook/feature/diagnostic")
+        val callback = File(directory, "TiebaHostLogHook.kt").readText()
+        assertTrue(callback.contains("ConfigManager.snapshot().isDetailedLoggingEnabled"))
+        assertTrue(callback.contains("DetailedLogSession.recordTieba("))
+        for (name in listOf("TiebaHostLogHook.kt", "CloudDialogLog.kt")) {
+            val source = File(directory, name).readText()
+            for (forbidden in listOf("FileOutputStream", "contentResolver", "Class.forName", "getDeclared", "openConnection"))
+                assertFalse("$name: $forbidden", source.contains(forbidden))
         }
-        error("Source file not found: $relativePath")
     }
 }

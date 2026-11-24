@@ -19,7 +19,14 @@ internal class TestPreferences<V>(
         private set
     val writes: Int get() = applies + commits
     private val pending = linkedMapOf<String, V?>()
+    private val listeners = linkedSetOf<SharedPreferences.OnSharedPreferenceChangeListener>()
     private var clear = false
+
+    val listenerCount: Int get() = listeners.size
+
+    fun notifyChanged(key: String) {
+        listeners.toList().forEach { it.onSharedPreferenceChanged(prefs, key) }
+    }
 
     private fun publish() {
         val writable = values as MutableMap<String, V>
@@ -53,6 +60,14 @@ internal class TestPreferences<V>(
         when (method.name) {
             "contains" -> values.containsKey(args!![0])
             "edit" -> { check(editorMethods.isNotEmpty()) { "Read-only test preferences" }; edits++; editor }
+            "registerOnSharedPreferenceChangeListener" -> {
+                listeners += args!![0] as SharedPreferences.OnSharedPreferenceChangeListener
+                null
+            }
+            "unregisterOnSharedPreferenceChangeListener" -> {
+                listeners -= args!![0] as SharedPreferences.OnSharedPreferenceChangeListener
+                null
+            }
             else -> {
                 check(method.name in readMethods) { "Unexpected preferences call: ${method.name}" }
                 when (method.name) {
@@ -66,7 +81,6 @@ internal class TestPreferences<V>(
                         }
                         (if (typedDefaults) typed else value) ?: args[1]
                     }
-                    "registerOnSharedPreferenceChangeListener", "unregisterOnSharedPreferenceChangeListener" -> null
                     else -> error("Unexpected preferences call: ${method.name}")
                 }
             }

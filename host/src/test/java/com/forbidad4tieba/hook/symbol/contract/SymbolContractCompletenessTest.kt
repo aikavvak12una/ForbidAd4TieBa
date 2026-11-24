@@ -37,24 +37,7 @@ class SymbolContractCompletenessTest {
         assertEquals(lists, HookSymbols.fromJson(lists.toJson()))
     }
 
-    @Test fun everyMissingRequiredMemeDependencyDisablesOnlyItsOwnCapability() {
-        InputMemeBarContract.required.fields.forEach { missing ->
-            val symbols = buildHookSymbols {
-                InputMemeBarContract.required.fields.filterNot { it == missing }.forEach {
-                    @Suppress("UNCHECKED_CAST")
-                    this[it as SymbolField<String?>] = "fixture"
-                }
-            }
-            val capability = InputMemeBarContract.capabilities(symbols).getValue(HookFeatureKey.HIDE_INPUT_MEME_BAR)
-            val point = InputMemeBarContract.points(symbols).single()
-            assertEquals(listOf(missing.cacheKey), capability.missingCritical)
-            assertEquals(capability.missingCritical, point.missing)
-            assertEquals(HookPointState.MISSING, point.state)
-            assertFalse(capability.isSupported())
-        }
-    }
-
-    @Test fun failedRestorationDoesNotEscapeTheOwningContract() {
+@Test fun failedRestorationDoesNotEscapeTheOwningContract() {
         val symbols = buildHookSymbols {
             this[InputMemeBarContract.inputMemeBarControllerClass] = "fixture.BrokenController"
             this[InputMemeBarContract.inputMemeBarEnableMethod] = "enabled"

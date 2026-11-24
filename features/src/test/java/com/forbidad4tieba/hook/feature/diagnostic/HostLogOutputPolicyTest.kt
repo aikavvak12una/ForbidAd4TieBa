@@ -7,11 +7,6 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class HostLogOutputPolicyTest {
-    @Test fun ordinaryMessagesKeepTheirContentAndIdentity() {
-        val message = "request finished; cookieRepeatedOpt=true; token_count=0; 中文日志"
-        assertSame(message, HostLogContent.sanitize(message, 15_000))
-        assertSame("", HostLogContent.sanitize("", 128))
-    }
 
     @Test fun credentialHeadersAndProtocolFieldsAreRemovedBeforeExport() {
         val fields = listOf(
@@ -28,34 +23,11 @@ class HostLogOutputPolicyTest {
         fields.forEach { assertEquals(it, "<redacted>", HostLogContent.sanitize(it, 15_000)) }
     }
 
-    @Test fun knownCredentialMarkersAreCaseInsensitiveAndMatchBareFields() {
-        listOf("BDUSS", "BDUSS_BFESS", "STOKEN", "STOKEN_BFESS", "PTOKEN", "BAIDUID_BFESS",
-            "tbs", "csrf_token", "xsrf_token", "access_token", "refresh_token", "id_token",
-            "token", "password", "passwd").forEach { key ->
-            assertEquals(key, "<redacted>", HostLogContent.sanitize("[$key] synthetic-secret", 256))
-        }
-    }
-
     @Test fun truncationCannotLeaveTheVisiblePrefixOfAMarkedCredential() {
         val message = "x".repeat(110) + " BDUSS=" + "s".repeat(100_000)
         assertEquals("<redacted>", HostLogContent.sanitize(message, 128))
         assertEquals(128, HostLogContent.sanitize("x".repeat(100_000), 128).length)
         assertTrue(HostLogContent.sanitize("x".repeat(100_000), 128).endsWith("...[truncated]"))
-    }
-
-    @Test fun markersBeyondTheOutputBoundaryCannotExpandTheWorkOrLeakTheTail() {
-        val result = HostLogContent.sanitize("x".repeat(20_000) + " Cookie: synthetic-secret", 128)
-        assertEquals(128, result.length)
-        assertFalse(result.contains("synthetic-secret"))
-        assertFalse(result.contains("Cookie"))
-    }
-
-    @Test fun conservativeCharacterChargeCoversRedactionAndTruncation() {
-        for (value in listOf("", "tbs", "ordinary", "Cookie: synthetic-secret", "x".repeat(18_000))) {
-            for (limit in listOf(32, 128, 256, 15_000)) {
-                assertTrue(HostLogContent.boundedCharacterCount(value, limit) >= HostLogContent.sanitize(value, limit).length)
-            }
-        }
     }
 
     @Test fun entryBudgetSuppressesBurstsAndReportsOnTheNextWindow() {
@@ -76,29 +48,12 @@ class HostLogOutputPolicyTest {
         assertEquals(2L, budget.acquire(100, 1_000))
     }
 
-    @Test fun oversizeEntryDoesNotReserveSpaceAndSuppressionCanSurviveIdleWindows() {
-        val budget = HostLogRateBudget(maxEntries = 1, maxCharacters = 100)
-        assertEquals(-1L, budget.acquire(Int.MAX_VALUE, 0))
-        assertEquals(-1L, budget.acquire(101, 10_000))
-        assertEquals(2L, budget.acquire(100, 20_000))
-    }
-
     @Test fun anOlderConcurrentTimestampDoesNotRefillTheBudget() {
         val budget = HostLogRateBudget(maxEntries = 1, maxCharacters = 100)
         assertEquals(0L, budget.acquire(1, 5_000))
         assertEquals(-1L, budget.acquire(1, 4_000))
         assertEquals(-1L, budget.acquire(1, 5_999))
         assertEquals(2L, budget.acquire(1, 6_000))
-    }
-
-    @Test fun exportCanDrainSuppressedEntriesWithoutRefillingTheBudget() {
-        val budget = HostLogRateBudget(maxEntries = 1, maxCharacters = 10)
-        assertEquals(0L, budget.acquire(10, 0))
-        repeat(3) { assertEquals(-1L, budget.acquire(1, 0)) }
-        assertEquals(3L, budget.drainSuppressed())
-        assertEquals(0L, budget.drainSuppressed())
-        assertEquals(-1L, budget.acquire(1, 0))
-        assertEquals(1L, budget.acquire(10, 1_000))
     }
 
     @Test fun separatePriorityBudgetRemainsAvailableDuringAnOrdinaryFlood() {

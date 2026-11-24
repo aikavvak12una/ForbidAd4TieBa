@@ -261,7 +261,7 @@ object UiText {
         fun replyVisibilityProbeIntervalDesc(min: Int, max: Int, defaultValue: Int): String =
             "每次检测间隔，范围 $min-$max ms"
         const val DISABLE_AUTO_REFRESH_LABEL = "禁止自动刷新"
-        const val DISABLE_AUTO_REFRESH_DESC = "避免首页被强制重置刷新列表"
+        const val DISABLE_AUTO_REFRESH_DESC = "保留首页缓存，仅阻止进入推荐页和回到前台时的自动刷新。下拉、点击首页和分页按贴吧原逻辑运行；其他自动刷新不拦截，无缓存时需手动加载。"
         const val DISABLE_PB_GESTURE_FONT_SCALE_LABEL = "禁用调整字号手势"
         const val DISABLE_PB_GESTURE_FONT_SCALE_DESC = "禁用帖子页双指缩放调整字号"
         const val FREE_COPY_LABEL = "自由复制"

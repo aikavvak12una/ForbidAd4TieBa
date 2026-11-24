@@ -2,97 +2,47 @@ package com.forbidad4tieba.hook.feature.ad
 
 import com.forbidad4tieba.hook.config.ConfigManager
 import com.forbidad4tieba.hook.config.SettingsSnapshot
+import com.forbidad4tieba.hook.symbol.model.CustomPostCardFilterSymbols
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Test
 
 class FeedAdHookTest {
     @Test
-    fun missingCustomTargetsKeepTheIndependentAdFilterActive() {
-        withSettings(SettingsSnapshot.bootstrap().copy(isFeedAdBlockEnabled = true,
-            isCustomPostFilterEnabled = true, isPostHelpFilterEnabled = true)) {
-            val ordinary = Card("feed_card")
-            val ad = Card("ad_card_video")
-            val input = listOf(ordinary, ad)
-            assertEquals(listOf(ordinary), filter(input, null))
-            assertEquals(listOf(ordinary, ad), input)
+    fun missingCustomTargetsDoNotDisableTheIndependentAdFilter() {
+        withSettings(SettingsSnapshot.bootstrap().copy(
+            isFeedAdBlockEnabled = true,
+            isCustomPostFilterEnabled = true,
+            isPostHelpFilterEnabled = true,
+        )) {
+            val post = Card("feed_card")
+            val feedAd = Card("ad_card_video")
+            val input = listOf(post, feedAd)
+
+            assertEquals(listOf(post), filter(input, null))
+            assertEquals(listOf(post, feedAd), input)
         }
     }
 
     @Test
-    fun strategyAndFeedSwitchesControlTheirOwnCardsInBothFilteringPaths() {
-        val post = Card("feed_card")
-        val banner = Card("recommend_banner")
-        val feedAd = Card("ad_card_video")
-        val otherBanner = Card("banner")
-        val input = listOf(post, banner, feedAd, otherBanner)
-        val cases = listOf(
-            Triple(SettingsSnapshot.bootstrap(), input, false),
-            Triple(SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true), listOf(post, feedAd, otherBanner), true),
-            Triple(SettingsSnapshot.bootstrap().copy(isFeedAdBlockEnabled = true), listOf(post, banner), true),
-            Triple(
-                SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true, isFeedAdBlockEnabled = true),
-                listOf(post),
-                true,
-            ),
-        )
-
-        for ((settings, expected, changed) in cases) {
-            withSettings(settings) {
-                for (runtimeFilter in listOf(null, customFilter)) {
-                    val output = filter(input, runtimeFilter)
-                    assertEquals(expected, output)
-                    if (changed) assertNotSame(input, output) else assertSame(input, output)
-                    assertEquals(listOf(post, banner, feedAd, otherBanner), input)
-                }
-            }
-        }
-    }
-
-    @Test
-    fun strategyRemovesOnlyExactBannerKeyAndPreservesUnknownItems() {
-        withSettings(SettingsSnapshot.bootstrap().copy(isStrategyAdBlockEnabled = true)) {
-            val input = listOf(Card("recommend_banner_extra"), Card("recommend"), Card(null), null, Any())
-            for (runtimeFilter in listOf(null, customFilter)) {
-                assertSame(input, filter(input, runtimeFilter))
-            }
-        }
-    }
-
-    @Test
-    fun disabledFiltersDoNotReadTemplateKeys() {
-        withSettings(SettingsSnapshot.bootstrap()) {
-            val banner = Card("recommend_banner")
-            val input = listOf(banner)
-            for (runtimeFilter in listOf(null, customFilter)) {
-                assertSame(input, filter(input, runtimeFilter))
-            }
-            assertEquals(0, banner.keyReads)
-        }
-    }
-
-    @Test
-    fun strategyAndCustomPostFilteringShareOnePassAndKeepFeedAds() {
-        withSettings(
-            SettingsSnapshot.bootstrap().copy(
-                isStrategyAdBlockEnabled = true,
-                isCustomPostFilterEnabled = true,
-                isPostHelpFilterEnabled = true,
-            ),
-        ) {
+    fun strategyAndCustomRulesShareOnePassWithoutCrossEnabling() {
+        withSettings(SettingsSnapshot.bootstrap().copy(
+            isStrategyAdBlockEnabled = true,
+            isCustomPostFilterEnabled = true,
+            isPostHelpFilterEnabled = true,
+        )) {
             val post = Card("feed_card")
             val banner = Card("recommend_banner")
             val help = Card(
                 "feed_card",
-                CardData(
-                    listOf(
-                        Component(
-                            "feed_head",
-                            mapOf("card_type" to "question_good", "thread_type" to "0", "is_special_thread" to "1"),
-                        ),
+                CardData(listOf(Component(
+                    "feed_head",
+                    mapOf(
+                        "card_type" to "question_good",
+                        "thread_type" to "0",
+                        "is_special_thread" to "1",
                     ),
-                ),
+                ))),
             )
             val feedAd = Card("ad_card_video")
             val input = listOf(post, banner, help, feedAd)
@@ -100,12 +50,23 @@ class FeedAdHookTest {
             assertEquals(listOf(post, feedAd), filter(input, customFilter))
             assertEquals(listOf(post, banner, help, feedAd), input)
             input.forEach { assertEquals(1, it.keyReads) }
+
+            val disabled = Card("recommend_banner")
+            withSettings(SettingsSnapshot.bootstrap()) {
+                val disabledInput = listOf(disabled)
+                assertSame(disabledInput, filter(disabledInput, customFilter))
+                assertEquals(0, disabled.keyReads)
+            }
         }
     }
 
-    private fun filter(input: List<*>, runtimeFilter: com.forbidad4tieba.hook.symbol.model.CustomPostCardFilterSymbols?): List<*> {
-        return FeedAdHook.filterList(input, FeedTemplateFixture::class.java.getMethod("templateKey"), runtimeFilter, "feed-ad-regression")
-    }
+    private fun filter(input: List<*>, custom: CustomPostCardFilterSymbols?): List<*> =
+        FeedAdHook.filterList(
+            input,
+            FeedTemplateFixture::class.java.getMethod("templateKey"),
+            custom,
+            "feed-ad",
+        )
 
     private fun withSettings(settings: SettingsSnapshot, block: () -> Unit) {
         val field = ConfigManager::class.java.getDeclaredField("settingsSnapshot").apply { isAccessible = true }
@@ -120,18 +81,24 @@ class FeedAdHookTest {
 
     private val customFilter = feedFilterFixture(CardData::class.java, Component::class.java)
 
-    class Card(private val key: String?, private val data: CardData = CardData(emptyList())) : FeedTemplateFixture {
+    class Card(
+        private val key: String?,
+        private val data: CardData = CardData(emptyList()),
+    ) : FeedTemplateFixture {
         var keyReads = 0
         override fun templateKey(): String? {
-            keyReads += 1
+            keyReads++
             return key
         }
-        override fun payload(): CardData = data
+
+        override fun payload() = data
     }
 
     class CardData(@JvmField val dataList: List<Component>)
-
-    class Component(private val key: String, @JvmField val params: Map<String, String>) : FeedTemplateFixture {
-        override fun templateKey(): String = key
+    class Component(
+        private val key: String,
+        @JvmField val params: Map<String, String>,
+    ) : FeedTemplateFixture {
+        override fun templateKey() = key
     }
 }

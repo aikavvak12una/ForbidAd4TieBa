@@ -5,7 +5,6 @@ import com.forbidad4tieba.hook.contracts.Diagnostics
 import com.forbidad4tieba.hook.diagnostic.HookSymbolScanDiagnostics
 import com.forbidad4tieba.hook.symbol.model.*
 import com.forbidad4tieba.hook.symbol.scan.HookSymbolScanSession
-import com.forbidad4tieba.hook.symbol.scan.AutoRefreshDexScanner
 import com.forbidad4tieba.hook.symbol.scan.EnterForumCapsuleDexScanner
 import com.forbidad4tieba.hook.symbol.scan.GameFloatingBarDexScanner
 import com.forbidad4tieba.hook.symbol.scan.ScanReflection
@@ -35,12 +34,6 @@ internal object DexKitSemanticScanner {
     private const val FREE_COPY_POST_DATA_CLASS = "com.baidu.tieba.tbadkcore.data.PostData"
     private const val FREE_COPY_THREAD_DATA_CLASS = "com.baidu.tbadk.core.data.ThreadData"
     private const val TEXT_VIEW_CLASS = "android.widget.TextView"
-    /**
-     * Log literal emitted by the host's cold-start tracker when a homepage
-     * network request begins. Used as the semantic anchor for locating every
-     * feed refresh entry point; see [scanRecPersonalizeRequestMethods].
-     */
-    private const val HOME_NET_START_ANCHOR = "onHomepageNetStart"
     private const val LOW_SCORE_SCHEDULER_CLASS = "com.baidu.tieba.parser.LowScoreScheduler"
     private const val COLD_START_DELAY_SCHEDULE_CLASS = "com.baidu.searchbox.launch.ColdStartDelaySchedule"
 
@@ -357,76 +350,6 @@ internal object DexKitSemanticScanner {
             }
         }
     }
-
-    fun scanAutoRefresh(
-        sourcePaths: List<String>,
-        ownerClassName: String,
-        logger: ScanLogger? = null,
-    ): List<DexAutoRefreshMatch> = withBridge(sourcePaths, logger, "AutoRefreshHook.Dex", emptyList()) { bridge ->
-        exactMethods(bridge, ownerClassName, logger).mapNotNull(AutoRefreshDexScanner::match)
-    }
-
-    /**
-     * Finds every home-feed network request entry point the host exposes.
-     *
-     * The host marks the start of a homepage network request by calling its
-     * cold-start tracker, whose body carries the literal "onHomepageNetStart".
-     * That string is the semantic anchor: R8 renames the tracker class, the
-     * tracker method and the request methods, but the log literal survives, and
-     * every refresh transport has to pass through the tracker. The callers of
-     * that tracker are therefore exactly the set of methods that must be blocked
-     * — across whatever classes the host currently splits them into.
-     *
-     * Matching a fixed owner class plus a fixed invoked method name instead
-     * (the previous rule) silently loses refresh paths: on 22.10.1.0 it found
-     * only 1 of the 4 real entry points, because the host had moved two of them
-     * onto a second class and renamed the tracker method.
-     */
-    fun scanRecPersonalizeRequestMethods(
-        sourcePaths: List<String>,
-        logger: ScanLogger? = null,
-    ): List<DexRecPersonalizeRequestMatch> =
-        withBridge(sourcePaths, logger, "AutoRefreshHook.RecRequestDex", emptyList()) { bridge ->
-            val trackers = try {
-                bridge.findMethod(
-                    FindMethod.create()
-                        .searchPackages("com.baidu.tieba")
-                        .matcher(
-                            MethodMatcher.create()
-                                .addUsingString(HOME_NET_START_ANCHOR, StringMatchType.Contains),
-                        ),
-                ).toList()
-            } catch (t: Throwable) {
-                recordIssue(
-                    logger,
-                    "$TAG.RecRequestTracker",
-                    HookSymbolScanDiagnostics.formatScanException(t),
-                )
-                return@withBridge emptyList()
-            }
-            if (trackers.isEmpty()) {
-                recordIssue(
-                    logger,
-                    "$TAG.RecRequestTracker",
-                    "no method carries anchor '$HOME_NET_START_ANCHOR'",
-                )
-                return@withBridge emptyList()
-            }
-            trackers
-                .flatMap { tracker -> tracker.callers.orEmpty().toList() }
-                .distinctBy { it.descriptor }
-                .mapNotNull { method ->
-                    if (Modifier.isStatic(method.modifiers) || method.returnTypeName != "void") {
-                        return@mapNotNull null
-                    }
-                    DexRecPersonalizeRequestMatch(
-                        ownerClassName = method.declaredClassName,
-                        ownerMethodName = method.methodName,
-                        paramTypes = method.paramTypeNames,
-                        evidence = "homeNetStart",
-                    )
-                }
-        }
 
     /**
      * Scans LowScoreScheduler for the boolean(String) method used to decide

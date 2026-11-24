@@ -1,10 +1,10 @@
 package com.baidu.tieba.homepage.personalize.bigday
 
-/** Type-only fixture for cached member validation; no host or Android behavior is executed. */
+import android.view.ViewGroup
+
+/** Type-only fixture; no Android behavior is executed. */
 @Suppress("UNUSED_PARAMETER")
-class BigdaySwipeRefreshLayout {
-    fun renamed(refreshing: Boolean, notify: Boolean) {}
-    fun wrongParameter(refreshing: Boolean) {}
-    fun wrongReturn(refreshing: Boolean, notify: Boolean): Boolean = false
-    companion object { @JvmStatic fun staticGesture(refreshing: Boolean, notify: Boolean) {} }
+class BigdaySwipeRefreshLayout : ViewGroup(null) {
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {}
+    fun setRefreshing(refreshing: Boolean) {}
 }

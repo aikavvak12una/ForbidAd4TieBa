@@ -170,10 +170,8 @@ data class SearchBoxTextAdSymbols(
 )
 
 data class AutoRefreshSymbols(
-    val triggerMethod: Method,
-    val netRequestMethods: List<Method>,
-    val cacheRestoreMethod: Method?,
-    val pullGestureMethod: Method?,
+    val flow: HomeRefreshFlowSymbols,
+    val cacheRestoreMethod: Method,
 )
 
 data class AutoLoadMoreSymbols(

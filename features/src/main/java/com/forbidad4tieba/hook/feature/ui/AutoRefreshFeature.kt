@@ -8,7 +8,7 @@ import com.forbidad4tieba.hook.config.SettingsSnapshot
 import com.forbidad4tieba.hook.symbol.contract.AutoRefreshContract
 import com.forbidad4tieba.hook.symbol.model.HookFeatureKey
 
-internal val AutoRefreshFeature = FeatureDefinition.observed(
+internal val AutoRefreshFeature = FeatureDefinition.single(
     id = "AutoRefreshHook",
     phase = FeaturePhase.SYMBOL,
     process = FeatureProcess.MAIN,

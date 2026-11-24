@@ -12,9 +12,7 @@ import org.junit.Test
 import sun.misc.Unsafe
 
 class RemoteEnvironmentStateTest {
-    private val prefsField = ConfigManager::class.java.getDeclaredField("prefs").apply {
-        isAccessible = true
-    }
+    private val prefsField = ConfigManager::class.java.getDeclaredField("prefs").apply { isAccessible = true }
     private val warningField = RemoteEnvironmentState::class.java
         .getDeclaredField("environmentWarningDialogActive").apply { isAccessible = true }
     private var previousPrefs: SharedPreferences? = null
@@ -38,42 +36,8 @@ class RemoteEnvironmentStateTest {
     }
 
     @Test
-    fun unlockedLegacyUserSkipsWarningWithoutWritingAcknowledgement() {
-        val fixture = fixture(unlocked = true)
-
-        assertFalse(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
-        assertFalse(RemoteEnvironmentState.isEnvironmentWarningAcknowledged(fixture.context))
-        assertFalse(fixture.user.prefs.contains(RemoteEnvironmentState.KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED))
-        assertEquals(0, fixture.user.edits)
-        assertEquals(0, fixture.state.edits)
-    }
-
-    @Test
-    fun unlockedUserDoesNotCreatePostScanPendingWarning() {
-        val fixture = fixture(unlocked = true)
-
-        RemoteEnvironmentState.markPostScanEnvironmentWarningPending(fixture.context)
-
-        assertFalse(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(fixture.context))
-        assertEquals(0, fixture.state.edits)
-        assertEquals(0, fixture.user.edits)
-    }
-
-    @Test
-    fun previouslyPendingWarningIsConsumedWithoutShowingForUnlockedUser() {
-        val fixture = fixture(unlocked = true, pending = true)
-
-        assertFalse(RemoteEnvironmentState.consumePendingPostScanEnvironmentWarning(fixture.context))
-        assertFalse(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(fixture.context))
-        assertEquals(1, fixture.state.applies)
-        assertEquals(0, fixture.user.edits)
-        assertFalse(RemoteEnvironmentState.isEnvironmentWarningAcknowledged(fixture.context))
-    }
-
-    @Test
-    fun ordinaryUnacknowledgedUserRetainsWarningAndPendingLifecycle() {
+    fun ordinaryUserRetainsThePendingWarningLifecycle() {
         val fixture = fixture(unlocked = false)
-
         assertTrue(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
         RemoteEnvironmentState.markPostScanEnvironmentWarningPending(fixture.context)
         assertTrue(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(fixture.context))
@@ -83,68 +47,37 @@ class RemoteEnvironmentStateTest {
     }
 
     @Test
-    fun acknowledgedUserRetainsExistingWarningExemption() {
-        val fixture = fixture(unlocked = false, acknowledged = true)
+    fun hiddenUnlockSkipsAcknowledgementAndConsumesAnExistingPendingWarning() {
+        val unlocked = fixture(unlocked = true)
+        assertFalse(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(unlocked.context))
+        RemoteEnvironmentState.markPostScanEnvironmentWarningPending(unlocked.context)
+        assertFalse(unlocked.user.prefs.contains(RemoteEnvironmentState.KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED))
+        assertEquals(0, unlocked.user.edits)
+        assertEquals(0, unlocked.state.edits)
 
-        assertFalse(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
-        RemoteEnvironmentState.markPostScanEnvironmentWarningPending(fixture.context)
-        assertFalse(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(fixture.context))
-        assertEquals(0, fixture.state.edits)
-        assertEquals(0, fixture.user.edits)
+        val pending = fixture(unlocked = true, pending = true)
+        assertFalse(RemoteEnvironmentState.consumePendingPostScanEnvironmentWarning(pending.context))
+        assertFalse(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(pending.context))
+        assertEquals(1, pending.state.applies)
+        assertEquals(0, pending.user.edits)
     }
 
     @Test
-    fun storedRemoteLockPreventsHiddenFeaturesFromGrantingExemption() {
-        val fixture = fixture(unlocked = true, unlockBlocked = true)
+    fun acknowledgementAndRemoteLocksRemainDistinctWarningControls() {
+        for (storedLock in listOf(false, true)) {
+            val fixture = fixture(unlocked = true, unlockBlocked = storedLock)
+            RemoteEnvironmentState.restrictedFeatureUnlockBlockedByRemote = !storedLock
+            assertFalse(RemoteEnvironmentState.isRestrictedFeaturesUnlocked(fixture.context))
+            assertTrue(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
+            RemoteEnvironmentState.markPostScanEnvironmentWarningPending(fixture.context)
+            assertTrue(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(fixture.context))
+        }
 
-        assertFalse(RemoteEnvironmentState.isRestrictedFeaturesUnlocked(fixture.context))
-        assertTrue(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
-        RemoteEnvironmentState.markPostScanEnvironmentWarningPending(fixture.context)
-        assertTrue(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(fixture.context))
-    }
-
-    @Test
-    fun publishedRemoteLockPreventsHiddenFeaturesFromGrantingExemption() {
-        val fixture = fixture(unlocked = true)
-        RemoteEnvironmentState.restrictedFeatureUnlockBlockedByRemote = true
-
-        assertFalse(RemoteEnvironmentState.isRestrictedFeaturesUnlocked(fixture.context))
-        assertTrue(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
-        RemoteEnvironmentState.markPostScanEnvironmentWarningPending(fixture.context)
-        assertTrue(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(fixture.context))
-    }
-
-    @Test
-    fun disablingHiddenFeaturesRestoresWarningWithoutChangingAcknowledgement() {
-        val fixture = fixture(unlocked = true)
-        assertFalse(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
-
-        fixture.user.prefs.edit()
-            .putBoolean(AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED, false)
-            .apply()
-
-        assertTrue(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
-        assertFalse(RemoteEnvironmentState.isEnvironmentWarningAcknowledged(fixture.context))
-        assertFalse(fixture.user.prefs.contains(RemoteEnvironmentState.KEY_ENVIRONMENT_WARNING_ACKNOWLEDGED))
-    }
-
-    @Test
-    fun ordinaryUserStillSchedulesPendingBeforeRemoteWarningBecomesActive() {
-        val fixture = fixture(unlocked = false, warningActive = false)
-        assertFalse(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
-
-        RemoteEnvironmentState.markPostScanEnvironmentWarningPending(fixture.context)
-
-        assertTrue(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(fixture.context))
-        assertEquals(1, fixture.state.applies)
-    }
-
-    @Test
-    fun publishedWarningControlAlsoRespectsHiddenFeatureExemption() {
-        val fixture = fixture(unlocked = true, warningActive = false)
-        warningField.setBoolean(null, true)
-
-        assertFalse(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(fixture.context))
+        val acknowledged = fixture(unlocked = false, acknowledged = true)
+        assertFalse(RemoteEnvironmentState.shouldShowEnvironmentWarningDialog(acknowledged.context))
+        RemoteEnvironmentState.markPostScanEnvironmentWarningPending(acknowledged.context)
+        assertFalse(RemoteEnvironmentState.hasPendingPostScanEnvironmentWarning(acknowledged.context))
+        assertEquals(0, acknowledged.state.edits)
     }
 
     private fun fixture(

@@ -1,303 +1,156 @@
 package com.forbidad4tieba.hook.feature.ui
 
-import com.forbidad4tieba.hook.core.RuntimeHooks
-import com.forbidad4tieba.hook.contracts.MemberAccess
-import android.app.Activity
-import android.app.Application
-import android.os.Bundle
-import android.os.SystemClock
-import com.forbidad4tieba.hook.symbol.model.AutoRefreshSymbols
+import com.forbidad4tieba.hook.InstallOutcome
+import com.forbidad4tieba.hook.InstallState
 import com.forbidad4tieba.hook.config.ConfigManager
-import com.forbidad4tieba.hook.core.StableTiebaHookPoints
+import com.forbidad4tieba.hook.core.RuntimeHooks
 import com.forbidad4tieba.hook.core.XposedCompat
-import com.forbidad4tieba.hook.utils.ReflectionUtils
-
+import com.forbidad4tieba.hook.symbol.model.AutoRefreshSymbols
+import com.forbidad4tieba.hook.symbol.model.HomeRefreshField
+import com.forbidad4tieba.hook.symbol.model.HomeRefreshMethod
+import io.github.libxposed.api.XposedInterface
+import java.lang.reflect.Executable
 import java.lang.reflect.Method
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
+import java.util.Collections
+import java.util.WeakHashMap
 
 object AutoRefreshHook {
-    /**
-     * Every home-feed refresh chain (cold start, background->foreground, 30-min
-     * hot reload, stale-cache reload, message refresh, pull-to-refresh, home-tab
-     * switch) funnels into RecPersonalizePageModel.m/r request methods; see
-     * [installNetRequestHook] for why that funnel is the single interception
-     * point. After a genuine user refresh gesture (pull-to-refresh release or
-     * home-tab switch) requests are allowed for this long. The host refresh
-     * chain is asynchronous (AsyncTask -> cache read -> idle handler ->
-     * request), so the window must outlive the whole chain, but stays short
-     * enough that later automatic refreshes are blocked again.
-     */
+    private var runtime: HomeRefreshRuntime? = null
 
-    private const val USER_REFRESH_GRACE_MS = 8000L
+    @Synchronized internal fun hook(targets: AutoRefreshSymbols): InstallOutcome {
+        if (!ConfigManager.snapshot().isAutoRefreshDisabled) return InstallOutcome(InstallState.SKIPPED)
+        val api = XposedCompat.module ?: return InstallOutcome(InstallState.SKIPPED)
+        if (runtime?.active == true) return InstallOutcome(InstallState.ALREADY_INSTALLED)
+        val next = HomeRefreshRuntime(api, targets) { ConfigManager.snapshot().isAutoRefreshDisabled }
+        val result = next.install()
+        if (next.active) runtime = next
+        return result
+    }
+}
 
-    private const val TAB_SELECTION_CHANGED_METHOD = "onTabSelectionChanged"
+/** Suppresses only entry refreshes and the continuations of their cache reads. */
+internal class HomeRefreshRuntime(
+    private val api: XposedInterface,
+    private val targets: AutoRefreshSymbols,
+    private val enabled: () -> Boolean,
+) {
+    private enum class Phase { INITIALIZE, BLOCK_REFRESH }
 
-    private val installedMethodKeys = ConcurrentHashMap.newKeySet<String>()
-    private val foregroundCallbacksRegistered = AtomicBoolean(false)
-    /** End (uptimeMillis) of the user-refresh grace window. 0 = no grace. */
-    private val userRefreshUntilMs = AtomicLong(0L)
+    private val flow = targets.flow
+    private val phase = ThreadLocal<Phase?>()
+    private val bootstrapCaches = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
+    private val handles = ArrayList<XposedInterface.HookHandle>()
+    @Volatile var active = false
+        private set
 
-    private val startedActivityCount = AtomicInteger(0)
-    private val hasSeenForeground = AtomicBoolean(false)
-
-    internal fun registerForegroundCallbacks(app: Application) {
-        if (!ConfigManager.snapshot().isAutoRefreshDisabled) return
-        if (!foregroundCallbacksRegistered.compareAndSet(false, true)) return
-
-        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-
-            override fun onActivityStarted(activity: Activity) {
-                val previousCount = startedActivityCount.getAndIncrement()
-                if (previousCount == 0 && hasSeenForeground.getAndSet(true)) {
-                    beginAutomaticPhase("foreground")
+    fun install(): InstallOutcome {
+        if (active) return InstallOutcome(InstallState.ALREADY_INSTALLED, handles.size)
+        try {
+            intercept(targets.cacheRestoreMethod, "cache availability") { chain ->
+                if (chain.args.firstOrNull() == "disable_home_cache") false else chain.proceed()
+            }
+            listOf(HomeRefreshMethod.PAGE_INITIALIZE, HomeRefreshMethod.CACHE_INITIALIZE).forEach { role ->
+                methods(role) { _, chain -> inPhase(Phase.INITIALIZE) { chain.proceed() } }
+            }
+            listOf(HomeRefreshMethod.APP_INITIALIZE, HomeRefreshMethod.PAGE_RESUME, HomeRefreshMethod.PAGE_FOREGROUND).forEach { role ->
+                methods(role) { _, chain -> inPhase(Phase.BLOCK_REFRESH) { chain.proceed() } }
+            }
+            methods(HomeRefreshMethod.INITIAL_PREFETCH) { _, chain ->
+                if (phase.get() == null) chain.proceed() else null
+            }
+            methods(HomeRefreshMethod.PAGE_TRIGGER) { _, chain ->
+                if (phase.get() == null) chain.proceed() else null
+            }
+            val oldCache = flow.methods.getValue(HomeRefreshMethod.CACHE_LOAD).single {
+                it.declaringClass == flow.method(HomeRefreshMethod.REFRESH).declaringClass
+            }
+            val newCache = flow.methods.getValue(HomeRefreshMethod.CACHE_LOAD).single {
+                it.declaringClass == flow.field(HomeRefreshField.NEW_FEED_CACHE).type
+            }
+            methods(HomeRefreshMethod.REFRESH) { _, chain ->
+                when (phase.get()) {
+                    null -> chain.proceed()
+                    Phase.BLOCK_REFRESH -> null
+                    Phase.INITIALIZE -> oldCache.invoke(chain.thisObject, false)
                 }
             }
-
-            override fun onActivityResumed(activity: Activity) = Unit
-            override fun onActivityPaused(activity: Activity) = Unit
-
-            override fun onActivityStopped(activity: Activity) {
-                startedActivityCount.updateAndGet { count ->
-                    if (count > 0) count - 1 else 0
+            methods(HomeRefreshMethod.NEW_REFRESH) { _, chain ->
+                when (phase.get()) {
+                    null -> chain.proceed()
+                    Phase.BLOCK_REFRESH -> null
+                    Phase.INITIALIZE -> {
+                        val model = flow.field(HomeRefreshField.FEED_OWNER_MODEL).get(chain.thisObject) ?: return@methods null
+                        val cache = flow.field(HomeRefreshField.NEW_FEED_CACHE).get(model)
+                        val listener = flow.field(HomeRefreshField.NEW_FEED_CACHE_LISTENER).get(model)
+                        if (cache == null || listener == null) null else newCache.invoke(cache, listener, false)
+                    }
                 }
             }
-
-            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-            override fun onActivityDestroyed(activity: Activity) = Unit
-        })
-        XposedCompat.log("[AutoRefreshHook] foreground callbacks registered")
-    }
-
-    internal fun hook(targets: AutoRefreshSymbols) {
-        if (!ConfigManager.snapshot().isAutoRefreshDisabled) {
-            XposedCompat.log("[AutoRefreshHook] skipped: config disabled")
-            return
-        }
-        val mod = XposedCompat.module ?: return
-        val triggerMethod = targets.triggerMethod
-        val netRequestMethods = targets.netRequestMethods
-        for (netRequestMethod in netRequestMethods) {
-            if (installNetRequestHook(mod, netRequestMethod)) {
-                XposedCompat.log(
-                    "[AutoRefreshHook] net-request hook INSTALLED: " +
-                        "${netRequestMethod.declaringClass.name}.${netRequestMethod.name}()",
-                )
-            } else {
-                XposedCompat.log("[AutoRefreshHook] already installed: ${ReflectionUtils.methodSignature(netRequestMethod)}")
+            listOf(HomeRefreshMethod.DISPATCH, HomeRefreshMethod.NEW_DISPATCH).forEach { role ->
+                methods(role) { _, chain -> if (phase.get() == null) chain.proceed() else null }
             }
-        }
-
-        val cacheRestoreMethod = targets.cacheRestoreMethod
-        if (cacheRestoreMethod != null && installCacheRestoreHook(mod, cacheRestoreMethod)) {
-            XposedCompat.log(
-                "[AutoRefreshHook] cache-restore hook INSTALLED: " +
-                    "${cacheRestoreMethod.declaringClass.name}.${cacheRestoreMethod.name}()",
-            )
-        }
-        val hostClassLoader = triggerMethod.declaringClass.classLoader
-            ?: run {
-                XposedCompat.log("[AutoRefreshHook] skipped: host classloader unavailable")
-                return
+            methods(HomeRefreshMethod.REFRESH_INDICATOR) { _, chain ->
+                if (phase.get() != null && chain.args.firstOrNull() == true) null else chain.proceed()
             }
-        installRefreshAnimationHook(mod, hostClassLoader)
-        targets.pullGestureMethod?.let { installPullGestureHook(mod, it) }
-        installTabClickGestureHook(mod, hostClassLoader)
-
-        beginAutomaticPhase("startup")
-
-        val netDesc = netRequestMethods.joinToString(" + ") { "${it.declaringClass.name}.${it.name}()" }
-        XposedCompat.log(
-            "[AutoRefreshHook] hook INSTALLED: $netDesc blockMode=all-auto-except-user-gesture",
-        )
-    }
-
-    /**
-     * LowScoreScheduler.C(taskId) decides whether a host task is blocked by the
-     * low-score scheduler. When the host disables home caching, the cold-start
-     * feed has no cached data after the auto-refresh is blocked. Returning false
-     * for "disable_home_cache" restores the host's own home-cache read/write path
-     * so the last-seen feed renders without a network refresh. All other taskIds
-     * keep the host's original behavior.
-     */
-    private fun installCacheRestoreHook(
-        mod: io.github.libxposed.api.XposedModule,
-        method: Method,
-    ): Boolean {
-        val methodKey = ReflectionUtils.methodSignature(method)
-        if (!installedMethodKeys.add(methodKey)) return false
-        val key = "disable_home_cache"
-        RuntimeHooks.builder(mod, method, "AutoRefreshHook", "installCacheRestoreHook:method").intercept { chain ->
-            if (!ConfigManager.snapshot().isAutoRefreshDisabled) {
-                return@intercept chain.proceed()
-            }
-            val taskId = chain.args.firstOrNull() as? String
-            if (taskId == key) {
-                XposedCompat.logD { "[AutoRefreshHook] cache restore: $key -> false" }
-                return@intercept false
-            }
-            chain.proceed()
-        }
-        return true
-    }
-
-    /**
-     * The pull-to-refresh loading animation is shown by
-     * BigdaySwipeRefreshLayout.setRefreshing(true) during automatic refreshes.
-     * With the auto-refresh blocked there is no completion callback to hide it,
-     * so the animation would spin forever. Skipping setRefreshing(true) when the
-     * refresh is NOT inside a user-gesture grace window keeps the cached feed
-     * visible without the stuck spinner, while the user's own pull-to-refresh
-     * (which marks the grace window) still shows the spinner normally.
-     */
-    private fun installRefreshAnimationHook(
-        mod: io.github.libxposed.api.XposedModule,
-        cl: ClassLoader,
-    ) {
-        val refreshClass = MemberAccess.findClassOrNull(
-            StableTiebaHookPoints.HOME_SWIPE_REFRESH_LAYOUT_CLASS,
-            cl,
-        ) ?: return
-        val method = runCatching {
-            refreshClass.getDeclaredMethod("setRefreshing", Boolean::class.javaPrimitiveType)
-        }.getOrNull() ?: return
-        runCatching {
-            method.isAccessible = true
-            RuntimeHooks.builder(mod, method, "AutoRefreshHook", "installRefreshAnimationHook:method").intercept { chain ->
-                if (!ConfigManager.snapshot().isAutoRefreshDisabled) {
-                    return@intercept chain.proceed()
+            flow.constructors.values.flatten().forEach { constructor ->
+                intercept(constructor, "initial cache " + constructor.declaringClass.simpleName) { chain ->
+                    val result = chain.proceed()
+                    if (phase.get() == Phase.INITIALIZE) chain.thisObject?.let { bootstrapCaches[it] = true }
+                    result
                 }
-                val refreshing = chain.args.firstOrNull() as? Boolean
-                if (refreshing == true && SystemClock.uptimeMillis() > userRefreshUntilMs.get()) {
-                    XposedCompat.logD("[AutoRefreshHook] skip refreshing animation (auto-refresh blocked)")
-                    return@intercept null
+            }
+            listOf(HomeRefreshMethod.CACHE_BACKGROUND, HomeRefreshMethod.CACHE_POST).forEach { role ->
+                methods(role) { _, chain ->
+                    if (bootstrapCaches.containsKey(chain.thisObject)) inPhase(Phase.BLOCK_REFRESH) { chain.proceed() }
+                    else chain.proceed()
                 }
-                chain.proceed()
             }
-            XposedCompat.log("[AutoRefreshHook] refresh-animation hook INSTALLED")
-        }.onFailure { t ->
-            XposedCompat.logD { "[AutoRefreshHook] refresh-animation hook skipped: ${t.message}" }
-        }
-    }
-
-    /** The restored state setter carries refreshing/from-user flags; only a user release opens the grace window. */
-    private fun installPullGestureHook(
-        mod: io.github.libxposed.api.XposedModule,
-        method: Method,
-    ) {
-        runCatching {
-            method.isAccessible = true
-            RuntimeHooks.builder(mod, method, "AutoRefreshHook", "installPullGestureHook:method").intercept { chain ->
-                val refreshing = chain.args.firstOrNull() as? Boolean
-                val fromUserGesture = chain.args.getOrNull(1) as? Boolean
-                if (refreshing == true && fromUserGesture == true) {
-                    markUserRefresh("pull")
+            listOf(HomeRefreshMethod.CACHE_CONTINUE to HomeRefreshField.CACHE_CONTINUATION_TASK,
+                HomeRefreshMethod.IDLE_CONTINUE to HomeRefreshField.IDLE_CONTINUATION_TASK).forEach { (role, parent) ->
+                methods(role) { _, chain ->
+                    val task = flow.field(parent).get(chain.thisObject)
+                    if (bootstrapCaches.containsKey(task)) inPhase(Phase.BLOCK_REFRESH) { chain.proceed() }
+                    else chain.proceed()
                 }
-                chain.proceed()
             }
-            XposedCompat.log("[AutoRefreshHook] pull-gesture hook INSTALLED")
-        }.onFailure { t ->
-            XposedCompat.logD { "[AutoRefreshHook] pull-gesture hook skipped: ${t.message}" }
+            check(handles.all(RuntimeHooks::ownsActiveHandle)) { "An entry-refresh handle is inactive" }
+            active = true
+            XposedCompat.log("[AutoRefreshHook] installed: entry refresh suppression; handles=" + handles.size)
+            return InstallOutcome(InstallState.INSTALLED, handles.size)
+        } catch (failure: Throwable) {
+            val cleanup = release()
+            val state = if (cleanup.isEmpty()) InstallState.ROLLED_BACK else InstallState.ROLLBACK_FAILED
+            XposedCompat.log("[AutoRefreshHook] install rolled back: " + failure.message)
+            return InstallOutcome(state, reason = (listOf(failure.message.orEmpty()) + cleanup).joinToString("; "))
         }
     }
 
-    /**
-     * Every bottom-tab button click funnels into
-     * FragmentTabHost.onTabSelectionChanged(int, boolean): the tab views are
-     * wrapped by FragmentTabWidget with click listeners that call this
-     * interface method, and it is the first thing to run on the click — before
-     * setCurrentTab/setPrimary/onPrimary and therefore before the refresh
-     * chain. It is only reachable from real user clicks (programmatic tab
-     * switches and the startup ViewPager init go through setCurrentTab /
-     * setPrimaryItem directly), so it needs no user-interaction guard and also
-     * covers re-clicking the current home tab.
-     */
-    private fun installTabClickGestureHook(
-        mod: io.github.libxposed.api.XposedModule,
-        cl: ClassLoader,
-    ) {
-        val tabHostClass = MemberAccess.findClassOrNull(StableTiebaHookPoints.FRAGMENT_TAB_HOST_CLASS, cl) ?: return
-        val method = runCatching {
-            tabHostClass.getDeclaredMethod(
-                TAB_SELECTION_CHANGED_METHOD,
-                Int::class.javaPrimitiveType,
-                Boolean::class.javaPrimitiveType,
-            )
-        }.getOrNull() ?: return
-        runCatching {
-            method.isAccessible = true
-            RuntimeHooks.builder(mod, method, "AutoRefreshHook", "installTabClickGestureHook:method").intercept { chain ->
-                markUserRefresh("tab")
-                chain.proceed()
-            }
-            XposedCompat.log("[AutoRefreshHook] tab-click gesture hook INSTALLED")
-        }.onFailure { t ->
-            XposedCompat.logD { "[AutoRefreshHook] tab-click gesture hook skipped: ${t.message}" }
+    fun release(): List<String> {
+        active = false
+        val failures = ArrayList<String>()
+        handles.asReversed().forEach { handle ->
+            try { handle.unhook() } catch (failure: Throwable) { failures += failure.message.orEmpty() }
+        }
+        bootstrapCaches.clear()
+        phase.remove()
+        return failures
+    }
+
+    internal fun retainedCount(): Int = bootstrapCaches.size
+
+    private fun intercept(member: Executable, purpose: String, callback: (XposedInterface.Chain) -> Any?) {
+        handles += RuntimeHooks.builder(api, member, "AutoRefreshHook", purpose).intercept { chain ->
+            if (!active || !enabled()) chain.proceed() else callback(chain)
         }
     }
 
-    /**
-     * The single interception point for automatic home-feed refreshes.
-     *
-     * All home-feed refresh chains funnel into RecPersonalizePageModel.m/r
-     * requests: cold-start and background->foreground refresh (w1/B0 chain),
-     * the 30-minute hot reload, the stale-cache reload (n2b), the
-     * HomePageRefreshEvent message, the pull-to-refresh gesture and the
-     * home-tab switch. Intercepting further upstream (w1/B0/jza.k1) would also
-     * stop the cold-start cached-feed render, which lives in the same chain, so
-     * the request funnel is the only gate that blocks the network refresh
-     * without emptying the cached feed.
-     *
-     * A request is allowed only when it is (a) a load-more request
-     * (RecPersonalizePageModel.m with loadType >= 2, which never resets the
-     * feed) or (b) issued inside the short user-gesture window marked by a real
-     * pull-to-refresh release or home-tab switch. Everything else — automatic
-     * refreshes of any kind — is blocked.
-     */
-    private fun installNetRequestHook(
-        mod: io.github.libxposed.api.XposedModule,
-        method: Method,
-    ): Boolean {
-        val methodKey = ReflectionUtils.methodSignature(method)
-        if (!installedMethodKeys.add(methodKey)) return false
-
-        RuntimeHooks.builder(mod, method, "AutoRefreshHook", "installNetRequestHook:method").intercept { chain ->
-            if (!ConfigManager.snapshot().isAutoRefreshDisabled) {
-                return@intercept chain.proceed()
-            }
-            // Load-more (loadType >= 2) must never be blocked; only the
-            // reload/refresh type (loadType == 1) is an auto-refresh target.
-            val loadType = chain.args.firstOrNull() as? Int
-            if (loadType != null && loadType >= 2) {
-                return@intercept chain.proceed()
-            }
-            if (SystemClock.uptimeMillis() <= userRefreshUntilMs.get()) {
-                return@intercept chain.proceed()
-            }
-            XposedCompat.logW("[AutoRefreshHook] blocked auto refresh: ${method.name}()")
-            return@intercept null
-        }
-        return true
+    private fun methods(role: HomeRefreshMethod, callback: (Method, XposedInterface.Chain) -> Any?) {
+        flow.methods.getValue(role).forEach { method -> intercept(method, role.name) { callback(method, it) } }
     }
 
-    private fun markUserRefresh(reason: String) {
-        if (!ConfigManager.snapshot().isAutoRefreshDisabled) return
-        userRefreshUntilMs.set(SystemClock.uptimeMillis() + USER_REFRESH_GRACE_MS)
-        XposedCompat.logD { "[AutoRefreshHook] user refresh gesture: $reason" }
-    }
-
-    /**
-     * Enters an automatic phase (startup or background->foreground). Any
-     * leftover user-gesture grace is cleared so the auto refresh fired by the
-     * lifecycle chain is blocked, not accidentally attributed to an older
-     * gesture.
-     */
-    private fun beginAutomaticPhase(reason: String) {
-        if (!ConfigManager.snapshot().isAutoRefreshDisabled) return
-        userRefreshUntilMs.set(0L)
-        XposedCompat.logD { "[AutoRefreshHook] automatic phase: $reason" }
+    private inline fun <T> inPhase(value: Phase, block: () -> T): T {
+        val previous = phase.get()
+        phase.set(value)
+        try { return block() } finally { if (previous == null) phase.remove() else phase.set(previous) }
     }
 }

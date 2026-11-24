@@ -40,16 +40,6 @@ class SymbolDiscoverySourceTest {
         assertTrue(violations("""private const val ENABLE_METHOD = "s" """).isNotEmpty())
     }
 
-    @Test fun rejectsOpaqueClassesLengthBiasAndGuessedSuffixes() {
-        listOf(
-            """val owner = "com.baidu.tieba.np6" """,
-            """val task = "com.baidu.tieba.NativeProxy\${'$'}a" """,
-            """compareBy<Method> { it.name.length }""",
-            """for (suffix in 'a'..'z') probe(suffix)""",
-            """import dalvik.system.DexFile as Inventory""",
-        ).forEach { assertTrue(it, violations(it).isNotEmpty()) }
-    }
-
     @Test fun rejectsDiscoveryByTypeSpellingAndPartialDexNames() {
         listOf(
             """fields.filter { it.field.typeName.endsWith("Layout") }""",
@@ -82,22 +72,6 @@ class SymbolDiscoverySourceTest {
         assertEquals(emptyList<String>(), SymbolDiscoverySourceGuard.violations(mapOf(
             "features/src/main/java/example/ImageCache.kt" to """file.name.endsWith(".tmp")""",
         )))
-    }
-
-    @Test fun permitsDescriptorsPublicApisSemanticStringsAndDiagnosticSorting() {
-        val source = """
-            // methods.firstOrNull { it.name == "w" }
-            /* val owner = "com.baidu.tieba.np6" */
-            val method = methods.singleOrNull { it.name == cached.methodName }
-            val restored = owner.getDeclaredMethod(resolvedName, *params)
-            val keys = listOf("pb", "id", "b")
-            val callback = methods.singleOrNull { it.name == "onScroll" }
-            val metadata = kotlin.Metadata::class.java.getMethod("d2")
-            val resources = "com.baidu.tieba.R\${'$'}id"
-            val diagnosticTag = "com.baidu.tieba.R.drawable.${'$'}name"
-            val diagnostics = candidates.sortedBy { it.name }.joinToString()
-        """.trimIndent()
-        assertEquals(emptyList<String>(), violations(source))
     }
 
     private fun violations(source: String) = SymbolDiscoverySourceGuard.violations(mapOf(

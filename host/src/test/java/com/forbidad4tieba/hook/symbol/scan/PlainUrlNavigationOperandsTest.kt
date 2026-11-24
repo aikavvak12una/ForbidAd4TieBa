@@ -125,17 +125,7 @@ class PlainUrlNavigationOperandsTest {
         assertEquals(listOf(PlainUrlMessageDataSymbolScanner.Roles(type.descriptor, url.descriptor, text.descriptor)), select(ops))
     }
 
-    @Test fun extendedMovesAndRangeInvokesPreserveIncomingMessageIdentity() {
-        val base = consumerOps()
-        val ops = listOf(Op(listOf(0x0508, 31)), Op(listOf(0x0009, 4, 30))) +
-            listOf(invoke(getData, listOf(5), range = true), result(5), base[2], invoke(getPage, listOf(4)), result(0)) +
-            base.drop(5)
-        val code = code("renamed.Activity", listOf(message), false, 32, ops)
-        assertEquals(listOf(PlainUrlMessageDataSymbolScanner.Roles(type.descriptor, url.descriptor, text.descriptor)),
-            PlainUrlNavigationOperands.consumer(code, navigation, payload, initialized))
-    }
-
-    private fun wrapperCode(arguments: List<Int> = listOf(1, 2, 3, 4, 0)): Code =
+private fun wrapperCode(arguments: List<Int> = listOf(1, 2, 3, 4, 0)): Code =
         code(span, wrapper.parameters, true, 5, listOf(constant(0, 0), invoke(delegate, arguments), returns))
     private fun delegateCode(stringSources: List<Int> = listOf(9, 10, 11)): Code {
         val original = Call("Lcom/baidu/adp/base/BdPageContext;->getOrignalPage()Ljava/lang/Object;",

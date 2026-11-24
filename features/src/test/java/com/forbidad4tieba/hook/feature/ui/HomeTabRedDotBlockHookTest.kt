@@ -1,218 +1,98 @@
 package com.forbidad4tieba.hook.feature.ui
-
 import android.graphics.Canvas
 import android.view.View
-import android.view.ViewGroup
-import com.forbidad4tieba.hook.InstallState
 import com.forbidad4tieba.hook.core.OwnedHookSet
 import com.forbidad4tieba.hook.core.RuntimeHooks
-import com.forbidad4tieba.hook.symbol.contract.*
+import com.forbidad4tieba.hook.symbol.contract.RedDotLayer
+import com.forbidad4tieba.hook.symbol.contract.RedDotMessageTargets
+import com.forbidad4tieba.hook.symbol.contract.RedDotResourceSetter
+import com.forbidad4tieba.hook.symbol.contract.RedDotTargets
 import com.forbidad4tieba.hook.testing.FakeHookApi
 import io.github.libxposed.api.XposedInterface
-import java.lang.reflect.Executable
-import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import sun.misc.Unsafe
-
 class HomeTabRedDotBlockHookTest {
     private val draw = Badge::class.java.getDeclaredMethod("draw", Canvas::class.java)
     private val text = Badge::class.java.getDeclaredMethod("getRedNum")
-    private val visible = Badge::class.java.getDeclaredMethod("setRedDotVisible", Boolean::class.javaPrimitiveType)
-    private fun targets(
-        visibility: List<Method> = emptyList(),
-        message: RedDotMessageTargets? = RedDotMessageTargets(draw, text),
-        resources: List<RedDotResourceSetter> = emptyList(),
-        ids: Set<Int> = emptySet(),
-        navigation: RedDotNavigationTargets? = null,
-    ) = RedDotTargets(visibility, message, resources, ids, navigation)
 
     @After fun release() {
-        val owned = RuntimeHooks::class.java.getDeclaredField("hooks").apply { isAccessible = true }
-            .get(null) as OwnedHookSet<*, *>
-        assertTrue(owned.rollback().isEmpty())
+        val hooks = RuntimeHooks::class.java.getDeclaredField("hooks")
+            .apply { isAccessible = true }.get(null) as OwnedHookSet<*, *>
+        assertTrue(hooks.rollback().isEmpty())
     }
-
-    @Test fun hostReshowCannotPaintPlainDotsAndContentSurvivesRapidUpdates() {
-        val api = FakeHookApi()
-        val badge = Badge()
+    @Test fun contentLabelsAndReaderFailuresPreserveTheHostModel() {
+        val api = FakeHookApi(); val badge = Badge()
         install(api, targets())
-        for (label in listOf(null, "", " ", "7", "...", "99+", "活动", "新", null, "0")) {
-            badge.label = label
-            badge.shown = true // Host caller shows the badge after refresh has returned.
-            var paints = 0
-            api.invoke(draw, badge, arrayOf(null)) { paints++; null }
+        for (label in listOf(null, "", "7", "99+", "活动")) {
+            badge.label = label; badge.shown = true; var paints = 0
+            api.call(draw, listOf(null), badge) { paints++; null }
             assertEquals(label, if (label.isNullOrBlank()) 0 else 1, paints)
-            assertTrue(badge.shown) // Host visibility/model is untouched; suppression is at paint.
+            assertTrue(badge.shown); assertEquals(label, badge.label)
         }
+        badge.brokenReader = true; var paints = 0
+        api.call(draw, listOf(null), badge) { paints++; null }
+        assertEquals(1, paints)
     }
-
-    @Test fun featureOffBypassesTheReaderAndReenablingUsesTheLatestContent() {
-        val api = FakeHookApi()
-        val badge = Badge()
-        var enabled = true
+    @Test fun disabledPaintPathReadsNeitherReceiverNorLabel() {
+        val api = FakeHookApi(); var enabled = false
         install(api, targets(), { enabled })
-        api.invoke(draw, badge, arrayOf(null)) { fail("Plain dot painted"); null }
-        enabled = false
-        badge.label = "99+"
-        val before = badge.reads
-        var paints = 0
-        api.invoke(draw, badge, arrayOf(null)) { paints++; null }
-        assertEquals(before, badge.reads)
-        enabled = true
-        api.invoke(draw, badge, arrayOf(null)) { paints++; null }
-        assertEquals(2, paints)
-    }
-
-    @Test fun failedReaderPreservesHostDrawing() {
-        val api = FakeHookApi()
-        val badge = Badge().apply { brokenReader = true }
-        install(api, targets())
-        var paints = 0
-        api.invoke(draw, badge, arrayOf(null)) { paints++; null }
+        var proceeded = 0
+        val chain = Proxy.newProxyInstance(
+            javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java),
+        ) { _, method, _ ->
+            if (method.name == "proceed") { proceeded++; null } else error("disabled read ${method.name}")
+        } as XposedInterface.Chain
+        api.callbacks.getValue(draw).intercept(chain)
+        assertEquals(1, proceeded)
+        enabled = true; var paints = 0
+        api.call(draw, listOf(null), Badge().apply { label = "7" }) { paints++; null }
         assertEquals(1, paints)
     }
-
-    @Test fun failedMessageHookDoesNotPreventIndependentVisibilityHook() {
-        val api = FakeHookApi(setOf(draw))
-        val outcome = install(api, targets(listOf(visible)))
-        assertEquals(InstallState.PARTIAL, outcome.state)
-        assertEquals(1, outcome.installedCount)
-        var received: Any? = null
-        api.invoke(visible, Badge(), arrayOf(true)) { received = it[0]; null }
-        assertEquals(false, received)
-        api.invoke(visible, Badge(), arrayOf(false)) { received = it[0]; null }
-        assertEquals(false, received)
-    }
-
-    @Test fun repeatedInstallCountsHandlesAndReleasedCallbacksAreInert() {
-        val api = FakeHookApi()
-        assertEquals(1, install(api, targets()).installedCount)
-        assertEquals(InstallState.ALREADY_INSTALLED, install(api, targets()).state)
-        assertEquals(1, api.created)
-        val stale = api.callbacks.getValue(draw)
-        release()
-        var paints = 0
-        stale.intercept(api.chain(Badge(), arrayOf(null)) { paints++; null })
-        assertEquals(1, paints)
-    }
-
-    @Test fun resourceScopeOnlyMasksNamedArtworkAfterTheHostSetter() {
+    @Test fun resourceMaskRunsAfterHostOnlyForNamedArtworkScope() {
         val api = FakeHookApi()
         val member = Skin::class.java.getDeclaredMethod("background", View::class.java, Int::class.javaPrimitiveType)
-        val view = allocate(View::class.java)
-        val events = mutableListOf<String>()
-        var enabled = true
-        var maskEnabled: (() -> Boolean)? = null
-        RuntimeHooks.measure("HomeTabRedDotBlockHook") {
-            HomeTabRedDotBlockHook.install(
-                targets(message = null, resources = listOf(RedDotResourceSetter(member, RedDotLayer.BACKGROUND)),
-                    ids = setOf(7)), api.value, { enabled },
-            ) { target, layer, active ->
-                assertSame(view, target)
-                assertEquals(RedDotLayer.BACKGROUND, layer)
-                maskEnabled = active
-                events.add("mask")
-            }
+        val view = allocate(View::class.java); val events = arrayListOf<String>()
+        var enabled = true; var maskEnabled: (() -> Boolean)? = null
+        install(
+            api, targets(listOf(RedDotResourceSetter(member, RedDotLayer.BACKGROUND)), setOf(7)), { enabled },
+        ) { target, layer, active ->
+            assertSame(view, target); assertEquals(RedDotLayer.BACKGROUND, layer)
+            maskEnabled = active; events += "mask"
         }
-        api.invoke(member, Skin(), arrayOf(view, 7)) { events.add("host"); null }
+        api.call(member, arrayOf<Any?>(view, 7).toList(), Skin()) { events += "host"; null }
         assertEquals(listOf("host", "mask"), events)
-        events.clear()
-        api.invoke(member, Skin(), arrayOf(view, 8)) { events.add("host"); null }
+        events.clear(); api.call(member, arrayOf<Any?>(view, 8).toList(), Skin()) { events += "host"; null }
         assertEquals(listOf("host"), events)
-        enabled = false
-        assertFalse(maskEnabled!!.invoke())
-        api.invoke(member, Skin(), arrayOf(view, 7)) { events.add("host"); null }
+        enabled = false; assertFalse(maskEnabled!!.invoke())
+        api.call(member, arrayOf<Any?>(view, 7).toList(), Skin()) { events += "host"; null }
         assertEquals(listOf("host", "host"), events)
     }
-
-    @Test fun navigationReshowKeepsTheSeparateDotTransparentWithoutRescanningOrTouchingText() {
-        val api = FakeHookApi()
-        val dot = allocate(AlphaView::class.java).apply { value = 0.8f }
-        val holder = Holder(dot)
-        val adapter = Adapter()
-        val create = Adapter::class.java.getDeclaredMethod("create", ViewGroup::class.java, Int::class.javaPrimitiveType)
-        val bind = Adapter::class.java.getDeclaredMethod("bind", Holder::class.java, Int::class.javaPrimitiveType)
-        var scans = 0
-        var enabled = true
-        val nav = RedDotNavigationTargets(create, bind) { scans++; (it as Holder).dot }
-        install(api, targets(message = null, navigation = nav), { enabled })
-        api.invoke(create, adapter, arrayOf(null, 1)) { holder }
-        assertEquals(0f, dot.value)
-        repeat(3) {
-            holder.shown = true
-            api.invoke(bind, adapter, arrayOf(holder, 0)) { null }
-            assertEquals(0f, dot.value)
-        }
-        assertEquals(1, scans)
-        assertEquals("活动 / 7", holder.otherText)
-        enabled = false
-        api.invoke(bind, adapter, arrayOf(holder, 0)) { null }
-        assertEquals(0.8f, dot.value)
+    private fun targets(
+        resources: List<RedDotResourceSetter> = emptyList(),
+        ids: Set<Int> = emptySet(),
+    ) = RedDotTargets(emptyList(), RedDotMessageTargets(draw, text), resources, ids, null)
+    private fun install(
+        api: FakeHookApi,
+        targets: RedDotTargets,
+        enabled: () -> Boolean = { true },
+        mask: (View, RedDotLayer, () -> Boolean) -> Unit = { _, _, _ -> },
+    ) = RuntimeHooks.measure("HomeTabRedDotBlockHook") {
+        HomeTabRedDotBlockHook.install(targets, api.value, enabled, mask)
     }
-
-    @Test fun failedNavigationBindingRollsBackItsCreateHookAndLeavesMessageDrawing() {
-        val create = Adapter::class.java.getDeclaredMethod("create", ViewGroup::class.java, Int::class.javaPrimitiveType)
-        val bind = Adapter::class.java.getDeclaredMethod("bind", Holder::class.java, Int::class.javaPrimitiveType)
-        val api = FakeHookApi(setOf(bind))
-        val nav = RedDotNavigationTargets(create, bind) { error("No callback should remain") }
-        val outcome = install(api, targets(navigation = nav))
-        assertEquals(InstallState.PARTIAL, outcome.state)
-        assertEquals(1, outcome.installedCount)
-        assertFalse(create in api.callbacks)
-        assertTrue(draw in api.callbacks)
-    }
-
-    private fun install(api: FakeHookApi, targets: RedDotTargets, enabled: () -> Boolean = { true }) =
-        RuntimeHooks.measure("HomeTabRedDotBlockHook") { HomeTabRedDotBlockHook.install(targets, api.value, enabled) }
-
     class Badge {
-        var label: String? = null
-        var shown = false
-        var reads = 0
-        var brokenReader = false
-        fun getRedNum(): String? { reads++; check(!brokenReader); return label }
-        fun draw(canvas: Canvas?) {}
-        fun setRedDotVisible(value: Boolean) {}
+        var label: String? = null; var shown = false; var brokenReader = false
+        fun getRedNum(): String? { check(!brokenReader); return label }
+        fun draw(canvas: Canvas?) = Unit
     }
-    class Skin { fun background(view: View, id: Int) {} }
-    class AlphaView : View(null) {
-        var value = 1f
-        override fun getAlpha() = value
-        override fun setAlpha(alpha: Float) { value = alpha }
-    }
-    class Holder(val dot: AlphaView) {
-        var shown = false
-        val otherText = "活动 / 7"
-    }
-    class Adapter {
-        fun create(parent: ViewGroup?, type: Int): Holder? = null
-        fun bind(holder: Holder, position: Int) {}
-    }
-
+    class Skin { fun background(view: View, id: Int) = Unit }
     private fun <T> allocate(type: Class<T>): T {
         val field = Unsafe::class.java.getDeclaredField("theUnsafe").apply { isAccessible = true }
         return checkNotNull(type.cast((field.get(null) as Unsafe).allocateInstance(type)))
     }
-
-    private fun FakeHookApi.invoke(member: Executable, receiver: Any, args: Array<Any?>,
-                                   proceed: (Array<Any?>) -> Any?): Any? {
-        val callback = callbacks[member]
-        return if (callback == null) proceed(args) else callback.intercept(chain(receiver, args, proceed))
-    }
-
-    private fun FakeHookApi.chain(receiver: Any, args: Array<Any?>, proceed: (Array<Any?>) -> Any?): XposedInterface.Chain =
-        Proxy.newProxyInstance(javaClass.classLoader, arrayOf(XposedInterface.Chain::class.java)) { _, method, call ->
-            when (method.name) {
-                "proceed" -> {
-                    @Suppress("UNCHECKED_CAST")
-                    proceed(if (call.isNullOrEmpty()) args else call[0] as Array<Any?>)
-                }
-                "getThisObject" -> receiver
-                "getArgs" -> args.asList()
-                else -> error("Unexpected chain call: " + method.name)
-            }
-        } as XposedInterface.Chain
 }

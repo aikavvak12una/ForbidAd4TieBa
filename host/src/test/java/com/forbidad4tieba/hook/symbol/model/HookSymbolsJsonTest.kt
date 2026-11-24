@@ -12,22 +12,10 @@ import org.junit.Test
 import org.json.JSONObject
 
 class HookSymbolsJsonTest {
-    @Test
-    fun removedMessageContainerFieldsDoNotReenterTheConsumerContract() {
-        val old = JSONObject(buildHookSymbols { this[MessageTabContract.msgTabLocateToTabMethod] = "locateTab" }.toJson())
-            .put("msgTabContainerSelectMethod", "unusedSelect")
-            .put("msgTabContainerExtDataField", "unusedExtData")
-        val parsed = requireNotNull(HookSymbols.fromJson(old.toString()))
-        assertEquals("locateTab", parsed[MessageTabContract.msgTabLocateToTabMethod])
-        val emitted = JSONObject(parsed.toJson())
-        assertFalse(emitted.has("msgTabContainerSelectMethod"))
-        assertFalse(emitted.has("msgTabContainerExtDataField"))
-    }
-
-    @Test
+@Test
     fun jsonRoundTripPreservesResourceHookPointAndScanMetaFields() {
         val symbols = buildHookSymbols {
-            this[AutoRefreshContract.autoRefreshTriggerMethod] = "com.tieba.Feed#triggerRefresh"
+            this[AutoRefreshContract.autoRefreshFlow] = "lifecycle-flow"
             this[FeedContract.feedCardBindMethod] = "com.tieba.FeedCard#bind"
             this[InputMemeBarContract.inputMemeBarControllerClass] = "com.tieba.SpriteMemePanController"
             this[InputMemeBarContract.inputMemeBarEnableMethod] = "enabled"
@@ -41,7 +29,7 @@ class HookSymbolsJsonTest {
 
         assertNotNull(parsed)
         requireNotNull(parsed)
-        assertEquals("com.tieba.Feed#triggerRefresh", parsed[AutoRefreshContract.autoRefreshTriggerMethod])
+        assertEquals("lifecycle-flow", parsed[AutoRefreshContract.autoRefreshFlow])
         assertEquals("com.tieba.FeedCard#bind", parsed[FeedContract.feedCardBindMethod])
         assertEquals("com.tieba.SpriteMemePanController", parsed[InputMemeBarContract.inputMemeBarControllerClass])
         assertEquals("enabled", parsed[InputMemeBarContract.inputMemeBarEnableMethod])

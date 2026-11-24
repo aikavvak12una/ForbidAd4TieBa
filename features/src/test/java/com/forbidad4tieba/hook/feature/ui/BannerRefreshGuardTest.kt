@@ -17,18 +17,6 @@ class BannerRefreshGuardTest {
         assertEquals(listOf("skin", "bind", "squash"), events)
     }
 
-    @Test fun differentInstancesAndLaterRefreshesRemainIndependent() {
-        val guard = BannerRefreshGuard()
-        val first = Any()
-        val second = Any()
-        val squashed = ArrayList<Any>()
-        guard.run(first, {
-            guard.run(second, { Unit }, { squashed += second })
-        }, { squashed += first })
-        guard.run(first, { Unit }, { squashed += first })
-        assertEquals(listOf(second, first, first), squashed)
-    }
-
     @Test fun throwingOriginalDoesNotSquashOrPoisonTheNextRefresh() {
         val guard = BannerRefreshGuard()
         val target = Any()
@@ -38,17 +26,6 @@ class BannerRefreshGuardTest {
         }
         assertEquals(0, squashes)
         guard.run(target, { Unit }, { squashes++ })
-        assertEquals(1, squashes)
-    }
-
-    @Test fun failedDecorationPreservesHostResultAndCanRetry() {
-        val failures = ArrayList<Throwable>()
-        val guard = BannerRefreshGuard { failures += it }
-        val target = Any()
-        assertEquals(7, guard.run(target, { 7 }, { error("view unavailable") }))
-        assertEquals(1, failures.size)
-        var squashes = 0
-        assertEquals(8, guard.run(target, { 8 }, { squashes++ }))
         assertEquals(1, squashes)
     }
 

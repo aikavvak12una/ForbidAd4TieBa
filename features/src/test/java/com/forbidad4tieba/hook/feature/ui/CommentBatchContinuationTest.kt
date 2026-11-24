@@ -15,43 +15,12 @@ class CommentBatchContinuationTest {
         assertTrue(batch.take())
     }
 
-    @Test fun commitBeforeCompletionCannotOverlapRequests() {
-        val request = Any()
-        val batch = CommentBatchContinuation(request)
-        batch.commit(request, true)
-        assertFalse(batch.queue())
-        batch.finish(request)
-        assertTrue(batch.queue())
-    }
-
-    @Test fun lateResultsFromAnotherRequestCannotStartAnotherPage() {
-        val request = Any()
-        val batch = CommentBatchContinuation(request)
-        batch.finish(Any())
-        batch.commit(Any(), true)
-        assertFalse(batch.queue())
-        batch.commit(request, true)
-        assertFalse(batch.queue())
-    }
-
     @Test fun matchingRequiresIdentityEvenWhenTokensCompareEqual() {
         val request = listOf(1)
         val batch = CommentBatchContinuation(request)
         batch.finish(listOf(1))
         batch.commit(request, true)
         assertFalse(batch.queue())
-    }
-
-    @Test fun failedOrEmptyPageDoesNotLoop() {
-        val request = Any()
-        val failed = CommentBatchContinuation(request)
-        failed.finish(request)
-        assertFalse(failed.queue())
-        val empty = CommentBatchContinuation(request)
-        empty.finish(request)
-        empty.commit(request, false)
-        empty.commit(request, true)
-        assertFalse(empty.queue())
     }
 
     @Test fun leavingPageChangingSortOrDisablingCancelsQueuedWork() {

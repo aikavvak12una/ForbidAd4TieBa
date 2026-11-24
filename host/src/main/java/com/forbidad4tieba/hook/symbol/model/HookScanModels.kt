@@ -447,19 +447,6 @@ internal data class PbLikeAutoReplyScanSymbols(
     val flow: PbAutoReplyFlowSymbols = PbAutoReplyFlowSymbols(),
 )
 
-internal data class DexAutoRefreshMatch(
-    val ownerMethodName: String,
-    val score: Int,
-    val evidence: String,
-)
-
-internal data class DexRecPersonalizeRequestMatch(
-    val ownerClassName: String,
-    val ownerMethodName: String,
-    val paramTypes: List<String>,
-    val evidence: String,
-)
-
 internal data class DexHomeCacheRestoreMatch(
     val ownerMethodName: String,
     val evidence: String,

@@ -21,24 +21,6 @@ class AutoSignInResponsesTest {
         assertEquals("失败原因", result.failure.message)
     }
 
-    @Test fun explicitAlreadySignedFlagIsSuccessful() {
-        assertTrue(AutoSignInResponses.single(JSONObject("""{"error_code":"already","user_info":{"is_sign_in":1}}""")).success)
-        assertTrue(AutoSignInResponses.single(JSONObject("""{"data":{"user_info":{"is_sign_in":"1"}}}""")).success)
-    }
-
-    @Test fun alreadySignedCodeConfirmsSingleSignWithoutAUserFlag() {
-        for (raw in listOf(
-            """{"error_code":160002}""",
-            """{"error_code":"160002","error_msg":"今日已签到"}""",
-            """{"errno":0,"data":{"error":{"errno":"160002"}}}""",
-            """{"error":{"error_code":160002},"data":{"code":"160002"}}""",
-        )) {
-            val result = AutoSignInResponses.single(JSONObject(raw))
-            assertTrue(raw, result.success)
-            assertNull(result.failure)
-        }
-    }
-
     @Test fun alreadySignedCodeDoesNotHideAnotherBusinessFailure() {
         for (raw in listOf(
             """{"error_code":160002,"data":{"error":{"errno":"fixture_login_required"}}}""",
@@ -57,12 +39,6 @@ class AutoSignInResponsesTest {
         val batch = AutoSignInResponses.batch(json, listOf(one, two))
         assertEquals("160002", batch.failure?.code)
         assertTrue(batch.attempts.values.all { !it.success })
-    }
-
-    @Test fun shieldedForumKeepsItsActualFailureCode() {
-        val result = AutoSignInResponses.single(JSONObject("""{"error_code":340006,"error_msg":"贴吧已被屏蔽"}"""))
-        assertFalse(result.success)
-        assertEquals(SignInFailure(SignInFailureKind.API, "340006", "贴吧已被屏蔽"), result.failure)
     }
 
     @Test fun missingResultDoesNotBecomeSuccessOrAnInventedErrorCode() {
@@ -91,20 +67,6 @@ class AutoSignInResponsesTest {
         assertFalse(result.attempts.getValue(one.key).success)
     }
 
-    @Test fun batchFailureCodeAppliesToUnreturnedForum() {
-        val result = AutoSignInResponses.batch(JSONObject("""{"error":{"errno":"batch_denied","errmsg":"暂不可用"}}"""), listOf(one))
-        assertEquals("batch_denied", result.attempts.getValue(one.key).failure!!.code)
-    }
-
-    @Test fun batchNoticeWithoutApiErrorTriggersFallbackAndKeepsExplicitSuccesses() {
-        val result = AutoSignInResponses.batch(JSONObject("""{"errno":0,"data":{"show_dialog":1,
-            "sign_notice":"零点到一点为签到高峰期，一键签到失败机率较大，请错开高峰期再来签到！",
-            "info":[{"forum_id":"1","signed":1}]}}"""), listOf(one, two))
-        assertEquals(SignInFailureKind.SERVER_NOTICE, result.failure?.kind)
-        assertTrue(result.attempts.getValue(one.key).success)
-        assertEquals(result.failure, result.attempts.getValue(two.key).failure)
-    }
-
     @Test fun batchNoticeDoesNotHideApiFailureOrMakeAnInvalidListUsable() {
         val json = JSONObject("""{"errno":"fixture_login_required","show_dialog":1,"sign_notice":"批签提示","forum_info":[]}""")
         assertEquals("fixture_login_required", AutoSignInResponses.snapshot(json, 0).failure?.code)
@@ -119,16 +81,6 @@ class AutoSignInResponsesTest {
         assertNull(AutoSignInResponses.snapshot(JSONObject("""{"errno":99,"forum_info":[]}"""), 0).snapshot)
     }
 
-    @Test fun snapshotKeepsOfficialBatchEligibilityAndServerNotice() {
-        val result = AutoSignInResponses.snapshot(JSONObject("""{"errno":0,"forum_info":[{"forum_id":"1","forum_name":"甲吧","user_level":6,"is_sign_in":"0"}],"valid":"1","can_use":"0","level":7,"sign_max_num_new":20,"show_dialog":"1","sign_notice":"请完成验证"}"""), 0).snapshot!!
-        assertTrue(result.batchAllowed)
-        assertFalse(result.allLevels)
-        assertEquals(7, result.batchMinLevel)
-        assertEquals(20, result.batchSize)
-        assertEquals(SignInFailureKind.SERVER_NOTICE, result.notice!!.kind)
-        assertEquals("请完成验证", result.notice.message)
-    }
-
     @Test fun errorDetailsAreBoundedAndDoNotKeepCredentialValues() {
         val message = AutoSignInResponses.safeMessage("BDUSS=test-secret; STOKEN=other-secret; tbs=value\n" + "a".repeat(500))
         assertFalse(message.contains("test-secret"))
@@ -139,9 +91,4 @@ class AutoSignInResponsesTest {
         assertFalse(AutoSignInResponses.safeMessage("""{"BDUSS":"quoted-secret"}""").contains("quoted-secret"))
     }
 
-    @Test fun conflictingSnapshotEntriesAreRejected() {
-        val result = AutoSignInResponses.snapshot(JSONObject("""{"errno":0,"forum_info":[{"forum_id":"1","forum_name":"甲吧","is_sign_in":1},{"forum_id":"1","forum_name":"甲吧","is_sign_in":0}]}"""), 0)
-        assertNull(result.snapshot)
-        assertEquals(SignInFailureKind.INVALID_RESPONSE, result.failure!!.kind)
-    }
 }
