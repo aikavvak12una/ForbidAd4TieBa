@@ -6,6 +6,7 @@ internal object SymbolContracts {
         CommentFilterContract,
         CommentShortcutContract,
         PerformanceContract,
+        AiImageCreationContract,
         VideoDisableContract,
         YyBackgroundContract,
         SwanPreloadContract,

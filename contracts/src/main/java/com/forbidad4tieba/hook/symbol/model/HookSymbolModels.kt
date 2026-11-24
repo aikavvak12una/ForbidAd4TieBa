@@ -48,6 +48,7 @@ object HookFeatureKey {
     const val DISABLE_AUTO_REFRESH = "disable_auto_refresh"
     const val COOKIE_SYNC_DEDUP = "force_host_performance_flags"
     const val DISABLE_AD_SDK_COMPONENTS = "disable_ad_sdk_components"
+    const val DISABLE_AI_IMAGE_CREATION = "disable_ai_image_creation"
     const val DISABLE_VIDEO_COMPONENTS = "disable_video_components"
     const val DISABLE_YY_BACKGROUND = "disable_yy_background"
     const val DISABLE_SWAN_PRELOAD = "disable_swan_preload"
@@ -99,6 +100,7 @@ object HookFeatureKey {
         DISABLE_AUTO_REFRESH,
         COOKIE_SYNC_DEDUP,
         DISABLE_AD_SDK_COMPONENTS,
+        DISABLE_AI_IMAGE_CREATION,
         DISABLE_VIDEO_COMPONENTS,
         DISABLE_YY_BACKGROUND,
         DISABLE_SWAN_PRELOAD,

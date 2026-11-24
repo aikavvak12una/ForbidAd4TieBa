@@ -44,13 +44,27 @@ class HookSymbolsJsonTest {
     fun everyBuilderFieldSurvivesJsonRoundTrip() {
         val builder = HookSymbolsBuilder()
         val fields = SymbolContracts.all.flatMap { contract ->
-            contract.javaClass.declaredMethods.filter { it.returnType == SymbolField::class.java }
-                .map { contract to it }
+            contract.javaClass.declaredMethods.filter { it.parameterCount == 0 }.flatMap { getter ->
+                val returnType = getter.genericReturnType as? ParameterizedType ?: return@flatMap emptyList()
+                val fieldType = when {
+                    getter.returnType == SymbolField::class.java -> returnType
+                    Map::class.java.isAssignableFrom(getter.returnType) ->
+                        (returnType.actualTypeArguments[1] as? ParameterizedType)
+                            ?.takeIf { it.rawType == SymbolField::class.java }
+                    else -> null
+                } ?: return@flatMap emptyList()
+                val valueType = fieldType.actualTypeArguments.single()
+                val result = getter.invoke(contract)
+                val declaredFields = if (result is Map<*, *>) result.values else listOf(result)
+                declaredFields.map { field ->
+                    require(field is SymbolField<*>) { "Invalid symbol field getter: ${getter.name}" }
+                    field to valueType
+                }
+            }
         }
-        fields.forEachIndexed { index, (contract, getter) ->
+        fields.forEachIndexed { index, (declaredField, valueType) ->
             @Suppress("UNCHECKED_CAST")
-            val field = getter.invoke(contract) as SymbolField<Any?>
-            val valueType = (getter.genericReturnType as ParameterizedType).actualTypeArguments.single()
+            val field = declaredField as SymbolField<Any?>
             val rawType = (if (valueType is ParameterizedType) valueType.rawType else valueType) as Class<*>
             builder[field] = sampleValue(rawType, valueType, field.cacheKey, index)
         }

@@ -12,6 +12,7 @@ object PerformancePreferences {
     const val KEY_DISABLE_VIDEO_COMPONENTS = "disable_video_components"
     const val KEY_DISABLE_YY_BACKGROUND = "disable_yy_background"
     const val KEY_DISABLE_SWAN_PRELOAD = "disable_swan_preload"
+    const val KEY_DISABLE_AI_IMAGE_CREATION = "disable_ai_image_creation"
 
     internal val ENABLE_PERFORMANCE_OPTIMIZATION = BooleanPreference(
         KEY_ENABLE_PERFORMANCE_OPTIMIZATION, false, PreferenceUse.SWITCH, null,
@@ -37,6 +38,10 @@ object PerformancePreferences {
     internal val DISABLE_SWAN_PRELOAD = BooleanPreference(
         KEY_DISABLE_SWAN_PRELOAD, true, PreferenceUse.SWITCH, HookFeatureKey.DISABLE_SWAN_PRELOAD,
         SwitchPresentation(UiText.Settings.DISABLE_SWAN_PRELOAD_LABEL, UiText.Settings.DISABLE_SWAN_PRELOAD_DESC),
+    )
+    internal val DISABLE_AI_IMAGE_CREATION = BooleanPreference(
+        KEY_DISABLE_AI_IMAGE_CREATION, false, PreferenceUse.SWITCH, HookFeatureKey.DISABLE_AI_IMAGE_CREATION,
+        SwitchPresentation(UiText.Settings.DISABLE_AI_IMAGE_CREATION_LABEL, UiText.Settings.DISABLE_AI_IMAGE_CREATION_DESC),
     )
 
     private val retiredKeys = listOf(
@@ -69,5 +74,6 @@ object PerformancePreferences {
         DISABLE_VIDEO_COMPONENTS,
         DISABLE_YY_BACKGROUND,
         DISABLE_SWAN_PRELOAD,
+        DISABLE_AI_IMAGE_CREATION,
     )
 }

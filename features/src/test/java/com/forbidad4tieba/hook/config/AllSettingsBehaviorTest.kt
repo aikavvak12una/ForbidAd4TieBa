@@ -11,6 +11,25 @@ import kotlin.random.Random
 
 /** Frozen behavior before the full settings migration, including interacting parent switches. */
 class AllSettingsBehaviorTest {
+    @Test fun aiImageChoiceRequiresThePerformanceMasterUnlockAndCapability() {
+        val p = mapOf<String, Any?>(
+            PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to true,
+            AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to true,
+            PerformancePreferences.KEY_DISABLE_AI_IMAGE_CREATION to true,
+        )
+        fun enabled(values: Map<String, Any?>, available: Boolean = true, locked: Boolean = false): Boolean =
+            EffectiveSettingsPolicy.derive(UserSettings(values), HostCapabilities(mapOf(
+                HookFeatureKey.DISABLE_AI_IMAGE_CREATION to if (available) ConfigManager.ScanFeatureAvailabilityState.AVAILABLE
+                    else ConfigManager.ScanFeatureAvailabilityState.DISABLED,
+            )), RemoteSettingsPolicy(locked)).snapshot.isAiImageCreationDisabled
+        assertTrue(enabled(p))
+        assertFalse(enabled(p - PerformancePreferences.KEY_DISABLE_AI_IMAGE_CREATION))
+        assertFalse(enabled(p + (PerformancePreferences.KEY_ENABLE_PERFORMANCE_OPTIMIZATION to false)))
+        assertFalse(enabled(p + (AccountPreferences.KEY_RESTRICTED_FEATURES_UNLOCKED to false)))
+        assertFalse(enabled(p, available = false))
+        assertFalse(enabled(p, locked = true))
+    }
+
     @Test fun allSettingsPreserveTheAcceptedBehaviorMatrix() {
         val keys = listOf(
             "auto_hide_home_tab",
@@ -163,6 +182,7 @@ class AllSettingsBehaviorTest {
                     result.snapshot.isPerformanceOptimizationEnabled && scanAvailable
                 assertEquals("YY default: $name/$state/$locked", backgroundDefaultsEnabled, result.snapshot.isYyBackgroundDisabled)
                 assertEquals("Swan default: $name/$state/$locked", backgroundDefaultsEnabled, result.snapshot.isSwanPreloadDisabled)
+                assertFalse("New AI image control defaults off", result.snapshot.isAiImageCreationDisabled)
 
                 val retiredBeforeDefaultNotify =
                     ", isPbScrollCoalesceEnabled=${oldPerformanceValue("enable_pb_scroll_coalesce", true)}"
@@ -180,6 +200,7 @@ class AllSettingsBehaviorTest {
                         ", isLowEndDeviceConfigForced=${oldPerformanceValue("force_low_end_device_config", true)}" +
                         ", isTitanPatchBlockEnabled=${oldPerformanceValue("block_titan_patch", false, false)}"
                 val performanceProjection = result.snapshot.toString()
+                    .replace(", isAiImageCreationDisabled=false", "")
                     .replace(", isYyBackgroundDisabled=$backgroundDefaultsEnabled, isSwanPreloadDisabled=$backgroundDefaultsEnabled", "")
                     .replace("isVideoPreloadDisabled=", "isVideoComponentsDisabled=")
                     .replace("isCookieSyncDedupEnabled=", "isHostPerformanceFlagsForced=")

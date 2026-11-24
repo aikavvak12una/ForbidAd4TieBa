@@ -230,6 +230,7 @@ internal object SettingsMenuGroupBuilder {
                 SwitchItem(PerformancePreferences.DISABLE_VIDEO_COMPONENTS),
                 SwitchItem(PerformancePreferences.DISABLE_YY_BACKGROUND),
                 SwitchItem(PerformancePreferences.DISABLE_SWAN_PRELOAD),
+                SwitchItem(PerformancePreferences.DISABLE_AI_IMAGE_CREATION),
             ),
         ),
     )

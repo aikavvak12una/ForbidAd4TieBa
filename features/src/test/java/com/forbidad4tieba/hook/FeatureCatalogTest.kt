@@ -33,6 +33,13 @@ class FeatureCatalogTest {
     @Test
     fun mainProcessSelectorsAndStaticPlansStayNarrow() {
         val settings = SettingsSnapshot.bootstrap()
+        val aiImage = FeatureCatalog.definitions.single { it.id == "AiImageCreationHook" }
+        for (process in listOf("com.baidu.tieba", "com.baidu.tieba:remote",
+            "com.baidu.tieba:media", "com.android.systemui")) {
+            val context = HookInstallContext(process, null)
+            assertEquals(process == "com.baidu.tieba" || process == "com.baidu.tieba:remote", aiImage.process.accepts(context))
+            assertTrue(aiImage.entries(context, settings).isEmpty())
+        }
         val publish = FeatureCatalog.definitions.single { it.id == "PublishEntryHook" }
         assertEquals(FeaturePhase.POST_ATTACH, publish.phase)
         assertEquals(null, publish.toggle)

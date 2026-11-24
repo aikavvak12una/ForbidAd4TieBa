@@ -77,6 +77,7 @@ import com.forbidad4tieba.hook.symbol.model.HookSymbols
 import com.forbidad4tieba.hook.ui.SettingsMenuFeature
 import com.forbidad4tieba.hook.feature.perf.YyBackgroundFeature
 import com.forbidad4tieba.hook.feature.perf.SwanPreloadFeature
+import com.forbidad4tieba.hook.feature.perf.AiImageCreationFeature
 
 /** Explicit registration order is the only composition policy here. */
 internal object FeatureCatalog {
@@ -104,6 +105,7 @@ internal object FeatureCatalog {
         VideoComponentsFeature,
         YyBackgroundFeature,
         SwanPreloadFeature,
+        AiImageCreationFeature,
         HelpCenterFooterBlockFeature,
         AccountListDedupFeature,
         MineTabWebBlockFeature,

@@ -62,6 +62,7 @@ object SettingsDiagnostics {
             childLine(PerformancePreferences.DISABLE_VIDEO_COMPONENTS, settings.isVideoPreloadDisabled),
             childLine(PerformancePreferences.DISABLE_YY_BACKGROUND, settings.isYyBackgroundDisabled),
             childLine(PerformancePreferences.DISABLE_SWAN_PRELOAD, settings.isSwanPreloadDisabled),
+            childLine(PerformancePreferences.DISABLE_AI_IMAGE_CREATION, settings.isAiImageCreationDisabled),
         )
     }
 }

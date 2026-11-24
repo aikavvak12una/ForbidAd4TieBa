@@ -336,6 +336,8 @@ object UiText {
         const val DISABLE_YY_BACKGROUND_LABEL = "禁止 YY 后台初始化"
         const val DISABLE_YY_BACKGROUND_DESC = "停止 YY 管理器构造时的播放器准备与直播预加载，关闭插入式直播预览。主动进入直播仍可按需加载。"
         const val DISABLE_SWAN_PRELOAD_LABEL = "禁止小程序预加载"
+        const val DISABLE_AI_IMAGE_CREATION_LABEL = "禁用图片 AI 创作／加料"
+        const val DISABLE_AI_IMAGE_CREATION_DESC = "隐藏图片 AI 创作入口并阻止其页面打开，减少图片编码、上传和生成轮询。保留普通图片、草稿及其他网页。\n* 会导致某些AI功能无法使用"
         const val DISABLE_SWAN_PRELOAD_DESC = "阻止小程序预加载调度与预加载服务启动，保留主动打开小程序和公共组件。\n* 首次打开小程序可能等待更久"
         const val DETAILED_LOGGING_LABEL = "输出详细日志"
         const val DETAILED_LOGGING_DESC = "从最近一次冷启动开始记录，需重启生效\n* 包含账号数据等敏感信息，勿随意分享"

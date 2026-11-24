@@ -180,6 +180,7 @@ internal object EffectiveSettingsPolicy {
             isVideoPreloadDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_VIDEO_COMPONENTS),
             isYyBackgroundDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_YY_BACKGROUND),
             isSwanPreloadDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_SWAN_PRELOAD),
+            isAiImageCreationDisabled = performanceChildBoolean(PerformancePreferences.DISABLE_AI_IMAGE_CREATION),
             isPerformanceOptimizationEnabled = performanceOptimizationEnabled,
             isCookieSyncDedupEnabled = performanceChildBoolean(PerformancePreferences.COOKIE_SYNC_DEDUP),
             isPrivateReadReceiptInvisibleEnabled = restrictedBoolean(AccountPreferences.PRIVATE_READ_RECEIPT_INVISIBLE),
